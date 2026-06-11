@@ -9,6 +9,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Dashboard } from '@/pages/Dashboard';
 import { FarmForm } from '@/pages/FarmForm';
 import { PlotDesigner } from '@/pages/PlotDesigner';
+import { Calendar } from '@/pages/Calendar';
 import { Weather } from '@/pages/Weather';
 import { Simulations } from '@/pages/Simulations';
 import { Monitoring } from '@/pages/Monitoring';
@@ -51,6 +52,9 @@ function Routes() {
       </Route>
       <Route path="/farms/:id/map">
         {(params) => <PlotDesigner farmId={Number(params.id)} />}
+      </Route>
+      <Route path="/farms/:id/calendar">
+        {(params) => <Calendar farmId={Number(params.id)} />}
       </Route>
       <Route path="/farms/:id/weather">
         {(params) => <Weather farmId={Number(params.id)} />}

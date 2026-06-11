@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
+  CalendarDays,
   CloudSun,
   FlaskConical,
   Leaf,
@@ -14,7 +15,6 @@ import {
   Plus,
   Sprout,
   Trash2,
-  Activity,
   ChartNoAxesColumn,
 } from 'lucide-react';
 
@@ -267,8 +267,8 @@ function ActiveAlertsBanner({ farms }: { farms: Farm[] }) {
 
 const SHORTCUTS = (farmId: number | undefined) => [
   { icon: Leaf, label: 'Crop Library', href: '/crops', color: 'text-green-600' },
+  { icon: CalendarDays, label: 'Calendar', href: `/farms/${farmId}/calendar`, color: 'text-emerald-600' },
   { icon: ChartNoAxesColumn, label: 'Simulations', href: `/farms/${farmId}/simulations`, color: 'text-blue-600' },
-  { icon: Activity, label: 'Monitoring', href: `/farms/${farmId}/monitoring`, color: 'text-purple-600' },
   { icon: CloudSun, label: 'Weather', href: `/farms/${farmId}/weather`, color: 'text-orange-600' },
 ];
 

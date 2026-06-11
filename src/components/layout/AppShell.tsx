@@ -49,7 +49,7 @@ export function AppShell({ children }: AppShellProps) {
 }
 
 import { Link, useLocation } from 'wouter';
-import { CloudSun, FlaskConical, LayoutDashboard, Leaf, Map, Plus, Activity } from 'lucide-react';
+import { CalendarDays, CloudSun, FlaskConical, LayoutDashboard, Leaf, Map, Plus, Activity } from 'lucide-react';
 import { useFarms } from '@/hooks/useFarms';
 import { cn } from '@/lib/utils';
 
@@ -80,6 +80,7 @@ function SidebarMobile({ onNavigate }: { onNavigate: () => void }) {
           <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{farm.name}</div>
           {[
             { href: `/farms/${farm.id}/map`, icon: Map, label: 'Plot Designer' },
+            { href: `/farms/${farm.id}/calendar`, icon: CalendarDays, label: 'Calendar' },
             { href: `/farms/${farm.id}/weather`, icon: CloudSun, label: 'Weather' },
             { href: `/farms/${farm.id}/simulations`, icon: FlaskConical, label: 'Simulations' },
             { href: `/farms/${farm.id}/monitoring`, icon: Activity, label: 'Monitoring' },

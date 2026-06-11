@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'wouter';
-import { ChevronRight, CloudSun, FlaskConical, Map, Activity } from 'lucide-react';
+import { CalendarDays, ChevronRight, CloudSun, FlaskConical, Map, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Farm } from '@/types';
 
 const farmLinks = (farmId: number) => [
   { href: `/farms/${farmId}/map`, icon: Map, label: 'Plot Designer' },
+  { href: `/farms/${farmId}/calendar`, icon: CalendarDays, label: 'Calendar' },
   { href: `/farms/${farmId}/weather`, icon: CloudSun, label: 'Weather' },
   { href: `/farms/${farmId}/simulations`, icon: FlaskConical, label: 'Simulations' },
   { href: `/farms/${farmId}/monitoring`, icon: Activity, label: 'Monitoring' },

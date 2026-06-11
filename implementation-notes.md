@@ -82,6 +82,11 @@ section. Spec: `SPEC.md`. Restore point: `main @ 770c186`, work on `pro-upgrade`
   when a plan exists; legacy `FarmCell` coverage remains the fallback for seed
   data/monitoring compatibility. Dashboard weather and alert queries now use a
   15-minute `staleTime` instead of inheriting the global infinite cache.
+- **Planting calendar**: added `src/lib/calendar.ts` and
+  `/farms/:id/calendar`. Calendar actions are generated only for crops painted
+  in the plan and only when the crop has sow/transplant/direct-sow metadata;
+  harvest windows require a real outdoor start. Frost-free farms get year-round
+  direct-sow windows for crops with calendar anchors.
 
 ## Known gaps / future work
 
