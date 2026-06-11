@@ -72,6 +72,16 @@ section. Spec: `SPEC.md`. Restore point: `main @ 770c186`, work on `pro-upgrade`
   `vite.config.d.ts` into the repo root from the referenced node config. Moved
   that output to `node_modules/.tmp/` via `tsconfig.node.json` so `npm run build`
   leaves the worktree clean.
+- **Farm form location/frost upgrade**: create/edit now supports Open-Meteo
+  geocoding search, stores elevation, and exposes user-editable `MM-DD` frost
+  fields. Selecting a place or pressing "Estimate from latitude" applies the
+  documented latitude/elevation heuristic, with blank fields representing
+  frost-free climates.
+- **Dashboard plan awareness**: farm cards now read `getPlan` and compute
+  planted area, approximate plant counts, and estimated yield from `PlanState`
+  when a plan exists; legacy `FarmCell` coverage remains the fallback for seed
+  data/monitoring compatibility. Dashboard weather and alert queries now use a
+  15-minute `staleTime` instead of inheriting the global infinite cache.
 
 ## Known gaps / future work
 

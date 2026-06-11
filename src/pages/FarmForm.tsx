@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,8 +11,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, MapPin, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Save, Search, Snowflake } from 'lucide-react';
 import { toast } from 'sonner';
+import { estimateFrostDates } from '@/lib/frost';
+import { searchPlaces, type GeocodeResult } from '@/lib/geocode';
 import type { SoilType } from '@/types';
 
 const soilTypes: SoilType[] = ['loam', 'clay', 'sandy', 'silt', 'peat', 'chalky'];
@@ -22,8 +24,11 @@ const schema = z.object({
   description: z.string().optional().nullable(),
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
+  elevationM: z.coerce.number().optional().nullable(),
   areHa: z.coerce.number().positive(),
   soilType: z.enum(soilTypes as [SoilType, ...SoilType[]]).optional().nullable(),
+  lastFrost: z.string().optional().nullable(),
+  firstFrost: z.string().optional().nullable(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -34,6 +39,11 @@ export function FarmForm({ farmId }: { farmId?: number }) {
   const { data: farm, isLoading } = useFarm(farmId);
   const createFarm = useCreateFarm();
   const updateFarm = useUpdateFarm();
+  const [placeQuery, setPlaceQuery] = useState('');
+  const [placeResults, setPlaceResults] = useState<GeocodeResult[]>([]);
+  const [placeLoading, setPlaceLoading] = useState(false);
+
+  const defaultFrost = estimateFrostDates(45.5231, 0);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -42,24 +52,64 @@ export function FarmForm({ farmId }: { farmId?: number }) {
       description: '',
       lat: 45.5231,
       lng: -122.6765,
+      elevationM: 0,
       areHa: 1,
       soilType: 'loam',
+      lastFrost: defaultFrost.lastFrost ?? '',
+      firstFrost: defaultFrost.firstFrost ?? '',
     },
   });
 
   useEffect(() => {
     if (farm) {
+      const fallbackFrost = estimateFrostDates(farm.lat, farm.elevationM ?? 0);
       form.reset({
         name: farm.name,
         description: farm.description ?? '',
         lat: farm.lat,
         lng: farm.lng,
+        elevationM: farm.elevationM ?? 0,
         areHa: farm.areHa,
         soilType: farm.soilType ?? 'loam',
+        lastFrost: farm.lastFrost !== undefined ? farm.lastFrost ?? '' : fallbackFrost.lastFrost ?? '',
+        firstFrost: farm.firstFrost !== undefined ? farm.firstFrost ?? '' : fallbackFrost.firstFrost ?? '',
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [farm?.id]);
+
+  const applyFrostEstimate = (lat = form.getValues('lat'), elevationM = form.getValues('elevationM') ?? 0) => {
+    const frost = estimateFrostDates(lat, elevationM ?? 0);
+    form.setValue('lastFrost', frost.lastFrost ?? '');
+    form.setValue('firstFrost', frost.firstFrost ?? '');
+    if (!frost.lastFrost || !frost.firstFrost) {
+      toast.info('This latitude is treated as frost-free for calendar planning');
+    }
+  };
+
+  const runPlaceSearch = async () => {
+    if (placeQuery.trim().length < 2) return;
+    try {
+      setPlaceLoading(true);
+      const results = await searchPlaces(placeQuery);
+      setPlaceResults(results);
+      if (results.length === 0) toast.info('No matching places found');
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setPlaceLoading(false);
+    }
+  };
+
+  const applyPlace = (place: GeocodeResult) => {
+    form.setValue('lat', Number(place.latitude.toFixed(4)));
+    form.setValue('lng', Number(place.longitude.toFixed(4)));
+    form.setValue('elevationM', place.elevation ?? 0);
+    if (!form.getValues('name')) form.setValue('name', place.name);
+    applyFrostEstimate(place.latitude, place.elevation ?? 0);
+    setPlaceQuery(`${place.name}${place.admin1 ? `, ${place.admin1}` : ''}${place.country ? `, ${place.country}` : ''}`);
+    setPlaceResults([]);
+  };
 
   const submit = form.handleSubmit(async (values) => {
     const payload = {
@@ -67,8 +117,11 @@ export function FarmForm({ farmId }: { farmId?: number }) {
       description: values.description || null,
       lat: values.lat,
       lng: values.lng,
+      elevationM: values.elevationM ?? null,
       areHa: values.areHa,
       soilType: values.soilType ?? null,
+      lastFrost: values.lastFrost || null,
+      firstFrost: values.firstFrost || null,
     };
     try {
       if (isEdit && farmId) {
@@ -102,7 +155,7 @@ export function FarmForm({ farmId }: { farmId?: number }) {
         <div>
           <h1 className="text-xl font-bold">{isEdit ? 'Edit Farm' : 'Add a Farm'}</h1>
           <p className="text-sm text-muted-foreground">
-            {isEdit ? 'Update farm metadata' : 'Set the GPS anchor — the voxel terrain is generated from this point.'}
+            {isEdit ? 'Update farm metadata' : 'Search a real place or enter coordinates manually.'}
           </p>
         </div>
       </div>
@@ -149,6 +202,48 @@ export function FarmForm({ farmId }: { farmId?: number }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-xs">Place search</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={placeQuery}
+                    onChange={(e) => setPlaceQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        runPlaceSearch();
+                      }
+                    }}
+                    placeholder="Town, city, or region"
+                    className="h-8 pl-7 text-sm"
+                  />
+                </div>
+                <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={runPlaceSearch} disabled={placeLoading}>
+                  {placeLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                  Search
+                </Button>
+              </div>
+              {placeResults.length > 0 && (
+                <div className="rounded-md border border-border bg-background p-1">
+                  {placeResults.map((place) => (
+                    <button
+                      key={place.id}
+                      type="button"
+                      onClick={() => applyPlace(place)}
+                      className="block w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+                    >
+                      <span className="font-medium">{place.name}</span>
+                      <span className="text-muted-foreground">
+                        {place.admin1 ? `, ${place.admin1}` : ''}{place.country ? `, ${place.country}` : ''}
+                        {place.elevation !== null ? ` · ${Math.round(place.elevation)} m` : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="lat" className="text-xs">
@@ -178,6 +273,18 @@ export function FarmForm({ farmId }: { farmId?: number }) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="elevationM" className="text-xs">
+                  Elevation (m)
+                </Label>
+                <Input
+                  id="elevationM"
+                  type="number"
+                  step="1"
+                  className="h-8 text-sm"
+                  {...form.register('elevationM')}
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="areHa" className="text-xs">
                   Area (ha)
@@ -209,6 +316,39 @@ export function FarmForm({ farmId }: { farmId?: number }) {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Snowflake className="w-4 h-4 text-primary" />
+              Frost dates
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="lastFrost" className="text-xs">
+                  Last spring frost
+                </Label>
+                <Input id="lastFrost" placeholder="MM-DD" className="h-8 text-sm" {...form.register('lastFrost')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="firstFrost" className="text-xs">
+                  First fall frost
+                </Label>
+                <Input id="firstFrost" placeholder="MM-DD" className="h-8 text-sm" {...form.register('firstFrost')} />
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                Leave blank for frost-free climates; the planting calendar uses these dates.
+              </p>
+              <Button type="button" variant="outline" size="sm" className="h-8 whitespace-nowrap" onClick={() => applyFrostEstimate()}>
+                Estimate from latitude
+              </Button>
             </div>
           </CardContent>
         </Card>

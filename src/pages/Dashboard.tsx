@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'wouter';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
+import { computeStats } from '@/lib/plan';
 import { useDeleteFarm, useFarms } from '@/hooks/useFarms';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,13 +38,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import type { Alert, Farm } from '@/types';
+import type { Alert, Crop, Farm } from '@/types';
+
+const WEATHER_STALE_MS = 15 * 60 * 1000;
 
 function useFarmWeather(farmId: number | undefined) {
   return useQuery({
     queryKey: ['weather', farmId],
     queryFn: () => apiFetch.getWeather(farmId!),
     enabled: !!farmId,
+    staleTime: WEATHER_STALE_MS,
   });
 }
 
@@ -51,6 +56,7 @@ function useFarmAlerts(farmId: number | undefined) {
     queryKey: ['alerts', farmId],
     queryFn: () => apiFetch.listAlerts(farmId!),
     enabled: !!farmId,
+    staleTime: WEATHER_STALE_MS,
   });
 }
 
@@ -74,12 +80,26 @@ function FarmCard({ farm }: { farm: Farm }) {
     queryKey: ['cells', farm.id],
     queryFn: () => apiFetch.listCells(farm.id),
   });
+  const { data: plan = null } = useQuery({
+    queryKey: ['plan', farm.id],
+    queryFn: () => apiFetch.getPlan(farm.id),
+  });
+  const { data: crops = [] } = useQuery<Crop[]>({
+    queryKey: ['crops'],
+    queryFn: () => apiFetch.listCrops(),
+  });
   const { data: alerts = [] } = useFarmAlerts(farm.id);
   const deleteFarm = useDeleteFarm();
   const qc = useQueryClient();
 
-  const planted = cells.filter((c) => c.cropId).length;
-  const coverage = cells.length > 0 ? Math.round((planted / cells.length) * 100) : 0;
+  const planStats = useMemo(() => plan ? computeStats(plan, crops) : null, [crops, plan]);
+  const plannedPlants = planStats?.perCrop.reduce((sum, stat) => sum + stat.plants, 0) ?? 0;
+  const legacyPlanted = cells.filter((c) => c.cropId).length;
+  const plantedDisplay = planStats ? `≈${plannedPlants}` : String(legacyPlanted);
+  const plantedLabel = planStats ? 'plants planned' : 'legacy planted';
+  const coverage = planStats && plan
+    ? Math.round((planStats.plantedAreaM2 / (plan.widthM * plan.heightM)) * 100)
+    : cells.length > 0 ? Math.round((legacyPlanted / cells.length) * 100) : 0;
   const unread = alerts.filter((a) => !a.isRead).length;
   const critical = alerts.filter((a) => !a.isRead && a.severity === 'critical').length;
 
@@ -109,14 +129,18 @@ function FarmCard({ farm }: { farm: Farm }) {
       </CardHeader>
       <CardContent className="space-y-3">
         <WeatherPill farmId={farm.id} />
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <div className="bg-muted rounded-md px-2 py-1.5 text-center">
             <div className="text-sm font-semibold">{farm.areHa}</div>
             <div className="text-xs text-muted-foreground">ha</div>
           </div>
           <div className="bg-muted rounded-md px-2 py-1.5 text-center">
-            <div className="text-sm font-semibold">{planted}</div>
-            <div className="text-xs text-muted-foreground">planted</div>
+            <div className="text-sm font-semibold">{plantedDisplay}</div>
+            <div className="text-xs text-muted-foreground">{plantedLabel}</div>
+          </div>
+          <div className="bg-muted rounded-md px-2 py-1.5 text-center">
+            <div className="text-sm font-semibold">{planStats ? `${planStats.totalYieldKg.toFixed(0)}` : '—'}</div>
+            <div className="text-xs text-muted-foreground">kg yield</div>
           </div>
           <div className="bg-muted rounded-md px-2 py-1.5 text-center">
             <div className="text-sm font-semibold capitalize">{farm.soilType ?? 'loam'}</div>
@@ -171,6 +195,7 @@ function FarmCard({ farm }: { farm: Farm }) {
                     await deleteFarm.mutateAsync(farm.id);
                     qc.invalidateQueries({ queryKey: ['alerts'] });
                     qc.invalidateQueries({ queryKey: ['cells'] });
+                    qc.invalidateQueries({ queryKey: ['plan'] });
                     toast.success('Farm deleted');
                   }}
                 >
