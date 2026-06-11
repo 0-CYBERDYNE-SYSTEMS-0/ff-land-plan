@@ -6,7 +6,9 @@ import {
   BoxSelect,
   Brush,
   Check,
+  Download,
   Eraser,
+  FileSpreadsheet,
   Hand,
   Leaf,
   Map as MapIcon,
@@ -36,7 +38,7 @@ import {
   type PlanPairing,
   type PlanStats,
 } from '@/lib/plan';
-import { drawPlan } from '@/lib/renderPlan';
+import { drawPlan, renderPlanToPng } from '@/lib/renderPlan';
 import { useFarm } from '@/hooks/useFarms';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useTheme } from '@/hooks/useTheme';
@@ -120,6 +122,34 @@ function stripInvalidPlants(plan: PlanState): PlanState {
 
 function sameCell(a: string | null, b: string | null) {
   return a === b;
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function sowWindow(crop: Crop): string {
+  const parts: string[] = [];
+  if (crop.sowIndoorsWeeksBeforeLastFrost !== null && crop.sowIndoorsWeeksBeforeLastFrost !== undefined) {
+    parts.push(`${crop.sowIndoorsWeeksBeforeLastFrost}w before frost indoors`);
+  }
+  if (crop.transplantWeeksAfterLastFrost !== null && crop.transplantWeeksAfterLastFrost !== undefined) {
+    parts.push(`${crop.transplantWeeksAfterLastFrost}w after frost transplant`);
+  }
+  if (crop.directSowStartWeeks !== null && crop.directSowStartWeeks !== undefined) {
+    parts.push(`${crop.directSowStartWeeks}-${crop.directSowEndWeeks ?? crop.directSowStartWeeks}w after frost direct`);
+  }
+  return parts.join('; ') || 'Not specified';
 }
 
 export function PlotDesigner({ farmId }: { farmId: number }) {
@@ -553,6 +583,36 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     requestAnimationFrame(fitToView);
   };
 
+  const exportPng = async () => {
+    const plan = planRef.current;
+    if (!plan) return;
+    try {
+      const blob = await renderPlanToPng(plan, crops, `${farm?.name ?? 'Farm'} Plot Plan`);
+      downloadBlob(blob, `${(farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-plot.png`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const exportCsv = () => {
+    if (!stats) return;
+    const rows = [
+      ['crop', 'variety', 'plants_needed', 'spacing_cm', 'row_spacing_cm', 'seeds_est', 'sow_window'],
+      ...stats.perCrop.map((stat) => [
+        stat.crop.name,
+        stat.crop.isCustom ? 'Custom' : '',
+        stat.plants,
+        stat.crop.spacingCm ?? 30,
+        stat.crop.rowSpacingCm ?? stat.crop.spacingCm ?? 30,
+        Math.ceil(stat.plants * 1.5),
+        sowWindow(stat.crop),
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
+    const fileBase = (farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${fileBase}-shopping-list.csv`);
+  };
+
   useEffect(() => {
     if (planLoading || cropsLoading) return;
     if (initializedFarmRef.current === farmId) return;
@@ -716,6 +776,12 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
               </Button>
               <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={fitToView}>
                 <Ruler className="w-3.5 h-3.5" /> Fit
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={exportPng}>
+                <Download className="w-3.5 h-3.5" /> PNG
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={exportCsv} disabled={!stats || stats.perCrop.length === 0}>
+                <FileSpreadsheet className="w-3.5 h-3.5" /> CSV
               </Button>
               <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={() => setSettingsOpen((o) => !o)}>
                 <Settings className="w-3.5 h-3.5" /> Settings

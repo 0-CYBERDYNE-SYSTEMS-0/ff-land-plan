@@ -87,6 +87,10 @@ section. Spec: `SPEC.md`. Restore point: `main @ 770c186`, work on `pro-upgrade`
   in the plan and only when the crop has sow/transplant/direct-sow metadata;
   harvest windows require a real outdoor start. Frost-free farms get year-round
   direct-sow windows for crops with calendar anchors.
+- **Exports and crop library polish**: Plot Designer now downloads PNGs through
+  the shared safe canvas renderer and CSV shopping lists from current plan
+  stats. Crop Library cards now expose emoji, spacing, family, frost tolerance,
+  and companion/antagonist chips, with added family and frost filters.
 
 ## Known gaps / future work
 

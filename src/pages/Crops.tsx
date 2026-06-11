@@ -10,6 +10,7 @@ import {
   Leaf,
   Plus,
   Search,
+  Snowflake,
   Sun,
   Thermometer,
   TrendingUp,
@@ -26,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { CropIcon } from '@/components/crops/CropIcon';
 import { EmptyState } from '@/components/shared/EmptyState';
-import type { Crop, CropCategory } from '@/types';
+import type { Crop, CropCategory, FrostTolerance } from '@/types';
 
 const CATEGORIES: { value: CropCategory | 'all'; label: string }[] = [
   { value: 'all', label: 'All Crops' },
@@ -49,7 +50,14 @@ const SUN_TONE: Record<string, string> = {
   shade: 'text-slate-500',
 };
 
-function CropCard({ crop }: { crop: Crop }) {
+const FROST_FILTERS: { value: FrostTolerance | 'all'; label: string }[] = [
+  { value: 'all', label: 'All Frost' },
+  { value: 'tender', label: 'Tender' },
+  { value: 'half-hardy', label: 'Half-hardy' },
+  { value: 'hardy', label: 'Hardy' },
+];
+
+function CropCard({ crop, cropBySlug }: { crop: Crop; cropBySlug: Map<string, Crop> }) {
   const [open, setOpen] = useState(false);
   return (
     <Card
@@ -63,7 +71,11 @@ function CropCard({ crop }: { crop: Crop }) {
             className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{ background: (crop.colorHex || '#4CAF50') + '22' }}
           >
-            <CropIcon category={crop.category} className="w-4 h-4" style={{ color: crop.colorHex || '#4CAF50' }} />
+            {crop.emoji ? (
+              <span className="text-lg">{crop.emoji}</span>
+            ) : (
+              <CropIcon category={crop.category} className="w-4 h-4" style={{ color: crop.colorHex || '#4CAF50' }} />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-1">
@@ -95,6 +107,19 @@ function CropCard({ crop }: { crop: Crop }) {
             <Sun className="w-3 h-3" /> {crop.sunRequirement}
           </div>
         </div>
+        <div className="flex flex-wrap gap-1">
+          {crop.family && <Badge variant="outline" className="text-xs">{crop.family}</Badge>}
+          {crop.frostTolerance && (
+            <Badge variant="secondary" className="text-xs gap-1">
+              <Snowflake className="w-3 h-3" /> {crop.frostTolerance}
+            </Badge>
+          )}
+          {crop.spacingCm && (
+            <Badge variant="outline" className="text-xs">
+              {crop.spacingCm}×{crop.rowSpacingCm ?? crop.spacingCm} cm
+            </Badge>
+          )}
+        </div>
         {open && (
           <div className="border-t border-border pt-3 space-y-3">
             {crop.description && <p className="text-xs text-muted-foreground">{crop.description}</p>}
@@ -112,6 +137,26 @@ function CropCard({ crop }: { crop: Crop }) {
                   <div className="text-xs font-medium">{s.val}</div>
                 </div>
               ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <div className="font-medium mb-1">Companions</div>
+                <div className="flex flex-wrap gap-1">
+                  {(crop.companions ?? []).slice(0, 6).map((slug) => (
+                    <Badge key={slug} variant="secondary" className="text-xs">{cropBySlug.get(slug)?.name ?? slug}</Badge>
+                  ))}
+                  {(crop.companions ?? []).length === 0 && <span className="text-muted-foreground">None listed</span>}
+                </div>
+              </div>
+              <div>
+                <div className="font-medium mb-1">Keep away</div>
+                <div className="flex flex-wrap gap-1">
+                  {(crop.antagonists ?? []).slice(0, 6).map((slug) => (
+                    <Badge key={slug} variant="outline" className="text-xs">{cropBySlug.get(slug)?.name ?? slug}</Badge>
+                  ))}
+                  {(crop.antagonists ?? []).length === 0 && <span className="text-muted-foreground">None listed</span>}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -135,6 +180,8 @@ export function Crops() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<CropCategory | 'all'>('all');
+  const [familyFilter, setFamilyFilter] = useState('all');
+  const [frostFilter, setFrostFilter] = useState<FrostTolerance | 'all'>('all');
   const { data: crops = [], isLoading } = useQuery<Crop[]>({
     queryKey: ['crops'],
     queryFn: () => apiFetch.listCrops(),
@@ -172,15 +219,23 @@ export function Crops() {
   });
 
   const filtered = crops.filter((c) => {
-    const matchesText = !search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.scientificName ?? '').toLowerCase().includes(search.toLowerCase());
+    const matchesText = !search ||
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.scientificName ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.family ?? '').toLowerCase().includes(search.toLowerCase());
     const matchesCategory = filter === 'all' || c.category === filter;
-    return matchesText && matchesCategory;
+    const matchesFamily = familyFilter === 'all' || c.family === familyFilter;
+    const matchesFrost = frostFilter === 'all' || c.frostTolerance === frostFilter;
+    return matchesText && matchesCategory && matchesFamily && matchesFrost;
   });
 
   const counts = crops.reduce<Record<string, number>>((acc, c) => {
     acc[c.category] = (acc[c.category] ?? 0) + 1;
     return acc;
   }, {});
+
+  const families = [...new Set(crops.map((c) => c.family).filter((f): f is string => !!f))].sort();
+  const cropBySlug = new Map(crops.map((crop) => [crop.slug, crop]).filter((entry): entry is [string, Crop] => !!entry[0]));
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-5">
@@ -289,10 +344,31 @@ export function Crops() {
             </button>
           ))}
         </div>
+        <Select value={familyFilter} onValueChange={setFamilyFilter}>
+          <SelectTrigger className="h-8 w-44 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Families</SelectItem>
+            {families.map((family) => (
+              <SelectItem key={family} value={family}>{family}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={frostFilter} onValueChange={(v) => setFrostFilter(v as FrostTolerance | 'all')}>
+          <SelectTrigger className="h-8 w-36 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FROST_FILTERS.map((f) => (
+              <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {filtered.length} crop{filtered.length !== 1 ? 's' : ''} {search || filter !== 'all' ? 'matching' : 'available'}
+        {filtered.length} crop{filtered.length !== 1 ? 's' : ''} {search || filter !== 'all' || familyFilter !== 'all' || frostFilter !== 'all' ? 'matching' : 'available'}
       </p>
 
       {isLoading ? (
@@ -304,7 +380,7 @@ export function Crops() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((c) => (
-            <CropCard key={c.id} crop={c} />
+            <CropCard key={c.id} crop={c} cropBySlug={cropBySlug} />
           ))}
         </div>
       )}
