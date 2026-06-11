@@ -45,7 +45,7 @@ function Routes() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/farms/new" component={FarmForm} />
+      <Route path="/farms/new">{() => <FarmForm />}</Route>
       <Route path="/farms/:id/edit">
         {(params) => <FarmForm farmId={Number(params.id)} />}
       </Route>

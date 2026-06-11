@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'wouter';
-import { ChartNoAxesColumn, CloudSun, FlaskConical, LayoutDashboard, Leaf, Map, Plus, Sprout, Sun, Moon, Activity } from 'lucide-react';
+import { LayoutDashboard, Leaf, Plus, Sprout, Sun, Moon } from 'lucide-react';
 
 import { useTheme } from '@/hooks/useTheme';
 import { useFarms } from '@/hooks/useFarms';

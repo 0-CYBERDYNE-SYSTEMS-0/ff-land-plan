@@ -49,7 +49,7 @@ export function AppShell({ children }: AppShellProps) {
 }
 
 import { Link, useLocation } from 'wouter';
-import { ChartNoAxesColumn, CloudSun, FlaskConical, LayoutDashboard, Leaf, Map, Plus, Sprout, Activity } from 'lucide-react';
+import { CloudSun, FlaskConical, LayoutDashboard, Leaf, Map, Plus, Activity } from 'lucide-react';
 import { useFarms } from '@/hooks/useFarms';
 import { cn } from '@/lib/utils';
 

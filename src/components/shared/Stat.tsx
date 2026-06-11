@@ -11,7 +11,7 @@ interface StatProps {
   sub?: string;
 }
 
-export function Stat({ label, value, unit, icon, progress, sub }: StatProps) {
+export function Stat({ label, value, icon, progress, sub }: StatProps) {
   return (
     <Card>
       <CardContent className="pt-4 pb-3 space-y-1">

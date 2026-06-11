@@ -1,4 +1,4 @@
-import { Apple, Flower2, Leaf, Sprout, Wheat } from 'lucide-react';
+import { Apple, Flower, Flower2, Leaf, Sprout, Wheat } from 'lucide-react';
 import type { CropCategory } from '@/types';
 
 interface CropIconProps {
@@ -13,6 +13,7 @@ const iconMap = {
   fruit: Apple,
   herb: Flower2,
   cover_crop: Sprout,
+  flower: Flower,
 } satisfies Record<CropCategory, React.ComponentType<{ className?: string; style?: React.CSSProperties }>>;
 
 export function CropIcon({ category, className, style }: CropIconProps) {

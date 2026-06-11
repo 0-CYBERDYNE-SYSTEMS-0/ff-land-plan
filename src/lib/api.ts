@@ -1,8 +1,8 @@
-// API client. The default `apiFetch` runs against the in-memory mock layer
-// in `src/mock/api.ts`, which lets the entire app boot and exercise every
-// route without a backend. Swap the import in pages for a real `fetch`-based
-// client to wire a real server.
+// API seam. `apiFetch` is the local-first client (persistent store + real
+// Open-Meteo weather). Point this at a fetch-based server client to wire a
+// real backend without touching pages.
 
-import { mockApi, type MockApi } from '@/mock/api';
+import { localApi, type Api } from '@/lib/localApi';
 
-export const apiFetch: MockApi = mockApi;
+export type { Api };
+export const apiFetch: Api = localApi;

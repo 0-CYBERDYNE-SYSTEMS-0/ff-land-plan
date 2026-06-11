@@ -13,6 +13,11 @@ export interface Farm {
   areHa: number;
   soilType: SoilType | null;
   createdAt: string;
+  elevationM?: number | null;
+  // "MM-DD", user-overridable; defaulted from the latitude heuristic in lib/frost.ts.
+  // null = frost-free climate (|lat| < 10).
+  lastFrost?: string | null;
+  firstFrost?: string | null;
 }
 
 export interface WeatherCurrent {
@@ -137,7 +142,9 @@ export interface Simulation {
   createdAt: string;
 }
 
-export type CropCategory = 'vegetable' | 'grain' | 'fruit' | 'herb' | 'cover_crop';
+export type CropCategory = 'vegetable' | 'grain' | 'fruit' | 'herb' | 'cover_crop' | 'flower';
+
+export type FrostTolerance = 'tender' | 'half-hardy' | 'hardy';
 
 export interface Crop {
   id: number;
@@ -154,4 +161,51 @@ export interface Crop {
   colorHex: string;
   description: string | null;
   isCustom: boolean;
+  // Agronomy fields (optional so legacy/custom crops stay valid; helpers in
+  // lib/plan.ts fall back to defaults when absent).
+  slug?: string;
+  family?: string;
+  spacingCm?: number;
+  rowSpacingCm?: number;
+  sowDepthCm?: number;
+  frostTolerance?: FrostTolerance;
+  // Calendar offsets in weeks relative to the farm's last spring frost.
+  sowIndoorsWeeksBeforeLastFrost?: number | null;
+  transplantWeeksAfterLastFrost?: number | null;
+  directSowStartWeeks?: number | null;
+  directSowEndWeeks?: number | null;
+  harvestWindowDays?: number;
+  yieldKgPerPlant?: number;
+  companions?: string[]; // crop slugs
+  antagonists?: string[]; // crop slugs
+  emoji?: string;
+}
+
+// --- Plot plan (sparse, replaces FarmCell for the designer) -----------------
+
+export type AssetCategory = 'growing' | 'infrastructure' | 'life';
+export type AssetPattern = 'solid' | 'stripes' | 'dots' | 'cross';
+
+export interface GardenAsset {
+  slug: string;
+  label: string;
+  category: AssetCategory;
+  defaultWM: number;
+  defaultHM: number;
+  colorHex: string;
+  pattern: AssetPattern;
+  emoji: string;
+  plantable: boolean;
+  description: string;
+}
+
+export interface PlanState {
+  farmId: number;
+  widthM: number;
+  heightM: number;
+  cellM: number;
+  allowOutsideBeds: boolean;
+  planting: Record<string, number>; // "x,y" -> cropId
+  ground: Record<string, string>; // "x,y" -> asset slug
+  updatedAt: string;
 }

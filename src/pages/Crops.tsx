@@ -5,19 +5,14 @@ import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Apple,
-  ChevronRight,
   Clock,
   Droplets,
-  Flower2,
   Leaf,
   Plus,
   Search,
-  Sprout,
   Sun,
   Thermometer,
   TrendingUp,
-  Wheat,
   X,
 } from 'lucide-react';
 
@@ -40,6 +35,7 @@ const CATEGORIES: { value: CropCategory | 'all'; label: string }[] = [
   { value: 'fruit', label: 'Fruits' },
   { value: 'herb', label: 'Herbs' },
   { value: 'cover_crop', label: 'Cover Crops' },
+  { value: 'flower', label: 'Flowers' },
 ];
 
 const NITROGEN_TONE: Record<string, string> = {
@@ -126,7 +122,7 @@ function CropCard({ crop }: { crop: Crop }) {
 
 const SCHEMA = z.object({
   name: z.string().min(1),
-  category: z.enum(['vegetable', 'grain', 'fruit', 'herb', 'cover_crop']),
+  category: z.enum(['vegetable', 'grain', 'fruit', 'herb', 'cover_crop', 'flower']),
   growthDays: z.coerce.number().min(1),
   waterNeedMmDay: z.coerce.number().min(0),
   yieldTonHa: z.coerce.number().min(0),
