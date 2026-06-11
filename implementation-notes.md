@@ -38,6 +38,31 @@ section. Spec: `SPEC.md`. Restore point: `main @ 770c186`, work on `pro-upgrade`
 - Weather: Open-Meteo (open-meteo.com) — free, no API key, CC-BY 4.0 attribution
   added to the Weather page footer.
 
+## Decisions made during phases 1–3 (chronological)
+
+- **Pre-existing typecheck failures fixed**: the repo had never actually been
+  typechecked (node_modules wasn't installed, `tsc` unavailable, lint broken).
+  Fixed unused imports in AppShell/Sidebar/Stat/Crops and a wouter route-typing
+  error in App.tsx as part of the quality gate.
+- **Crop ids 1–5 pinned** to the legacy seed values so old demo voxel cells
+  still render with the new 47-crop library. Custom crops start at id 1000.
+- **Soil moisture unit conversion**: Open-Meteo returns volumetric m³/m³;
+  mapped to a 0–100% display value via ×200 (0.5 m³/m³ ≈ saturated ≈ 100%).
+- **Alerts are fully derived** from the live forecast with deterministic hash
+  ids (farm:type:date) so read-state survives recomputation; the old seeded
+  alerts (incl. 'pest'/'nutrient' types) are gone — those types remain in the
+  TS union for future use.
+- **`src/mock/` deleted**; seeds moved to `src/data/seed.ts` (only farms,
+  legacy cells, sensors, sims, NDVI — crops/weather/alerts are real now).
+- **Garlic & cover crops** get approximate fall-sowing windows expressed as
+  +26..+30 weeks after *last* frost (the calendar model is last-frost-relative);
+  good enough for v1, noted as future work to model first-frost-relative sowing.
+- **Weather page attribution** (Open-Meteo CC-BY) still needs to be added when
+  the Weather page is touched in Phase 4/7.
+
 ## Known gaps / future work
 
-(running list)
+- Per-query `staleTime` overrides for weather queries in existing pages
+  (they currently inherit `Infinity`; data refreshes only on full reload).
+- First-frost-relative sowing windows for fall-planted crops.
+- HANDOFF.md describes the exact resume point (Phase 3 page component).
