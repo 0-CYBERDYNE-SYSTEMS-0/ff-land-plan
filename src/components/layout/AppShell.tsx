@@ -79,7 +79,7 @@ function SidebarMobile({ onNavigate }: { onNavigate: () => void }) {
         <div key={farm.id} onClick={onNavigate}>
           <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{farm.name}</div>
           {[
-            { href: `/farms/${farm.id}/map`, icon: Map, label: 'Voxel Editor' },
+            { href: `/farms/${farm.id}/map`, icon: Map, label: 'Plot Designer' },
             { href: `/farms/${farm.id}/weather`, icon: CloudSun, label: 'Weather' },
             { href: `/farms/${farm.id}/simulations`, icon: FlaskConical, label: 'Simulations' },
             { href: `/farms/${farm.id}/monitoring`, icon: Activity, label: 'Monitoring' },

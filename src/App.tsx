@@ -8,7 +8,7 @@ import { ThemeProvider } from '@/hooks/useTheme';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dashboard } from '@/pages/Dashboard';
 import { FarmForm } from '@/pages/FarmForm';
-import { VoxelMap } from '@/pages/VoxelMap';
+import { PlotDesigner } from '@/pages/PlotDesigner';
 import { Weather } from '@/pages/Weather';
 import { Simulations } from '@/pages/Simulations';
 import { Monitoring } from '@/pages/Monitoring';
@@ -50,7 +50,7 @@ function Routes() {
         {(params) => <FarmForm farmId={Number(params.id)} />}
       </Route>
       <Route path="/farms/:id/map">
-        {(params) => <VoxelMap farmId={Number(params.id)} />}
+        {(params) => <PlotDesigner farmId={Number(params.id)} />}
       </Route>
       <Route path="/farms/:id/weather">
         {(params) => <Weather farmId={Number(params.id)} />}

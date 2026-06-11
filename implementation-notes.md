@@ -59,6 +59,19 @@ section. Spec: `SPEC.md`. Restore point: `main @ 770c186`, work on `pro-upgrade`
   good enough for v1, noted as future work to model first-frost-relative sowing.
 - **Weather page attribution** (Open-Meteo CC-BY) still needs to be added when
   the Weather page is touched in Phase 4/7.
+- **Plot Designer page landed** as `src/pages/PlotDesigner.tsx`, replacing the
+  old DOM-cell `VoxelMap` at the existing `/farms/:id/map` route. It keeps the
+  `PlanState` in a ref, redraws the shared `drawPlan()` canvas renderer
+  imperatively, and leaves React state for toolbar/sidebar chrome, stats,
+  pairings, hover/selection, and saved status.
+- **Designer editing model**: brush/erase/asset stamping mutate sparse cell maps
+  during drag; rectangle fill commits on pointer-up; each stroke records one
+  shallow plan snapshot for undo/redo (50 max) and schedules a 600 ms autosave
+  through `apiFetch.savePlan`. Non-plantable assets clear plants underneath.
+- **Build hygiene**: `tsc -b` was emitting `vite.config.js` and
+  `vite.config.d.ts` into the repo root from the referenced node config. Moved
+  that output to `node_modules/.tmp/` via `tsconfig.node.json` so `npm run build`
+  leaves the worktree clean.
 
 ## Known gaps / future work
 

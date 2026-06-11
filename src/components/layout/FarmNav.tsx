@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import type { Farm } from '@/types';
 
 const farmLinks = (farmId: number) => [
-  { href: `/farms/${farmId}/map`, icon: Map, label: 'Voxel Editor' },
+  { href: `/farms/${farmId}/map`, icon: Map, label: 'Plot Designer' },
   { href: `/farms/${farmId}/weather`, icon: CloudSun, label: 'Weather' },
   { href: `/farms/${farmId}/simulations`, icon: FlaskConical, label: 'Simulations' },
   { href: `/farms/${farmId}/monitoring`, icon: Activity, label: 'Monitoring' },

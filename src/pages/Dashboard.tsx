@@ -133,7 +133,7 @@ function FarmCard({ farm }: { farm: Farm }) {
         <div className="flex gap-1.5 pt-1">
           <Link href={`/farms/${farm.id}/map`} className="flex-1">
             <Button variant="default" size="sm" className="w-full text-xs gap-1">
-              <Map className="w-3.5 h-3.5" /> Open Map
+              <Map className="w-3.5 h-3.5" /> Design Plot
             </Button>
           </Link>
           <Link href={`/farms/${farm.id}/weather`}>
@@ -293,7 +293,7 @@ export function Dashboard() {
               </p>
             </div>
             <div className="flex gap-3 justify-center flex-wrap">
-              {['Live weather data', 'Voxel crop editor', 'Yield simulations', 'IoT sensor support'].map((tag) => (
+              {['Live weather data', 'Plot designer', 'Yield simulations', 'IoT sensor support'].map((tag) => (
                 <Badge key={tag} variant="secondary" className="text-xs">
                   {tag}
                 </Badge>
