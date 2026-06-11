@@ -31,6 +31,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Stat } from '@/components/shared/Stat';
 import { WeatherIcon } from '@/components/weather/WeatherIcon';
 
+const WEATHER_STALE_MS = 15 * 60 * 1000;
+
 export function Weather({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
   const { data: farm } = useFarm(farmId);
@@ -38,14 +40,17 @@ export function Weather({ farmId }: { farmId: number }) {
   const weather = useQuery({
     queryKey: ['weather', farmId],
     queryFn: () => apiFetch.getWeather(farmId),
+    staleTime: WEATHER_STALE_MS,
   });
   const forecast = useQuery({
     queryKey: ['forecast', farmId],
     queryFn: () => apiFetch.getForecast(farmId),
+    staleTime: WEATHER_STALE_MS,
   });
   const history = useQuery({
     queryKey: ['weather-history', farmId],
     queryFn: () => apiFetch.getWeatherHistory(farmId, 24),
+    staleTime: WEATHER_STALE_MS,
   });
 
   const c = weather.data?.current;
@@ -283,6 +288,9 @@ export function Weather({ farmId }: { farmId: number }) {
           </CardContent>
         </Card>
       )}
+      <p className="text-xs text-muted-foreground">
+        Weather, forecast, soil, and UV data from Open-Meteo under CC BY 4.0.
+      </p>
     </div>
   );
 }

@@ -91,6 +91,10 @@ section. Spec: `SPEC.md`. Restore point: `main @ 770c186`, work on `pro-upgrade`
   the shared safe canvas renderer and CSV shopping lists from current plan
   stats. Crop Library cards now expose emoji, spacing, family, frost tolerance,
   and companion/antagonist chips, with added family and frost filters.
+- **Phase 7 cleanup**: README now describes the local-first Pro planner instead
+  of the old mock/VoxelMap app. Weather/forecast/history/alert queries touched
+  in this pass use 15-minute `staleTime`, and the Weather page includes
+  Open-Meteo CC BY 4.0 attribution.
 
 ## Known gaps / future work
 

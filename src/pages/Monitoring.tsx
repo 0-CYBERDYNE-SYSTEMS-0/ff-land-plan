@@ -260,6 +260,7 @@ export function Monitoring({ farmId }: { farmId: number }) {
   const { data: alerts = [] } = useQuery<Alert[]>({
     queryKey: ['alerts', farmId],
     queryFn: () => apiFetch.listAlerts(farmId),
+    staleTime: 15 * 60 * 1000,
     refetchInterval: 60_000,
   });
   const { data: cells = [] } = useQuery({
