@@ -1,0 +1,157 @@
+// Shared domain types for FarmFriend.
+// Names match the API contract used by the original backend so a real server
+// can drop in behind the in-memory mock with no client changes.
+
+export type SoilType = 'loam' | 'clay' | 'sandy' | 'silt' | 'peat' | 'chalky';
+
+export interface Farm {
+  id: number;
+  name: string;
+  description: string | null;
+  lat: number;
+  lng: number;
+  areHa: number;
+  soilType: SoilType | null;
+  createdAt: string;
+}
+
+export interface WeatherCurrent {
+  tempC: number;
+  feelsLikeC: number;
+  humidity: number;
+  windSpeedKmh: number;
+  precipMm: number;
+  uvIndex: number;
+  cloudCover: number;
+  soilTempC: number;
+  soilMoisture: number;
+  weatherCode: number;
+  weatherDesc: string;
+}
+
+export interface Weather {
+  current: WeatherCurrent;
+  cached: boolean;
+  timestamp: string;
+}
+
+export interface WeatherHistoryPoint {
+  tempC: number;
+  humidity: number;
+  soilMoisture: number;
+}
+
+export interface ForecastDay {
+  date: string;
+  maxTempC: number;
+  minTempC: number;
+  precipMm: number;
+  weatherCode: number;
+}
+
+export type AlertSeverity = 'critical' | 'warning' | 'info';
+export type AlertType = 'frost' | 'heat' | 'drought' | 'flood' | 'pest' | 'nutrient';
+
+export interface Alert {
+  id: number;
+  farmId: number;
+  alertType: AlertType;
+  severity: AlertSeverity;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export type SensorType = 'soil_moisture' | 'temperature' | 'humidity' | 'ndvi_proxy' | 'rainfall';
+
+export interface Sensor {
+  id: number;
+  farmId: number;
+  name: string;
+  sensorType: SensorType;
+  isActive: boolean;
+  lastValue: number | null;
+  lastUnit: string | null;
+  lastReadingAt: string | null;
+}
+
+export interface SensorReading {
+  id: number;
+  sensorId: number;
+  value: number;
+  recordedAt: string;
+}
+
+export interface FarmCell {
+  id: number;
+  farmId: number;
+  x: number;
+  y: number;
+  z: number;
+  cropId: number | null;
+  soilMoisture: number;
+  nitrogenLevel: number;
+}
+
+export interface NdviCell {
+  x: number;
+  y: number;
+  ndvi: number;
+}
+
+export interface NdviEstimate {
+  farmId: number;
+  ndviGrid: NdviCell[];
+  timestamp: string;
+}
+
+export type ScenarioType =
+  | 'baseline'
+  | 'drought'
+  | 'heat_stress'
+  | 'optimal'
+  | 'climate_change';
+
+export type SimulationStatus = 'pending' | 'running' | 'complete' | 'failed';
+
+export interface SimulationResults {
+  yieldTonHa: number;
+  waterUseMm: number;
+  carbonKgHa: number;
+  profitUsdHa: number;
+  stressScore: number;
+  summary: string;
+}
+
+export interface Simulation {
+  id: number;
+  farmId: number;
+  name: string;
+  scenarioType: ScenarioType;
+  durationDays: number;
+  tempDeltaC: number;
+  precipMultiplier: number;
+  fertilizerBoost: number;
+  status: SimulationStatus;
+  results: string | null;
+  createdAt: string;
+}
+
+export type CropCategory = 'vegetable' | 'grain' | 'fruit' | 'herb' | 'cover_crop';
+
+export interface Crop {
+  id: number;
+  name: string;
+  scientificName: string | null;
+  category: CropCategory;
+  growthDays: number;
+  waterNeedMmDay: number;
+  nitrogenNeed: 'low' | 'medium' | 'high';
+  sunRequirement: 'full' | 'partial' | 'shade';
+  minTempC: number;
+  maxTempC: number;
+  yieldTonHa: number;
+  colorHex: string;
+  description: string | null;
+  isCustom: boolean;
+}
