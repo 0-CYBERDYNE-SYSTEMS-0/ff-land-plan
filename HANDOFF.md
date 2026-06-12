@@ -1,145 +1,145 @@
-# HANDOFF — FarmFriend Pro upgrade (`pro-upgrade` branch)
+# HANDOFF — FarmFriend voxel-3D upgrade (`pro-upgrade` branch)
 
-**Status at handoff: Phases 1–2 of 7 complete and committed. Phase 3 (Plot
-Designer) is ~40% done — both support libraries are written, typechecked, and
-committed; the page component is NOT started.** Typecheck is clean. The app has
-not been smoke-tested in a browser since the weather swap — do that early.
+**Status at handoff (2026-06-12): the original 7-phase pro upgrade is fully
+shipped, and Phase 0 of the voxel-3D initiative just landed. Next task is
+Phase 1: the lazy-loaded three.js "World" view.** Typecheck and `npm run
+build` are both clean at handoff.
 
-Read these first, in order:
-1. `SPEC.md` — what we're building. **The "Amendments (post Opus review)"
-   section is binding** — it overrides the prose above it where they differ.
-2. `implementation-notes.md` — decisions/tradeoffs made so far. Keep appending
-   to it; it's a deliverable.
-3. This file.
+Read in order: this file → `SPEC.md` (the "Amendments" section is binding for
+the 2D designer) → `implementation-notes.md` (keep appending; it's a
+deliverable).
 
 ## Where things stand
 
-| Phase | State |
+| Work | State |
 | --- | --- |
-| 1. Types, real crop dataset (47), asset library (21) | ✅ committed `1eca669` |
-| 2. Persistent store, local API, live Open-Meteo weather, frost heuristic, geocoding | ✅ committed `1eca669` |
-| 3. Plot Designer (canvas) | 🟡 libs done (`src/lib/plan.ts`, `src/lib/renderPlan.ts`); **page component not started** |
-| 4. FarmForm geocoding + frost dates; plan-aware Dashboard | ⬜ |
-| 5. Planting calendar (`/farms/:id/calendar`) | ⬜ |
-| 6. PNG/CSV exports + Crops page upgrade | ⬜ |
-| 7. QA, README, final commits | ⬜ |
+| Pro upgrade phases 1–7 (crops, store, weather, designer, calendar, exports) | ✅ `1eca669` … `cd8fef5` |
+| 3D Phase 0a — editor access fixes (mount race, responsive layout, touch) | ✅ `336959d` |
+| 3D Phase 0b — decompose PlotDesigner into `usePlanEditor` + components | ✅ `261941f` |
+| 3D Phase 1 — read-only World view (three.js island) | ⬜ **← you are here** |
+| 3D Phases 2–5 — procedural plants/sun, time-scrub growth, edit-in-3D, history | ⬜ |
 
-Git: branch `pro-upgrade`; restore point is `main @ 770c186`. History:
-`6c655e8` (spec+notes) → `1eca669` (phases 1–2) → libs committed after.
-Working tree should be clean when you start; `npm run typecheck` must stay clean
-(note: `npm run lint` is broken repo-wide — no ESLint installed; typecheck is the gate).
+Uncommitted: `src/data/seed.ts` carries ~95 lines of a half-finished
+"showcase plan" seed (demo plot for first-run). It typechecks but was never
+verified in-browser. Finish it or revert it — do not blindly commit it.
 
-## What was built (the 30-second architecture tour)
+## The 3D architecture (decided after Opus review — do not relitigate casually)
 
-- **`src/lib/api.ts`** is still the single seam every page imports
-  (`apiFetch`). It now points at **`src/lib/localApi.ts`** (the old
-  `src/mock/api.ts` is deleted), which implements the same interface backed by:
-  - **`src/lib/store.ts`** — one localStorage blob `ff-pro:v1`, loaded sync at
-    boot, saved via debounced `persist()` (500 ms) with quota try/catch.
-    First-run seeds come from `src/data/seed.ts` (moved from `src/mock/`).
-  - **`src/lib/weather.ts`** — real Open-Meteo. One fetch serves
-    weather + forecast + history; `localApi.farmWeather()` memoizes per
-    coordinate for 15 min and dedupes in-flight calls. Alerts are **derived
-    from the live forecast** (frost/heat/flood/drought) with deterministic
-    hash ids so read-state persists across recomputation.
-- **`src/data/crops.ts`** — 47 real crops. IDs 1–5 deliberately match the old
-  seed cells (tomato/lettuce/wheat/apple/basil) so legacy demo data renders.
-  Companions/antagonists reference **slugs**, not ids.
-- **`src/data/assets.ts`** — 21 placeable assets; `plantable: true` means crops
-  may be painted on top (beds, greenhouse, etc.).
-- **`src/lib/plan.ts`** — sparse `PlanState` model (`Record<"x,y", …>`),
-  `computeStats` (plant counts via summed area — **no flood fill, on purpose**),
-  `findPairings` (companion/antagonist adjacency within 4 cells = 1 m).
-- **`src/lib/renderPlan.ts`** — the one draw routine used by both the live
-  canvas and `renderPlanToPng` (title + legend + 1 m scale bar already done).
-- **`src/lib/frost.ts`** — latitude→frost-date heuristic (formula documented in
-  SPEC amendment 8). `src/lib/geocode.ts` — Open-Meteo geocoding search.
+Full reasoning lives in this branch's planning session; the decisions:
 
-Legacy kept on purpose: `FarmCell`/`listCells`/`setCellCrop`/NDVI/sensors/sims
-are untouched — Monitoring and Dashboard still read them. Don't migrate or
-delete; the designer uses `getPlan`/`savePlan` instead.
+1. **Vanilla three.js in a React island — NOT react-three-fiber.** The app is
+   React 18; R3F v9+ requires React 19, so R3F would pin us to its legacy v8
+   maintenance branch. One `<World3D>` component owns a canvas, builds the
+   scene imperatively in an effect, runs its own rAF loop, and receives plain
+   props (`PlanState`, date, weather, lat/lng). Only revisit if React 19
+   upgrade happens first. Use `camera-controls` (yomotsu) for orbit/pinch.
+2. **Draw-call budget < 80 worst case.** Ground layer = ONE plane with a baked
+   `CanvasTexture` (reuse `renderPlan.drawPlan` onto an offscreen canvas —
+   do not write a second ground renderer). Plants = one `InstancedMesh` per
+   crop present (≤47, typically <10). Structures = one `InstancedMesh` per
+   asset archetype (≤21). Rebuild geometry only on plan edit, never per frame.
+3. **Fully procedural models, no asset packs.** Per-crop voxel plant from data
+   we have: `category` → archetype shape, `colorHex` → color, `growthDays` →
+   height scale, seeded per-cell jitter to kill the clone look. Far-LOD =
+   instanced billboards (also the mobile tier).
+4. **2D stays the editor ("Blueprint"); 3D ships read-only first ("World"
+   toggle).** `PlanState` is the single source of truth; `World3D` is a pure
+   projection. Edit-in-3D arrives in Phase 4 by raycasting to the grid and
+   calling the SAME mutation functions via `usePlanEditor` — never fork the
+   mutation logic.
+5. **Lazy-load the entire 3D bundle.** `React.lazy(() => import(World3D))`
+   behind the toggle + a `manualChunks` entry for `three` in `vite.config.ts`.
+   The main bundle is already 295 kB gzip (recharts); three.js must not load
+   on dashboard pages.
+6. **Schema changes are additive + optional only** (`store.ts` merges loaded
+   blobs over the seed shape, so old localStorage plans keep working):
+   `plantedAt?: Record<"x,y", string>` (fallback: derive sow date from
+   `calendar.ts`), `structureHeights?`, `elevation?` (defer), `view3d?`
+   (camera memory).
 
-## Next task: finish Phase 3 — `src/pages/PlotDesigner.tsx`
+## Phase 1 scope (the next session's work)
 
-Replaces `VoxelMap` at route `/farms/:id/map` (update `src/App.tsx`, delete
-`src/pages/VoxelMap.tsx`, rename the "Voxel Editor" label in
-`src/components/layout/FarmNav.tsx` and `AppShell.tsx`'s mobile nav to "Plot
-Designer").
+Deliverable: flip a Blueprint/World toggle and the saved plan stands up as an
+orbitable 3D model, desktop + tablet. Concretely:
 
-Non-negotiable architecture (SPEC amendments 1, 7; Opus verdict):
-- **Single `<canvas>`; never DOM cells.** Plan data lives in a **ref**;
-  imperative redraw via `drawPlan()` on rAF or on-change. React state only for
-  chrome: active tool, crop, asset, zoom display, stats, pairings, saved-at.
-- Tools: select **V**, brush **B** (1×1 / 3×3), rectangle **R**, asset stamp
-  **A**, erase **E** (layer toggle plants/ground); wheel zoom around cursor
-  (emoji per cell at ≥16 px), space/middle-drag pan, zoom-to-fit button.
-- Hit test: `floor((mouseX − offsetX) / cellPx)`. Planting allowed per
-  `canPlantAt()` (bed cells, or anywhere if `allowOutsideBeds`).
-- Undo/redo: snapshot `{planting, ground}` (shallow clones) per stroke
-  (pointerdown→pointerup), cap 50; redo cleared on new stroke. Cmd+Z / ⇧Cmd+Z.
-- Autosave: debounce ~600 ms after each committed stroke →
-  `apiFetch.savePlan(planRef.current)`; show a "Saved ✓" indicator. Load via
-  `apiFetch.getPlan(farmId)` → `createDefaultPlan(farmId)` when null.
-- Stats/pairings: recompute after each stroke (cheap — sparse maps);
-  `conflictCellSet(pairings)` feeds the amber highlights in `drawPlan`.
-  Live plant-count readout while painting is an approved cheap win.
-- Plan settings dialog: width/height (2–60 m, then `clampPlan`),
-  `allowOutsideBeds` toggle.
-- Side panel: crop palette (searchable, emoji+color chips), asset palette
-  (grouped by category), per-crop stats (area, ≈N plants, yield kg), totals
-  (water L/day, families), pairing warnings ("Fennel inhibits tomato — keep
-  1 m apart") and companion notes.
+- `src/three/engine.ts` — renderer/scene/camera/rAF lifecycle, resize.
+- `src/three/groundTexture.ts` — `PlanState` → offscreen canvas via
+  `drawPlan` → `CanvasTexture` on a ground plane.
+- `src/three/structures.ts` — procedural box models per asset slug
+  (raised bed frame, greenhouse translucent box, fence post+rail, pond,
+  shed…), instanced per archetype, default heights in code.
+- Plants as instanced billboards (colorHex quad; full procedural plants are
+  Phase 2).
+- `src/components/world/World3D.tsx` — the lazy island; `ViewToggle.tsx` in
+  the designer header; wire into `src/pages/PlotDesigner.tsx` (it's a 64-line
+  orchestrator now — keep it thin).
+- `camera-controls` + `three` as new deps; `fitToBox` the plot on mount.
 
-Then phases 4–6 per SPEC (calendar math helpers belong in a new
-`src/lib/calendar.ts`, using `monthDayToDoy`/`dateFromMonthDay` from frost.ts),
-then Phase 7.
+## Editor code map (post-decomposition)
+
+- `src/components/designer/usePlanEditor.ts` (852 lines) — ALL editor state:
+  plan/viewport/drag refs, undo/redo, autosave, pointer+pinch+wheel handlers,
+  stats/pairings, exports, data fetching. **This hook is the seam both
+  BlueprintCanvas and the future World3D consume.**
+- `src/components/designer/BlueprintCanvas.tsx` — canvas element, DOM effects
+  (ResizeObserver sizing, non-passive wheel listener, redraw, keyboard).
+- `DesignerToolbar.tsx`, `CropPalette.tsx`, `AssetPalette.tsx`,
+  `StatsPanel.tsx`, `PairingsPanel.tsx`, `SelectionPanel.tsx` — presentational.
+- Layout invariants (fixed in `336959d`, don't regress): page root is
+  `xl:h-full` flex column; canvas card is `flex min-h-0 flex-col` so the
+  canvas absorbs toolbar wrap; below `xl` the canvas is `h-[60dvh]` and the
+  panels are reached by normal page scroll; the canvas sizing effect is keyed
+  on `isLoading` because the skeleton early-return means refs are null on
+  mount.
+
+Legacy kept on purpose: `FarmCell`/`listCells`/NDVI/sensors/sims still feed
+Monitoring and Dashboard. Don't migrate or delete; the designer uses
+`getPlan`/`savePlan`.
 
 ## Traps that will actually bite you
 
-1. **Open-Meteo soil/UV are hourly-only.** Already handled in `weather.ts`
-   (current-hour index + `timezone=auto`) — verified live on 2026-06-11. Don't
-   "simplify" them into `current=`; they silently vanish.
+1. **Open-Meteo soil/UV are hourly-only** — handled in `weather.ts`
+   (current-hour index + `timezone=auto`). Don't "simplify" into `current=`.
 2. **QueryClient defaults are hostile to weather**: global
-   `staleTime: Infinity` + a default queryFn that fetches the queryKey as a
-   URL. Any new weather/alert/forecast `useQuery` MUST pass its own `queryFn`
-   and `staleTime: 15 * 60 * 1000`. The existing pages (Weather, Dashboard,
-   Monitoring) already pass their own queryFn via `apiFetch` — but they inherit
-   `staleTime: Infinity`, which is now wrong for weather; per-query overrides
-   are part of remaining work (Phase 4/7 polish).
-3. **Soil moisture units**: Open-Meteo returns volumetric m³/m³ (~0–0.5);
-   `weather.ts` maps to % via ×200. If readings look halved/doubled, that line
-   is the suspect.
-4. **PNG export taint**: keep `renderPlan.ts` free of `drawImage` from remote
-   URLs or `toBlob()` throws. Emoji as `fillText` is safe.
-5. **Custom crop ids start at 1000** (`store.ts` counters) — static library ids
-   stay below that. Don't renumber library crops; plans persist cropIds in
-   localStorage.
-6. **`ctx.roundRect`** requires TS ≥5.x DOM lib (present, 5.6) and a modern
-   browser — fine for Vite dev targets, just don't downgrade TS.
-7. Garlic/cover-crop calendar offsets are **positive large weeks** (fall
-   planting ≈ weeks 18–30 after last frost) — an approximation, flagged in
-   implementation-notes. The calendar must handle `lastFrost: null`
-   (|lat| < 10 → treat as direct-sow year-round, SPEC amendment 8).
+   `staleTime: Infinity` + a URL-joining default queryFn. New queries must
+   pass their own `queryFn`; weather queries should override `staleTime`.
+3. **Soil moisture units**: Open-Meteo volumetric m³/m³ mapped to % via ×200
+   in `weather.ts`.
+4. **PNG export taint**: keep `renderPlan.ts` free of remote `drawImage` or
+   `toBlob()` throws. This now also protects the 3D ground texture.
+5. **Custom crop ids start at 1000** (`store.ts`); never renumber library
+   crops — plans persist cropIds in localStorage.
+6. **TS strict + noUnusedLocals/noUnusedParameters**: unused imports fail the
+   build. `npm run lint` is broken repo-wide (no ESLint installed);
+   `npm run typecheck` is the gate.
+7. **React 18, not 19** — this is why R3F is off the table (decision 1).
+   A React 19 bump is a separate, deliberate project.
 
 ## Verification gates (run before calling anything done)
 
-1. `npm run typecheck` — clean (it is at handoff).
-2. `npm run build` — not yet run on this branch; run it.
-3. Browser smoke: `npm run dev` → every page loads, no console errors; Weather
-   page shows real Portland data for seed farms; refresh persists farms/plans.
-   Clear `localStorage` (`ff-pro:*`) to test first-run seeding.
-4. End-to-end (SPEC "Verification plan"): create farm via geocoding → weather →
-   design plot → counts/conflicts → refresh persists → calendar dates sane →
-   PNG + CSV export.
+1. `npm run typecheck` — clean at handoff.
+2. `npm run build` — clean at handoff (1.04 MB main chunk / 295 kB gzip;
+   the chunk-size warning is recharts and is expected — but three.js must
+   land in its own lazy chunk, not here).
+3. Playwright smoke on `npm run dev` → `#/farms/1/map`: first load shows the
+   grid centered and filling the canvas; paint → "Unsaved"→"Saved"; wheel
+   zoom changes px/cell; palette reachable by scroll at 1024×768 and 390×844;
+   zero console errors. (Phase 0 evidence lived in /tmp/ff-editor-audit and
+   /tmp/ff-editor-fix; regenerate as needed.)
+4. After Phase 1: dashboard network tab must show NO three.js chunk until the
+   World toggle is clicked.
+
+## Suggested skills for the next session
+
+- `webapp-testing` or `browse` — Playwright smoke tests against the dev
+  server (the verification gates above).
+- `investigate` — if a regression appears, root-cause before patching.
+- `qa` / `qa-only` — end-of-phase sweep across viewports.
 
 ## Workflow the user asked for (keep honoring it)
 
-Orchestrator implements; **Opus** for heavy design reasoning (its spec review
-verdicts are already folded into SPEC amendments); **Sonnet** for
-status/verification passes (browser QA); **Haiku** for all git operations.
-Commit after each completed phase, message style as in `1eca669`.
-**Never** put Claude/Anthropic/co-author references in commits or files.
-Keep `implementation-notes.md` updated as you go — it's an explicit user
-deliverable, same as the code.
-
-Task list state at handoff: #1 ✅, #2 ✅, #3 in_progress, #4–7 pending.
+Orchestrator plans and verifies; **Opus** for heavy design reasoning;
+**Sonnet** workers implement under precise specs; **Haiku** for all git
+operations. Commit after each completed phase (message style as in
+`336959d`). **Never** put Claude/Anthropic/co-author references in commits or
+any project file. Keep `implementation-notes.md` updated as you go.
