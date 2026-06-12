@@ -66,11 +66,9 @@ function SidebarMobile({ onNavigate }: { onNavigate: () => void }) {
       {PRIMARY_LINKS.map((link) => {
         const active = location === link.href;
         return (
-          <Link key={link.href} href={link.href}>
-            <a onClick={onNavigate} className={cn('flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm', active ? 'bg-primary/15 text-primary font-medium' : 'text-muted-foreground hover:bg-muted')}>
-              <link.icon className="w-4 h-4" />
-              {link.label}
-            </a>
+          <Link key={link.href} href={link.href} onClick={onNavigate} className={cn('flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm', active ? 'bg-primary/15 text-primary font-medium' : 'text-muted-foreground hover:bg-muted')}>
+            <link.icon className="w-4 h-4" />
+            {link.label}
           </Link>
         );
       })}
@@ -85,19 +83,15 @@ function SidebarMobile({ onNavigate }: { onNavigate: () => void }) {
             { href: `/farms/${farm.id}/simulations`, icon: FlaskConical, label: 'Simulations' },
             { href: `/farms/${farm.id}/monitoring`, icon: Activity, label: 'Monitoring' },
           ].map((link) => (
-            <Link key={link.href} href={link.href}>
-              <a onClick={onNavigate} className="flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-muted">
-                <link.icon className="w-4 h-4" />
-                {link.label}
-              </a>
+            <Link key={link.href} href={link.href} onClick={onNavigate} className="flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-muted">
+              <link.icon className="w-4 h-4" />
+              {link.label}
             </Link>
           ))}
         </div>
       ))}
-      <Link href="/farms/new">
-        <a onClick={onNavigate} className="mx-2 mt-2 flex items-center gap-2 px-3 py-2 text-sm text-primary">
-          <Plus className="w-4 h-4" /> New Farm
-        </a>
+      <Link href="/farms/new" onClick={onNavigate} className="mx-2 mt-2 flex items-center gap-2 px-3 py-2 text-sm text-primary">
+        <Plus className="w-4 h-4" /> New Farm
       </Link>
     </nav>
   );

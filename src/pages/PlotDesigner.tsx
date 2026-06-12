@@ -66,7 +66,7 @@ interface Viewport {
 }
 
 interface DragState {
-  kind: 'paint' | 'rect' | 'pan' | null;
+  kind: 'paint' | 'rect' | 'pan' | 'gesture' | null;
   before: PlanState | null;
   changed: boolean;
   startX: number;
@@ -181,6 +181,9 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     panOffsetX: 0,
     panOffsetY: 0,
   });
+  const didInitialFitRef = useRef(false);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ distance: number; midX: number; midY: number } | null>(null);
   const autosaveRef = useRef<number | null>(null);
   const undoRef = useRef<PlanState[]>([]);
   const redoRef = useRef<PlanState[]>([]);
@@ -431,6 +434,24 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   const finishStroke = useCallback((event?: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     const plan = planRef.current;
+    if (event) pointersRef.current.delete(event.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    if (drag.kind === 'gesture') {
+      if (pointersRef.current.size < 2) {
+        dragRef.current = {
+          kind: null,
+          before: null,
+          changed: false,
+          startX: 0,
+          startY: 0,
+          panClientX: 0,
+          panClientY: 0,
+          panOffsetX: 0,
+          panOffsetY: 0,
+        };
+      }
+      return;
+    }
     const endCell = event ? getCellFromEvent(event) : null;
     const endKey = endCell?.key ?? hoverKey;
     if (drag.kind === 'rect' && plan && endKey) {
@@ -480,6 +501,37 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     const plan = planRef.current;
     if (!plan) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointersRef.current.size >= 2) {
+      const drag = dragRef.current;
+      if (drag.kind === 'paint' || drag.kind === 'rect') {
+        if (drag.before) {
+          planRef.current = drag.before;
+          updateStats(drag.before);
+          setPlanVersion((v) => v + 1);
+        }
+        setRectPreview(null);
+      }
+      const points = [...pointersRef.current.values()];
+      const [p1, p2] = points;
+      pinchRef.current = {
+        distance: Math.hypot(p2.x - p1.x, p2.y - p1.y),
+        midX: (p1.x + p2.x) / 2,
+        midY: (p1.y + p2.y) / 2,
+      };
+      dragRef.current = {
+        kind: 'gesture',
+        before: null,
+        changed: false,
+        startX: 0,
+        startY: 0,
+        panClientX: 0,
+        panClientY: 0,
+        panOffsetX: 0,
+        panOffsetY: 0,
+      };
+      return;
+    }
     const cell = getCellFromEvent(event);
     if (event.button === 1 || spaceHeldRef.current) {
       dragRef.current = {
@@ -521,9 +573,45 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+    const drag = dragRef.current;
+    if (drag.kind === 'gesture' && pointersRef.current.size >= 2) {
+      const canvas = canvasRef.current;
+      const plan = planRef.current;
+      if (!canvas || !plan || !pinchRef.current) return;
+      const points = [...pointersRef.current.values()];
+      const [p1, p2] = points;
+      const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const px = (midX - rect.left) * scaleX;
+      const py = (midY - rect.top) * scaleY;
+      const viewport = viewportRef.current;
+      const oldCellPx = viewport.cellPx;
+      const prevDistance = pinchRef.current.distance || distance;
+      const scale = distance / prevDistance;
+      const nextCellPx = Math.max(4, Math.min(36, oldCellPx * scale));
+      const worldX = (px - viewport.offsetX) / oldCellPx;
+      const worldY = (py - viewport.offsetY) / oldCellPx;
+      const panDX = (midX - pinchRef.current.midX) * scaleX;
+      const panDY = (midY - pinchRef.current.midY) * scaleY;
+      viewportRef.current = {
+        ...viewport,
+        cellPx: nextCellPx,
+        offsetX: px - worldX * nextCellPx + panDX,
+        offsetY: py - worldY * nextCellPx + panDY,
+      };
+      pinchRef.current = { distance, midX, midY };
+      setViewportVersion((v) => v + 1);
+      return;
+    }
     const cell = getCellFromEvent(event);
     setHoverKey((current) => sameCell(current, cell?.key ?? null) ? current : cell?.key ?? null);
-    const drag = dragRef.current;
     if (drag.kind === 'pan') {
       viewportRef.current = {
         ...viewportRef.current,
@@ -541,7 +629,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     }
   };
 
-  const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
+  const handleWheel = useCallback((event: WheelEvent) => {
     const plan = planRef.current;
     const canvas = canvasRef.current;
     if (!plan || !canvas) return;
@@ -566,7 +654,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
       offsetY: py - worldY * nextCellPx,
     };
     setViewportVersion((v) => v + 1);
-  };
+  }, []);
 
   const applySettings = () => {
     const current = planRef.current;
@@ -580,7 +668,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     }));
     replacePlan(next, { save: true, recordHistory: before });
     setSettingsOpen(false);
-    requestAnimationFrame(fitToView);
+    fitToView();
   };
 
   const exportPng = async () => {
@@ -613,6 +701,8 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${fileBase}-shopping-list.csv`);
   };
 
+  const isLoading = farmLoading || cropsLoading || planLoading || !planRef.current;
+
   useEffect(() => {
     if (planLoading || cropsLoading) return;
     if (initializedFarmRef.current === farmId) return;
@@ -624,7 +714,11 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     setDraftAllowOutsideBeds(plan.allowOutsideBeds);
     updateStats(plan);
     setPlanVersion((v) => v + 1);
-    requestAnimationFrame(fitToView);
+    didInitialFitRef.current = false;
+    if (canvasRef.current && shellRef.current) {
+      fitToView();
+      didInitialFitRef.current = true;
+    }
   }, [cropsLoading, farmId, fitToView, planLoading, storedPlan, updateStats]);
 
   useEffect(() => {
@@ -640,13 +734,26 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
       canvas.width = Math.max(320, Math.floor(rect.width));
       canvas.height = Math.max(420, Math.floor(rect.height));
       viewportRef.current = { ...viewportRef.current, viewW: canvas.width, viewH: canvas.height };
-      setViewportVersion((v) => v + 1);
+      if (!didInitialFitRef.current) {
+        fitToView();
+        didInitialFitRef.current = true;
+      } else {
+        setViewportVersion((v) => v + 1);
+      }
     };
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(shell);
     return () => observer.disconnect();
-  }, []);
+  }, [isLoading, fitToView]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const wheelHandler = (event: WheelEvent) => handleWheel(event);
+    canvas.addEventListener('wheel', wheelHandler, { passive: false });
+    return () => canvas.removeEventListener('wheel', wheelHandler);
+  }, [isLoading, handleWheel]);
 
   useEffect(() => {
     redraw();
@@ -689,7 +796,6 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
   }, []);
 
-  const isLoading = farmLoading || cropsLoading || planLoading || !planRef.current;
   const zoomLabel = `${Math.round(viewportRef.current.cellPx)} px/cell`;
   const antagonists = pairings.filter((p) => p.kind === 'antagonist');
   const companions = pairings.filter((p) => p.kind === 'companion');
@@ -702,7 +808,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   if (!currentPlan) return <div className="p-6">Plan not found.</div>;
 
   return (
-    <div className="h-full min-h-0 p-4 lg:p-6 space-y-4">
+    <div className="flex flex-col p-4 lg:p-6 space-y-4 xl:h-full xl:min-h-0">
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
           <ArrowLeft className="w-4 h-4" />
@@ -721,8 +827,8 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
         </Badge>
       </div>
 
-      <div className="grid min-h-[calc(100vh-9rem)] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-h-[560px] overflow-hidden rounded-lg border border-border bg-card">
+      <div className="grid gap-4 xl:flex-1 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
           <div className="flex flex-wrap items-center gap-2 border-b border-border p-2">
             <div className="flex flex-wrap items-center gap-1 rounded-md border border-border p-0.5">
               {TOOL_OPTIONS.map((option) => (
@@ -735,7 +841,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
                   onClick={() => setTool(option.tool)}
                 >
                   <option.icon className="w-3.5 h-3.5" />
-                  {option.label}
+                  <span className="hidden sm:inline">{option.label}</span>
                 </Button>
               ))}
             </div>
@@ -768,23 +874,23 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
               </Select>
             )}
             <div className="ml-auto flex items-center gap-1">
-              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={undo} disabled={undoRef.current.length === 0}>
-                <Undo2 className="w-3.5 h-3.5" /> Undo
+              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={undo} disabled={undoRef.current.length === 0} title="Undo">
+                <Undo2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Undo</span>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={redo} disabled={redoRef.current.length === 0}>
-                <Redo2 className="w-3.5 h-3.5" /> Redo
+              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={redo} disabled={redoRef.current.length === 0} title="Redo">
+                <Redo2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Redo</span>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={fitToView}>
-                <Ruler className="w-3.5 h-3.5" /> Fit
+              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={fitToView} title="Fit">
+                <Ruler className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Fit</span>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={exportPng}>
-                <Download className="w-3.5 h-3.5" /> PNG
+              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={exportPng} title="Export PNG">
+                <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">PNG</span>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={exportCsv} disabled={!stats || stats.perCrop.length === 0}>
-                <FileSpreadsheet className="w-3.5 h-3.5" /> CSV
+              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={exportCsv} disabled={!stats || stats.perCrop.length === 0} title="Export CSV">
+                <FileSpreadsheet className="w-3.5 h-3.5" /> <span className="hidden sm:inline">CSV</span>
               </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={() => setSettingsOpen((o) => !o)}>
-                <Settings className="w-3.5 h-3.5" /> Settings
+              <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={() => setSettingsOpen((o) => !o)} title="Settings">
+                <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Settings</span>
               </Button>
             </div>
           </div>
@@ -811,7 +917,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
             </div>
           )}
 
-          <div ref={shellRef} className="relative h-[calc(100%-3.25rem)] min-h-[520px] bg-muted/30">
+          <div ref={shellRef} className="relative h-[60dvh] min-h-[320px] bg-muted/30 xl:h-auto xl:min-h-0 xl:flex-1">
             <canvas
               ref={canvasRef}
               className={cn('block h-full w-full touch-none', spaceHeldRef.current || dragRef.current.kind === 'pan' ? 'cursor-grabbing' : 'cursor-crosshair')}
@@ -820,7 +926,6 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
               onPointerUp={finishStroke}
               onPointerCancel={finishStroke}
               onPointerLeave={() => setHoverKey(null)}
-              onWheel={handleWheel}
               onContextMenu={(e) => e.preventDefault()}
             />
             <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap items-center gap-2 rounded-md bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow-sm">
