@@ -127,8 +127,255 @@ function buildNorthMeadowPlan(): PlanState {
   return plan;
 }
 
+function buildSouthWheatPlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 2,
+    widthM: 40,
+    heightM: 24,
+    cellM: 0.25,
+    allowOutsideBeds: false,
+    planting: {},
+    ground: {},
+    updatedAt: new Date().toISOString(),
+    plantedAt: {},
+  };
+
+  // --- Paths and fences ---
+  // North woodchip path (row 0-3)
+  fillGround(plan, 0, 0, 160, 4, 'path-woodchip');
+  // South woodchip path (row 91-95)
+  fillGround(plan, 0, 91, 160, 5, 'path-woodchip');
+  // Central gravel path (row 45-49)
+  fillGround(plan, 0, 45, 160, 5, 'path-gravel');
+  // West fence line (col 0-3)
+  fillGround(plan, 0, 4, 4, 87, 'fence');
+  // East fence line (col 152-155)
+  fillGround(plan, 152, 4, 4, 87, 'fence');
+  // Inter-zone paths
+  fillGround(plan, 36, 4, 4, 41, 'path-woodchip');   // between Zone A and B
+  fillGround(plan, 73, 4, 4, 41, 'path-woodchip');   // between Zone B and C
+  fillGround(plan, 110, 4, 4, 41, 'path-woodchip');  // between Zone C and D
+  fillGround(plan, 147, 4, 4, 41, 'path-woodchip');  // between Zone D and east fence
+
+  // --- Infrastructure (north edge, row 0-3) ---
+  fillGround(plan, 58, 0, 9, 4, 'shed');           // shed 58-66, 0-3
+  fillGround(plan, 58, 4, 6, 6, 'compost-bin');    // compost 58-63, 4-9
+  fillGround(plan, 64, 4, 3, 6, 'rain-barrel');    // rain barrel 64-66, 4-9
+  fillGround(plan, 58, 11, 3, 3, 'beehive');       // beehive 58-60, 11-13
+  fillGround(plan, 62, 11, 5, 3, 'beehive');       // beehive 62-66, 11-13
+
+  // --- Water feature: pond at southeast corner ---
+  fillGround(plan, 136, 78, 20, 16, 'pond');
+  // Irrigation lines radiating from pond
+  fillGround(plan, 130, 82, 6, 2, 'path-gravel');
+  fillGround(plan, 136, 74, 2, 4, 'path-gravel');
+  fillGround(plan, 156, 82, 4, 2, 'path-gravel');
+
+  // --- Livestock: chicken coop + run on east side ---
+  fillGround(plan, 152, 50, 8, 12, 'chicken-coop');
+  fillGround(plan, 152, 62, 8, 16, 'chicken-coop');
+
+  // --- Orchard: 4 fruit trees on south edge ---
+  fillGround(plan, 108, 80, 6, 10, 'fruit-tree');   // tree 1
+  fillGround(plan, 118, 80, 6, 10, 'fruit-tree');  // tree 2
+  fillGround(plan, 128, 80, 6, 10, 'fruit-tree');  // tree 3
+  fillGround(plan, 138, 80, 6, 10, 'fruit-tree');  // tree 4
+
+  // --- Zone A: Brassicas (col 4-35, row 4-44) ---
+  // 4 raised beds with paths between
+  fillGround(plan, 4, 4, 32, 8, 'raised-bed');     // bed 1 (row 4-11)
+  fillGround(plan, 4, 13, 32, 8, 'raised-bed');    // bed 2 (row 13-20)
+  fillGround(plan, 4, 22, 32, 8, 'raised-bed');    // bed 3 (row 22-29)
+  fillGround(plan, 4, 31, 32, 8, 'raised-bed');    // bed 4 (row 31-38)
+  // Path between beds
+  fillGround(plan, 4, 12, 32, 1, 'path-woodchip');
+  fillGround(plan, 4, 21, 32, 1, 'path-woodchip');
+  fillGround(plan, 4, 30, 32, 1, 'path-woodchip');
+  // Crops in Zone A
+  fillCrop(plan, 5, 5, 14, 6, 20);   // cabbage (bed 1 left)
+  fillCrop(plan, 19, 5, 2, 6, 12);   // onion border
+  fillCrop(plan, 21, 5, 14, 6, 19);  // broccoli (bed 1 right)
+  fillCrop(plan, 5, 14, 14, 6, 18);   // kale (bed 2 left)
+  fillCrop(plan, 19, 14, 2, 6, 12);  // onion border
+  fillCrop(plan, 21, 14, 14, 6, 21); // cauliflower (bed 2 right)
+  fillCrop(plan, 5, 23, 14, 6, 20);   // cabbage (bed 3 left)
+  fillCrop(plan, 19, 23, 2, 6, 13);  // garlic border
+  fillCrop(plan, 21, 23, 14, 6, 18);  // kale (bed 3 right)
+  fillCrop(plan, 5, 32, 14, 6, 19);   // broccoli (bed 4 left)
+  fillCrop(plan, 19, 32, 2, 6, 13);  // garlic border
+  fillCrop(plan, 21, 32, 14, 6, 21);  // cauliflower (bed 4 right)
+
+  // --- Zone B: Nightshades (col 41-72, row 4-44) ---
+  // 3 raised beds + trellis
+  fillGround(plan, 41, 4, 32, 10, 'raised-bed');   // bed 1 (row 4-13)
+  fillGround(plan, 41, 15, 32, 10, 'raised-bed');  // bed 2 (row 15-24)
+  fillGround(plan, 41, 26, 32, 10, 'raised-bed');  // bed 3 (row 26-35)
+  // Trellis
+  fillGround(plan, 72, 4, 1, 40, 'trellis');
+  // Path between beds
+  fillGround(plan, 41, 14, 32, 1, 'path-woodchip');
+  fillGround(plan, 41, 25, 32, 1, 'path-woodchip');
+  // Crops in Zone B - tomato-basil guild
+  fillCrop(plan, 42, 5, 10, 8, 1);   // tomato (bed 1 left)
+  fillCrop(plan, 52, 5, 6, 8, 5);    // basil interplanted
+  fillCrop(plan, 58, 5, 8, 8, 6);    // pepper (bed 1 right)
+  fillCrop(plan, 42, 16, 10, 8, 1);  // tomato (bed 2 left)
+  fillCrop(plan, 52, 16, 6, 8, 5);   // basil interplanted
+  fillCrop(plan, 58, 16, 8, 8, 7);   // eggplant (bed 2 right)
+  fillCrop(plan, 42, 27, 10, 8, 6);  // pepper (bed 3 left)
+  fillCrop(plan, 52, 27, 6, 8, 5);   // basil interplanted
+  fillCrop(plan, 58, 27, 8, 8, 1);  // tomato (bed 3 right)
+
+  // --- Zone C: Roots + Alliums (col 78-109, row 4-44) ---
+  // 4 raised beds
+  fillGround(plan, 78, 4, 32, 8, 'raised-bed');    // bed 1 (row 4-11)
+  fillGround(plan, 78, 13, 32, 8, 'raised-bed');   // bed 2 (row 13-20)
+  fillGround(plan, 78, 22, 32, 8, 'raised-bed');   // bed 3 (row 22-29)
+  fillGround(plan, 78, 31, 32, 8, 'raised-bed');   // bed 4 (row 31-38)
+  // Path between beds
+  fillGround(plan, 78, 12, 32, 1, 'path-woodchip');
+  fillGround(plan, 78, 21, 32, 1, 'path-woodchip');
+  fillGround(plan, 78, 30, 32, 1, 'path-woodchip');
+  // Crops in Zone C
+  fillCrop(plan, 79, 5, 15, 6, 9);   // carrot (bed 1 left)
+  fillCrop(plan, 94, 5, 15, 6, 10);  // beet (bed 1 right)
+  fillCrop(plan, 79, 14, 15, 6, 12); // onion (bed 2 left)
+  fillCrop(plan, 94, 14, 15, 6, 13); // garlic (bed 2 right)
+  fillCrop(plan, 79, 23, 15, 6, 9);  // carrot (bed 3 left)
+  fillCrop(plan, 94, 23, 15, 6, 10); // beet (bed 3 right)
+  fillCrop(plan, 79, 32, 15, 6, 14); // leek (bed 4 left)
+  fillCrop(plan, 94, 32, 15, 6, 12); // onion (bed 4 right)
+
+  // --- Zone D: Legumes + Cucurbits (col 115-146, row 4-44) ---
+  // 3 in-ground beds + trellis
+  fillGround(plan, 115, 4, 32, 10, 'inground-bed');  // bed 1 (row 4-13)
+  fillGround(plan, 115, 15, 32, 10, 'inground-bed'); // bed 2 (row 15-24)
+  fillGround(plan, 115, 26, 32, 10, 'inground-bed'); // bed 3 (row 26-35)
+  // Trellis
+  fillGround(plan, 146, 4, 1, 40, 'trellis');
+  // Path between beds
+  fillGround(plan, 115, 14, 32, 1, 'path-woodchip');
+  fillGround(plan, 115, 25, 32, 1, 'path-woodchip');
+  // Crops in Zone D
+  fillCrop(plan, 116, 5, 10, 8, 22);  // cucumber on trellis side (bed 1 left)
+  fillCrop(plan, 126, 5, 8, 8, 27);   // bush bean (bed 1 middle)
+  fillCrop(plan, 134, 5, 8, 8, 29);   // pea (bed 1 right)
+  fillCrop(plan, 116, 16, 10, 8, 22); // cucumber (bed 2 left)
+  fillCrop(plan, 126, 16, 8, 8, 27);  // bush bean (bed 2 middle)
+  fillCrop(plan, 134, 16, 8, 8, 23);  // zucchini at ends (bed 2 right)
+  fillCrop(plan, 116, 27, 10, 8, 29); // pea (bed 3 left)
+  fillCrop(plan, 126, 27, 8, 8, 27);  // bush bean (bed 3 middle)
+  fillCrop(plan, 134, 27, 8, 8, 23); // zucchini (bed 3 right)
+
+  // --- Greenhouse: col 4-24, row 52-72 (20x12 cells) ---
+  fillGround(plan, 4, 52, 21, 21, 'greenhouse');
+  // Greenhouse crops: tender crops (tomato, pepper, basil, eggplant)
+  fillCrop(plan, 6, 55, 5, 6, 1);   // tomato
+  fillCrop(plan, 12, 55, 5, 6, 6);  // pepper
+  fillCrop(plan, 18, 55, 4, 6, 5);  // basil
+  fillCrop(plan, 6, 62, 5, 6, 7);  // eggplant
+  fillCrop(plan, 12, 62, 5, 6, 1);  // tomato
+  fillCrop(plan, 18, 62, 4, 6, 5);  // basil
+
+  // --- Polytunnel: col 26-50, row 54-70 (24x8 cells, adjusted to 25x17) ---
+  fillGround(plan, 26, 54, 25, 17, 'polytunnel');
+  // Polytunnel crops: warm-season crops (zucchini, melon, cucumber)
+  fillCrop(plan, 28, 56, 7, 5, 23);  // zucchini
+  fillCrop(plan, 36, 56, 7, 5, 25);  // melon
+  fillCrop(plan, 44, 56, 5, 5, 22);  // cucumber
+  fillCrop(plan, 28, 62, 7, 5, 23);  // zucchini
+  fillCrop(plan, 36, 62, 7, 5, 25);  // melon
+  fillCrop(plan, 44, 62, 5, 5, 22);  // cucumber
+
+  // --- Cold frames: 2 small ones ---
+  fillGround(plan, 4, 74, 7, 7, 'cold-frame');     // cold frame 1: col 4-10, row 74-80
+  fillGround(plan, 12, 74, 7, 7, 'cold-frame');    // cold frame 2: col 12-18, row 74-80
+  // Cold frame crops: early starts (lettuce, spinach)
+  fillCrop(plan, 5, 75, 5, 5, 2);   // lettuce
+  fillCrop(plan, 13, 75, 5, 5, 15); // spinach
+
+  // --- Herb spiral: col 26-42, row 74-86 ---
+  fillGround(plan, 26, 74, 17, 13, 'raised-bed');
+  // Herb spiral crops: dense planting
+  fillCrop(plan, 27, 75, 4, 4, 5);   // basil
+  fillCrop(plan, 32, 75, 4, 4, 33);  // parsley
+  fillCrop(plan, 37, 75, 4, 4, 36);  // thyme
+  fillCrop(plan, 27, 80, 4, 4, 37);  // rosemary
+  fillCrop(plan, 32, 80, 4, 4, 40);  // chives
+  fillCrop(plan, 37, 80, 4, 4, 35);  // dill
+
+  // --- Berry patch: strawberry bed (col 44-60, row 74-86) ---
+  fillGround(plan, 44, 74, 17, 13, 'raised-bed');
+  fillCrop(plan, 45, 75, 15, 11, 30); // strawberry
+
+  // --- Grain patch: wheat (col 62-78, row 74-86) ---
+  fillGround(plan, 62, 74, 17, 13, 'inground-bed');
+  fillCrop(plan, 63, 75, 15, 11, 3); // wheat (the farm's namesake!)
+
+  // --- Flower border: col 80-156, row 52-56 ---
+  // Marigold, nasturtium, borage, sunflower mix along paths
+  fillCrop(plan, 80, 52, 8, 5, 42);   // marigold
+  fillCrop(plan, 88, 52, 8, 5, 43);   // nasturtium
+  fillCrop(plan, 96, 52, 8, 5, 45);   // borage
+  fillCrop(plan, 104, 52, 8, 5, 44);  // sunflower
+  fillCrop(plan, 112, 52, 8, 5, 42);  // marigold
+  fillCrop(plan, 120, 52, 8, 5, 43);  // nasturtium
+  fillCrop(plan, 128, 52, 8, 5, 45);  // borage
+  fillCrop(plan, 136, 52, 8, 5, 44);  // sunflower
+  fillCrop(plan, 144, 52, 8, 5, 42);  // marigold
+
+  // --- Cover crop: crimson clover (col 80-100, row 74-86) ---
+  fillCrop(plan, 80, 74, 21, 13, 46); // crimson clover (nitrogen fixer)
+
+  // --- plantedAt dates ---
+  const now = Date.now();
+  const dayMs = 1000 * 60 * 60 * 24;
+
+  // Spring crops (brassicas, roots, peas, lettuce, spinach) - ~60 days ago
+  const springDate = new Date(now - dayMs * 60).toISOString();
+  [20, 19, 18, 21, 9, 10, 12, 13, 14, 29, 2, 15].forEach((id) => {
+    plan.plantedAt![id] = springDate;
+  });
+
+  // Summer crops (tomato, pepper, eggplant, cucumber, zucchini, bush bean) - ~30 days ago
+  const summerDate = new Date(now - dayMs * 30).toISOString();
+  [1, 6, 7, 22, 23, 27].forEach((id) => {
+    plan.plantedAt![id] = summerDate;
+  });
+
+  // Herbs - ~45 days ago
+  const herbDate = new Date(now - dayMs * 45).toISOString();
+  [5, 33, 36, 37, 40, 35].forEach((id) => {
+    plan.plantedAt![id] = herbDate;
+  });
+
+  // Flowers - ~40 days ago
+  const flowerDate = new Date(now - dayMs * 40).toISOString();
+  [42, 43, 44, 45].forEach((id) => {
+    plan.plantedAt![id] = flowerDate;
+  });
+
+  // Strawberries - perennial, ~90 days ago
+  plan.plantedAt![30] = new Date(now - dayMs * 90).toISOString();
+
+  // Wheat - ~20 days ago (spring wheat)
+  plan.plantedAt![3] = new Date(now - dayMs * 20).toISOString();
+
+  // Cover crop (crimson clover) - ~10 days ago
+  plan.plantedAt![46] = new Date(now - dayMs * 10).toISOString();
+
+  // Apple trees - perennial, ~365 days ago
+  plan.plantedAt![4] = new Date(now - dayMs * 365).toISOString();
+
+  // Melon (in polytunnel) - ~30 days ago (summer crop)
+  plan.plantedAt![25] = summerDate;
+
+  return plan;
+}
+
 export const seedPlans: Record<number, PlanState> = {
   1: buildNorthMeadowPlan(),
+  2: buildSouthWheatPlan(),
 };
 
 // --- Cells (legacy voxel grid; Monitoring still reads these) --------------
