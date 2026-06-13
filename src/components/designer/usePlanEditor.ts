@@ -803,6 +803,7 @@ export function usePlanEditor(farmId: number) {
     hoverKey,
     setHoverKey,
     rectPreview,
+    setRectPreview,
     saveState,
     savedAt,
     stats,

@@ -208,4 +208,6 @@ export interface PlanState {
   planting: Record<string, number>; // "x,y" -> cropId
   ground: Record<string, string>; // "x,y" -> asset slug
   updatedAt: string;
+  // Optional: when each cell was planted (ISO date). Fallback: derive from calendar.
+  plantedAt?: Record<string, string>;
 }

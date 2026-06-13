@@ -144,3 +144,64 @@ builds the scene imperatively in an effect, runs its own rAF loop.
   zero console errors, zero warnings (used `THREE.Timer` instead of deprecated
   `THREE.Clock`).
 - Dashboard pages do NOT load the three.js chunk until World is toggled.
+
+## 3D Phases 2–5 — Complete 3D upgrade (2026-06-13)
+
+All remaining 3D phases shipped in one session.
+
+### Phase 2 — Procedural plant models
+
+Replaced colored voxel boxes with category-specific procedural geometry using
+`BufferGeometryUtils.mergeGeometries`:
+
+- **vegetable**: green stem (`CylinderGeometry`) + 2-3 flat leaves (`SphereGeometry` scaled) + fruit sphere
+- **herb**: 3-5 small spheres in bushy cluster, no stem
+- **fruit**: brown woody stem + flat leaf canopy
+- **grain**: golden stalk + cone tassel
+- **flower**: thin green stem + flower head sphere
+- **cover_crop**: very flat ground-cover sphere
+
+Per-cell jitter: deterministic pseudo-random seeded by cell coordinates (`rotY`,
+`scaleY`, `offsetX`, `offsetZ`) to kill the clone look.
+
+Height varies by `growthDays` within category ranges (e.g., vegetable 0.2-0.4m).
+
+### Phase 3 — Time-scrub growth animation
+
+Added `plantedAt?: Record<string, string>` to `PlanState` for tracking sow dates.
+Date picker in World3D footer scrubs plant maturity. `getGrowthScale(crop, plantedAt,
+currentDate)` returns 0-1 based on days since planting vs `growthDays`. Plants scale
+in Y dimension by this factor.
+
+### Phase 4 — Edit-in-3D
+
+- `src/three/use3DEditor.ts` — hook wrapping raycasting + same mutations.
+- `getCellFromRaycast`: casts ray against ground plane at y=0, converts world
+  position to cell coordinates.
+- `handlePointerDown/Move/Up`: calls `applyBrushAt`, `replacePlan`, `setSelectedKey`,
+  `setRectPreview` — the SAME functions the 2D Blueprint uses.
+- Wired into `World3D.tsx` canvas pointer events. Left-click paints, camera-controls
+  orbit with right-click / touch.
+
+### Phase 5 — History visualization
+
+- `src/three/historyViz.ts` — `buildGhostPlants` / `disposeGhostPlants`.
+- Translucent green ghosts (`#22c55e`, opacity 0.25) for undo stack, blue ghosts
+  (`#3b82f6`, opacity 0.25) for redo stack.
+- "Show History" toggle in World3D footer. Rebuilds ghosts on every plan change.
+
+### Files added/modified
+- `src/three/plants.ts` — rewritten with procedural geometry + growth scaling
+- `src/three/historyViz.ts` — new
+- `src/three/use3DEditor.ts` — new
+- `src/components/world/World3D.tsx` — date picker, history toggle, pointer events
+- `src/components/designer/usePlanEditor.ts` — exported `setRectPreview`, `setSelectedKey`
+- `src/types/index.ts` — added `plantedAt` to `PlanState`
+
+### Verification
+- `npm run typecheck` clean.
+- `npm run build` clean. Three.js chunk ~782 kB / 200 kB gzip. World3D chunk ~12 kB.
+- Playwright smoke test: Blueprint → World toggle → canvas → zero errors.
+  One non-critical warning: "Multiple instances of Three.js" from Vite chunking
+  (World3D.tsx imports THREE for types, lazy chunk also imports THREE).
+  Does not affect functionality.
