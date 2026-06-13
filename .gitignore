@@ -37,3 +37,6 @@ coverage
 
 # Personal
 AGENTS.local.md
+
+# Factory / Vix
+.vix/

@@ -9,6 +9,7 @@ import type {
   Sensor,
   SensorReading,
   Simulation,
+  PlanState,
 } from '@/types';
 
 // --- Farms ---------------------------------------------------------------
@@ -35,6 +36,100 @@ export const seedFarms: Farm[] = [
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 200).toISOString(),
   },
 ];
+
+// --- Plot plans (designer showcase) -----------------------------------------
+
+function planKey(x: number, y: number): string {
+  return `${x},${y}`;
+}
+
+function fillGround(plan: PlanState, x: number, y: number, w: number, h: number, assetSlug: string) {
+  for (let yy = y; yy < y + h; yy++) {
+    for (let xx = x; xx < x + w; xx++) {
+      plan.ground[planKey(xx, yy)] = assetSlug;
+    }
+  }
+}
+
+function fillCrop(plan: PlanState, x: number, y: number, w: number, h: number, cropId: number) {
+  for (let yy = y; yy < y + h; yy++) {
+    for (let xx = x; xx < x + w; xx++) {
+      plan.planting[planKey(xx, yy)] = cropId;
+    }
+  }
+}
+
+function buildNorthMeadowPlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 1,
+    widthM: 18,
+    heightM: 12,
+    cellM: 0.25,
+    allowOutsideBeds: false,
+    planting: {},
+    ground: {},
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Circulation and infrastructure.
+  fillGround(plan, 0, 0, 72, 3, 'path-woodchip');
+  fillGround(plan, 0, 32, 72, 3, 'path-woodchip');
+  fillGround(plan, 17, 0, 3, 48, 'path-gravel');
+  fillGround(plan, 34, 0, 3, 48, 'path-gravel');
+  fillGround(plan, 58, 4, 8, 8, 'shed');
+  fillGround(plan, 58, 14, 5, 5, 'compost-bin');
+  fillGround(plan, 64, 14, 3, 3, 'rain-barrel');
+  fillGround(plan, 58, 22, 8, 6, 'pond');
+  fillGround(plan, 58, 31, 3, 3, 'beehive');
+  fillGround(plan, 61, 31, 8, 10, 'chicken-coop');
+  fillGround(plan, 5, 36, 12, 10, 'fruit-tree');
+
+  // Plantable growing structures.
+  fillGround(plan, 3, 5, 12, 9, 'raised-bed');
+  fillGround(plan, 3, 18, 12, 9, 'raised-bed');
+  fillGround(plan, 21, 5, 12, 9, 'raised-bed');
+  fillGround(plan, 21, 18, 12, 9, 'inground-bed');
+  fillGround(plan, 39, 5, 15, 20, 'greenhouse');
+  fillGround(plan, 36, 29, 18, 8, 'polytunnel');
+  fillGround(plan, 15, 5, 1, 9, 'trellis');
+  fillGround(plan, 33, 18, 1, 9, 'trellis');
+
+  // Bed 1: tomato guild.
+  fillCrop(plan, 4, 6, 5, 6, 1); // tomato
+  fillCrop(plan, 9, 6, 3, 6, 5); // basil
+  fillCrop(plan, 12, 6, 2, 6, 42); // marigold
+
+  // Bed 2: quick spring salad succession.
+  fillCrop(plan, 4, 19, 4, 6, 2); // lettuce
+  fillCrop(plan, 8, 19, 3, 6, 9); // carrot
+  fillCrop(plan, 11, 19, 3, 6, 11); // radish
+
+  // Bed 3: visible pairing conflict for QA (tomato next to kale).
+  fillCrop(plan, 22, 6, 5, 6, 1); // tomato
+  fillCrop(plan, 27, 6, 5, 6, 18); // kale
+
+  // Bed 4: trellised cucumbers and legumes.
+  fillCrop(plan, 22, 19, 4, 6, 22); // cucumber
+  fillCrop(plan, 26, 19, 3, 6, 27); // bush bean
+  fillCrop(plan, 29, 19, 3, 6, 29); // pea
+
+  // Greenhouse: tender crops.
+  fillCrop(plan, 41, 7, 5, 7, 6); // pepper
+  fillCrop(plan, 46, 7, 5, 7, 1); // tomato
+  fillCrop(plan, 41, 15, 4, 6, 5); // basil
+  fillCrop(plan, 45, 15, 4, 6, 15); // spinach
+
+  // Polytunnel: warm-season cucurbits and flowers.
+  fillCrop(plan, 38, 31, 5, 4, 23); // zucchini
+  fillCrop(plan, 43, 31, 4, 4, 43); // nasturtium
+  fillCrop(plan, 47, 31, 5, 4, 45); // borage
+
+  return plan;
+}
+
+export const seedPlans: Record<number, PlanState> = {
+  1: buildNorthMeadowPlan(),
+};
 
 // --- Cells (legacy voxel grid; Monitoring still reads these) --------------
 

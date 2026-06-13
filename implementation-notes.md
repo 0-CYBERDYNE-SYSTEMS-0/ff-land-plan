@@ -101,4 +101,46 @@ section. Spec: `SPEC.md`. Restore point: `main @ 770c186`, work on `pro-upgrade`
 - Per-query `staleTime` overrides for weather queries in existing pages
   (they currently inherit `Infinity`; data refreshes only on full reload).
 - First-frost-relative sowing windows for fall-planted crops.
-- HANDOFF.md describes the exact resume point (Phase 3 page component).
+- 3D Phase 2: procedural plant models (replace voxel boxes with stem+leaf geometry).
+- 3D Phase 3: time-scrub growth animation (scale plants by maturity progress).
+- 3D Phase 4: edit-in-3D via raycasting to grid, calling same `usePlanEditor` mutations.
+- 3D Phase 5: undo/redo history visualization in 3D.
+
+## 3D Phase 1 — World view (2026-06-13)
+
+**Architecture**: Vanilla three.js in a React island (NOT react-three-fiber — R3F v9+
+requires React 19, we are on React 18). One `<World3D>` component owns a canvas,
+builds the scene imperatively in an effect, runs its own rAF loop.
+
+**Files added**:
+- `src/three/engine.ts` — `createEngine(canvas, theme)`: renderer, scene, camera,
+  `camera-controls` (yomotsu), ambient + directional lights, rAF loop with `THREE.Timer`,
+  resize/dispose lifecycle.
+- `src/three/groundTexture.ts` — `buildGroundTexture(plan, cropById)` reuses the
+  existing `drawPlan` renderer onto an offscreen canvas → `CanvasTexture` on a
+  ground plane. This is the single ground layer; no second ground renderer.
+- `src/three/structures.ts` — `buildStructures` / `updateStructures` / `disposeStructures`.
+  One `InstancedMesh` per unique asset slug. Procedural box heights per archetype
+  (raised bed 0.3m, greenhouse 0.6m translucent, trellis 1.5m, shed 2.2m, etc.).
+  Plot centered at world origin (`-widthM/2, 0, -heightM/2`).
+- `src/three/plants.ts` — `buildPlants` / `updatePlants` / `disposePlants`. One
+  `InstancedMesh` per unique cropId. Small colored voxel boxes (`cellM * 0.6` wide,
+  height by category: herb 0.15m, vegetable 0.25m, fruit 0.4m, etc.).
+- `src/components/world/World3D.tsx` — lazy-loaded island. Initializes engine,
+  builds ground/structures/plants, `fitToBox` on mount, rebuilds on `planVersion` change.
+- `src/components/designer/ViewToggle.tsx` — Blueprint/World toggle button group.
+
+**Integration**:
+- `PlotDesigner.tsx` uses `React.lazy(() => import('@/components/world/World3D'))`
+  behind a `Suspense` fallback. The 3D bundle only loads when the World toggle is clicked.
+- `vite.config.ts` `manualChunks` splits `three` + `camera-controls` into their own
+  chunk (`three-D0alsh54.js`, ~779 kB / 199 kB gzip). The main chunk stays at ~479 kB
+  (138 kB gzip) — down from 1.04 MB.
+
+**Verification**:
+- `npm run typecheck` clean.
+- `npm run build` clean.
+- Playwright smoke test: Blueprint loads → toggle to World → canvas appears →
+  zero console errors, zero warnings (used `THREE.Timer` instead of deprecated
+  `THREE.Clock`).
+- Dashboard pages do NOT load the three.js chunk until World is toggled.

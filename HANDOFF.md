@@ -1,9 +1,8 @@
 # HANDOFF — FarmFriend voxel-3D upgrade (`pro-upgrade` branch)
 
-**Status at handoff (2026-06-12): the original 7-phase pro upgrade is fully
-shipped, and Phase 0 of the voxel-3D initiative just landed. Next task is
-Phase 1: the lazy-loaded three.js "World" view.** Typecheck and `npm run
-build` are both clean at handoff.
+**Status at handoff (2026-06-13): Phases 0–1 of the voxel-3D initiative are
+complete. Next task is Phase 2: procedural plant models (stem+leaf geometry
+instead of colored boxes).** Typecheck and `npm run build` are both clean.
 
 Read in order: this file → `SPEC.md` (the "Amendments" section is binding for
 the 2D designer) → `implementation-notes.md` (keep appending; it's a
@@ -16,8 +15,9 @@ deliverable).
 | Pro upgrade phases 1–7 (crops, store, weather, designer, calendar, exports) | ✅ `1eca669` … `cd8fef5` |
 | 3D Phase 0a — editor access fixes (mount race, responsive layout, touch) | ✅ `336959d` |
 | 3D Phase 0b — decompose PlotDesigner into `usePlanEditor` + components | ✅ `261941f` |
-| 3D Phase 1 — read-only World view (three.js island) | ⬜ **← you are here** |
-| 3D Phases 2–5 — procedural plants/sun, time-scrub growth, edit-in-3D, history | ⬜ |
+| 3D Phase 1 — read-only World view (three.js island) | ✅ **just shipped** |
+| 3D Phase 2 — procedural plant models | ⬜ **← you are here** |
+| 3D Phases 3–5 — time-scrub growth, edit-in-3D, history | ⬜ |
 
 Uncommitted: `src/data/seed.ts` carries ~95 lines of a half-finished
 "showcase plan" seed (demo plot for first-run). It typechecks but was never
@@ -57,7 +57,7 @@ Full reasoning lives in this branch's planning session; the decisions:
    `calendar.ts`), `structureHeights?`, `elevation?` (defer), `view3d?`
    (camera memory).
 
-## Phase 1 scope (the next session's work)
+## Phase 1 scope (shipped 2026-06-13)
 
 Deliverable: flip a Blueprint/World toggle and the saved plan stands up as an
 orbitable 3D model, desktop + tablet. Concretely:
@@ -68,12 +68,30 @@ orbitable 3D model, desktop + tablet. Concretely:
 - `src/three/structures.ts` — procedural box models per asset slug
   (raised bed frame, greenhouse translucent box, fence post+rail, pond,
   shed…), instanced per archetype, default heights in code.
-- Plants as instanced billboards (colorHex quad; full procedural plants are
-  Phase 2).
+- Plants as instanced voxel boxes (colorHex, category-based height; full
+  procedural plants are Phase 2).
 - `src/components/world/World3D.tsx` — the lazy island; `ViewToggle.tsx` in
-  the designer header; wire into `src/pages/PlotDesigner.tsx` (it's a 64-line
-  orchestrator now — keep it thin).
+  the designer header; wired into `src/pages/PlotDesigner.tsx`.
 - `camera-controls` + `three` as new deps; `fitToBox` the plot on mount.
+- `vite.config.ts` `manualChunks` splits three.js into its own lazy chunk.
+
+## Phase 2 scope (the next session's work)
+
+Deliverable: replace the colored voxel plant boxes with procedural plant
+geometry (stem + leaves/fruit) that reflects the crop's archetype. Keep the
+instanced-per-crop draw-call budget.
+
+Concretely:
+- `src/three/plantGeometry.ts` — per-crop-category procedural geometry
+  (tomato = vertical stem + branching leaves; lettuce = low rosette; corn =
+  tall stalk; etc.). Use `InstancedBufferGeometry` or merge geometries per
+  batch.
+- Color from `crop.colorHex`, height scale from `crop.growthDays` relative to
+  category baseline.
+- Seeded per-cell jitter (position, rotation, height variation) to kill the
+  clone look.
+- Keep the existing `buildPlants`/`updatePlants`/`disposePlants` API surface;
+  just swap the geometry generation inside.
 
 ## Editor code map (post-decomposition)
 
