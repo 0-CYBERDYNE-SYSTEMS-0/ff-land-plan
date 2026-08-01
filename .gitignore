@@ -40,3 +40,6 @@ AGENTS.local.md
 
 # Factory / Vix
 .vix/
+
+# Aperant data directory
+.auto-claude/
