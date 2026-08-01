@@ -7,6 +7,8 @@ export interface Engine {
   camera: THREE.PerspectiveCamera;
   controls: CameraControls;
   canvas: HTMLCanvasElement;
+  addUpdate: (fn: (dt: number) => void) => void;
+  removeUpdate: (fn: (dt: number) => void) => void;
   dispose: () => void;
   resize: (width: number, height: number) => void;
 }
@@ -59,6 +61,7 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
   const timer = new THREE.Timer();
   let rafId = 0;
   let disposed = false;
+  const updateFns = new Set<(dt: number) => void>();
 
   function animate() {
     if (disposed) return;
@@ -67,6 +70,7 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
     timer.update();
     const delta = timer.getDelta();
     controls.update(delta);
+    for (const fn of updateFns) fn(delta);
     renderer.render(scene, camera);
   }
 
@@ -98,6 +102,8 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
     camera,
     controls,
     canvas,
+    addUpdate: (fn) => { updateFns.add(fn); },
+    removeUpdate: (fn) => { updateFns.delete(fn); },
     dispose,
     resize,
   };

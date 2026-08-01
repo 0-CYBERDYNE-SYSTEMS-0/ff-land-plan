@@ -263,6 +263,35 @@ export function updatePlants(
   return buildPlants(plan, cropById, scene, currentDate);
 }
 
+/** Apply gentle wind sway to plant batches based on crop category. */
+export function swayPlants(batches: PlantBatch[], crops: Map<number, Crop>, time: number, windStrength: number): void {
+  for (const batch of batches) {
+    const crop = crops.get(batch.cropId);
+    if (!crop) continue;
+
+    // Only tall crops sway noticeably
+    let swayAmount = 0;
+    switch (crop.category) {
+      case 'grain':
+      case 'flower':
+        swayAmount = 0.04 * windStrength;
+        break;
+      case 'vegetable':
+      case 'fruit':
+        swayAmount = 0.015 * windStrength;
+        break;
+      default:
+        swayAmount = 0.005 * windStrength;
+    }
+
+    if (swayAmount > 0) {
+      const sway = Math.sin(time * 1.5 + batch.cropId) * swayAmount;
+      batch.mesh.rotation.z = sway;
+      batch.mesh.rotation.x = Math.cos(time * 1.3 + batch.cropId * 0.7) * swayAmount * 0.6;
+    }
+  }
+}
+
 /** Dispose all geometry and materials held by plant batches. */
 export function disposePlants(batches: PlantBatch[]): void {
   for (const batch of batches) {
