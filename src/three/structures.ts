@@ -1,126 +1,166 @@
+/**
+ * World structures — renders plan.ground asset slugs using the Lane C creative
+ * voxel structure builders (src/creative/structures, 1 voxel = 10 cm).
+ *
+ * Strategy:
+ *  - Each structure type's template object is built ONCE (lazily, cached at
+ *    module scope). Per-cell instances are `Object3D.clone()`s which share the
+ *    template's geometry and materials, so cloning is cheap and we never
+ *    dispose shared geometry per instance.
+ *  - Templates are authored at ~1 m footprints (1 voxel = 10 cm); plan cells
+ *    are typically 0.25 m. Each slug maps to a target world size for its
+ *    largest horizontal dimension; the template's bounding box is measured
+ *    once and scaled uniformly to hit that target (see TARGET_SIZE_M).
+ *  - Instances sit at the cell centre, y=0 base, with a deterministic
+ *    hash-based 0/90/180/270° rotation (linear items like fences vary;
+ *    gates stay aligned).
+ *  - `pond` and `fruit-tree` are skipped here entirely: the pond tile
+ *    (src/creative/terrain/water.ts, rendered by src/three/ground.ts) already
+ *    draws depth-tinted water, mud banks and cattail reeds, so the old
+ *    procedural rock-ring fallback was removed — it only cluttered the
+ *    shoreline. Fruit trees are rendered by the crop system.
+ */
 import * as THREE from 'three';
-import { assetBySlug } from '@/data/assets';
 import type { PlanState } from '@/types';
 import { parseKey } from '@/lib/plan';
+import { entries as structureEntries } from '@/creative/structures/registry';
 
-export interface StructureBatch {
-  mesh: THREE.InstancedMesh;
-  count: number;
+export interface StructureGroup {
+  /** Root objects added to the scene (one per placed cell). */
+  roots: THREE.Object3D[];
 }
 
-// Height defaults (meters) for each known asset slug.
-const HEIGHT_MAP: Record<string, number> = {
-  'raised-bed': 0.3,
-  'inground-bed': 0.05,
-  'greenhouse': 0.6,
-  'polytunnel': 0.5,
-  'cold-frame': 0.2,
-  'trellis': 1.5,
-  'fruit-tree': 2.5,
-  'path-gravel': 0.02,
-  'path-woodchip': 0.02,
-  'path-stone': 0.02,
-  'fence': 1.0,
-  'gate': 1.0,
-  'shed': 2.2,
-  'compost-bin': 1.0,
-  'rain-barrel': 0.8,
-  'ibc-tote': 1.0,
-  'water-tap': 0.5,
-  'irrigation-line': 0.02,
-  'pond': 0.05,
-  'beehive': 0.5,
-  'chicken-coop': 1.5,
+// ---------------------------------------------------------------------------
+// Slug → creative maker + world scale mapping
+// ---------------------------------------------------------------------------
+
+interface SlugMapping {
+  /** Registry entry id in src/creative/structures/registry.ts. */
+  entryId: string;
+  /**
+   * Target world size (metres) for the template's largest horizontal
+   * dimension after scaling. Plan cells are ~0.25 m:
+   *  - big buildings span ~3–4 cells,
+   *  - mid props ~2 cells,
+   *  - small props ~1–1.5 cells,
+   *  - linear items (fence/gate/trellis/irrigation) run ~2 cells so adjacent
+   *    fence cells visually connect.
+   */
+  targetSizeM: number;
+}
+
+const SLUG_MAP: Record<string, SlugMapping> = {
+  shed:            { entryId: 'shed',           targetSizeM: 0.85 },
+  greenhouse:      { entryId: 'greenhouse',     targetSizeM: 1.0 },
+  polytunnel:      { entryId: 'polytunnel',     targetSizeM: 0.9 },
+  'cold-frame':    { entryId: 'cold-frame',     targetSizeM: 0.5 },
+  'chicken-coop':  { entryId: 'chicken-coop',   targetSizeM: 0.75 },
+  fence:           { entryId: 'fence-post-rail', targetSizeM: 0.55 },
+  gate:            { entryId: 'gate',           targetSizeM: 0.5 },
+  trellis:         { entryId: 'trellis',        targetSizeM: 0.5 },
+  'compost-bin':   { entryId: 'compost-bin',    targetSizeM: 0.5 },
+  'rain-barrel':   { entryId: 'rain-barrel',    targetSizeM: 0.3 },
+  'ibc-tote':      { entryId: 'ibc-tote',       targetSizeM: 0.4 },
+  'water-tap':     { entryId: 'water-tap',      targetSizeM: 0.3 },
+  'irrigation-line': { entryId: 'irrigation-line', targetSizeM: 0.55 },
+  beehive:         { entryId: 'beehive',        targetSizeM: 0.3 },
 };
 
-const DEFAULT_HEIGHT = 0.25;
+/** Slugs whose per-cell rotation varies by hash; everything else stays axis-aligned. */
+const ROTATED_SLUGS = new Set(['fence', 'gate', 'trellis', 'irrigation-line']);
 
-/** Return the default vertical height for a given asset slug. */
-export function getAssetHeight(slug: string): number {
-  return HEIGHT_MAP[slug] ?? DEFAULT_HEIGHT;
+/** Deterministic small hash for per-cell rotation picks. */
+function hashCell(x: number, z: number): number {
+  let h = x * 374761393 + z * 668265263;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return (h ^ (h >> 16)) >>> 0;
 }
 
-/** Determine whether an asset should be rendered with translucency. */
-function isTranslucent(slug: string): boolean {
-  return slug === 'greenhouse' || slug === 'polytunnel' || slug === 'pond';
+// ---------------------------------------------------------------------------
+// Template cache (shared geometry/materials)
+// ---------------------------------------------------------------------------
+
+interface Template {
+  obj: THREE.Object3D;
+  /** Largest horizontal dimension of the un-scaled template, in metres. */
+  sizeM: number;
 }
 
-/** Build InstancedMesh batches for every unique asset slug in plan.ground. */
-export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureBatch[] {
-  // Group cells by asset slug.
-  const cellsBySlug = new Map<string, string[]>();
-  for (const key of Object.keys(plan.ground)) {
-    const slug = plan.ground[key];
-    if (!slug) continue;
-    const arr = cellsBySlug.get(slug);
-    if (arr) arr.push(key);
-    else cellsBySlug.set(slug, [key]);
-  }
+const templateCache = new Map<string, Template>();
 
+function getTemplate(entryId: string): Template | null {
+  const cached = templateCache.get(entryId);
+  if (cached) return cached;
+
+  const entry = structureEntries.find((e) => e.id === entryId);
+  if (!entry) return null;
+
+  const obj = entry.make();
+  const bbox = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3();
+  bbox.getSize(size);
+  const sizeM = Math.max(size.x, size.z) || 1;
+  const tpl = { obj, sizeM };
+  templateCache.set(entryId, tpl);
+  return tpl;
+}
+
+// ---------------------------------------------------------------------------
+// Public API (signature-compatible with the previous implementation)
+// ---------------------------------------------------------------------------
+
+export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureGroup[] {
+  const cellM = plan.cellM;
   const offsetX = -(plan.widthM / 2);
   const offsetZ = -(plan.heightM / 2);
+  const roots: THREE.Group[] = [];
 
-  const batches: StructureBatch[] = [];
+  const placeRoot = (root: THREE.Object3D, cxWorld: number, czWorld: number): void => {
+    root.position.set(cxWorld, 0, czWorld);
+    scene.add(root);
+    roots.push(root as THREE.Group);
+  };
 
-  for (const [slug, keys] of cellsBySlug) {
-    const asset = assetBySlug(slug);
-    const height = getAssetHeight(slug);
-    const color = asset?.colorHex ?? '#888888';
-    const translucent = isTranslucent(slug);
+  // Creative-backed slugs — one instance per contiguous cell of that slug.
+  for (const [slug, mapping] of Object.entries(SLUG_MAP)) {
+    const tpl = getTemplate(mapping.entryId);
+    if (!tpl) continue;
 
-    // Each batch gets its own geometry so disposal is safe per-batch.
-    const geometry = new THREE.BoxGeometry(plan.cellM, 1, plan.cellM);
-    const material = new THREE.MeshStandardMaterial({
-      color,
-      transparent: translucent,
-      opacity: translucent ? 0.5 : 1.0,
-      roughness: 0.8,
-      metalness: 0.1,
-    });
+    for (const [key] of Object.entries(plan.ground)) {
+      if (plan.ground[key] !== slug) continue;
+      const [cx, cz] = parseKey(key);
+      const wx = cx * cellM + cellM / 2 + offsetX;
+      const wz = cz * cellM + cellM / 2 + offsetZ;
 
-    const count = keys.length;
-    const mesh = new THREE.InstancedMesh(geometry, material, count);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-
-    const dummy = new THREE.Object3D();
-    for (let i = 0; i < count; i++) {
-      const [cellX, cellY] = parseKey(keys[i]);
-      const x = cellX * plan.cellM + plan.cellM / 2 + offsetX;
-      const z = cellY * plan.cellM + plan.cellM / 2 + offsetZ;
-      const y = height / 2;
-
-      dummy.position.set(x, y, z);
-      dummy.scale.set(1, height, 1);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
+      const inst = tpl.obj.clone();
+      const scale = mapping.targetSizeM / tpl.sizeM;
+      inst.scale.setScalar(scale);
+      if (ROTATED_SLUGS.has(slug)) {
+        // Deterministic quarter-turn variety; gates stay aligned to paths.
+        if (slug !== 'gate') inst.rotation.y = (hashCell(cx, cz) % 4) * (Math.PI / 2);
+      }
+      placeRoot(inst, wx, wz);
     }
-
-    mesh.instanceMatrix.needsUpdate = true;
-    scene.add(mesh);
-    batches.push({ mesh, count });
   }
 
-  return batches;
+  // 'pond' is intentionally not placed here — the terrain pond tile from
+  // src/three/ground.ts covers it (see header note).
+
+  return [{ roots }];
 }
 
-/** Rebuild structure batches from scratch when the plan changes. */
-export function updateStructures(batches: StructureBatch[], plan: PlanState, scene: THREE.Scene): StructureBatch[] {
+export function updateStructures(batches: StructureGroup[], plan: PlanState, scene: THREE.Scene): StructureGroup[] {
   disposeStructures(batches);
   return buildStructures(plan, scene);
 }
 
-/** Dispose all geometry and materials held by structure batches. */
-export function disposeStructures(batches: StructureBatch[]): void {
+export function disposeStructures(batches: StructureGroup[]): void {
   for (const batch of batches) {
-    batch.mesh.removeFromParent();
-    batch.mesh.geometry.dispose();
-    const mat = batch.mesh.material;
-    if (Array.isArray(mat)) {
-      for (const m of mat) m.dispose();
-    } else {
-      mat.dispose();
+    for (const root of batch.roots) {
+      // Clones share geometry/materials with the cached templates, so we only
+      // detach them from the scene.
+      root.removeFromParent();
     }
+    batch.roots.length = 0;
   }
-  batches.length = 0;
 }

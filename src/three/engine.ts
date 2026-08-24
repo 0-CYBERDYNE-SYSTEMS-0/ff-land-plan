@@ -11,6 +11,7 @@ export interface Engine {
   removeUpdate: (fn: (dt: number) => void) => void;
   dispose: () => void;
   resize: (width: number, height: number) => void;
+  setBounds: (options: { minDistance?: number; maxDistance?: number; maxPolarAngle?: number }) => void;
 }
 
 /**
@@ -83,6 +84,14 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
     camera.updateProjectionMatrix();
   }
 
+  // --- Camera bounds ------------------------------------------------------
+  function setBounds(options: { minDistance?: number; maxDistance?: number; maxPolarAngle?: number }) {
+    if (options.minDistance !== undefined) controls.minDistance = options.minDistance;
+    if (options.maxDistance !== undefined) controls.maxDistance = options.maxDistance;
+    if (options.maxPolarAngle !== undefined) controls.maxPolarAngle = options.maxPolarAngle;
+    controls.update(0);
+  }
+
   // --- Dispose ------------------------------------------------------------
   function dispose() {
     disposed = true;
@@ -106,5 +115,6 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
     removeUpdate: (fn) => { updateFns.delete(fn); },
     dispose,
     resize,
+    setBounds,
   };
 }

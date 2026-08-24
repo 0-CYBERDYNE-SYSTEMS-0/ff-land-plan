@@ -58,7 +58,17 @@ const clonePlan = (plan: PlanState): PlanState => ({
   ...plan,
   planting: { ...plan.planting },
   ground: { ...plan.ground },
+  ...(plan.plantedAt ? { plantedAt: { ...plan.plantedAt } } : {}),
 });
+
+const stampPlantedAt = (plan: PlanState, key: string) => {
+  if (!plan.plantedAt) plan.plantedAt = {};
+  plan.plantedAt[key] = new Date().toISOString();
+};
+
+const clearPlantedAt = (plan: PlanState, key: string) => {
+  if (plan.plantedAt) delete plan.plantedAt[key];
+};
 
 const clampMeters = (value: number) => Math.min(MAX_DIM_M, Math.max(MIN_DIM_M, value));
 
@@ -75,10 +85,14 @@ function footprintCells(asset: GardenAsset, plan: PlanState) {
 
 function stripInvalidPlants(plan: PlanState): PlanState {
   const planting = { ...plan.planting };
+  const plantedAt = plan.plantedAt ? { ...plan.plantedAt } : undefined;
   for (const key of Object.keys(planting)) {
-    if (!canPlantAt(plan, key)) delete planting[key];
+    if (!canPlantAt({ ...plan, planting }, key)) {
+      delete planting[key];
+      if (plantedAt) delete plantedAt[key];
+    }
   }
-  return { ...plan, planting };
+  return { ...plan, planting, ...(plantedAt ? { plantedAt } : {}) };
 }
 
 function sameCell(a: string | null, b: string | null) {
@@ -317,17 +331,22 @@ export function usePlanEditor(farmId: number) {
     if (tool === 'brush') {
       if (!activeCropId || !canPlantAt(plan, key) || plan.planting[key] === activeCropId) return false;
       plan.planting[key] = activeCropId;
+      stampPlantedAt(plan, key);
       return true;
     }
     if (tool === 'erase') {
       if (eraseLayer === 'plants') {
         if (!plan.planting[key]) return false;
         delete plan.planting[key];
+        clearPlantedAt(plan, key);
         return true;
       }
       if (!plan.ground[key]) return false;
       delete plan.ground[key];
-      if (!canPlantAt(plan, key)) delete plan.planting[key];
+      if (!canPlantAt(plan, key)) {
+        delete plan.planting[key];
+        clearPlantedAt(plan, key);
+      }
       return true;
     }
     if (tool === 'asset' && activeAsset) {
@@ -343,6 +362,7 @@ export function usePlanEditor(farmId: number) {
           }
           if (!activeAsset.plantable && plan.planting[k]) {
             delete plan.planting[k];
+            clearPlantedAt(plan, k);
             changed = true;
           }
         }
@@ -381,6 +401,7 @@ export function usePlanEditor(farmId: number) {
         if (rectMode === 'plants') {
           if (!activeCropId || !canPlantAt(plan, key) || plan.planting[key] === activeCropId) continue;
           plan.planting[key] = activeCropId;
+          stampPlantedAt(plan, key);
           changed = true;
         } else if (activeAsset) {
           if (plan.ground[key] !== activeAsset.slug) {
@@ -389,6 +410,7 @@ export function usePlanEditor(farmId: number) {
           }
           if (!activeAsset.plantable && plan.planting[key]) {
             delete plan.planting[key];
+            clearPlantedAt(plan, key);
             changed = true;
           }
         }

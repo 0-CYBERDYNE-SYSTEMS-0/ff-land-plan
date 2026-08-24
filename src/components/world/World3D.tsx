@@ -10,11 +10,11 @@ import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
 import { createClouds, type Clouds } from '@/three/clouds';
 import { createEngine, type Engine } from '@/three/engine';
 import { createFlightCamera, type FlightCamera } from '@/three/flight';
-import { buildGroundTexture } from '@/three/groundTexture';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
 import { buildPlants, disposePlants, type PlantBatch, swayPlants, updatePlants } from '@/three/plants';
+import { buildGround, disposeGround, updateGround, type GroundBatch } from '@/three/ground';
 import { createSky, type Sky } from '@/three/sky';
-import { buildStructures, disposeStructures, type StructureBatch, updateStructures } from '@/three/structures';
+import { buildStructures, disposeStructures, type StructureGroup, updateStructures } from '@/three/structures';
 import { createTour, generateTourWaypoints, type Tour } from '@/three/tour';
 import { use3DEditor } from '@/three/use3DEditor';
 import { buildWaterPlanes, disposeWaterPlanes, updateWaterPlanes, type WaterPlane } from '@/three/water';
@@ -29,8 +29,8 @@ interface World3DProps {
 export default function World3D({ editor }: World3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
-  const groundRef = useRef<THREE.Mesh | null>(null);
-  const structureBatchesRef = useRef<StructureBatch[]>([]);
+  const groundBatchesRef = useRef<GroundBatch[]>([]);
+  const structureBatchesRef = useRef<StructureGroup[]>([]);
   const plantBatchesRef = useRef<PlantBatch[]>([]);
   const waterPlanesRef = useRef<WaterPlane[]>([]);
   const undoGhostsRef = useRef<GhostBatch[]>([]);
@@ -49,10 +49,10 @@ export default function World3D({ editor }: World3DProps) {
 
   const [scrubDate, setScrubDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [showHistory, setShowHistory] = useState(false);
-  const [timeOfDay, setTimeOfDay] = useState(0.5);
-  const [autoTime, setAutoTime] = useState(true);
-  const timeRef = useRef(0.5);
-  const autoTimeRef = useRef(true);
+  const [timeOfDay, setTimeOfDay] = useState(0.4);
+  const [autoTime, setAutoTime] = useState(false);
+  const timeRef = useRef(0.4);
+  const autoTimeRef = useRef(false);
   const audioOnRef = useRef(false);
   const [tourActive, setTourActive] = useState(false);
   const [tourProgress, setTourProgress] = useState(0);
@@ -93,6 +93,7 @@ export default function World3D({ editor }: World3DProps) {
     container.appendChild(canvas);
 
     const engine = createEngine(canvas, 'light');
+    engine.scene.background = null; // sky dome handles background
     engineRef.current = engine;
 
     // Sky system
@@ -107,19 +108,8 @@ export default function World3D({ editor }: World3DProps) {
     const weatherFX = createWeatherFX(engine.scene);
     weatherFXRef.current = weatherFX;
 
-    // Ground plane
-    const texture = buildGroundTexture(plan, cropById);
-    const groundGeo = new THREE.PlaneGeometry(plan.widthM, plan.heightM);
-    const groundMat = new THREE.MeshStandardMaterial({
-      map: texture,
-      roughness: 0.9,
-      metalness: 0.0,
-    });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    engine.scene.add(ground);
-    groundRef.current = ground;
+    // 3D voxel ground blocks (replaces flat texture plane)
+    groundBatchesRef.current = buildGround(plan, engine.scene);
 
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
@@ -138,12 +128,22 @@ export default function World3D({ editor }: World3DProps) {
     // Audio
     audioRef.current = createAudioAtmosphere();
 
-    // Fit camera
-    const box = new THREE.Box3(
-      new THREE.Vector3(-plan.widthM / 2, 0, -plan.heightM / 2),
-      new THREE.Vector3(plan.widthM / 2, 5, plan.heightM / 2),
-    );
-    engine.controls.fitToBox(box, true, { paddingTop: 2, paddingBottom: 2, paddingLeft: 2, paddingRight: 2 });
+    // Camera — isometric angle like Tiny World Builder
+    const maxDim = Math.max(plan.widthM, plan.heightM);
+    const dist = maxDim * 0.6;
+    engine.camera.position.set(dist * 0.7, dist * 0.5, dist * 0.7);
+    engine.camera.lookAt(0, 0, 0);
+    engine.controls.setTarget(0, 0, 0);
+    engine.controls.azimuthAngle = -Math.PI / 4;
+    engine.controls.polarAngle = Math.PI / 3.5;
+    engine.controls.distance = dist;
+    // Clamp camera so it can't dive under the ground plane or fly into the void.
+    engine.setBounds({
+      minDistance: 2,
+      maxDistance: dist * 4,
+      maxPolarAngle: THREE.MathUtils.degToRad(88),
+    });
+    engine.controls.update(0);
 
     // Tour waypoints
     const waypoints = generateTourWaypoints(plan, cropById);
@@ -275,6 +275,7 @@ export default function World3D({ editor }: World3DProps) {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
+      disposeGround(groundBatchesRef.current);
       disposeStructures(structureBatchesRef.current);
       disposePlants(plantBatchesRef.current);
       disposeWaterPlanes(waterPlanesRef.current);
@@ -289,13 +290,9 @@ export default function World3D({ editor }: World3DProps) {
       audioRef.current?.dispose();
       tourRef.current?.dispose();
       flightRef.current?.dispose();
-      texture.dispose();
-      groundGeo.dispose();
-      groundMat.dispose();
       engine.dispose();
       if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
       engineRef.current = null;
-      groundRef.current = null;
     };
   }, [editor.planVersion, editor.cropById, scrubDate, handlePointerDown, handlePointerMove, handlePointerUp]);
 
@@ -306,14 +303,8 @@ export default function World3D({ editor }: World3DProps) {
     const cropById = editor.cropById;
     if (!engine || !plan) return;
 
-    // Ground texture
-    const oldGround = groundRef.current;
-    if (oldGround) {
-      const oldMat = oldGround.material as THREE.MeshStandardMaterial;
-      oldMat.map?.dispose();
-      oldMat.map = buildGroundTexture(plan, cropById);
-      oldMat.needsUpdate = true;
-    }
+    // Rebuild 3D ground blocks
+    groundBatchesRef.current = updateGround(groundBatchesRef.current, plan, engine.scene);
 
     // Structures & plants
     structureBatchesRef.current = updateStructures(structureBatchesRef.current, plan, engine.scene);

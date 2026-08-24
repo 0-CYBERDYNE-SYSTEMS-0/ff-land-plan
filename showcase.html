@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Asset Showcase</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #ece9dd; }
+    #canvas { position: absolute; top: 0; left: 0; z-index: 0; }
+    #app { position: relative; z-index: 1; pointer-events: none; }
+    .cell { display: inline-block; vertical-align: top; margin: 8px; }
+    .label {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 13px; font-weight: 600; color: #3b3527;
+      padding: 2px 6px; height: 18px;
+    }
+    .viewport { border-radius: 6px; outline: 1px solid rgba(60,54,40,0.12); }
+    .id-tag { position: relative; }
+    .id-tag::after {
+      content: attr(data-id);
+      position: absolute; right: 10px; bottom: 8px;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 11px; color: rgba(40,36,26,0.55);
+    }
+    h1 { font-family: ui-monospace, Menlo, monospace; font-size: 14px; color: #3b3527; margin: 8px 12px; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="app"></div>
+  <script>
+    window.onerror = function (msg, src, line) {
+      document.title = 'SHOWCASE-ERROR: ' + msg + ' @' + line;
+      var d = document.createElement('div');
+      d.style.cssText = 'position:relative;z-index:9;font:14px monospace;color:#a00;padding:12px';
+      d.textContent = 'ERROR: ' + msg + ' (' + (src || '') + ':' + line + ')';
+      document.getElementById('app').appendChild(d);
+    };
+  </script>
+  <script type="module" src="/src/creative/showcase/main.ts"></script>
+</body>
+</html>
