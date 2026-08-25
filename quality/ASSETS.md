@@ -99,7 +99,9 @@ Tools & props: `watering-can`, `wheelbarrow`, `hoe`, `pitchfork`, `seed-bag`,
 `bucket`.
 
 Atmosphere:
-- `studio/presets.ts` — lighting presets `dawn`, `noon`, `dusk`, `night`, `overcast`
+- `studio/presets.ts` — SHOWCASE-ONLY: superseded in the app by `src/three/sky.ts`
+  (single-sun system); entries stay functional for showcase diorama cells only.
+  Lighting presets `dawn`, `noon`, `dusk`, `night`, `overcast`
   (hemisphere+key light colors/intensities/fog), exported as data + applied via
   registry `tune()` demo entries `preset-dawn` … so they can be judged visually.
 - `wind-sway-demo` — row of wheat + tomato swaying (canonical wind animation).

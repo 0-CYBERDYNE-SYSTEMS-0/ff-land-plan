@@ -134,6 +134,42 @@ export const assetLibrary: GardenAsset[] = [
     emoji: '🐔', plantable: false,
     description: 'Coop with run; ~1 m² of run per bird minimum.',
   },
+  {
+    slug: 'barn', label: 'Barn', category: 'infrastructure',
+    defaultWM: 4.5, defaultHM: 3, colorHex: '#A93226', pattern: 'solid',
+    emoji: '🏠', plantable: false,
+    description: 'Classic red barn; wakes farm life around it.',
+  },
+  {
+    slug: 'picket-fence', label: 'Picket Fence', category: 'infrastructure',
+    defaultWM: 0.25, defaultHM: 4, colorHex: '#D7CBAF', pattern: 'stripes',
+    emoji: '🚧', plantable: false,
+    description: 'Decorative picket line; paint cells in a row to connect segments.',
+  },
+  {
+    slug: 'hay-bale', label: 'Hay Bale', category: 'infrastructure',
+    defaultWM: 0.9, defaultHM: 0.5, colorHex: '#DBB124', pattern: 'stripes',
+    emoji: '🌾', plantable: false,
+    description: 'Square bale; feed store, seating and windbreak in one.',
+  },
+  {
+    slug: 'crate-stack', label: 'Crate Stack', category: 'infrastructure',
+    defaultWM: 0.75, defaultHM: 0.75, colorHex: '#8D6E63', pattern: 'dots',
+    emoji: '📦', plantable: false,
+    description: 'Harvest crates staged where the day’s picking lands.',
+  },
+  {
+    slug: 'signpost', label: 'Signpost', category: 'infrastructure',
+    defaultWM: 0.25, defaultHM: 0.25, colorHex: '#6E2C00', pattern: 'solid',
+    emoji: '🪧', plantable: false,
+    description: 'Labels plots and rows so helpers find their way.',
+  },
+  {
+    slug: 'scarecrow', label: 'Scarecrow', category: 'life',
+    defaultWM: 0.5, defaultHM: 0.5, colorHex: '#C0392B', pattern: 'cross',
+    emoji: '🪆', plantable: false,
+    description: 'Patchwork guardian; keeps hungry birds off the beds.',
+  },
 ];
 
 export const assetBySlug = (slug: string): GardenAsset | undefined =>

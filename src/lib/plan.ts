@@ -5,6 +5,10 @@
 
 import type { Crop, GardenAsset, PlanState } from '@/types';
 import { assetBySlug } from '@/data/assets';
+// Catalog import is intentional and pure data: companionSetsFor has a fixed
+// two-argument signature, so slug->id resolution mirrors findPairings using the
+// shipped catalog (custom crops carry no companion metadata by definition).
+import { cropLibrary } from '@/data/crops';
 
 export const CELL_M = 0.25;
 export const CELL_AREA_M2 = CELL_M * CELL_M;
@@ -229,6 +233,106 @@ export function conflictCellSet(pairings: PlanPairing[]): Set<string> {
   const set = new Set<string>();
   for (const p of pairings) if (p.kind === 'antagonist') for (const c of p.cells) set.add(c);
   return set;
+}
+
+// --- Spacing violations -------------------------------------------------------
+//
+// Consumers: BlueprintCanvas spacing toggle passes this Set as
+// RenderOptions.spacingViolations (red tint under plants). PNG export and
+// src/three/groundTexture.ts never pass it — the layer is opt-in only.
+
+// Deterministic output cap so huge plans stay cheap to render.
+export const MAX_SPACING_VIOLATIONS = 400;
+
+// A crop participates in spacing checks only with a real positive spacingCm.
+// Unlike plantsForArea there is NO default fallback here: flagging a violation
+// against an invented 30 cm default would produce false reds for custom crops.
+function usableSpacingCm(crop: Crop | undefined): number | null {
+  const v = crop?.spacingCm;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/**
+ * Keys ('x,y') of planted cells that sit closer than the average of the two
+ * crops' spacingCm values. Threshold in metres is (a + b) / 200 because cell
+ * distance is measured centre-to-centre; same-species pairs count too.
+ * Scan window matches the pairing engine (±4 cells); distances are Euclidean.
+ */
+export function spacingViolationSet(plan: PlanState, cropById: Map<number, Crop>): Set<string> {
+  const violations = new Set<string>();
+  const cellM = Number.isFinite(plan.cellM) && plan.cellM > 0 ? plan.cellM : CELL_M;
+  const cells = Object.keys(plan.planting)
+    .map((key) => {
+      const [x, y] = parseKey(key);
+      return { key, x, y };
+    })
+    .sort((p, q) => p.x - q.x || p.y - q.y); // deterministic regardless of insertion order
+  if (cells.length < 2) return violations;
+
+  for (let i = 0; i < cells.length; i++) {
+    const a = cells[i];
+    const spacingA = usableSpacingCm(cropById.get(plan.planting[a.key]));
+    if (spacingA === null) continue;
+    for (let j = i + 1; j < cells.length; j++) {
+      const b = cells[j];
+      const dx = b.x - a.x;
+      if (dx > ADJ_RADIUS_CELLS) break; // x-sorted: no further cell can be in window
+      const dy = b.y - a.y;
+      if (Math.abs(dy) > ADJ_RADIUS_CELLS) continue;
+      const spacingB = usableSpacingCm(cropById.get(plan.planting[b.key]));
+      if (spacingB === null) continue;
+      if (Math.hypot(dx, dy) * cellM < (spacingA + spacingB) / 200) {
+        violations.add(a.key);
+        violations.add(b.key);
+        if (violations.size >= MAX_SPACING_VIOLATIONS) return violations;
+      }
+    }
+  }
+  return violations;
+}
+
+// --- Per-crop companion / antagonist halos ------------------------------------
+//
+// Consumer: BlueprintCanvas companions toggle passes the result as
+// RenderOptions.companionHalos ({ good, bad } corner triangles). Same one-sided
+// semantics as findPairings: the ACTIVE crop's own companions/antagonists lists
+// decide what counts as good/bad; antagonists win if a slug appears in both.
+
+/**
+ * Planted neighbour cells (within the ±4-cell adjacency window of any cell of
+ * `cropId`) whose crop is listed as a companion or antagonist OF `cropId`.
+ */
+export function companionSetsFor(
+  cropId: number,
+  plan: PlanState,
+): { good: Set<string>; bad: Set<string> } {
+  const good = new Set<string>();
+  const bad = new Set<string>();
+  const active = cropLibrary.find((c) => c.id === cropId);
+  if (!active) return { good, bad };
+  const goodIds = slugsToIds(active.companions, cropLibrary);
+  const badIds = slugsToIds(active.antagonists, cropLibrary);
+  if (goodIds.size === 0 && badIds.size === 0) return { good, bad };
+
+  // Union of the ±4 neighbourhoods of every cell planted with cropId.
+  const nearActive = new Set<string>();
+  for (const key of Object.keys(plan.planting)) {
+    if (plan.planting[key] !== cropId) continue;
+    const [x, y] = parseKey(key);
+    for (let dy = -ADJ_RADIUS_CELLS; dy <= ADJ_RADIUS_CELLS; dy++) {
+      for (let dx = -ADJ_RADIUS_CELLS; dx <= ADJ_RADIUS_CELLS; dx++) {
+        nearActive.add(cellKey(x + dx, y + dy));
+      }
+    }
+  }
+
+  for (const key of Object.keys(plan.planting)) {
+    const otherId = plan.planting[key];
+    if (otherId === cropId || !nearActive.has(key)) continue;
+    if (badIds.has(otherId)) bad.add(key);
+    else if (goodIds.has(otherId)) good.add(key);
+  }
+  return { good, bad };
 }
 
 export const assetForCell = (plan: PlanState, key: string): GardenAsset | undefined => {

@@ -12,6 +12,7 @@ import { DesignerToolbar } from '@/components/designer/DesignerToolbar';
 import { PairingsPanel } from '@/components/designer/PairingsPanel';
 import { SelectionPanel } from '@/components/designer/SelectionPanel';
 import { StatsPanel } from '@/components/designer/StatsPanel';
+import { TemplatesCard } from '@/components/designer/TemplatesCard';
 import { ViewToggle } from '@/components/designer/ViewToggle';
 import { usePlanEditor } from '@/components/designer/usePlanEditor';
 
@@ -76,11 +77,12 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
         </div>
 
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
+          <TemplatesCard editor={editor} />
           <CropPalette editor={editor} />
           <AssetPalette editor={editor} />
+          <SelectionPanel editor={editor} />
           <StatsPanel editor={editor} />
           <PairingsPanel editor={editor} />
-          <SelectionPanel editor={editor} />
         </div>
       </div>
     </div>

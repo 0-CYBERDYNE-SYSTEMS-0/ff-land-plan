@@ -29,7 +29,10 @@ const argv = process.argv.slice(2);
 const gate = argv.includes('--gate');
 const expectIdx = argv.indexOf('--expect');
 const expectText = expectIdx !== -1 ? argv[expectIdx + 1] : null;
-const rest = argv.filter((a, i) => a !== '--gate' && i !== expectIdx && i !== expectIdx + 1);
+// Drop --gate, and (only when --expect is actually present) the flag + its value.
+const skip = new Set([argv.indexOf('--gate')]);
+if (expectIdx !== -1) { skip.add(expectIdx); skip.add(expectIdx + 1); }
+const rest = argv.filter((a, i) => !skip.has(i));
 const [url = '', out = '', geom = ''] = rest;
 if (!url || !out) {
   console.error('usage: node tools/appshot.mjs <url> <outPath> [WxH] [--gate] [--expect <text>]');

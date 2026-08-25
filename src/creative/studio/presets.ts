@@ -1,4 +1,10 @@
 /**
+ * SHOWCASE-ONLY — superseded in the app by the src/three/sky.ts single-sun
+ * system (sky.update() owns the one directional light + ambient; never wire a
+ * second lighting authority into World3D). These presets remain functional
+ * for the showcase's studio rig: registry entries `preset-dawn` … apply them
+ * per diorama cell for visual judgement.
+ *
  * Studio lighting presets — pure data + one applier.
  *
  * Each preset produces a distinctly different mood while keeping voxel assets

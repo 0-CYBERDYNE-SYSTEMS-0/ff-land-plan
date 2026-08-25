@@ -4,16 +4,28 @@
  *
  * Strategy:
  *  - Each structure type's template object is built ONCE (lazily, cached at
- *    module scope). Per-cell instances are `Object3D.clone()`s which share the
+ *    module scope). Instances are `Object3D.clone()`s which share the
  *    template's geometry and materials, so cloning is cheap and we never
  *    dispose shared geometry per instance.
- *  - Templates are authored at ~1 m footprints (1 voxel = 10 cm); plan cells
- *    are typically 0.25 m. Each slug maps to a target world size for its
- *    largest horizontal dimension; the template's bounding box is measured
- *    once and scaled uniformly to hit that target (see TARGET_SIZE_M).
- *  - Instances sit at the cell centre, y=0 base, with a deterministic
- *    hash-based 0/90/180/270° rotation (linear items like fences vary;
- *    gates stay aligned).
+ *  - Templates are authored at ~1 m footprints (1 voxel = 10 cm). Each slug
+ *    maps to a target world size for its largest horizontal dimension; the
+ *    template's bounding box is measured once and scaled uniformly to hit
+ *    that target.
+ *
+ *  - Region merge (audit finding A6): NON-linear slugs emit ONE instance per
+ *    CONTIGUOUS REGION of same-slug cells (deterministic BFS flood fill,
+ *    anchor = lexicographically-first cell), centred on the region's bounding
+ *    box. Before this fix one instance was placed PER CELL, so a painted
+ *    footprint rendered dozens–hundreds of overlapping copies (seed farm 1:
+ *    64 overlapping sheds). Target sizes for non-linear slugs are DERIVED
+ *    from the designer record (`assetLibrary`: Math.max(defaultWM, defaultHM))
+ *    so the 3D model always matches the 2D footprint — a single source of
+ *    truth, no magic numbers.
+ *  - LINEAR slugs (fence, picket-fence, gate, trellis, irrigation-line) KEEP
+ *    per-cell placement at connective sizes (~0.5–0.55 m) so adjacent
+ *    segments visually tile into continuous runs.
+ *  - Instances sit at y=0 base. Linear items get a deterministic hash-based
+ *    0/90/180/270° rotation variety; everything else stays axis-aligned.
  *  - `pond` and `fruit-tree` are skipped here entirely: the pond tile
  *    (src/creative/terrain/water.ts, rendered by src/three/ground.ts) already
  *    draws depth-tinted water, mud banks and cattail reeds, so the old
@@ -23,10 +35,11 @@
 import * as THREE from 'three';
 import type { PlanState } from '@/types';
 import { parseKey } from '@/lib/plan';
+import { assetBySlug } from '@/data/assets';
 import { entries as structureEntries } from '@/creative/structures/registry';
 
 export interface StructureGroup {
-  /** Root objects added to the scene (one per placed cell). */
+  /** Root objects added to the scene (one per linear cell / merged region). */
   roots: THREE.Object3D[];
 }
 
@@ -38,42 +51,97 @@ interface SlugMapping {
   /** Registry entry id in src/creative/structures/registry.ts. */
   entryId: string;
   /**
-   * Target world size (metres) for the template's largest horizontal
-   * dimension after scaling. Plan cells are ~0.25 m:
-   *  - big buildings span ~3–4 cells,
-   *  - mid props ~2 cells,
-   *  - small props ~1–1.5 cells,
-   *  - linear items (fence/gate/trellis/irrigation) run ~2 cells so adjacent
-   *    fence cells visually connect.
+   * Connective per-cell size in metres — ONLY set for linear slugs, whose
+   * segments must overlap slightly to read as one run (~0.5–0.55 m).
+   * Non-linear slugs omit it: their target size is derived from the designer
+   * record in `assetLibrary` (Math.max(defaultWM, defaultHM)) so the 3D size
+   * always equals the painted 2D footprint.
    */
-  targetSizeM: number;
+  targetSizeM?: number;
+  /**
+   * Linear items (fences, gate, trellis, irrigation lines) stay PER CELL so
+   * segments visually connect; everything else merges into regions.
+   */
+  linear?: boolean;
 }
 
 const SLUG_MAP: Record<string, SlugMapping> = {
-  shed:            { entryId: 'shed',           targetSizeM: 0.85 },
-  greenhouse:      { entryId: 'greenhouse',     targetSizeM: 1.0 },
-  polytunnel:      { entryId: 'polytunnel',     targetSizeM: 0.9 },
-  'cold-frame':    { entryId: 'cold-frame',     targetSizeM: 0.5 },
-  'chicken-coop':  { entryId: 'chicken-coop',   targetSizeM: 0.75 },
-  fence:           { entryId: 'fence-post-rail', targetSizeM: 0.55 },
-  gate:            { entryId: 'gate',           targetSizeM: 0.5 },
-  trellis:         { entryId: 'trellis',        targetSizeM: 0.5 },
-  'compost-bin':   { entryId: 'compost-bin',    targetSizeM: 0.5 },
-  'rain-barrel':   { entryId: 'rain-barrel',    targetSizeM: 0.3 },
-  'ibc-tote':      { entryId: 'ibc-tote',       targetSizeM: 0.4 },
-  'water-tap':     { entryId: 'water-tap',      targetSizeM: 0.3 },
-  'irrigation-line': { entryId: 'irrigation-line', targetSizeM: 0.55 },
-  beehive:         { entryId: 'beehive',        targetSizeM: 0.3 },
+  // Non-linear — one instance per contiguous region, sized from assetLibrary.
+  shed:            { entryId: 'shed' },
+  greenhouse:      { entryId: 'greenhouse' },
+  polytunnel:      { entryId: 'polytunnel' },
+  'cold-frame':    { entryId: 'cold-frame' },
+  'chicken-coop':  { entryId: 'chicken-coop' },
+  barn:            { entryId: 'barn' },
+  'hay-bale':      { entryId: 'hay-bale' },
+  'crate-stack':   { entryId: 'crate-stack' },
+  signpost:        { entryId: 'signpost' },
+  scarecrow:       { entryId: 'scarecrow' },
+  'compost-bin':   { entryId: 'compost-bin' },
+  'rain-barrel':   { entryId: 'rain-barrel' },
+  'ibc-tote':      { entryId: 'ibc-tote' },
+  'water-tap':     { entryId: 'water-tap' },
+  beehive:         { entryId: 'beehive' },
+  // Linear — connective per-cell placement so runs read continuously.
+  fence:           { entryId: 'fence-post-rail', targetSizeM: 0.55, linear: true },
+  'picket-fence':  { entryId: 'fence-picket', targetSizeM: 0.55, linear: true },
+  gate:            { entryId: 'gate', targetSizeM: 0.5, linear: true },
+  trellis:         { entryId: 'trellis', targetSizeM: 0.5, linear: true },
+  'irrigation-line': { entryId: 'irrigation-line', targetSizeM: 0.55, linear: true },
 };
 
 /** Slugs whose per-cell rotation varies by hash; everything else stays axis-aligned. */
-const ROTATED_SLUGS = new Set(['fence', 'gate', 'trellis', 'irrigation-line']);
+const ROTATED_SLUGS = new Set(['fence', 'picket-fence', 'gate', 'trellis', 'irrigation-line']);
 
 /** Deterministic small hash for per-cell rotation picks. */
 function hashCell(x: number, z: number): number {
   let h = x * 374761393 + z * 668265263;
   h = (h ^ (h >> 13)) * 1274126177;
   return (h ^ (h >> 16)) >>> 0;
+}
+
+/** Fallback when a designer record is missing (should not happen). */
+const FALLBACK_SIZE_M = 0.5;
+
+/** Target world size for a slug: explicit for linear items, else the designer record. */
+function resolveTargetSizeM(slug: string, mapping: SlugMapping): number {
+  if (mapping.targetSizeM !== undefined) return mapping.targetSizeM;
+  const record = assetBySlug(slug);
+  if (!record) return FALLBACK_SIZE_M;
+  const derived = Math.max(record.defaultWM, record.defaultHM);
+  return derived > 0 ? derived : FALLBACK_SIZE_M;
+}
+
+/**
+ * Group same-slug cell keys into 4-connected contiguous regions.
+ * Deterministic: anchors are visited in lexicographically-sorted key order,
+ * so the partition (and root order) is stable regardless of plan insertion
+ * order. Returns regions as lists of "x,y" keys.
+ */
+function contiguousRegions(keys: string[]): string[][] {
+  const remaining = new Set(keys);
+  const regions: string[][] = [];
+  const anchors = [...keys].sort();
+  for (const anchor of anchors) {
+    if (!remaining.has(anchor)) continue;
+    remaining.delete(anchor);
+    const region: string[] = [];
+    const queue: string[] = [anchor];
+    while (queue.length > 0) {
+      const key = queue.pop() as string;
+      region.push(key);
+      const [cx, cz] = parseKey(key);
+      for (const [nx, nz] of [[cx + 1, cz], [cx - 1, cz], [cx, cz + 1], [cx, cz - 1]]) {
+        const nk = `${nx},${nz}`;
+        if (remaining.has(nk)) {
+          remaining.delete(nk);
+          queue.push(nk);
+        }
+      }
+    }
+    regions.push(region.sort());
+  }
+  return regions.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 }
 
 // ---------------------------------------------------------------------------
@@ -121,25 +189,57 @@ export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureG
     roots.push(root as THREE.Group);
   };
 
-  // Creative-backed slugs — one instance per contiguous cell of that slug.
+  // Index ground cells by mapped slug in ONE pass (order-independent).
+  const keysBySlug = new Map<string, string[]>();
+  for (const [key, slug] of Object.entries(plan.ground)) {
+    if (!SLUG_MAP[slug]) continue;
+    let list = keysBySlug.get(slug);
+    if (!list) {
+      list = [];
+      keysBySlug.set(slug, list);
+    }
+    list.push(key);
+  }
+
   for (const [slug, mapping] of Object.entries(SLUG_MAP)) {
+    const keys = keysBySlug.get(slug);
+    if (!keys || keys.length === 0) continue;
     const tpl = getTemplate(mapping.entryId);
     if (!tpl) continue;
 
-    for (const [key] of Object.entries(plan.ground)) {
-      if (plan.ground[key] !== slug) continue;
-      const [cx, cz] = parseKey(key);
-      const wx = cx * cellM + cellM / 2 + offsetX;
-      const wz = cz * cellM + cellM / 2 + offsetZ;
+    const scaleBase = resolveTargetSizeM(slug, mapping) / tpl.sizeM;
 
-      const inst = tpl.obj.clone();
-      const scale = mapping.targetSizeM / tpl.sizeM;
-      inst.scale.setScalar(scale);
-      if (ROTATED_SLUGS.has(slug)) {
-        // Deterministic quarter-turn variety; gates stay aligned to paths.
-        if (slug !== 'gate') inst.rotation.y = (hashCell(cx, cz) % 4) * (Math.PI / 2);
+    if (mapping.linear) {
+      // Connective per-cell placement — segments must visually tile.
+      for (const key of keys.sort()) {
+        const [cx, cz] = parseKey(key);
+        const wx = cx * cellM + cellM / 2 + offsetX;
+        const wz = cz * cellM + cellM / 2 + offsetZ;
+        const inst = tpl.obj.clone();
+        inst.scale.setScalar(scaleBase);
+        if (ROTATED_SLUGS.has(slug) && slug !== 'gate') {
+          // Deterministic quarter-turn variety; gates stay aligned to paths.
+          inst.rotation.y = (hashCell(cx, cz) % 4) * (Math.PI / 2);
+        }
+        placeRoot(inst, wx, wz);
       }
-      placeRoot(inst, wx, wz);
+    } else {
+      // ONE instance per contiguous region, centred on the region's bbox.
+      for (const region of contiguousRegions(keys)) {
+        let minCx = Infinity, maxCx = -Infinity, minCz = Infinity, maxCz = -Infinity;
+        for (const key of region) {
+          const [cx, cz] = parseKey(key);
+          if (cx < minCx) minCx = cx;
+          if (cx > maxCx) maxCx = cx;
+          if (cz < minCz) minCz = cz;
+          if (cz > maxCz) maxCz = cz;
+        }
+        const wx = ((minCx + maxCx + 1) / 2) * cellM + offsetX;
+        const wz = ((minCz + maxCz + 1) / 2) * cellM + offsetZ;
+        const inst = tpl.obj.clone();
+        inst.scale.setScalar(scaleBase);
+        placeRoot(inst, wx, wz);
+      }
     }
   }
 

@@ -1,6 +1,21 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { plantsForArea } from '@/lib/plan';
+import type { Crop } from '@/types';
+import { sowWindow } from './usePlanEditor';
 import type { PlanEditor } from './usePlanEditor';
+
+const SUN_LABELS: Record<Crop['sunRequirement'], string> = {
+  full: 'Full sun',
+  partial: 'Partial sun',
+  shade: 'Shade',
+};
+
+const NITROGEN_LABELS: Record<Crop['nitrogenNeed'], string> = {
+  low: 'N: low',
+  medium: 'N: medium',
+  high: 'N: high',
+};
 
 export function SelectionPanel({ editor }: { editor: PlanEditor }) {
   const { selectedInfo } = editor;
@@ -15,18 +30,27 @@ export function SelectionPanel({ editor }: { editor: PlanEditor }) {
             <div className="text-xs text-muted-foreground">Cell {selectedInfo.x}, {selectedInfo.y}</div>
             <div>Crop: {selectedInfo.crop ? `${selectedInfo.crop.emoji ?? ''} ${selectedInfo.crop.name}` : 'None'}</div>
             {selectedInfo.crop && (
-              <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                <div className="font-medium text-foreground">
-                  {selectedInfo.crop.scientificName ?? selectedInfo.crop.family ?? selectedInfo.crop.category}
+              <>
+                <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                  <div className="font-medium text-foreground">
+                    {selectedInfo.crop.scientificName ?? selectedInfo.crop.family ?? selectedInfo.crop.category}
+                  </div>
+                  <div>
+                    Spacing {selectedInfo.crop.spacingCm ?? 30} cm × {selectedInfo.crop.rowSpacingCm ?? selectedInfo.crop.spacingCm ?? 30} cm
+                    {' '}· this cell contributes ≈{plantsForArea(selectedInfo.crop, 1)} plant
+                  </div>
+                  <div>
+                    Family {selectedInfo.crop.family ?? 'Unknown'} · {selectedInfo.crop.frostTolerance ?? 'unknown'} frost tolerance
+                  </div>
+                  <div>~{selectedInfo.crop.growthDays} days to harvest</div>
+                  <div>Sow: {sowWindow(selectedInfo.crop)}</div>
                 </div>
-                <div>
-                  Spacing {selectedInfo.crop.spacingCm ?? 30} cm × {selectedInfo.crop.rowSpacingCm ?? selectedInfo.crop.spacingCm ?? 30} cm
-                  {' '}· this cell contributes ≈{plantsForArea(selectedInfo.crop, 1)} plant
+                <div className="flex flex-wrap gap-1">
+                  <Badge variant="secondary" className="text-[11px]">☀️ {SUN_LABELS[selectedInfo.crop.sunRequirement]}</Badge>
+                  <Badge variant="secondary" className="text-[11px]">💧 {selectedInfo.crop.waterNeedMmDay} mm/day</Badge>
+                  <Badge variant="secondary" className="text-[11px]">🧪 {NITROGEN_LABELS[selectedInfo.crop.nitrogenNeed]}</Badge>
                 </div>
-                <div>
-                  Family {selectedInfo.crop.family ?? 'Unknown'} · {selectedInfo.crop.frostTolerance ?? 'unknown'} frost tolerance
-                </div>
-              </div>
+              </>
             )}
             <div>Ground: {selectedInfo.asset ? `${selectedInfo.asset.emoji} ${selectedInfo.asset.label}` : 'Bare soil'}</div>
             <div className="text-xs text-muted-foreground">

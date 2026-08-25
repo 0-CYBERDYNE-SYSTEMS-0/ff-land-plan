@@ -8,6 +8,7 @@ import {
   canPlantAt,
   cellKey,
   clampPlan,
+  companionSetsFor,
   computeStats,
   conflictCellSet,
   createDefaultPlan,
@@ -15,17 +16,19 @@ import {
   parseKey,
   planCols,
   planRows,
+  spacingViolationSet,
   type PlanPairing,
   type PlanStats,
 } from '@/lib/plan';
-import { drawPlan, renderPlanToPng } from '@/lib/renderPlan';
+import { drawPlan, renderPlanToPng, type RenderOptions } from '@/lib/renderPlan';
 import { useFarm } from '@/hooks/useFarms';
 import { useTheme } from '@/hooks/useTheme';
 import type { Crop, GardenAsset, PlanState } from '@/types';
 
-export type Tool = 'select' | 'brush' | 'rect' | 'asset' | 'erase';
+export type Tool = 'select' | 'brush' | 'rect' | 'asset' | 'erase' | 'pick' | 'fill' | 'line';
+export type BrushSize = 1 | 3 | 5;
 export type EraseLayer = 'plants' | 'ground';
-export type RectMode = 'plants' | 'asset';
+export type RectMode = 'plants' | 'asset' | 'erase';
 export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 export interface Viewport {
@@ -37,7 +40,7 @@ export interface Viewport {
 }
 
 interface DragState {
-  kind: 'paint' | 'rect' | 'pan' | 'gesture' | null;
+  kind: 'paint' | 'rect' | 'line' | 'pan' | 'gesture' | null;
   before: PlanState | null;
   changed: boolean;
   startX: number;
@@ -49,10 +52,42 @@ interface DragState {
 }
 
 const ZOOM_LEVELS = [4, 8, 12, 18, 26, 36];
+const ZOOM_BASE_PX = 12; // reference for the zoom-percentage display
+const MIN_FIT_PX = 6; // P0-3: fit-to-view never drops below legible mobile floor
 const MIN_DIM_M = 2;
 const MAX_DIM_M = 60;
 const AUTOSAVE_MS = 600;
 const HISTORY_LIMIT = 50;
+const FLOOD_CAP = 5000; // P1-2: fill tool safety ceiling
+const BRUSH_SIZES: BrushSize[] = [1, 3, 5];
+const ERASE_GHOST_COLOR = '#ef4444';
+
+const PREF_KEYS = {
+  overlaySpacing: 'ff-pro:overlay-spacing',
+  overlayCompanions: 'ff-pro:overlay-companions',
+  layerPlants: 'ff-pro:layer-plants',
+  layerGround: 'ff-pro:layer-ground',
+} as const;
+
+function readPref(key: string, fallback: boolean): boolean {
+  try {
+    const value = window.localStorage.getItem(key);
+    if (value === null) return fallback;
+    return value === '1';
+  } catch {
+    return fallback;
+  }
+}
+
+function writePref(key: string, value: boolean) {
+  try {
+    window.localStorage.setItem(key, value ? '1' : '0');
+  } catch {
+    // Storage unavailable (private mode etc.) — preference stays session-local.
+  }
+}
+
+// -------------------------------------------------------------------------------
 
 const clonePlan = (plan: PlanState): PlanState => ({
   ...plan,
@@ -99,6 +134,32 @@ function sameCell(a: string | null, b: string | null) {
   return a === b;
 }
 
+// P1-3: integer Bresenham walk, inclusive of both endpoints.
+function bresenhamCells(x0: number, y0: number, x1: number, y1: number): Array<[number, number]> {
+  const cells: Array<[number, number]> = [];
+  let cx = x0;
+  let cy = y0;
+  const dx = Math.abs(x1 - x0);
+  const sx = x0 < x1 ? 1 : -1;
+  const dy = -Math.abs(y1 - y0);
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (;;) {
+    cells.push([cx, cy]);
+    if (cx === x1 && cy === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      cx += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      cy += sy;
+    }
+  }
+  return cells;
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -113,7 +174,8 @@ function csvCell(value: string | number): string {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function sowWindow(crop: Crop): string {
+/** Human-readable sow window for a crop (CSV export + SelectionPanel inspector). */
+export function sowWindow(crop: Crop): string {
   const parts: string[] = [];
   if (crop.sowIndoorsWeeksBeforeLastFrost !== null && crop.sowIndoorsWeeksBeforeLastFrost !== undefined) {
     parts.push(`${crop.sowIndoorsWeeksBeforeLastFrost}w before frost indoors`);
@@ -168,18 +230,20 @@ export function usePlanEditor(farmId: number) {
   const undoRef = useRef<PlanState[]>([]);
   const redoRef = useRef<PlanState[]>([]);
   const spaceHeldRef = useRef(false);
+  const canvasFocusedRef = useRef(false);
   const initializedFarmRef = useRef<number | null>(null);
 
   const [tool, setTool] = useState<Tool>('brush');
   const [activeCropId, setActiveCropId] = useState<number | null>(null);
   const [activeAssetSlug, setActiveAssetSlug] = useState(assetLibrary[0]?.slug ?? '');
-  const [brushSize, setBrushSize] = useState<1 | 3>(1);
+  const [brushSize, setBrushSize] = useState<BrushSize>(1);
   const [eraseLayer, setEraseLayer] = useState<EraseLayer>('plants');
   const [rectMode, setRectMode] = useState<RectMode>('plants');
   const [cropSearch, setCropSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [rectPreview, setRectPreview] = useState<{ x0: number; y0: number; x1: number; y1: number; color: string } | null>(null);
+  const [lineDraft, setLineDraft] = useState<{ x: number; y: number } | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [stats, setStats] = useState<PlanStats | null>(null);
@@ -190,6 +254,14 @@ export function usePlanEditor(farmId: number) {
   const [draftWidth, setDraftWidth] = useState(20);
   const [draftHeight, setDraftHeight] = useState(12);
   const [draftAllowOutsideBeds, setDraftAllowOutsideBeds] = useState(true);
+  // P0-4: interaction cursors derive from STATE so re-renders track them live.
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  // P0-5 / P1-7 / P1-8: overlay + layer visibility preferences (localStorage-backed).
+  const [showSpacing, setShowSpacing] = useState(() => readPref(PREF_KEYS.overlaySpacing, true));
+  const [showCompanions, setShowCompanions] = useState(() => readPref(PREF_KEYS.overlayCompanions, false));
+  const [showPlants, setShowPlants] = useState(() => readPref(PREF_KEYS.layerPlants, true));
+  const [showGround, setShowGround] = useState(() => readPref(PREF_KEYS.layerGround, true));
 
   const cropById = useMemo(() => new Map(crops.map((crop) => [crop.id, crop])), [crops]);
   const activeCrop = activeCropId ? cropById.get(activeCropId) ?? null : null;
@@ -237,10 +309,97 @@ export function usePlanEditor(farmId: number) {
     };
   }, [cropById, planVersion, selectedKey]);
 
+  // P0-5: spacing-violation overlay source set, recomputed only when the plan,
+  // the catalog map, or the toggle changes.
+  const spacingViolations = useMemo(() => {
+    if (!showSpacing) return null;
+    const plan = planRef.current;
+    if (!plan) return null;
+    return spacingViolationSet(plan, cropById);
+  }, [cropById, planVersion, showSpacing]);
+
+  // P1-7: companion halos for the active crop, falling back to the selected
+  // cell's crop when no palette crop is active.
+  const companionHalos = useMemo(() => {
+    if (!showCompanions) return null;
+    const plan = planRef.current;
+    if (!plan) return null;
+    const fallbackCropId = selectedKey ? plan.planting[selectedKey] : undefined;
+    const cropId = activeCropId ?? fallbackCropId;
+    if (cropId === undefined || cropId === null) return null;
+    return companionSetsFor(cropId, plan);
+  }, [activeCropId, planVersion, selectedKey, showCompanions]);
+
+  // P0-1 / P1-3: ghost preview cells — brush square, asset footprint, erase
+  // targets, or the in-flight Bresenham line draft.
+  const ghost = useMemo(() => {
+    if (isPanning || spaceHeld) return null;
+    const plan = planRef.current;
+    if (!plan) return null;
+    const cols = planCols(plan);
+    const rows = planRows(plan);
+    const inBounds = (x: number, y: number) => x >= 0 && y >= 0 && x < cols && y < rows;
+
+    if (lineDraft && hoverKey) {
+      const [hx, hy] = parseKey(hoverKey);
+      const cells = bresenhamCells(lineDraft.x, lineDraft.y, hx, hy)
+        .filter(([x, y]) => inBounds(x, y));
+      if (cells.length > 0) {
+        const color = rectMode === 'erase'
+          ? ERASE_GHOST_COLOR
+          : rectMode === 'asset'
+            ? activeAsset?.colorHex ?? ERASE_GHOST_COLOR
+            : activeCrop?.colorHex ?? '#22c55e';
+        return { cells, colorHex: color };
+      }
+    }
+
+    if (!hoverKey) return null;
+    const [hx, hy] = parseKey(hoverKey);
+    const squareCells = (size: BrushSize) => {
+      const half = Math.floor(size / 2);
+      const cells: Array<[number, number]> = [];
+      for (let dy = -half; dy <= half; dy++) {
+        for (let dx = -half; dx <= half; dx++) {
+          if (inBounds(hx + dx, hy + dy)) cells.push([hx + dx, hy + dy]);
+        }
+      }
+      return cells;
+    };
+
+    if (tool === 'brush' && activeCrop) {
+      return { cells: squareCells(brushSize), colorHex: activeCrop.colorHex };
+    }
+    if (tool === 'asset' && activeAsset) {
+      const fp = footprintCells(activeAsset, plan);
+      const cells: Array<[number, number]> = [];
+      for (let y = hy; y < hy + fp.rows; y++) {
+        for (let x = hx; x < hx + fp.cols; x++) {
+          if (inBounds(x, y)) cells.push([x, y]);
+        }
+      }
+      return { cells, colorHex: activeAsset.colorHex };
+    }
+    if (tool === 'erase') {
+      return { cells: squareCells(brushSize), colorHex: ERASE_GHOST_COLOR };
+    }
+    return null;
+  }, [activeAsset, activeCrop, brushSize, hoverKey, isPanning, lineDraft, planVersion, rectMode, spaceHeld, tool]);
+
   const updateStats = useCallback((plan: PlanState) => {
     setStats(computeStats(plan, crops));
     setPairings(findPairings(plan, crops));
   }, [crops]);
+
+  const overlayOpts = useMemo(
+    () => ({
+      ghost,
+      spacingViolations,
+      companionHalos,
+      layers: { plants: showPlants, ground: showGround },
+    }),
+    [companionHalos, ghost, showGround, showPlants, spacingViolations],
+  );
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -249,35 +408,83 @@ export function usePlanEditor(farmId: number) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const viewport = viewportRef.current;
-    drawPlan(ctx, plan, {
+    // Ghost/overlays thread through the INTERACTIVE redraw only; PNG export
+    // builds its own options inside renderPlanToPng and never sees them.
+    const opts: RenderOptions = {
       ...viewport,
       cropById,
       conflictCells,
       hoverKey,
       rectPreview,
       theme,
-    });
-  }, [conflictCells, cropById, hoverKey, rectPreview, theme]);
+      ...overlayOpts,
+    };
+    drawPlan(ctx, plan, opts);
+  }, [conflictCells, cropById, hoverKey, overlayOpts, rectPreview, theme]);
 
   const fitToView = useCallback(() => {
     const plan = planRef.current;
     if (!plan) return;
     const viewport = viewportRef.current;
-    const cols = planCols(plan);
-    const rows = planRows(plan);
-    const fitPx = Math.max(4, Math.min((viewport.viewW - 48) / cols, (viewport.viewH - 48) / rows));
+    const cols = Math.max(1, planCols(plan));
+    const rows = Math.max(1, planRows(plan));
+    const fitPx = Math.max(MIN_FIT_PX, Math.min((viewport.viewW - 48) / cols, (viewport.viewH - 48) / rows));
     const level = ZOOM_LEVELS.reduce((best, levelPx) =>
       Math.abs(levelPx - fitPx) < Math.abs(best - fitPx) ? levelPx : best,
     ZOOM_LEVELS[0]);
-    const cellPx = Math.max(4, Math.min(36, Math.min(level, fitPx)));
+    const cellPx = Math.max(MIN_FIT_PX, Math.min(36, Math.min(level, fitPx)));
     viewportRef.current = {
       ...viewport,
       cellPx,
+      // Centered offsets: when the floored zoom makes the plan overflow the
+      // viewport, offsets go negative symmetrically so overflow is centered.
       offsetX: Math.round((viewport.viewW - cols * cellPx) / 2),
       offsetY: Math.round((viewport.viewH - rows * cellPx) / 2),
     };
     setViewportVersion((v) => v + 1);
   }, []);
+
+  // P0-2: single zoom primitive — every entry point (wheel, buttons, reset)
+  // anchors through this so the math is identical by construction.
+  const applyZoom = useCallback((nextCellPx: number, anchorX?: number, anchorY?: number) => {
+    const viewport = viewportRef.current;
+    const oldCellPx = viewport.cellPx;
+    if (nextCellPx === oldCellPx || nextCellPx <= 0) return;
+    const canvas = canvasRef.current;
+    const px = anchorX ?? (canvas ? canvas.width / 2 : viewport.viewW / 2);
+    const py = anchorY ?? (canvas ? canvas.height / 2 : viewport.viewH / 2);
+    const worldX = (px - viewport.offsetX) / oldCellPx;
+    const worldY = (py - viewport.offsetY) / oldCellPx;
+    viewportRef.current = {
+      ...viewport,
+      cellPx: nextCellPx,
+      offsetX: px - worldX * nextCellPx,
+      offsetY: py - worldY * nextCellPx,
+    };
+    setViewportVersion((v) => v + 1);
+  }, []);
+
+  const stepZoomLadder = useCallback((direction: 1 | -1, anchorX?: number, anchorY?: number) => {
+    const oldCellPx = viewportRef.current.cellPx;
+    let oldIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    ZOOM_LEVELS.forEach((levelPx, index) => {
+      const distance = Math.abs(levelPx - oldCellPx);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        oldIndex = index;
+      }
+    });
+    const nextIndex = Math.min(ZOOM_LEVELS.length - 1, Math.max(0, oldIndex + direction));
+    const nextCellPx = ZOOM_LEVELS[nextIndex];
+    if (nextCellPx === oldCellPx) return;
+    applyZoom(nextCellPx, anchorX, anchorY);
+  }, [applyZoom]);
+
+  const zoomIn = useCallback(() => stepZoomLadder(1), [stepZoomLadder]);
+  const zoomOut = useCallback(() => stepZoomLadder(-1), [stepZoomLadder]);
+  const zoomReset = useCallback(() => applyZoom(ZOOM_BASE_PX), [applyZoom]);
+  const zoomFit = fitToView;
 
   const scheduleAutosave = useCallback((nextPlan: PlanState) => {
     if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
@@ -324,17 +531,19 @@ export function usePlanEditor(farmId: number) {
     return { x, y, key: cellKey(x, y), px, py };
   }, []);
 
-  const mutateCell = useCallback((x: number, y: number): boolean => {
+  // `mode` lets the line tool reuse the exact same payload writers (brush /
+  // asset footprint / erase-layer) without touching tool state.
+  const mutateCell = useCallback((x: number, y: number, mode: Tool = tool): boolean => {
     const plan = planRef.current;
     if (!plan || x < 0 || y < 0 || x >= planCols(plan) || y >= planRows(plan)) return false;
     const key = cellKey(x, y);
-    if (tool === 'brush') {
+    if (mode === 'brush') {
       if (!activeCropId || !canPlantAt(plan, key) || plan.planting[key] === activeCropId) return false;
       plan.planting[key] = activeCropId;
       stampPlantedAt(plan, key);
       return true;
     }
-    if (tool === 'erase') {
+    if (mode === 'erase') {
       if (eraseLayer === 'plants') {
         if (!plan.planting[key]) return false;
         delete plan.planting[key];
@@ -349,7 +558,7 @@ export function usePlanEditor(farmId: number) {
       }
       return true;
     }
-    if (tool === 'asset' && activeAsset) {
+    if (mode === 'asset' && activeAsset) {
       let changed = false;
       const fp = footprintCells(activeAsset, plan);
       for (let yy = y; yy < y + fp.rows; yy++) {
@@ -403,7 +612,7 @@ export function usePlanEditor(farmId: number) {
           plan.planting[key] = activeCropId;
           stampPlantedAt(plan, key);
           changed = true;
-        } else if (activeAsset) {
+        } else if (rectMode === 'asset' && activeAsset) {
           if (plan.ground[key] !== activeAsset.slug) {
             plan.ground[key] = activeAsset.slug;
             changed = true;
@@ -418,6 +627,128 @@ export function usePlanEditor(farmId: number) {
     }
     return changed;
   }, [activeAsset, activeCropId, rectMode]);
+
+  // P1-3: commit the line stroke — payload applied along the Bresenham cells.
+  const applyLineCells = useCallback((x0: number, y0: number, x1: number, y1: number): boolean => {
+    const plan = planRef.current;
+    if (!plan) return false;
+    const cols = planCols(plan);
+    const rows = planRows(plan);
+    const clampX = (x: number) => Math.min(cols - 1, Math.max(0, x));
+    const clampY = (y: number) => Math.min(rows - 1, Math.max(0, y));
+    const mode: Tool = rectMode === 'erase' ? 'erase' : rectMode === 'asset' ? 'asset' : 'brush';
+    let changed = false;
+    for (const [x, y] of bresenhamCells(clampX(x0), clampY(y0), clampX(x1), clampY(y1))) {
+      changed = mutateCell(x, y, mode) || changed;
+    }
+    return changed;
+  }, [mutateCell, rectMode]);
+
+  // P1-1: eyedropper — copies the cell's content to the palette payloads and
+  // switches to the matching paint tool. Purely UI state: NO history entry.
+  const pickAt = useCallback((key: string) => {
+    const plan = planRef.current;
+    if (!plan) return;
+    const cropId = plan.planting[key];
+    if (cropId !== undefined) {
+      setActiveCropId(cropId);
+      setTool('brush');
+      return;
+    }
+    const slug = plan.ground[key];
+    if (slug) {
+      setActiveAssetSlug(slug);
+      setTool('asset');
+    }
+  }, []);
+
+  // P1-2: flood fill — BFS over cells with an identical value WITHIN THE SAME
+  // layer (planting id for plants mode, ground slug for asset mode), capped,
+  // committed as ONE history snapshot + one debounced autosave.
+  const applyFillAt = useCallback((sx: number, sy: number) => {
+    const plan = planRef.current;
+    if (!plan) return;
+    const cols = planCols(plan);
+    const rows = planRows(plan);
+    if (sx < 0 || sy < 0 || sx >= cols || sy >= rows) return;
+    const layerValue = (x: number, y: number): string =>
+      rectMode === 'asset'
+        ? plan.ground[cellKey(x, y)] ?? ''
+        : String(plan.planting[cellKey(x, y)] ?? '');
+    const target = layerValue(sx, sy);
+    const seen = new Set<string>([cellKey(sx, sy)]);
+    const queue: Array<[number, number]> = [[sx, sy]];
+    const region: Array<[number, number]> = [];
+    let head = 0;
+    while (head < queue.length && region.length < FLOOD_CAP) {
+      const [cx, cy] = queue[head++];
+      region.push([cx, cy]);
+      const neighbors: Array<[number, number]> = [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]];
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const nk = cellKey(nx, ny);
+        if (seen.has(nk)) continue;
+        if (layerValue(nx, ny) !== target) continue;
+        seen.add(nk);
+        queue.push([nx, ny]);
+      }
+    }
+
+    const before = clonePlan(plan); // ONE undo snapshot for the whole fill
+    let changed = false;
+    for (const [x, y] of region) {
+      if (rectMode === 'asset') {
+        // Asset fill assigns the slug per cell (rect-style) instead of
+        // stamping a full footprint per region cell.
+        const key = cellKey(x, y);
+        if (activeAsset) {
+          if (plan.ground[key] !== activeAsset.slug) {
+            plan.ground[key] = activeAsset.slug;
+            changed = true;
+          }
+          if (!activeAsset.plantable && plan.planting[key]) {
+            delete plan.planting[key];
+            clearPlantedAt(plan, key);
+            changed = true;
+          }
+        }
+      } else {
+        changed = mutateCell(x, y, 'brush') || changed;
+      }
+    }
+    if (!changed) return;
+    undoRef.current = [...undoRef.current, before].slice(-HISTORY_LIMIT);
+    redoRef.current = [];
+    if (planRef.current) updateStats(planRef.current);
+    setPlanVersion((v) => v + 1);
+    scheduleAutosave(clonePlan(plan)); // one autosave through the 600 ms debounce
+  }, [activeAsset, mutateCell, rectMode, scheduleAutosave, updateStats]);
+
+  // P0-4: Escape cancels any in-flight stroke (restoring its before-snapshot
+  // without a history entry), clears the rect/line previews and the selection.
+  const cancelStroke = useCallback(() => {
+    const drag = dragRef.current;
+    if ((drag.kind === 'paint' || drag.kind === 'rect' || drag.kind === 'line') && drag.before) {
+      planRef.current = drag.before;
+      updateStats(drag.before);
+      setPlanVersion((v) => v + 1);
+    }
+    setRectPreview(null);
+    setLineDraft(null);
+    setSelectedKey(null);
+    setIsPanning(false);
+    dragRef.current = {
+      kind: null,
+      before: null,
+      changed: false,
+      startX: 0,
+      startY: 0,
+      panClientX: 0,
+      panClientY: 0,
+      panOffsetX: 0,
+      panOffsetY: 0,
+    };
+  }, [updateStats]);
 
   const finishStroke = useCallback((event?: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
@@ -440,20 +771,29 @@ export function usePlanEditor(farmId: number) {
       }
       return;
     }
+    if (drag.kind === 'pan') setIsPanning(false);
     const endCell = event ? getCellFromEvent(event) : null;
     const endKey = endCell?.key ?? hoverKey;
-    if (drag.kind === 'rect' && plan && endKey) {
-      const [endX, endY] = parseKey(endKey);
-      drag.changed = applyRect(drag.startX, drag.startY, endX, endY) || drag.changed;
-      setRectPreview(null);
-      if (drag.changed) {
-        updateStats(plan);
-        setPlanVersion((v) => v + 1);
+    if (drag.kind === 'rect' || drag.kind === 'line') {
+      if (plan && endKey) {
+        const [endX, endY] = parseKey(endKey);
+        if (drag.kind === 'rect') {
+          drag.changed = applyRect(drag.startX, drag.startY, endX, endY) || drag.changed;
+        } else {
+          drag.changed = applyLineCells(drag.startX, drag.startY, endX, endY) || drag.changed;
+        }
+        if (drag.changed) updateStats(plan);
       }
+      // Previews die with the gesture even when the release lands off-plan.
+      setRectPreview(null);
+      setLineDraft(null);
     }
     if (drag.changed && drag.before && plan) {
+      // History push FIRST, then the version bump — the very render triggered
+      // by this bump already sees the enabled Undo button (P0-4).
       undoRef.current = [...undoRef.current, drag.before].slice(-HISTORY_LIMIT);
       redoRef.current = [];
+      setPlanVersion((v) => v + 1);
       scheduleAutosave(clonePlan(plan));
     }
     dragRef.current = {
@@ -467,7 +807,7 @@ export function usePlanEditor(farmId: number) {
       panOffsetX: 0,
       panOffsetY: 0,
     };
-  }, [applyRect, getCellFromEvent, hoverKey, scheduleAutosave, updateStats]);
+  }, [applyLineCells, applyRect, getCellFromEvent, hoverKey, scheduleAutosave, updateStats]);
 
   const undo = useCallback(() => {
     const current = planRef.current;
@@ -492,14 +832,16 @@ export function usePlanEditor(farmId: number) {
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointersRef.current.size >= 2) {
       const drag = dragRef.current;
-      if (drag.kind === 'paint' || drag.kind === 'rect') {
+      if (drag.kind === 'paint' || drag.kind === 'rect' || drag.kind === 'line') {
         if (drag.before) {
           planRef.current = drag.before;
           updateStats(drag.before);
           setPlanVersion((v) => v + 1);
         }
         setRectPreview(null);
+        setLineDraft(null);
       }
+      setIsPanning(false);
       const points = [...pointersRef.current.values()];
       const [p1, p2] = points;
       pinchRef.current = {
@@ -533,16 +875,31 @@ export function usePlanEditor(farmId: number) {
         panOffsetX: viewportRef.current.offsetX,
         panOffsetY: viewportRef.current.offsetY,
       };
+      setIsPanning(true);
       return;
     }
     if (!cell) return;
+    // P1-1: Alt-click eyedropper works from ANY tool.
+    if (event.altKey) {
+      event.preventDefault();
+      pickAt(cell.key);
+      return;
+    }
     if (tool === 'select') {
       setSelectedKey(cell.key);
       return;
     }
+    if (tool === 'pick') {
+      pickAt(cell.key);
+      return;
+    }
+    if (tool === 'fill') {
+      applyFillAt(cell.x, cell.y);
+      return;
+    }
     const before = clonePlan(plan);
     dragRef.current = {
-      kind: tool === 'rect' ? 'rect' : 'paint',
+      kind: tool === 'rect' ? 'rect' : tool === 'line' ? 'line' : 'paint',
       before,
       changed: false,
       startX: cell.x,
@@ -555,10 +912,12 @@ export function usePlanEditor(farmId: number) {
     if (tool === 'rect') {
       const color = rectMode === 'asset' && activeAsset ? activeAsset.colorHex : activeCrop?.colorHex ?? '#22c55e';
       setRectPreview({ x0: cell.x, y0: cell.y, x1: cell.x, y1: cell.y, color });
+    } else if (tool === 'line') {
+      setLineDraft({ x: cell.x, y: cell.y });
     } else {
       applyBrushAt(cell.x, cell.y);
     }
-  }, [activeAsset, activeCrop, applyBrushAt, getCellFromEvent, rectMode, tool, updateStats]);
+  }, [activeAsset, activeCrop, applyBrushAt, applyFillAt, getCellFromEvent, pickAt, rectMode, tool, updateStats]);
 
   const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (pointersRef.current.has(event.pointerId)) {
@@ -615,6 +974,8 @@ export function usePlanEditor(farmId: number) {
       const color = rectMode === 'asset' && activeAsset ? activeAsset.colorHex : activeCrop?.colorHex ?? '#22c55e';
       setRectPreview({ x0: drag.startX, y0: drag.startY, x1: cell.x, y1: cell.y, color });
     }
+    // Line drags need no explicit preview state here: hover updates drive the
+    // ghost memo, which renders the dashed Bresenham preview via RenderOptions.ghost.
   }, [activeAsset, activeCrop, applyBrushAt, getCellFromEvent, rectMode]);
 
   const handleWheel = useCallback((event: WheelEvent) => {
@@ -625,24 +986,10 @@ export function usePlanEditor(farmId: number) {
     const rect = canvas.getBoundingClientRect();
     const px = (event.clientX - rect.left) * (canvas.width / rect.width);
     const py = (event.clientY - rect.top) * (canvas.height / rect.height);
-    const viewport = viewportRef.current;
-    const oldCellPx = viewport.cellPx;
-    const oldIndex = ZOOM_LEVELS.reduce((best, level, index) =>
-      Math.abs(level - oldCellPx) < Math.abs(ZOOM_LEVELS[best] - oldCellPx) ? index : best,
-    0);
-    const nextIndex = Math.min(ZOOM_LEVELS.length - 1, Math.max(0, oldIndex + (event.deltaY < 0 ? 1 : -1)));
-    const nextCellPx = ZOOM_LEVELS[nextIndex];
-    if (nextCellPx === oldCellPx) return;
-    const worldX = (px - viewport.offsetX) / oldCellPx;
-    const worldY = (py - viewport.offsetY) / oldCellPx;
-    viewportRef.current = {
-      ...viewport,
-      cellPx: nextCellPx,
-      offsetX: px - worldX * nextCellPx,
-      offsetY: py - worldY * nextCellPx,
-    };
-    setViewportVersion((v) => v + 1);
-  }, []);
+    // Same ladder + cursor-anchored math as the zoom buttons: both funnel
+    // through stepZoomLadder/applyZoom.
+    stepZoomLadder(event.deltaY < 0 ? 1 : -1, px, py);
+  }, [stepZoomLadder]);
 
   const applySettings = useCallback(() => {
     const current = planRef.current;
@@ -713,6 +1060,11 @@ export function usePlanEditor(farmId: number) {
     if (!activeCropId && crops.length > 0) setActiveCropId(crops[0].id);
   }, [activeCropId, crops]);
 
+  // Rect/fill tools have no erase payload; keep the shared mode picker sane.
+  useEffect(() => {
+    if ((tool === 'rect' || tool === 'fill') && rectMode === 'erase') setRectMode('plants');
+  }, [rectMode, tool]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const shell = shellRef.current;
@@ -743,6 +1095,21 @@ export function usePlanEditor(farmId: number) {
     return () => canvas.removeEventListener('wheel', wheelHandler);
   }, [isLoading, handleWheel]);
 
+  // P0-4: track canvas-area focus so Space is only ever hijacked while the
+  // canvas itself holds focus (focused buttons keep native Space activation).
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onFocus = () => { canvasFocusedRef.current = true; };
+    const onBlur = () => { canvasFocusedRef.current = false; };
+    canvas.addEventListener('focus', onFocus);
+    canvas.addEventListener('blur', onBlur);
+    return () => {
+      canvas.removeEventListener('focus', onFocus);
+      canvas.removeEventListener('blur', onBlur);
+    };
+  }, [isLoading]);
+
   useEffect(() => {
     redraw();
   }, [hoverKey, planVersion, rectPreview, redraw, viewportVersion]);
@@ -757,20 +1124,43 @@ export function usePlanEditor(farmId: number) {
         else undo();
         return;
       }
-      if (event.code === 'Space') {
+      if (event.key === 'Escape') {
         event.preventDefault();
-        spaceHeldRef.current = true;
+        cancelStroke();
         return;
       }
+      if (event.code === 'Space') {
+        // Only capture Space while the canvas area holds focus; otherwise the
+        // browser's default activates the focused button (a11y fix).
+        if (!canvasFocusedRef.current) return;
+        event.preventDefault();
+        spaceHeldRef.current = true;
+        setSpaceHeld(true);
+        return;
+      }
+      if (mod || event.altKey) return;
       const key = event.key.toLowerCase();
+      if (key === '[' || key === ']') {
+        const currentIndex = BRUSH_SIZES.indexOf(brushSize);
+        const direction = key === ']' ? 1 : -1;
+        const nextIndex = (currentIndex + direction + BRUSH_SIZES.length) % BRUSH_SIZES.length;
+        setBrushSize(BRUSH_SIZES[nextIndex]);
+        return;
+      }
       if (key === 'v') setTool('select');
-      if (key === 'b') setTool('brush');
-      if (key === 'r') setTool('rect');
-      if (key === 'a') setTool('asset');
-      if (key === 'e') setTool('erase');
+      else if (key === 'b') setTool('brush');
+      else if (key === 'r') setTool('rect');
+      else if (key === 'l') setTool('line');
+      else if (key === 'g') setTool('fill');
+      else if (key === 'i') setTool('pick');
+      else if (key === 'a') setTool('asset');
+      else if (key === 'e') setTool('erase');
     };
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'Space') spaceHeldRef.current = false;
+      if (event.code === 'Space') {
+        spaceHeldRef.current = false;
+        setSpaceHeld(false);
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -778,12 +1168,28 @@ export function usePlanEditor(farmId: number) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [redo, undo]);
+  }, [brushSize, cancelStroke, redo, undo]);
+
+  // Preference persistence: single writer effect per flag keeps localStorage
+  // in lockstep no matter how many UI surfaces flip the toggle.
+  useEffect(() => { writePref(PREF_KEYS.overlaySpacing, showSpacing); }, [showSpacing]);
+  useEffect(() => { writePref(PREF_KEYS.overlayCompanions, showCompanions); }, [showCompanions]);
+  useEffect(() => { writePref(PREF_KEYS.layerPlants, showPlants); }, [showPlants]);
+  useEffect(() => { writePref(PREF_KEYS.layerGround, showGround); }, [showGround]);
 
   useEffect(() => () => {
     if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
   }, []);
 
+  const toggleSpacing = useCallback(() => setShowSpacing((v) => !v), []);
+  const toggleCompanions = useCallback(() => setShowCompanions((v) => !v), []);
+  const togglePlantsLayer = useCallback(() => setShowPlants((v) => !v), []);
+  const toggleGroundLayer = useCallback(() => setShowGround((v) => !v), []);
+
+  const zoomPct = useMemo(
+    () => Math.round((viewportRef.current.cellPx / ZOOM_BASE_PX) * 100),
+    [viewportVersion],
+  );
   const zoomLabel = `${Math.round(viewportRef.current.cellPx)} px/cell`;
   const antagonists = pairings.filter((p) => p.kind === 'antagonist');
   const companions = pairings.filter((p) => p.kind === 'companion');
@@ -826,6 +1232,8 @@ export function usePlanEditor(farmId: number) {
     setHoverKey,
     rectPreview,
     setRectPreview,
+    lineDraft,
+    setLineDraft,
     saveState,
     savedAt,
     stats,
@@ -840,6 +1248,18 @@ export function usePlanEditor(farmId: number) {
     setDraftHeight,
     draftAllowOutsideBeds,
     setDraftAllowOutsideBeds,
+    spaceHeld,
+    isPanning,
+
+    // overlays & layers (P0-5 / P1-7 / P1-8)
+    showSpacing,
+    toggleSpacing,
+    showCompanions,
+    toggleCompanions,
+    showPlants,
+    togglePlantsLayer,
+    showGround,
+    toggleGroundLayer,
 
     // derived
     cropById,
@@ -848,6 +1268,7 @@ export function usePlanEditor(farmId: number) {
     conflictCells,
     selectedInfo,
     zoomLabel,
+    zoomPct,
     antagonists,
     companions,
 
@@ -855,10 +1276,18 @@ export function usePlanEditor(farmId: number) {
     mutateCell,
     applyBrushAt,
     applyRect,
+    applyLineCells,
+    applyFillAt,
+    pickAt,
+    cancelStroke,
     finishStroke,
     handlePointerDown,
     handlePointerMove,
     handleWheel,
+    zoomIn,
+    zoomOut,
+    zoomReset,
+    zoomFit,
     undo,
     redo,
     fitToView,

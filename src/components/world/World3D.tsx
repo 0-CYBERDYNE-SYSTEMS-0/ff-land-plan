@@ -6,6 +6,7 @@ import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
 import type { Weather, WeatherCurrent } from '@/types';
 import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '@/three/animals';
+import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
 import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
 import { createClouds, type Clouds } from '@/three/clouds';
 import { createEngine, type Engine } from '@/three/engine';
@@ -79,6 +80,7 @@ export default function World3D({ editor }: World3DProps) {
   const cloudsRef = useRef<Clouds | null>(null);
   const weatherFXRef = useRef<WeatherFX | null>(null);
   const animalsRef = useRef<AnimalSystem | null>(null);
+  const dressingRef = useRef<DressingSystem | null>(null);
   const tourRef = useRef<Tour | null>(null);
   const flightRef = useRef<FlightCamera | null>(null);
   const growthFXRef = useRef<GrowthFX | null>(null);
@@ -204,6 +206,9 @@ export default function World3D({ editor }: World3DProps) {
 
     // Animals
     animalsRef.current = buildAnimals(plan, engine.scene);
+
+    // Auto-dressing props (static tools near shed/tap/barrel/bed anchors)
+    dressingRef.current = buildDressing(plan, engine.scene);
 
     // Growth FX
     growthFXRef.current = createGrowthFX(engine.scene);
@@ -373,6 +378,7 @@ export default function World3D({ editor }: World3DProps) {
       disposeGhostPlants(undoGhostsRef.current);
       disposeGhostPlants(redoGhostsRef.current);
       disposeAnimals(animalsRef.current!);
+      if (dressingRef.current) disposeDressing(dressingRef.current);
       sky.dispose();
       clouds.dispose();
       weatherFX.dispose();
@@ -410,6 +416,10 @@ export default function World3D({ editor }: World3DProps) {
       disposeAnimals(animalsRef.current);
       animalsRef.current = buildAnimals(plan, engine.scene);
     }
+
+    // Auto-dressing props rebuild alongside animals on plan changes
+    if (dressingRef.current) disposeDressing(dressingRef.current);
+    dressingRef.current = buildDressing(plan, engine.scene);
 
     // Ghosts
     disposeGhostPlants(undoGhostsRef.current);

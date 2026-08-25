@@ -4,7 +4,7 @@
 
 import type { Crop, GardenAsset, PlanState } from '@/types';
 import { assetBySlug } from '@/data/assets';
-import { parseKey, planCols, planRows } from '@/lib/plan';
+import { cellKey, parseKey, planCols, planRows } from '@/lib/plan';
 
 export interface RenderOptions {
   cellPx: number;
@@ -17,6 +17,22 @@ export interface RenderOptions {
   viewW: number;
   viewH: number;
   theme: 'light' | 'dark';
+  // --- Opt-in overlays (risk #1, shared-renderer leakage) ---------------------
+  // Every field below defaults to OFF/undefined so drawPlan's pixels are
+  // byte-identical for callers that don't pass it:
+  //   • BlueprintCanvas (interactive, Lane E): may pass ALL of them —
+  //     `ghost` hover/brush/asset footprint preview, `spacingViolations`
+  //     spacing toggle, `companionHalos` companions toggle, `layers` visibility.
+  //   • renderPlanToPng (PNG export, below): passes NONE — exports stay clean.
+  //   • src/three/groundTexture.ts (World3D ground): passes NONE — do not add.
+  /** Ghost footprint preview: per-cell 35% fill + solid 1px union outline. */
+  ghost?: { cells: Array<[number, number]>; colorHex: string } | null;
+  /** 'x,y' keys drawn as a ~28% red tint BEHIND plant emoji/icons. */
+  spacingViolations?: Set<string> | null;
+  /** Small corner triangles: good = green top-left, bad = red top-right. */
+  companionHalos?: { good?: Set<string>; bad?: Set<string> } | null;
+  /** false skips a layer entirely; undefined = visible (current behaviour). */
+  layers?: { plants?: boolean; ground?: boolean };
 }
 
 const EMOJI_MIN_PX = 16;
@@ -72,6 +88,14 @@ export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: R
   ctx.fillStyle = dark ? '#1a2419' : '#efe9df';
   ctx.fillRect(offsetX, offsetY, planW, planH);
 
+  // Layer visibility (opt-in `layers`): hiding the ground layer leaves a
+  // neutral flat base so plants stay readable without bed/path colours.
+  const showGround = opts.layers?.ground !== false;
+  if (!showGround) {
+    ctx.fillStyle = dark ? '#242e24' : '#e8e0d0';
+    ctx.fillRect(offsetX, offsetY, planW, planH);
+  }
+
   // Visible cell range only.
   const x0 = Math.max(0, Math.floor(-offsetX / cellPx));
   const y0 = Math.max(0, Math.floor(-offsetY / cellPx));
@@ -79,41 +103,58 @@ export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: R
   const y1 = Math.min(rows - 1, Math.ceil((viewH - offsetY) / cellPx));
 
   // Ground layer.
-  const drawPatterns = cellPx >= 10;
-  for (const key of Object.keys(plan.ground)) {
-    const [x, y] = parseKey(key);
-    if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-    const asset = assetBySlug(plan.ground[key]);
-    if (!asset) continue;
-    const px = offsetX + x * cellPx;
-    const py = offsetY + y * cellPx;
-    ctx.fillStyle = asset.colorHex;
-    ctx.fillRect(px, py, cellPx, cellPx);
-    if (drawPatterns) drawAssetPattern(ctx, asset, px, py, cellPx);
+  if (showGround) {
+    const drawPatterns = cellPx >= 10;
+    for (const key of Object.keys(plan.ground)) {
+      const [x, y] = parseKey(key);
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const asset = assetBySlug(plan.ground[key]);
+      if (!asset) continue;
+      const px = offsetX + x * cellPx;
+      const py = offsetY + y * cellPx;
+      ctx.fillStyle = asset.colorHex;
+      ctx.fillRect(px, py, cellPx, cellPx);
+      if (drawPatterns) drawAssetPattern(ctx, asset, px, py, cellPx);
+    }
+  }
+
+  // Spacing-violation tint (opt-in): translucent red UNDER the plant layer so
+  // emoji/icons stay readable on top of it.
+  if (opts.spacingViolations && opts.spacingViolations.size > 0) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(220, 38, 38, 0.28)';
+    for (const key of opts.spacingViolations) {
+      const [x, y] = parseKey(key);
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      ctx.fillRect(offsetX + x * cellPx, offsetY + y * cellPx, cellPx, cellPx);
+    }
+    ctx.restore();
   }
 
   // Planting layer.
-  const emoji = cellPx >= EMOJI_MIN_PX;
-  if (emoji) {
-    ctx.font = `${Math.floor(cellPx * 0.62)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-  }
-  const inset = Math.max(0.5, cellPx * 0.06);
-  for (const key of Object.keys(plan.planting)) {
-    const [x, y] = parseKey(key);
-    if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-    const crop = cropById.get(plan.planting[key]);
-    if (!crop) continue;
-    const px = offsetX + x * cellPx;
-    const py = offsetY + y * cellPx;
-    ctx.fillStyle = crop.colorHex;
-    ctx.beginPath();
-    const r = Math.min(3, cellPx * 0.18);
-    ctx.roundRect(px + inset, py + inset, cellPx - inset * 2, cellPx - inset * 2, r);
-    ctx.fill();
-    if (emoji && crop.emoji) {
-      ctx.fillText(crop.emoji, px + cellPx / 2, py + cellPx / 2 + cellPx * 0.04);
+  if (opts.layers?.plants !== false) {
+    const emoji = cellPx >= EMOJI_MIN_PX;
+    if (emoji) {
+      ctx.font = `${Math.floor(cellPx * 0.62)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+    }
+    const inset = Math.max(0.5, cellPx * 0.06);
+    for (const key of Object.keys(plan.planting)) {
+      const [x, y] = parseKey(key);
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const crop = cropById.get(plan.planting[key]);
+      if (!crop) continue;
+      const px = offsetX + x * cellPx;
+      const py = offsetY + y * cellPx;
+      ctx.fillStyle = crop.colorHex;
+      ctx.beginPath();
+      const r = Math.min(3, cellPx * 0.18);
+      ctx.roundRect(px + inset, py + inset, cellPx - inset * 2, cellPx - inset * 2, r);
+      ctx.fill();
+      if (emoji && crop.emoji) {
+        ctx.fillText(crop.emoji, px + cellPx / 2, py + cellPx / 2 + cellPx * 0.04);
+      }
     }
   }
 
@@ -133,6 +174,37 @@ export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: R
       );
     }
     ctx.restore();
+  }
+
+  // Companion halos (opt-in): small filled corner triangles — green top-left
+  // = helpful neighbour, red top-right = antagonistic neighbour. Deliberately
+  // a different glyph class from the amber full-cell OUTLINE of conflictCells.
+  const halos = opts.companionHalos;
+  if (halos && ((halos.good && halos.good.size > 0) || (halos.bad && halos.bad.size > 0))) {
+    const t = Math.max(3, Math.round(cellPx * 0.3));
+    const drawHalo = (set: Set<string>, color: string, topRight: boolean) => {
+      ctx.fillStyle = color;
+      for (const key of set) {
+        const [x, y] = parseKey(key);
+        if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+        const px = offsetX + x * cellPx;
+        const py = offsetY + y * cellPx;
+        ctx.beginPath();
+        if (topRight) {
+          ctx.moveTo(px + cellPx - t, py);
+          ctx.lineTo(px + cellPx, py);
+          ctx.lineTo(px + cellPx, py + t);
+        } else {
+          ctx.moveTo(px, py);
+          ctx.lineTo(px + t, py);
+          ctx.lineTo(px, py + t);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    };
+    if (halos.good && halos.good.size > 0) drawHalo(halos.good, '#16a34a', false);
+    if (halos.bad && halos.bad.size > 0) drawHalo(halos.bad, '#dc2626', true);
   }
 
   // Grid: faint cell lines at high zoom, 1 m lines always (every 4 cells).
@@ -194,6 +266,56 @@ export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: R
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
     ctx.strokeRect(px, py, pw, ph);
+    ctx.restore();
+  }
+
+  // Ghost footprint (opt-in) — drawn AFTER everything so it always reads as a
+  // placement preview. Per-cell 35% alpha fill plus a solid 1px outline around
+  // the UNION footprint: only outer edges are stroked, internal shared edges
+  // get a single pass (via the pure half-pixel snap below, shared endpoints
+  // round identically so collinear segments never gap). Coordinates snap to
+  // the .5 grid for crisp 1px lines at any px/cell.
+  const ghost = opts.ghost;
+  if (ghost && ghost.cells.length > 0) {
+    const members = new Set<string>(ghost.cells.map(([gx, gy]) => cellKey(gx, gy)));
+    const snap = (v: number) => Math.round(v) + 0.5;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = ghost.colorHex;
+    for (const gk of members) {
+      const [gx, gy] = parseKey(gk);
+      if (gx < x0 - 1 || gx > x1 + 1 || gy < y0 - 1 || gy > y1 + 1) continue;
+      ctx.fillRect(offsetX + gx * cellPx, offsetY + gy * cellPx, cellPx, cellPx);
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = ghost.colorHex;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const gk of members) {
+      const [gx, gy] = parseKey(gk);
+      if (gx < x0 - 1 || gx > x1 + 1 || gy < y0 - 1 || gy > y1 + 1) continue;
+      const left = offsetX + gx * cellPx;
+      const top = offsetY + gy * cellPx;
+      const right = left + cellPx;
+      const bottom = top + cellPx;
+      if (!members.has(cellKey(gx, gy - 1))) {
+        ctx.moveTo(snap(left), snap(top));
+        ctx.lineTo(snap(right), snap(top));
+      }
+      if (!members.has(cellKey(gx, gy + 1))) {
+        ctx.moveTo(snap(left), snap(bottom));
+        ctx.lineTo(snap(right), snap(bottom));
+      }
+      if (!members.has(cellKey(gx - 1, gy))) {
+        ctx.moveTo(snap(left), snap(top));
+        ctx.lineTo(snap(left), snap(bottom));
+      }
+      if (!members.has(cellKey(gx + 1, gy))) {
+        ctx.moveTo(snap(right), snap(top));
+        ctx.lineTo(snap(right), snap(bottom));
+      }
+    }
+    ctx.stroke();
     ctx.restore();
   }
 }

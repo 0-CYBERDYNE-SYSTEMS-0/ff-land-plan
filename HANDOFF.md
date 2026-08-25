@@ -50,11 +50,19 @@ deliverable).
    palettes, then flip **Blueprint → World** and confirm the plan stands up in 3D
    with creatures wandering near the coop.
 2. In World view, scrub the date and watch plants move through growth stages; run
-   the guided tour; try flight mode.
+   the guided tour; try flight mode. Paint a **Barn** — cows, pigs and sheep
+   appear around it; tool props (wheelbarrow, watering can, leaning hoe/fork)
+   auto-dress near sheds, taps and bed edges.
 3. Weather: `#/farms/1/weather` shows live Open-Meteo data (dashboard consumes it
    too). With the network cut, the world should keep rendering on defaults and the
    weather page falls back to last-good cache — no crashes.
 4. Calendar (`#/farms/1/calendar`) and the designer exports still work end to end.
+5. Blueprint editor power tools: hover **ghost previews** (brush/asset/erase),
+   zoom cluster (−/%/Fit/+) bottom-right, **Pick** (I / Alt-click), **Fill**
+   (G, flood of identical cells), **Line** (L), 5×5 brush (`[` `]` cycle),
+   **Spacing** violation tint + **Companions** halos overlays, plants/ground
+   layer toggles, rect-drag HUD. Starter templates in the rail
+   (TemplatesCard first) apply with confirm; one undo restores the prior plan.
 
 ### Known limitations (honest list)
 
@@ -69,6 +77,12 @@ deliverable).
   for aesthetics is still worthwhile.
 - Offline weather fallback serves the **last-good cache only**; that behavior is
   documented here but not yet covered by an automated test.
+- Barn livestock spawn (cow/pig/sheep) and dressing-prop aesthetics are
+  **code-path verified only** — headless captures cannot arbitrate world-scene
+  content (structures build from plan data that arrives after virtual-time
+  capture); interactive QA pending.
+- Wide-spacing pairs (e.g. fruit trees, ≥4 m thresholds) are only flagged by the
+  spacing overlay within its ±4-cell scan window (~1.41 m radius).
 
 ## Where things stand
 
