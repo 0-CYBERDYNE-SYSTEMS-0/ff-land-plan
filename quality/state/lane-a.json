@@ -1,1 +1,1 @@
-{"lane":"a","iteration":1,"status":"critiquing","gap":null,"history":[]}
+{"lane":"a","iteration":3,"status":"pass","gap":null,"history":[{"round":2,"verdict":"REVISE","note":"r2 evidence: soil/water/cliff/paths closeups + sheet r2 (Aug 23 ~17:45-18:25); remaining gaps carried into r3"},{"round":3,"verdict":"accepted","note":"r3 evidence: soil/water/paths/bed closeups + sheet r3 (Aug 23 ~23:40-24:00); latest round accepted into the merged beta candidate per MISSION-CONTROL.md"}]}

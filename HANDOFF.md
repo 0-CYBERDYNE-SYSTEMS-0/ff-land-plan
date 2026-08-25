@@ -1,11 +1,74 @@
 # HANDOFF — FarmFriend voxel-3D upgrade (`pro-upgrade` branch)
 
-**Status at handoff (2026-06-13): ALL 3D phases 0–5 are complete.** The voxel-3D
-initiative is fully shipped. Typecheck and `npm run build` are both clean.
+**Status at handoff (2026-08-24): pro-upgrade phases 1–7 and all 3D phases 0–5 are
+complete; the fun-UX/game layer is shipped; the `src/creative/` voxel asset library is
+wired into the live World3D renderer; a beta-hardening mission is IN PROGRESS**
+(see `quality/MISSION-BETA.md`). Typecheck is clean on the merged beta candidate.
+
+Shipped since the 2026-06-13 handoff:
+
+- **Fun-UX / game layer:** dynamic sky with time-of-day sun, clouds, weather FX,
+  flight mode, guided tour, living animals, audio, achievements, and a Perf HUD
+  (behind Debug).
+- **Creative voxel asset library:** `src/creative/` — terrain tiles, crops across six
+  growth stages, structures, creatures — built by four builder↔critic lanes and wired
+  into the live World3D renderer (verified per `quality/MISSION-CONTROL.md`; shot
+  evidence in `quality/shots/`).
+- **Beta hardening (in progress, three parallel lanes):** the data seam (live weather
+  actually driving the 3D world, graceful offline), a typed REST pluggability client,
+  single-sun night lighting, the rebuild-once/incremental-update path fix, and an
+  automated route QA matrix with a console-error gate.
 
 Read in order: this file → `SPEC.md` (the "Amendments" section is binding for
 the 2D designer) → `implementation-notes.md` (keep appending; it's a
 deliverable).
+
+## Beta Notes (2026-08-24)
+
+### How to run
+
+- `npm install`, then `npm run dev`. Vite's default URL is
+  http://localhost:5173 (the current beta session runs at http://localhost:5177).
+  Verification gate: `npm run typecheck` (`npx tsc --noEmit`).
+- Routing is hash-based: `#/` (dashboard), `#/crops`, `#/farms/1/map`,
+  `#/farms/1/calendar`, `#/farms/1/weather`, `#/farms/1/simulations`,
+  `#/farms/1/monitoring`, `#/farms/new`. The seed data ships farms 1 (North
+  Meadow) and 2 (South Wheat Field) — there is no farm 3.
+- Dev-only test hooks on the map page: `?ffview=world` opens the 3D World view
+  directly, `?fftime=<0..1>` pins time of day, `?ffdebug=1` pre-opens the Perf
+  HUD. Put these in the REAL query string, BEFORE the hash — params inside the
+  hash fragment break wouter matching (renders NotFound). Working form:
+  `http://localhost:5177/?ffview=world&fftime=0.05&ffdebug=1#/farms/1/map`.
+- Automated smoke: `node tools/appshot.mjs "<url>" <out.png> 1440x900 --gate [--expect "<page text>"]`
+  screenshots a route and fails on console errors / unhandled rejections;
+  `--expect` additionally verifies the right page rendered (a clean gate on a
+  NotFound page proves nothing).
+
+### Tester checklist
+
+1. Paint a plan: open `#/farms/1/map`, paint soil/crops/structures with the
+   palettes, then flip **Blueprint → World** and confirm the plan stands up in 3D
+   with creatures wandering near the coop.
+2. In World view, scrub the date and watch plants move through growth stages; run
+   the guided tour; try flight mode.
+3. Weather: `#/farms/1/weather` shows live Open-Meteo data (dashboard consumes it
+   too). With the network cut, the world should keep rendering on defaults and the
+   weather page falls back to last-good cache — no crashes.
+4. Calendar (`#/farms/1/calendar`) and the designer exports still work end to end.
+
+### Known limitations (honest list)
+
+- The REST client (`src/lib/restApi.ts`) ships type-checked against the `Api`
+  interface but is **unexercised against a live server**. It activates only when
+  `VITE_API_BASE_URL` is set (see `.env.example`); default behavior stays local-mock.
+- Performance on very large plans has **not yet been profiled**. The Perf HUD lives
+  behind Debug (`?ffdebug=1`) — capture frame-time numbers there if you see jank.
+- The single-sun night-lighting rework has a produced time-of-day matrix
+  (night/dawn/noon/dusk) in `quality/shots/beta/lighting/` with quantitative
+  pixel-band signatures recorded in `quality/MISSION-BETA.md`; a human glance
+  for aesthetics is still worthwhile.
+- Offline weather fallback serves the **last-good cache only**; that behavior is
+  documented here but not yet covered by an automated test.
 
 ## Where things stand
 

@@ -42,13 +42,11 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
   scene.background = new THREE.Color(theme === 'dark' ? '#1a1f2e' : '#e8f4f8');
 
   // --- Lights -------------------------------------------------------------
+  // Ambient only. THE directional sun is owned by createSky() (time-driven);
+  // engine deliberately adds NO static directional so there is exactly one
+  // sun in the scene (night used to be blasted by a fixed white light here).
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
-
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(10, 20, 10);
-  dirLight.castShadow = true;
-  scene.add(dirLight);
 
   // --- Controls -----------------------------------------------------------
   CameraControls.install({ THREE });

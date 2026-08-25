@@ -1,7 +1,1 @@
-{
-  "lane": "c",
-  "iteration": 1,
-  "status": "critiquing",
-  "gap": null,
-  "history": []
-}
+{"lane":"c","iteration":1,"status":"pass","gap":null,"history":[{"round":1,"verdict":"accepted","note":"r1 structure sweep: barn, chicken coop, fences, greenhouse, polytunnel+cold-frame, props (+sheet r1, Aug 23 ~16:10-16:45); accepted into the merged beta candidate per MISSION-CONTROL.md"}]}

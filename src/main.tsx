@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
+if (import.meta.env.DEV) {
+  // Dev-only: record runtime errors into the DOM for tools/appshot.mjs --gate.
+  import('./dev/bootProbe').then((m) => m.installBootProbe());
+}
+
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element #root not found');
 

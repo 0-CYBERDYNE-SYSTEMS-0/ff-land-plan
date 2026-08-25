@@ -21,7 +21,12 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
   const editor = usePlanEditor(farmId);
   const { farm, isLoading, planRef, saveState, savedAt } = editor;
-  const [viewMode, setViewMode] = useState<'blueprint' | 'world'>('blueprint');
+  const [viewMode, setViewMode] = useState<'blueprint' | 'world'>(() => {
+    // Test hook for headless verification (tools/appshot.mjs): ?ffview=world
+    // opens the 3D view immediately, no click required. Harmless in normal use.
+    if (new URLSearchParams(window.location.search).get('ffview') === 'world') return 'world';
+    return 'blueprint';
+  });
 
   if (isLoading) {
     return <div className="p-6"><Skeleton className="h-[75vh] w-full" /></div>;

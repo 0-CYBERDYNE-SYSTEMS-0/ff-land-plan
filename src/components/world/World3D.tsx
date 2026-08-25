@@ -20,10 +20,48 @@ import { use3DEditor } from '@/three/use3DEditor';
 import { buildWaterPlanes, disposeWaterPlanes, updateWaterPlanes, type WaterPlane } from '@/three/water';
 import { createGrowthFX, type GrowthFX } from '@/three/growth-fx';
 import { createPerfHUD, type PerfHUD } from '@/three/perf';
-import { createWeatherFX, type WeatherFX, type WeatherData } from '@/three/weather-fx';
+import { createWeatherFX, type WeatherFX } from '@/three/weather-fx';
 
 interface World3DProps {
   editor: PlanEditor;
+}
+
+/** Weather used by the rAF loop until live data arrives (or when offline). */
+const DEFAULT_WEATHER: WeatherCurrent = {
+  tempC: 15,
+  feelsLikeC: 14,
+  humidity: 50,
+  windSpeedKmh: 5,
+  precipMm: 0,
+  uvIndex: 3,
+  cloudCover: 30,
+  soilTempC: 12,
+  soilMoisture: 40,
+  weatherCode: 0,
+  weatherDesc: 'Clear',
+};
+
+/**
+ * Test-hook launch params, read ONCE on mount. Inert unless present.
+ * Checks BOTH `?a=b` in the real query string AND inside the hash fragment
+ * (`#/farms/3/map?fftime=0.05`) since the app is hash-routed.
+ */
+function readLaunchParams(): URLSearchParams {
+  const merged = new URLSearchParams(window.location.search);
+  const q = window.location.hash.indexOf('?');
+  if (q !== -1) {
+    new URLSearchParams(window.location.hash.slice(q + 1)).forEach((v, k) => {
+      if (!merged.has(k)) merged.set(k, v);
+    });
+  }
+  return merged;
+}
+
+type PointerHandler2 = (camera: THREE.Camera, scene: THREE.Scene, ndcX: number, ndcY: number) => void;
+interface PointerHandlers {
+  down: PointerHandler2;
+  move: PointerHandler2;
+  up: () => void;
 }
 
 export default function World3D({ editor }: World3DProps) {
@@ -47,44 +85,92 @@ export default function World3D({ editor }: World3DProps) {
   const perfHUDRef = useRef<PerfHUD | null>(null);
   const audioRef = useRef<AudioAtmosphere | null>(null);
 
+  // Live weather consumed by the rAF loop each frame (state below is only for the chip).
+  const weatherRef = useRef<WeatherCurrent | null>(null);
+
+  // Launch params (test hooks): fftime = initial timeOfDay, ffdebug = open Perf HUD.
   const [scrubDate, setScrubDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [showHistory, setShowHistory] = useState(false);
-  const [timeOfDay, setTimeOfDay] = useState(0.4);
+  const [timeOfDay, setTimeOfDay] = useState(() => {
+    const raw = readLaunchParams().get('fftime');
+    if (raw === null) return 0.4;
+    const v = Number.parseFloat(raw);
+    return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.4;
+  });
   const [autoTime, setAutoTime] = useState(false);
-  const timeRef = useRef(0.4);
+  const timeRef = useRef(timeOfDay);
   const autoTimeRef = useRef(false);
   const audioOnRef = useRef(false);
   const [tourActive, setTourActive] = useState(false);
   const [tourProgress, setTourProgress] = useState(0);
   const [weather, setWeather] = useState<WeatherCurrent | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
+  const [weatherCached, setWeatherCached] = useState(false);
+  const [showDebug, setShowDebug] = useState(() => readLaunchParams().get('ffdebug') === '1');
+  const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
   const [audioOn, setAudioOn] = useState(false);
+
+  // Latest-value refs: the mount-once init effect and its listeners read these
+  // instead of capturing render-time values.
+  const cropByIdRef = useRef(editor.cropById);
+  cropByIdRef.current = editor.cropById;
+  const scrubDateRef = useRef(scrubDate);
+  scrubDateRef.current = scrubDate;
+  showDebugRef.current = showDebug;
 
   const achievements = useRef(createAchievementSystem());
   const flightTime = useRef(0);
 
   const { handlePointerDown, handlePointerMove, handlePointerUp } = use3DEditor(editor);
 
-  // Fetch weather
+  // Handler identity changes whenever the picked tool/crop changes (they are
+  // useCallback-wrapped over editor state). The canvas listeners are created
+  // once and read the latest handlers through this ref.
+  const handlersRef = useRef<PointerHandlers>({ down: handlePointerDown, move: handlePointerMove, up: handlePointerUp });
+  handlersRef.current = { down: handlePointerDown, move: handlePointerMove, up: handlePointerUp };
+
+  // Fetch weather (graceful offline: warn + keep defaults, never an unhandled rejection)
   useEffect(() => {
     const farm = editor.farm;
     if (!farm) return;
     let cancelled = false;
-    apiFetch.getWeather(farm.id).then((w: Weather) => {
-      if (cancelled) return;
-      setWeather(w.current);
-    });
+    apiFetch
+      .getWeather(farm.id)
+      .then((w: Weather) => {
+        if (cancelled) return;
+        weatherRef.current = w.current; // rAF loop reads this every frame
+        setWeather(w.current);          // footer chip
+        setWeatherCached(Boolean(w.cached));
+      })
+      .catch((err: unknown) => {
+        console.warn('weather unavailable, using defaults', err);
+      });
     return () => { cancelled = true; };
   }, [editor.farm]);
 
-  // Initialize engine and scene
+  /**
+   * Initialize engine and scene — ONCE per mount.
+   *
+   * Deps are ONLY `sceneReady`, a boolean that flips false→true a single time
+   * (when plan + crops first exist). Deliberately NOT keyed on planVersion /
+   * cropById / scrubDate / pointer handlers, so a brush stroke or date scrub
+   * can never tear the whole world down; those flow through the incremental
+   * update effect below. All render-time values are read through refs:
+   * scrubDateRef / cropByIdRef here, handlersRef in the canvas listeners.
+   *
+   * `farmId` is included so navigating between farms (which swaps the editor's
+   * plan WITHOUT remounting this component under wouter) rebuilds the world
+   * exactly once per farm — it cannot flip from brush strokes or scrubs.
+   */
+  const sceneReady = Boolean(editor.planRef.current && editor.cropById.size > 0);
+  const farmId = editor.farm?.id;
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || !sceneReady) return;
+    if (engineRef.current) return; // StrictMode double-mount safety
+
     const plan = editor.planRef.current;
-    const cropById = editor.cropById;
-    if (!plan || !cropById.size) return;
-    if (engineRef.current) return;
+    if (!plan) return;
+    const cropById = cropByIdRef.current;
 
     const canvas = document.createElement('canvas');
     canvas.style.width = '100%';
@@ -113,7 +199,7 @@ export default function World3D({ editor }: World3DProps) {
 
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
-    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDate));
+    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current));
     waterPlanesRef.current = buildWaterPlanes(plan, engine.scene);
 
     // Animals
@@ -122,8 +208,9 @@ export default function World3D({ editor }: World3DProps) {
     // Growth FX
     growthFXRef.current = createGrowthFX(engine.scene);
 
-    // Performance HUD
+    // Performance HUD (ffdebug=1 opens it initially)
     perfHUDRef.current = createPerfHUD(canvas);
+    perfHUDRef.current.visible = showDebugRef.current;
 
     // Audio
     audioRef.current = createAudioAtmosphere();
@@ -174,16 +261,20 @@ export default function World3D({ editor }: World3DProps) {
       // Sky — use ref value for rAF, sync to state periodically
       sky.update(timeRef.current);
       if (ambientLight) {
+        // Sky owns the full lighting model: hue from the palette, strength
+        // with a legible night floor. The single sun directional is driven
+        // inside sky.update() itself (position/color/intensity).
         ambientLight.color.copy(sky.state.ambientColor);
-        ambientLight.intensity = sky.state.sunDirection.y > 0 ? 0.3 + sky.state.sunDirection.y * 0.5 : 0.15;
+        ambientLight.intensity = sky.state.ambientIntensity;
       }
 
-      // Clouds
-      const w = weather ?? { tempC: 15, windSpeedKmh: 5, cloudCover: 30, precipMm: 0, humidity: 50, weatherCode: 0 };
-      clouds.update(dt, (w as WeatherCurrent).windSpeedKmh ?? 5, (w as WeatherCurrent).cloudCover ?? 30);
+      // Clouds / weather FX / audio — live weather via ref, defaults until it
+      // arrives (and forever when offline). No per-frame allocations.
+      const w = weatherRef.current ?? DEFAULT_WEATHER;
+      clouds.update(dt, w.windSpeedKmh, w.cloudCover);
 
       // Weather
-      weatherFX.update(dt, w as WeatherData);
+      weatherFX.update(dt, w);
 
       // Water planes
       updateWaterPlanes(waterPlanesRef.current, t);
@@ -192,8 +283,8 @@ export default function World3D({ editor }: World3DProps) {
       if (animalsRef.current) updateAnimals(animalsRef.current, dt);
 
       // Plant sway
-      const windStr = w ? (w.windSpeedKmh ?? 5) / 20 : 0.25;
-      swayPlants(plantBatchesRef.current, cropById, t, windStr);
+      const windStr = w.windSpeedKmh / 20;
+      swayPlants(plantBatchesRef.current, cropByIdRef.current, t, windStr);
 
       // Growth FX
       growthFXRef.current?.update(dt);
@@ -219,9 +310,9 @@ export default function World3D({ editor }: World3DProps) {
       // Audio
       if (audioOnRef.current && audioRef.current) {
         audioRef.current.updateParams({
-          windSpeed: (w as WeatherCurrent).windSpeedKmh ?? 5,
-          precipMm: (w as WeatherCurrent).precipMm ?? 0,
-          tempC: (w as WeatherCurrent).tempC ?? 15,
+          windSpeed: w.windSpeedKmh,
+          precipMm: w.precipMm,
+          tempC: w.tempC,
         });
       }
 
@@ -244,15 +335,15 @@ export default function World3D({ editor }: World3DProps) {
     const onPointerDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
       const ndc = getNDC(e);
-      handlePointerDown(engine.camera, engine.scene, ndc.x, ndc.y);
+      handlersRef.current.down(engine.camera, engine.scene, ndc.x, ndc.y);
       canvas.setPointerCapture(e.pointerId);
     };
     const onPointerMove = (e: PointerEvent) => {
       const ndc = getNDC(e);
-      handlePointerMove(engine.camera, engine.scene, ndc.x, ndc.y);
+      handlersRef.current.move(engine.camera, engine.scene, ndc.x, ndc.y);
     };
     const onPointerUp = (e: PointerEvent) => {
-      handlePointerUp();
+      handlersRef.current.up();
       canvas.releasePointerCapture(e.pointerId);
     };
 
@@ -294,7 +385,7 @@ export default function World3D({ editor }: World3DProps) {
       if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
       engineRef.current = null;
     };
-  }, [editor.planVersion, editor.cropById, scrubDate, handlePointerDown, handlePointerMove, handlePointerUp]);
+  }, [sceneReady, farmId]); // mount-once per farm: see comment above the effect
 
   // React to plan changes
   useEffect(() => {
@@ -336,10 +427,13 @@ export default function World3D({ editor }: World3DProps) {
       }
     }
 
-    // Tour waypoints update
+    // Tour waypoints update — dispose the previous tour first (no leak), and
+    // keep the same completion behavior as the mount-time tour.
+    tourRef.current?.dispose();
     const waypoints = generateTourWaypoints(plan, cropById);
     tourRef.current = createTour(engine, waypoints, () => {
       setTourActive(false);
+      achievements.current.check('tour_complete');
     });
 
     // Check achievements based on plan
@@ -518,8 +612,16 @@ export default function World3D({ editor }: World3DProps) {
 
         {/* Weather info */}
         {weather && (
-          <div className="pointer-events-auto rounded-md bg-background/90 px-3 py-2 shadow-sm text-xs text-muted-foreground">
-            {weather.tempC}°C · 💨{weather.windSpeedKmh}km/h · 🌧{weather.precipMm}mm
+          <div className="pointer-events-auto flex items-center gap-1.5 rounded-md bg-background/90 px-3 py-2 shadow-sm text-xs text-muted-foreground">
+            <span>{weather.tempC}°C · 💨{weather.windSpeedKmh}km/h · 🌧{weather.precipMm}mm</span>
+            {weatherCached && (
+              <span
+                title="Live fetch failed earlier — showing last-good cached weather"
+                className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
+              >
+                cached
+              </span>
+            )}
           </div>
         )}
 

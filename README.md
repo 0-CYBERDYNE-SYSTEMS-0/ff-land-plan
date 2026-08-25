@@ -80,6 +80,19 @@ The API seam mirrors these logical endpoints:
 - `GET    /api/crops`
 - `POST   /api/crops`
 
+### Swapping in a backend
+
+Set `VITE_API_BASE_URL` (see `.env.example`) to a base URL serving the endpoint
+contract above — including its prefix, e.g. `http://localhost:8787/api` — and
+`src/lib/api.ts` swaps `apiFetch` to `createRestApi(base)` from
+`src/lib/restApi.ts`: a dependency-free `fetch` client covering every seam
+method (farms CRUD, weather/forecast/history, alerts, sensors + readings,
+legacy cells + NDVI, plans, simulations, crops). One mapping assumption:
+assigning a cell's crop posts to `/api/farms/:id/cells` with `{ id, cropId }`,
+since the table defines only GET/POST on that collection. Local-first remains
+the default — with the variable unset or empty, the local store plus live
+Open-Meteo weather (`src/lib/localApi.ts`) stays exactly as before.
+
 ## Develop
 
 Requires Node 20+.
