@@ -1,10 +1,15 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository. Last refreshed 2026-08-25 against `2c29eb9` — kept in
+sync with `AGENTS.md` (which has the fuller version).
 
 ## Project
 
-FarmFriend Voxel Digital Twin — a React 18 + TypeScript + Vite SPA for farm planning (voxel crop map, weather, sensors, simulations). The directory is `ff-land-plan` but the package name is `ff-voxel-twin`; both refer to this project.
+FarmFriend Voxel Digital Twin — a React 18 + TypeScript + Vite SPA for farm
+planning (voxel crop map, weather, sensors, simulations) with a procedural
+voxel 3D world. The directory is `ff-land-plan` but the package name is
+`ff-voxel-twin`; both refer to this project.
 
 ## Commands
 
@@ -16,25 +21,66 @@ npm run typecheck  # tsc --noEmit — the primary verification gate
 ```
 
 Caveats:
-- `npm run lint` is defined but broken — ESLint is not installed and there is no config. Use `npm run typecheck` instead.
-- There are no tests and no test runner.
+
+- `npm run lint` is defined but broken — ESLint is not installed and there is
+  no config. Use `npm run typecheck` instead. TS strict +
+  `noUnusedLocals`/`noUnusedParameters`: an unused import fails the build.
+- There are no tests and no test runner. Verification = typecheck + build +
+  the headless screenshot harness: `node tools/appshot.mjs "<url>" <out.png>
+  [WxH] [--gate] [--expect "<text>"]` (~40 s/shot; Chrome killed on timeout BY
+  DESIGN — trust GATE/EXPECT lines, not exit codes; scratch PNGs in
+  `$TMPDIR/<dir>/`, create dirs first; showcase pages assert
+  `--expect "showcase-ready N"`).
 
 ## Architecture
 
-**Mock API layer is intentional and is the app's data backbone — do not remove it.** The entire app runs with no backend:
+**Many frontends, one backend.** Two seams serve every view:
 
-- `src/lib/api.ts` exports `apiFetch`, which is currently the in-memory mock from `src/mock/api.ts`. This single export is the swap point for a real backend.
-- `src/mock/api.ts` holds mutable in-memory state seeded from `src/mock/seed.ts`. State resets on page refresh by design. Its method surface (`MockApi` interface) mirrors the REST contract listed in README.md (`/api/farms`, `/api/sensors`, etc.), so a `fetch`-based client can drop in without touching pages.
-- `src/types/index.ts` defines the domain types (`Farm`, `Weather`, `Sensor`, `Alert`, `Simulation`, …). Field names match the original backend's API contract — keep them in sync with the mock and README endpoint list when changing the data model.
+- **Data seam** — `src/lib/api.ts` exports `apiFetch: Api`. Default:
+  local-first (`localApi.ts`: localStorage store + real Open-Meteo weather).
+  Set `VITE_API_BASE_URL` to swap in `restApi.ts`; no page changes. Keep the
+  `Api` interface, localApi, restApi and the README endpoint list in sync.
+- **Mutation seam** — `usePlanEditor.ts` owns ALL plan editing (undo
+  snapshots, 600 ms autosave, tools, zoom API). Never fork it.
 
-**Data fetching:** TanStack Query v5. Hooks in `src/hooks/` (e.g., `useFarms.ts`) wrap `apiFetch` calls with explicit `queryFn`s and handle cache invalidation on mutations. `src/lib/queryClient.ts` also defines a default `queryFn` that joins the query key into a URL and `fetch`es it — that path is only exercised once a real backend exists; mock-backed hooks always pass their own `queryFn`. Queries use `staleTime: Infinity` and no retries.
+Frontends:
 
-**Routing:** Wouter in **hash mode** (`useHashLocation`) — URLs look like `#/farms/3/map`. Routes are declared in `src/App.tsx`; one page component per route in `src/pages/`. Farm-scoped pages receive `farmId` as a number prop parsed from the route param. Navigate via the `useNavigation()` shim in `src/hooks/useNavigation.ts`, not `useLocation()[1]` directly.
+1. **Blueprint** (2D editor): Select(V)/Brush(B)/Rect(R)/Asset(A)/Erase(E)/
+   Pick(I)/Fill(G)/Line(L), ghost previews, Spacing + Companions overlays,
+   layer toggles, zoom cluster, starter templates (`src/data/templates.ts`;
+   crop NAMES resolved at apply time; custom ids ≥1000 never renumbered).
+   **Law:** `drawPlan` feeds canvas + PNG export + 3D ground tiles — new
+   visual layers must be opt-in `RenderOptions` flags defaulting OFF.
+2. **World3D** (vanilla three.js island, lazy-loaded): mount-once init effect
+   (`[sceneReady, farmId]` deps; refs elsewhere); sky.ts owns THE single sun;
+   live weather reaches rAF via a ref. Test hooks BEFORE the hash:
+   `/?ffview=world&fftime=<0..1>&ffdebug=1#/farms/1/map`.
+3. **Creative library** (`src/creative/`): 157 deterministic voxel builders
+   (terrain / crops×6 stages / structures / creatures+tools+presets) consumed
+   by thin adapters (`plants/ground/structures/animals/dressing.ts`). Seeded
+   PRNG only — never `Math.random`. One voxel = 10 cm. Preview:
+   `showcase.html#lane=a|b|c|d`.
+4. **Ops views**: Dashboard/Calendar/Weather/Simulations/Monitoring.
 
-**Layout/providers:** `App.tsx` nests QueryClientProvider → ThemeProvider → Router → AppShell. `AppShell` (`src/components/layout/`) renders the sidebar, mobile header, and theme toggle. Theme is dark/light via a `dark` class on `<html>`, persisted to localStorage under `ff-voxel-twin:theme`.
+Layout invariants of PlotDesigner (don't regress): `xl:h-full` flex column;
+canvas card absorbs toolbar wrap; below-xl `h-[60dvh]` + page scroll;
+sizing effect keyed on `isLoading`.
 
-**UI components:** `src/components/ui/` contains shadcn/ui-style primitives (local copies built on Radix; not managed by the shadcn CLI). Styling is Tailwind with design tokens in `src/index.css`; `cn()` from `src/lib/utils.ts` merges classes. Forms use react-hook-form + Zod; toasts use Sonner; charts use Recharts.
+## Traps that will bite you
 
-**Path alias:** `@/` → `src/` (configured in both `vite.config.ts` and `tsconfig.json`).
+1. Open-Meteo soil/UV are hourly-only (`weather.ts` handles it).
+2. QueryClient defaults: `staleTime: Infinity` + URL-joining default queryFn —
+   pass explicit `queryFn`s; override staleTime for weather queries.
+3. Soil moisture m³/m³ → % via ×200 in `weather.ts`.
+4. Keep `renderPlan.ts` free of remote `drawImage` (export taint).
+5. Custom crop ids start at 1000; plans persist ids in localStorage.
+6. `npm run lint` is broken repo-wide; typecheck is the gate.
+7. React 18 (not 19) — why R3F is off the table.
+8. Query params go BEFORE the hash; params inside the hash break wouter
+   (NotFound). Seed ships farms 1–2 only — there is no farm 3.
 
-TypeScript is strict, with `noUnusedLocals`/`noUnusedParameters` enabled — unused imports fail the build.
+## Related docs
+
+`HANDOFF.md` (status/code map/traps) · `README.md` (endpoints + backend swap)
+· `SPEC.md` · `quality/MISSION-BETA.md` · `quality/MISSION-BLUEPRINT.md` ·
+`quality/ASSETS.md` · `quality/QUALITY_BAR.md` · `implementation-notes.md`.

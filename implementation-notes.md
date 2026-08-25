@@ -205,3 +205,82 @@ in Y dimension by this factor.
   One non-critical warning: "Multiple instances of Three.js" from Vite chunking
   (World3D.tsx imports THREE for types, lazy chunk also imports THREE).
   Does not affect functionality.
+
+## Beta hardening + Blueprint power tools (2026-08-24/25)
+
+Two missions run as parallel-lane contracts with merge gates; full contracts and
+verification logs live in `quality/MISSION-BETA.md` and
+`quality/MISSION-BLUEPRINT.md`. Decisions and traps not recorded elsewhere:
+
+### Beta hardening (`e6e4031`)
+- **Weather → 3D plumbing**: the rAF `update` closure captured mount-time
+  `weather` state forever (never in effect deps) — clouds/rain FX/audio/sway
+  ran on hardcoded defaults while the footer chip showed real data. Fix pattern:
+  fetch into a REF the loop reads each frame; state only for chips.
+- **Single sun**: engine had a static white DirectionalLight fighting sky.ts's
+  time-driven one — night was noon-lit from a fixed angle. Engine now adds
+  ambient only; sky owns THE sun + a dim moon-fill (≤0.13) so nights stay
+  legible per QUALITY_BAR. Warped clock: sunrise t≈0.22, sunset ≈0.90 so the
+  fftime matrix hits true night AND true dusk.
+- **Mount-once World3D init**: init effect previously keyed on planVersion/
+  scrubDate/handlers → every brush stroke disposed + rebuilt the entire scene,
+  then the incremental effect ran on top. Now deps are `[sceneReady, farmId]`;
+  latest values flow through refs (handlersRef, scrubDateRef, cropByIdRef).
+  StrictMode double-mount verified safe.
+- **REST pluggability**: `createRestApi(baseUrl)` type-conformance-checked
+  against `Api` only — unexercised against a live server (honest, documented in
+  client header + HANDOFF). Assumption: setCellCrop POSTs `{id, cropId}` to the
+  cells collection; getPlan maps 404→null.
+- **Harness** (`tools/appshot.mjs` + `src/dev/bootProbe.ts`): headless Chrome;
+  GATE = dev-only #ff-probe DOM node recording window.onerror/unhandledrejection/
+  console.error. Chrome never exits gracefully while the Vite HMR socket is open
+  — the spawn timeout is the terminator BY DESIGN (~40 s/shot); judge output
+  lines + PNG bytes, never exit codes. Showcase.html has NO probe → assert
+  `--expect "showcase-ready N"` instead (title set only after all builders run).
+  `/tmp` is sandbox-denied here; use `$TMPDIR/<dir>/` and mkdir it first.
+- **URL law**: query params must go BEFORE the hash (`/?a=b#/route`) — params
+  inside the hash fragment break wouter matching entirely (NotFound). Seed has
+  farms 1–2 only; older docs referencing `#/farms/3` were wrong (MISSION-BETA
+  log carries the correction + voided evidence rows).
+
+### Blueprint power tools (`2c29eb9`)
+- **Shared-renderer law**: drawPlan feeds canvas + PNG export + 3D ground
+  tiles. Every overlay shipped as opt-in RenderOptions default-OFF; Lane R
+  proved default-off by BYTE-IDENTICAL before/after screenshots. New flags:
+  ghost / spacingViolations / companionHalos / layers.
+- **Spacing math**: `Crop.spacingCm` is CENTIMETRES; violation threshold =
+  (spacingA+spacingB)/200 metres vs grid distance, ±4-cell window (same as the
+  pairing engine), 400-key deterministic cap. Wide-spacing pairs (fruit trees)
+  can't be flagged beyond ~1.41 m radius — accepted, documented in HANDOFF.
+- **Fill semantics**: BFS flood of identical value within ONE layer, cap 5000,
+  asset mode stamps slug per-cell (not footprint-per-cell) — which is exactly
+  what makes Lane W's region-merge render one barn per filled region.
+- **Region-merge structures**: non-linear slugs flood-fill to ONE instance per
+  contiguous region sized `max(defaultWM, defaultHM)` from the SAME assetLibrary
+  records Blueprint draws (2D footprint == 3D size forever). Linear items
+  (fences/gates/trellis/irrigation) stay per-cell to connect. Seed farm 1:
+  649 clones → 25 instances (shed 64→1). Verified via Node runtime probe —
+  headless world captures can't arbitrate scene content (plan data races
+  virtual-time capture; proven with a disable-everything identical-frame test).
+- **Barn wakes livestock for free**: animals.ts always triggered cow+pig+sheep
+  on slug 'barn'; the designer just couldn't paint one. Six new paintable slugs
+  added; tools became auto-dressing props (src/three/dressing.ts) rather than
+  palette items — hand-scale scene life shouldn't pollute planning data.
+- **Presets retired**: studio lighting presets kept showcase-only (documented);
+  wiring them live would create a second lighting authority fighting sky.update
+  every frame.
+- **Cross-lane seam debt**: SelectionPanel duplicated usePlanEditor's private
+  sowWindow() because lanes couldn't cross file ownership; post-merge I exported
+  the original and pointed SelectionPanel at it (dedup landed in the doc-refresh
+  commit).
+- **Templates**: data stores crop NAMES resolved to ids at apply time (custom
+  ids ≥1000 never renumbered); unknown names skipped + counted; out-of-plan-bounds
+  keys dropped. Apply = confirm dialog when plan non-empty → one replacePlan →
+  one undo entry.
+
+### Still open (honest)
+- REST client runtime exercise awaits a real backend.
+- Barn livestock + dressing aesthetics: code-path verified, needs interactive eyes.
+- Perf on very large plans unprofiled (Perf HUD behind ?ffdebug=1).
+- Dead code candidate: src/three/groundTexture.ts (superseded by voxel-tile
+  ground.ts; zero importers).

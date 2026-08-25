@@ -119,31 +119,54 @@ npm run preview
 
 Build artifacts land in `dist/`. The legacy build drop is preserved at `../ff-voxel-twin-legacy/` for reference.
 
+## Smoke-testing (headless)
+
+With the dev server running, screenshot any route and gate on runtime errors:
+
+```bash
+node tools/appshot.mjs "http://localhost:5173/#/farms/1/map" out.png 1440x900 --gate --expect "Plot Designer"
+```
+
+`--gate` fails on console errors / unhandled rejections; `--expect` asserts page
+content. Dev-only URL hooks on the map page: `?ffview=world`, `?fftime=<0..1>`,
+`?ffdebug=1` — placed in the real query string BEFORE the hash.
+
 ## Project layout
 
 ```
 ff-voxel-twin/
-├── index.html              # Vite entry, Plus Jakarta Sans + JetBrains Mono preload
+├── index.html              # Vite entry; showcase.html = voxel asset browser
 ├── public/                 # Static assets (favicon, etc.)
 ├── src/
-│   ├── main.tsx            # App bootstrap
+│   ├── main.tsx            # App bootstrap (+ DEV-only boot-probe wiring)
 │   ├── App.tsx             # Theme + QueryClient + router
 │   ├── index.css           # Tailwind + design tokens
-│   ├── lib/                # utils, API client, query client
-│   ├── data/               # crop, asset, and seed data
+│   ├── lib/                # api seam (localApi ⇄ restApi), store, weather,
+│   │                       #   calendar, plan helpers, renderPlan (2D canvas),
+│   │                       #   queryClient, achievements, geocode, frost
+│   ├── data/               # crop catalog (47), asset library (27 slugs),
+│   │                       #   seed farms, starter templates
+│   ├── creative/           # procedural voxel asset library: voxel kit,
+│   │                       #   terrain/ crops/ structures/ creatures/
+│   │                       #   studio/ registries + showcase entry
+│   ├── three/              # World3D systems & adapters: engine, sky (single
+│   │                       #   sun), plants/ground/structures/animals/dressing,
+│   │                       #   clouds/weather-fx/water/flight/tour/audio/perf,
+│   │                       #   use3DEditor, historyViz
 │   ├── components/
 │   │   ├── ui/             # shadcn-style primitives
 │   │   ├── layout/         # AppShell, Sidebar, Logo
-│   │   ├── weather/        # WeatherIcon
-│   │   ├── crops/          # CropIcon
-│   │   └── shared/         # Stat, PageHeader
+│   │   ├── designer/       # usePlanEditor seam + BlueprintCanvas, toolbar,
+│   │   │                   #   palettes, panels, TemplatesCard, ViewToggle
+│   │   ├── world/          # World3D lazy island
+│   │   └── …               # weather/, crops/, shared/, dev probe in src/dev/
 │   ├── pages/              # One file per route
-│   ├── hooks/              # useTheme
+│   ├── hooks/              # useTheme, useFarms, useNavigation
 │   └── types/              # Shared TypeScript types
-├── tailwind.config.js
-├── postcss.config.js
-├── vite.config.ts
-└── tsconfig.json
+├── quality/                # Mission contracts & verification logs (MISSION-*.md),
+│                           #   asset gauntlet docs + screenshot evidence
+└── tools/                  # appshot.mjs headless smoke gate · shot.mjs
+                            #   (showcase) · update-progress.mjs (dashboard)
 ```
 
 ## License

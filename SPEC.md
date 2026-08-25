@@ -206,3 +206,34 @@ emoji. Search + family/category/frost filters.
 2. Browser smoke test: create farm via geocoded location → real weather renders →
    design a plot (beds, paths, crops) → see counts/conflicts → refresh → plan
    persists → calendar shows sensible dates → export PNG + CSV.
+
+## Scope addendum (2026-08-25 — post-original-spec missions, binding)
+
+The original P0/P1/P2 scope shipped in full. Two later efforts extended the
+product beyond that spec; both were run as mission contracts with verification
+logs and are now part of the product surface:
+
+1. **3D World & creative asset library** (`01d67a6` + predecessors): vanilla
+   three.js World view; `src/creative/` procedural voxel library (157
+   builders: terrain tiles, crops ×6 growth stages for all 47 catalog crops,
+   20 structures, creatures/tools/atmosphere) wired into the live renderer via
+   thin adapters; fun-UX game layer (sky/clouds/weather FX/flight/tour/animals/
+   audio/achievements/perf HUD). Asset quality governed by
+   `quality/QUALITY_BAR.md` ("best Minecraft farm build" standard).
+2. **Beta hardening** (`e6e4031`, `quality/MISSION-BETA.md`): live weather
+   drives the 3D world (graceful offline); single-sun lighting; typed REST
+   backend swap (`VITE_API_BASE_URL` → `src/lib/restApi.ts`, default stays
+   local-first); automated headless smoke gate (`tools/appshot.mjs`).
+3. **Blueprint power tools** (`2c29eb9`, `quality/MISSION-BLUEPRINT.md`):
+   Pick/Fill/Line tools, ghost previews, spacing-violation + companion
+   overlays (real catalog math), layer toggles, zoom controls, starter
+   templates, recently-used palettes; barn/hay-bale/signpost/scarecrow/
+   crate-stack/picket-fence paintable (barn wakes livestock); structures
+   render one instance per contiguous region sized from their planning
+   footprint; tool props auto-dress scenes.
+
+Still true from the original spec: local-first persistence, no backend
+required, Open-Meteo as the weather source, `npm run typecheck` as the gate.
+New standing laws introduced since: RenderOptions overlays default OFF (shared
+renderer), zero PlanState schema changes without optional/additive fields, all
+plan mutations through `usePlanEditor`.

@@ -1,29 +1,39 @@
 # HANDOFF — FarmFriend voxel-3D upgrade (`pro-upgrade` branch)
 
-**Status at handoff (2026-08-24): pro-upgrade phases 1–7 and all 3D phases 0–5 are
-complete; the fun-UX/game layer is shipped; the `src/creative/` voxel asset library is
-wired into the live World3D renderer; a beta-hardening mission is IN PROGRESS**
-(see `quality/MISSION-BETA.md`). Typecheck is clean on the merged beta candidate.
+**Status at handoff (2026-08-25): pro-upgrade phases 1–7 and all 3D phases 0–5 are
+complete; the fun-UX/game layer is shipped; the `src/creative/` voxel asset library
+is wired into the live World3D renderer AND fully paintable; beta hardening and
+the Blueprint power-tools mission are both MERGED & VERIFIED** (see
+`quality/MISSION-BETA.md` and `quality/MISSION-BLUEPRINT.md`). Typecheck and
+production build are clean.
 
 Shipped since the 2026-06-13 handoff:
 
 - **Fun-UX / game layer:** dynamic sky with time-of-day sun, clouds, weather FX,
   flight mode, guided tour, living animals, audio, achievements, and a Perf HUD
   (behind Debug).
-- **Creative voxel asset library:** `src/creative/` — terrain tiles, crops across six
-  growth stages, structures, creatures — built by four builder↔critic lanes and wired
-  into the live World3D renderer (verified per `quality/MISSION-CONTROL.md`; shot
-  evidence in `quality/shots/`).
-- **Beta hardening (in progress, three parallel lanes):** the data seam (live weather
-  actually driving the 3D world, graceful offline), a typed REST pluggability client,
-  single-sun night lighting, the rebuild-once/incremental-update path fix, and an
-  automated route QA matrix with a console-error gate.
+- **Creative voxel asset library:** `src/creative/` — 157 deterministic builders
+  (14 terrain tiles, 103 crop stage builds across 17 archetypes covering all 47
+  catalog crops, 20 structures, 20 creatures/tools/atmosphere) — all runtime-QA'd,
+  wired into World3D via four thin adapters (`src/three/{plants,ground,structures,
+  animals,dressing}.ts`), and **paintable from the designer** (barn wakes cows/
+  pigs/sheep; tools auto-dress scenes near sheds/taps/beds).
+- **Beta hardening (merged):** live weather actually drives clouds/rain FX/audio/
+  plant sway (ref-based rAF plumbing, graceful offline + "cached" chip); single-
+  sun lighting (sky owns THE directional sun + moon fill; night stays legible);
+  mount-once World3D init (brush strokes/date scrubs no longer rebuild the scene);
+  typed REST client behind `VITE_API_BASE_URL`; automated route smoke gate.
+- **Blueprint power tools (merged):** ghost previews, Pick/Fill/Line/5×5 brush,
+  spacing-violation tint + companion halos (real catalog math), layer toggles,
+  zoom cluster, 6px mobile fit floor, Esc/Space/cursor fixes, starter templates
+  (Salad Garden, Salsa Bed, Pollinator Strip, Four-Bed Rotation), recently-used +
+  asset search, inspector upgrade. Zero PlanState schema changes — old plans load.
 
 Read in order: this file → `SPEC.md` (the "Amendments" section is binding for
 the 2D designer) → `implementation-notes.md` (keep appending; it's a
 deliverable).
 
-## Beta Notes (2026-08-24)
+## Beta Notes (2026-08-25)
 
 ### How to run
 
@@ -97,9 +107,18 @@ deliverable).
 | 3D Phase 4 — edit-in-3D via raycasting | ✅ |
 | 3D Phase 5 — undo/redo history visualization | ✅ |
 
-Uncommitted: `src/data/seed.ts` carries ~95 lines of a half-finished
-"showcase plan" seed (demo plot for first-run). It typechecks but was never
-verified in-browser. Finish it or revert it — do not blindly commit it.
+## Where things stand (continued)
+
+| Work | State |
+| --- | --- |
+| Fun-UX / game layer (sky, clouds, weather FX, flight, tour, animals, audio, achievements, perf HUD) | ✅ `c37f632` |
+| Creative voxel asset forge — 157 builders, 4 gauntlet lanes (see `quality/ASSETS.md`) | ✅ `01d67a6` |
+| Beta hardening: live weather→3D plumbing, single-sun lighting, REST API seam (`VITE_API_BASE_URL`), automated smoke gate (`tools/appshot.mjs`) | ✅ `e6e4031` · `quality/MISSION-BETA.md` |
+| Blueprint power tools + full asset wiring: ghost/fill/line/pick/5×5, spacing & companion overlays, layer toggles, zoom cluster, starter templates, barn/livestock wake-up, region-merge structures, dressing props | ✅ `2c29eb9` · `quality/MISSION-BLUEPRINT.md` |
+
+Working tree is clean. Known dead code: `src/three/groundTexture.ts` (the baked
+ground-plane texture) — superseded by the creative voxel-tile ground
+(`src/three/ground.ts`); nothing imports it. Safe to delete in a cleanup pass.
 
 ## The 3D architecture (decided after Opus review — do not relitigate casually)
 
@@ -196,16 +215,28 @@ Deliverable: undo/redo history visualization as translucent ghost overlays.
 - Green ghosts (undo stack), blue ghosts (redo stack), opacity 0.25.
 - "Show History" toggle in World3D footer.
 
-## Editor code map (post-decomposition)
+## Editor code map (post-decomposition, post power-tools mission)
 
-- `src/components/designer/usePlanEditor.ts` (852 lines) — ALL editor state:
+- `src/components/designer/usePlanEditor.ts` (~1,300 lines) — ALL editor state:
   plan/viewport/drag refs, undo/redo, autosave, pointer+pinch+wheel handlers,
-  stats/pairings, exports, data fetching. **This hook is the seam both
-  BlueprintCanvas and the future World3D consume.**
-- `src/components/designer/BlueprintCanvas.tsx` — canvas element, DOM effects
-  (ResizeObserver sizing, non-passive wheel listener, redraw, keyboard).
-- `DesignerToolbar.tsx`, `CropPalette.tsx`, `AssetPalette.tsx`,
-  `StatsPanel.tsx`, `PairingsPanel.tsx`, `SelectionPanel.tsx` — presentational.
+  zoom API (`applyZoom`/`stepZoomLadder` shared by wheel AND buttons), ghost
+  memo, pick/fill/line ops (fill = BFS flood ≤5,000 cells; line = Bresenham via
+  the ghost preview channel), overlay/layer prefs (`ff-pro:*` localStorage),
+  spacing/companions derivations, stats/pairings, exports, data fetching.
+  **This hook is THE mutation seam — every write path snapshots once + one
+  debounced autosave.** Exports `sowWindow()` for SelectionPanel/CSV reuse.
+- `src/components/designer/BlueprintCanvas.tsx` — canvas element + zoom/layer
+  cluster overlay + rect HUD chip + focus-scoped keyboard handling.
+- `DesignerToolbar.tsx` — tools Select(V)/Brush(B)/Rect(R)/Asset(A)/Erase(E)/
+  Pick(I)/Fill(G)/Line(L), brush sizes 1×1/3×3/5×5 (`[` `]` cycles), mode
+  pickers, Spacing + Companions overlay toggles, history/export/settings.
+- `CropPalette.tsx` / `AssetPalette.tsx` — palettes with search + recently-used
+  rings (`ff-pro:recent-crops` / `ff-pro:recent-assets`).
+- `TemplatesCard.tsx` (+ data in `src/data/templates.ts`) — four starter plans;
+  apply = confirm → one `replacePlan(..., {save:true})` → one undo entry.
+- `SelectionPanel.tsx`, `StatsPanel.tsx`, `PairingsPanel.tsx` — presentational;
+  rail order: Templates → CropPalette → AssetPalette → Selection → Stats →
+  Pairings.
 - Layout invariants (fixed in `336959d`, don't regress): page root is
   `xl:h-full` flex column; canvas card is `flex min-h-0 flex-col` so the
   canvas absorbs toolbar wrap; below `xl` the canvas is `h-[60dvh]` and the
@@ -229,33 +260,47 @@ Monitoring and Dashboard. Don't migrate or delete; the designer uses
 4. **PNG export taint**: keep `renderPlan.ts` free of remote `drawImage` or
    `toBlob()` throws. This now also protects the 3D ground texture.
 5. **Custom crop ids start at 1000** (`store.ts`); never renumber library
-   crops — plans persist cropIds in localStorage.
+   crops — plans persist cropIds in localStorage. Template data stores crop
+   NAMES and resolves them to ids at apply time.
 6. **TS strict + noUnusedLocals/noUnusedParameters**: unused imports fail the
    build. `npm run lint` is broken repo-wide (no ESLint installed);
    `npm run typecheck` is the gate.
 7. **React 18, not 19** — this is why R3F is off the table (decision 1).
    A React 19 bump is a separate, deliberate project.
+8. **`drawPlan` has three consumers** (interactive canvas, PNG export, 3D
+   ground tiles path): any new visual layer MUST be an opt-in `RenderOptions`
+   flag defaulting OFF or it leaks into exports/world. Overlays shipped this
+   way (`ghost`, `spacingViolations`, `companionHalos`, `layers`).
+9. **Query params go BEFORE the hash**: `?ffview=world#/farms/1/map`. Params
+   inside the hash fragment break wouter matching (renders NotFound). The seed
+   ships farms 1–2 only — there is no farm 3.
+10. **Headless world-route captures race plan loading**: structures may build
+    from an empty ground map under virtual time, so world PNG bytes cannot
+    arbitrate scene content — use GATE + Node-side runtime probes instead
+    (see MISSION-BLUEPRINT Verification Log).
 
 ## Verification gates (run before calling anything done)
 
 1. `npm run typecheck` — clean at handoff.
-2. `npm run build` — clean at handoff (1.04 MB main chunk / 295 kB gzip;
+2. `npm run build` — clean at handoff (main chunk ~515 kB / ~151 kB gzip;
    the chunk-size warning is recharts and is expected — but three.js must
    land in its own lazy chunk, not here).
-3. Playwright smoke on `npm run dev` → `#/farms/1/map`: first load shows the
-   grid centered and filling the canvas; paint → "Unsaved"→"Saved"; wheel
-   zoom changes px/cell; palette reachable by scroll at 1024×768 and 390×844;
-   zero console errors. (Phase 0 evidence lived in /tmp/ff-editor-audit and
-   /tmp/ff-editor-fix; regenerate as needed.)
-4. After Phase 1: dashboard network tab must show NO three.js chunk until the
-   World toggle is clicked.
+3. Automated smoke (replaces ad-hoc Playwright): dev server up, then
+   `node tools/appshot.mjs "<url>" <out.png> [WxH] --gate [--expect "<text>"]`
+   per route (~40 s/shot; Chrome killed on timeout BY DESIGN — trust the
+   GATE/EXPECT lines + PNG bytes, not exit codes). Showcase pages assert
+   `--expect "showcase-ready N"` (boot probe not mounted there). Scratch
+   PNGs go in `$TMPDIR/<dir>/` (never `/tmp`, never the repo unless archiving
+   evidence); create target dirs first — Chrome won't mkdir.
+4. Dashboard network tab must show NO three.js chunk until the World toggle
+   is clicked.
 
 ## Suggested skills for the next session
 
-- `webapp-testing` or `browse` — Playwright smoke tests against the dev
-  server (the verification gates above).
+- `webapp-testing` or `browse` — interactive checks that need real clicks
+  (the headless harness cannot synthesize trusted events).
 - `investigate` — if a regression appears, root-cause before patching.
-- `qa` / `qa-only` — end-of-phase sweep across viewports.
+- `qa` / `qa-only` — end-of-phase sweep across viewports using appshot.
 
 ## Workflow the user asked for (keep honoring it)
 
