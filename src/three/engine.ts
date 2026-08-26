@@ -12,6 +12,7 @@ export interface Engine {
   dispose: () => void;
   resize: (width: number, height: number) => void;
   setBounds: (options: { minDistance?: number; maxDistance?: number; maxPolarAngle?: number }) => void;
+  resetView: (opts?: { distance?: number }) => void;
 }
 
 /**
@@ -55,6 +56,12 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
   controls.mouseButtons.right = CameraControls.ACTION.TRUCK;
   controls.touches.one = CameraControls.ACTION.TOUCH_ROTATE;
   controls.touches.two = CameraControls.ACTION.TOUCH_ZOOM_TRUCK;
+  // Dampen the wheel dolly: one notch used to jump the camera inside
+  // structures, after which orbit/Fit could not recover (target inside
+  // geometry). Slower dolly + smooth damping keeps zooms readable.
+  controls.dollyToCursor = false;
+  controls.dampingFactor = 0.08;
+  controls.smoothTime = 0.25;
 
   // --- rAF loop -----------------------------------------------------------
   const timer = new THREE.Timer();
@@ -90,6 +97,18 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
     controls.update(0);
   }
 
+  // Escape hatch when the camera ends up inside geometry: restore the default
+  // isometric framing around the world origin.
+  function resetView(opts?: { distance?: number }) {
+    const d = opts?.distance ?? 12;
+    controls.setPosition(d * 0.7, d * 0.5, d * 0.7, false);
+    controls.setTarget(0, 0, 0, false);
+    controls.azimuthAngle = -Math.PI / 4;
+    controls.polarAngle = Math.PI / 3.5;
+    controls.distance = d;
+    controls.update(0);
+  }
+
   // --- Dispose ------------------------------------------------------------
   function dispose() {
     disposed = true;
@@ -114,5 +133,6 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
     dispose,
     resize,
     setBounds,
+    resetView,
   };
 }

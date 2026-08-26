@@ -284,3 +284,37 @@ verification logs live in `quality/MISSION-BETA.md` and
 - Perf on very large plans unprofiled (Perf HUD behind ?ffdebug=1).
 - Dead code candidate: src/three/groundTexture.ts (superseded by voxel-tile
   ground.ts; zero importers).
+
+## 2026-08-25 — Interactive browser QA + World camera fix
+
+First full interactive (non-headless) QA pass, done in the live in-app browser:
+dashboard, Blueprint painting (Asset tool: barn + chicken coop on Sunrise
+Hollow), Blueprint→World flip, World camera controls, Weather, Calendar.
+
+**Verified live (closes the "code-path verified only" gaps):**
+- Barn→cow/pig/sheep and coop→hens spawn confirmed VISUALLY in World view
+  (sheep + hens seen in screenshots around the painted barn/coop).
+- Paint→save→3D pipeline end-to-end: painted cells persist ("Saved" chip),
+  Select-tool inspection shows the painted slug, World renders the plan.
+- Perf HUD healthy when the tab is visible: FPS 16–25, ~136 draws, ~25M tris.
+  (HUD reads `--` in hidden/background tabs — rAF pauses; not a bug.)
+
+**Bug found + fixed (this commit):**
+- World-view wheel dolly was hypersensitive: ONE notch slammed the camera
+  inside the barn, and orbit/Fit could not recover (orbit target inside
+  geometry; the visible "Fit" button only resets the 2D Blueprint zoom).
+  Fix: `dampingFactor 0.08` + `smoothTime 0.25` in engine.ts, plus a new
+  `engine.resetView()` + "Reset view" footer button in World3D that restores
+  the isometric framing. Verified interactively: two hard -400 scrolls now
+  land in a usable close-up, and Reset view recovers the overview.
+
+**Smoke gate after fix:** GATE PASS + EXPECT PASS on /, /farms/3/map,
+/farms/3/weather (zero runtime errors). Typecheck + build clean; three.js
+still its own lazy chunk.
+
+**Still open (honest)**
+- REST client runtime exercise awaits a real backend.
+- Perf on very large plans unprofiled.
+- Dead code candidate: src/three/groundTexture.ts (zero importers).
+- Animal spawning remains indirect (paint barn/coop/hive/pond); palette hint
+  improvement discussed but not implemented.

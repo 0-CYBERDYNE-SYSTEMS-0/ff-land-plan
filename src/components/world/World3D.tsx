@@ -563,6 +563,21 @@ export default function World3D({ editor }: World3DProps) {
           </label>
         </div>
 
+        {/* Reset camera — escapes geometry after a bad zoom/orbit */}
+        <button
+          type="button"
+          onClick={() => {
+            const engine = engineRef.current;
+            if (!engine) return;
+            const plan = editor.planRef.current;
+            const dist = plan ? Math.max(plan.widthM, plan.heightM) * 0.6 : 12;
+            engine.resetView({ distance: dist });
+          }}
+          className="pointer-events-auto rounded-md bg-background/90 px-3 py-2 text-xs font-medium text-muted-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
+        >
+          Reset view
+        </button>
+
         {/* History */}
         <button
           type="button"
