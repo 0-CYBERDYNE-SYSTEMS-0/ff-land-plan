@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Stat } from '@/components/shared/Stat';
 import { WeatherIcon } from '@/components/weather/WeatherIcon';
+import { SoilProfileCard } from '@/components/weather/SoilProfileCard';
 
 const WEATHER_STALE_MS = 15 * 60 * 1000;
 
@@ -217,6 +218,8 @@ export function Weather({ farmId }: { farmId: number }) {
           </CardContent>
         </Card>
       )}
+
+      {farm && <SoilProfileCard lat={farm.lat} lng={farm.lng} />}
 
       {chartData.length > 1 && (
         <Card>
