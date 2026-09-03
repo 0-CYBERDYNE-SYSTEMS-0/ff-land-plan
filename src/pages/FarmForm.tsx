@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Loader2, MapPin, Save, Search, Snowflake } from 'lucide-react';
 import { toast } from 'sonner';
-import { estimateFrostDates } from '@/lib/frost';
+import { estimateFrostDates, isValidMonthDay } from '@/lib/frost';
 import { searchPlaces, type GeocodeResult } from '@/lib/geocode';
 import type { SoilType } from '@/types';
 
@@ -27,8 +27,16 @@ const schema = z.object({
   elevationM: z.coerce.number().optional().nullable(),
   areHa: z.coerce.number().positive(),
   soilType: z.enum(soilTypes as [SoilType, ...SoilType[]]).optional().nullable(),
-  lastFrost: z.string().optional().nullable(),
-  firstFrost: z.string().optional().nullable(),
+  lastFrost: z
+    .string()
+    .refine((v) => v === '' || isValidMonthDay(v), 'Use MM-DD, e.g. 04-15')
+    .optional()
+    .nullable(),
+  firstFrost: z
+    .string()
+    .refine((v) => v === '' || isValidMonthDay(v), 'Use MM-DD, e.g. 10-15')
+    .optional()
+    .nullable(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -334,12 +342,18 @@ export function FarmForm({ farmId }: { farmId?: number }) {
                   Last spring frost
                 </Label>
                 <Input id="lastFrost" placeholder="MM-DD" className="h-8 text-sm" {...form.register('lastFrost')} />
+                {form.formState.errors.lastFrost && (
+                  <p className="text-xs text-destructive">{form.formState.errors.lastFrost.message}</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="firstFrost" className="text-xs">
                   First fall frost
                 </Label>
                 <Input id="firstFrost" placeholder="MM-DD" className="h-8 text-sm" {...form.register('firstFrost')} />
+                {form.formState.errors.firstFrost && (
+                  <p className="text-xs text-destructive">{form.formState.errors.firstFrost.message}</p>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-between gap-3">

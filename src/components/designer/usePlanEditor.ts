@@ -31,6 +31,12 @@ export type EraseLayer = 'plants' | 'ground';
 export type RectMode = 'plants' | 'asset' | 'erase';
 export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
+// Assets tagged with `surfaces` may only be painted on matching canvases; the
+// palette filters on this and every asset-writing mutation re-checks it.
+function assetAllowedOnSurface(asset: GardenAsset, plan: PlanState): boolean {
+  return !asset.surfaces || asset.surfaces.includes(plan.surface ?? 'outdoor');
+}
+
 export interface Viewport {
   cellPx: number;
   offsetX: number;
@@ -560,7 +566,7 @@ export function usePlanEditor(farmId: number) {
       }
       return true;
     }
-    if (mode === 'asset' && activeAsset) {
+    if (mode === 'asset' && activeAsset && assetAllowedOnSurface(activeAsset, plan)) {
       let changed = false;
       const fp = footprintCells(activeAsset, plan);
       for (let yy = y; yy < y + fp.rows; yy++) {
@@ -614,7 +620,7 @@ export function usePlanEditor(farmId: number) {
           plan.planting[key] = activeCropId;
           stampPlantedAt(plan, key);
           changed = true;
-        } else if (rectMode === 'asset' && activeAsset) {
+        } else if (rectMode === 'asset' && activeAsset && assetAllowedOnSurface(activeAsset, plan)) {
           if (plan.ground[key] !== activeAsset.slug) {
             plan.ground[key] = activeAsset.slug;
             changed = true;
@@ -703,7 +709,7 @@ export function usePlanEditor(farmId: number) {
         // Asset fill assigns the slug per cell (rect-style) instead of
         // stamping a full footprint per region cell.
         const key = cellKey(x, y);
-        if (activeAsset) {
+        if (activeAsset && assetAllowedOnSurface(activeAsset, plan)) {
           if (plan.ground[key] !== activeAsset.slug) {
             plan.ground[key] = activeAsset.slug;
             changed = true;

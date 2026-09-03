@@ -66,7 +66,9 @@ const fragmentShader = /* glsl */ `
     float sunVis = smoothstep(-0.08, 0.05, sunDir.y);
 
     float sunDot = dot(dir, sunDir);
-    float sunDisc = smoothstep(uSunSize, uSunSize * 0.7, sunDot);
+    // Ascending edges (disc core → rim): GLSL smoothstep is undefined when
+    // edge0 >= edge1, and the previous reversed call dropped the disc entirely.
+    float sunDisc = smoothstep(uSunSize * 0.7, uSunSize, sunDot);
     float sunGlow = exp(sunDot * uSunGlow) * 0.15;
     vec3 sunContribution = (sunDisc + sunGlow) * uSunColor * sunVis;
 

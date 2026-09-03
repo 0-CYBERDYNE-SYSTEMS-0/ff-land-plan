@@ -160,5 +160,7 @@ export function createFlightCamera(engine: Engine, onEnd?: () => void): FlightCa
     deactivate();
   }
 
-  return { active, update, activate, deactivate, dispose };
+  // Live getter: `active` is a closure flag, and a plain property would
+  // snapshot `false` forever, freezing out the rAF gating and the exit button.
+  return { get active() { return active; }, update, activate, deactivate, dispose };
 }

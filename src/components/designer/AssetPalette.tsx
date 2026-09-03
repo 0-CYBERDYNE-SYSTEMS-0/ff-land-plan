@@ -69,7 +69,7 @@ export function AssetPalette({ editor }: { editor: PlanEditor }) {
 
   const recentAssets = recentSlugs
     .map((slug) => assetBySlug(slug))
-    .filter((asset): asset is GardenAsset => !!asset);
+    .filter((asset): asset is GardenAsset => !!asset && (!asset.surfaces || asset.surfaces.includes(surface)));
 
   return (
     <Card>

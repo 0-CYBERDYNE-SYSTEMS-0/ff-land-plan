@@ -180,5 +180,7 @@ export function createTour(
     stop();
   }
 
-  return { active, progress, waypoints, start, stop, next, prev, update, dispose };
+  // Live getters: `active`/`progress` are closure state, and plain properties
+  // would snapshot the construction-time values (false/0) forever.
+  return { get active() { return active; }, get progress() { return progress; }, waypoints, start, stop, next, prev, update, dispose };
 }

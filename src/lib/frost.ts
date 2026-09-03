@@ -13,6 +13,18 @@ export interface FrostDates {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+// Strict "MM-DD" check (month 01-12, day within month; Feb 29 allowed since
+// frost dates recur annually). Guards the free-form farm-form input and any
+// legacy stored values before they reach date math.
+export function isValidMonthDay(md: string): boolean {
+  const match = /^(\d{2})-(\d{2})$/.exec(md);
+  if (!match) return false;
+  const m = Number(match[1]);
+  const d = Number(match[2]);
+  const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+  return m >= 1 && m <= 12 && d >= 1 && d <= (daysInMonth ?? 0);
+}
+
 export function doyToMonthDay(doy: number): string {
   // Non-leap reference year keeps "MM-DD" stable.
   const d = new Date(2025, 0, 1);

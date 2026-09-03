@@ -1,4 +1,4 @@
-import { dateFromMonthDay, monthDayToDoy } from '@/lib/frost';
+import { dateFromMonthDay, isValidMonthDay, monthDayToDoy } from '@/lib/frost';
 import type { Crop, Farm, PlanState } from '@/types';
 
 export type CalendarActionType = 'sow_indoor' | 'transplant' | 'direct_sow' | 'harvest';
@@ -61,8 +61,10 @@ function actionSortKey(action: CalendarAction, today: Date): number {
 export function buildPlantingCalendar(farm: Farm, plan: PlanState, crops: Crop[], year = new Date().getFullYear()): CalendarAction[] {
   const planCrops = uniquePlanCrops(plan, crops);
   const today = new Date();
-  const lastFrost = farm.lastFrost ? dateFromMonthDay(farm.lastFrost, year) : null;
-  const firstFrost = farm.firstFrost ? dateFromMonthDay(farm.firstFrost, year) : null;
+  // Treat malformed stored frost strings (legacy free-form input) as absent
+  // rather than feeding NaN months into date math.
+  const lastFrost = farm.lastFrost && isValidMonthDay(farm.lastFrost) ? dateFromMonthDay(farm.lastFrost, year) : null;
+  const firstFrost = farm.firstFrost && isValidMonthDay(farm.firstFrost) ? dateFromMonthDay(farm.firstFrost, year) : null;
   const actions: CalendarAction[] = [];
 
   for (const crop of planCrops) {
@@ -128,7 +130,7 @@ export function calendarPercent(doyValue: number): number {
 
 export function frostDoy(farm: Farm): { last: number | null; first: number | null } {
   return {
-    last: farm.lastFrost ? monthDayToDoy(farm.lastFrost) : null,
-    first: farm.firstFrost ? monthDayToDoy(farm.firstFrost) : null,
+    last: farm.lastFrost && isValidMonthDay(farm.lastFrost) ? monthDayToDoy(farm.lastFrost) : null,
+    first: farm.firstFrost && isValidMonthDay(farm.firstFrost) ? monthDayToDoy(farm.firstFrost) : null,
   };
 }

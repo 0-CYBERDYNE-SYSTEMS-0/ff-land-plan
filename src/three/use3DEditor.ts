@@ -12,8 +12,28 @@ interface RaycastResult {
 }
 
 export function use3DEditor(editor: PlanEditor) {
-  const { planRef, tool, activeCropId, activeAsset, eraseLayer, applyBrushAt, replacePlan, setRectPreview, setSelectedKey } = editor;
-  const dragRef = useRef<{ kind: 'paint' | 'rect' | null; before: PlanState | null; changed: boolean; startX: number; startY: number }>({ kind: null, before: null, changed: false, startX: 0, startY: 0 });
+  const {
+    planRef,
+    tool,
+    activeAsset,
+    applyBrushAt,
+    applyRect,
+    applyLineCells,
+    applyFillAt,
+    pickAt,
+    replacePlan,
+    setRectPreview,
+    setSelectedKey,
+  } = editor;
+  const dragRef = useRef<{
+    kind: 'paint' | 'rect' | 'line' | null;
+    before: PlanState | null;
+    changed: boolean;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+  }>({ kind: null, before: null, changed: false, startX: 0, startY: 0, lastX: 0, lastY: 0 });
 
   const getCellFromRaycast = useCallback((camera: THREE.Camera, _scene: THREE.Scene, ndcX: number, ndcY: number): RaycastResult | null => {
     const plan = planRef.current;
@@ -42,6 +62,9 @@ export function use3DEditor(editor: PlanEditor) {
     return { x, y, key: cellKey(x, y) };
   }, [planRef]);
 
+  const rectPreviewColor = () =>
+    editor.rectMode === 'asset' && activeAsset ? activeAsset.colorHex : editor.activeCrop?.colorHex ?? '#22c55e';
+
   const handlePointerDown = useCallback((camera: THREE.Camera, scene: THREE.Scene, ndcX: number, ndcY: number) => {
     const plan = planRef.current;
     if (!plan) return;
@@ -52,46 +75,74 @@ export function use3DEditor(editor: PlanEditor) {
       setSelectedKey(cell.key);
       return;
     }
+    if (tool === 'pick') {
+      pickAt(cell.key);
+      return;
+    }
+    if (tool === 'fill') {
+      // Flood fill commits itself (history + autosave), same as blueprint.
+      applyFillAt(cell.x, cell.y);
+      return;
+    }
 
-    const before = { ...plan, planting: { ...plan.planting }, ground: { ...plan.ground } };
+    // Clone every mutated map — sharing plantedAt would let post-snapshot
+    // stamp/erase mutations leak into the undo baseline.
+    const before = { ...plan, planting: { ...plan.planting }, ground: { ...plan.ground }, plantedAt: { ...plan.plantedAt } };
     dragRef.current = {
-      kind: tool === 'rect' ? 'rect' : 'paint',
+      kind: tool === 'rect' ? 'rect' : tool === 'line' ? 'line' : 'paint',
       before,
       changed: false,
       startX: cell.x,
       startY: cell.y,
+      lastX: cell.x,
+      lastY: cell.y,
     };
 
     if (tool === 'rect') {
-      setRectPreview({ x0: cell.x, y0: cell.y, x1: cell.x, y1: cell.y, color: editor.rectMode === 'asset' && activeAsset ? activeAsset.colorHex : editor.activeCrop?.colorHex ?? '#22c55e' });
+      setRectPreview({ x0: cell.x, y0: cell.y, x1: cell.x, y1: cell.y, color: rectPreviewColor() });
+    } else if (tool === 'line') {
+      // No drag preview in 3D; the stroke commits on pointer-up.
     } else {
       applyBrushAt(cell.x, cell.y);
       dragRef.current.changed = true;
     }
-  }, [planRef, tool, activeCropId, activeAsset, eraseLayer, setSelectedKey, setRectPreview, editor.rectMode, editor.activeCrop, applyBrushAt, getCellFromRaycast]);
+  }, [planRef, tool, activeAsset, setSelectedKey, setRectPreview, editor.rectMode, editor.activeCrop, applyBrushAt, applyFillAt, pickAt, getCellFromRaycast]);
 
   const handlePointerMove = useCallback((camera: THREE.Camera, scene: THREE.Scene, ndcX: number, ndcY: number) => {
     const drag = dragRef.current;
-    const plan = planRef.current;
-    if (!plan) return;
+    if (!drag.kind) return;
     const cell = getCellFromRaycast(camera, scene, ndcX, ndcY);
+    if (!cell) return;
 
-    if (drag.kind === 'paint' && cell) {
+    drag.lastX = cell.x;
+    drag.lastY = cell.y;
+
+    if (drag.kind === 'paint') {
       applyBrushAt(cell.x, cell.y);
       drag.changed = true;
     }
-    if (drag.kind === 'rect' && cell) {
-      setRectPreview({ x0: drag.startX, y0: drag.startY, x1: cell.x, y1: cell.y, color: editor.rectMode === 'asset' && activeAsset ? activeAsset.colorHex : editor.activeCrop?.colorHex ?? '#22c55e' });
+    if (drag.kind === 'rect') {
+      setRectPreview({ x0: drag.startX, y0: drag.startY, x1: cell.x, y1: cell.y, color: rectPreviewColor() });
     }
-  }, [planRef, applyBrushAt, setRectPreview, editor.rectMode, editor.activeCrop, activeAsset, getCellFromRaycast]);
+  }, [applyBrushAt, setRectPreview, editor.rectMode, editor.activeCrop, activeAsset, getCellFromRaycast]);
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((camera: THREE.Camera, scene: THREE.Scene, ndcX?: number, ndcY?: number) => {
     const drag = dragRef.current;
     const plan = planRef.current;
     if (!plan) return;
 
-    if (drag.kind === 'rect' && drag.before) {
-      // For 3D rect, we need the end cell from the last move - simplified for now
+    if (drag.kind === 'rect' || drag.kind === 'line') {
+      const released = ndcX !== undefined && ndcY !== undefined
+        ? getCellFromRaycast(camera, scene, ndcX, ndcY)
+        : null;
+      // Fall back to the last dragged cell when the release lands off-plan.
+      const endX = released?.x ?? drag.lastX;
+      const endY = released?.y ?? drag.lastY;
+      if (drag.kind === 'rect') {
+        drag.changed = applyRect(drag.startX, drag.startY, endX, endY) || drag.changed;
+      } else {
+        drag.changed = applyLineCells(drag.startX, drag.startY, endX, endY) || drag.changed;
+      }
       setRectPreview(null);
     }
 
@@ -99,8 +150,8 @@ export function use3DEditor(editor: PlanEditor) {
       replacePlan({ ...plan, planting: { ...plan.planting }, ground: { ...plan.ground } }, { save: true, recordHistory: drag.before });
     }
 
-    dragRef.current = { kind: null, before: null, changed: false, startX: 0, startY: 0 };
-  }, [planRef, replacePlan, setRectPreview]);
+    dragRef.current = { kind: null, before: null, changed: false, startX: 0, startY: 0, lastX: 0, lastY: 0 };
+  }, [planRef, applyRect, applyLineCells, replacePlan, setRectPreview, getCellFromRaycast]);
 
   return {
     getCellFromRaycast,

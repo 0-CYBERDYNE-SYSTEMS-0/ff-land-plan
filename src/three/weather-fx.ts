@@ -148,7 +148,10 @@ export function createWeatherFX(scene: THREE.Scene): WeatherFX {
     const pos = rainGeo.attributes.position.array as Float32Array;
     const rainActive = rainIntensity > 0.05;
 
-    rainMat.opacity += (rainActive ? rainIntensity * 0.6 : 0) * dt * 3;
+    // Interpolate opacity toward the intensity target so particles fade out
+    // when precipitation ends instead of freezing at the last opacity.
+    const rainTarget = rainActive ? rainIntensity * 0.6 : 0;
+    rainMat.opacity += (rainTarget - rainMat.opacity) * Math.min(dt * 3, 1);
     rainMat.opacity = Math.max(0, Math.min(0.6, rainMat.opacity));
 
     if (rainActive) {
@@ -196,7 +199,8 @@ export function createWeatherFX(scene: THREE.Scene): WeatherFX {
     const snowIntensity = lastTemp <= 2 && precip > 0.1 ? Math.min(precip / 3, 1) : 0;
     const snowActive = snowIntensity > 0.05;
 
-    snowMat.opacity += (snowActive ? snowIntensity * 0.5 : 0) * dt * 3;
+    const snowTarget = snowActive ? snowIntensity * 0.5 : 0;
+    snowMat.opacity += (snowTarget - snowMat.opacity) * Math.min(dt * 3, 1);
     snowMat.opacity = Math.max(0, Math.min(0.5, snowMat.opacity));
 
     if (snowActive) {

@@ -254,6 +254,7 @@ export function updateGround(batches: GroundBatch[], plan: PlanState, scene: THR
 export function disposeGround(batches: GroundBatch[]): void {
   for (const batch of batches) {
     batch.mesh.removeFromParent();
+    batch.mesh.dispose(); // frees the per-instance matrix buffer; geometry/material stay shared
     // Template geometry + material are shared across instances/batches and are
     // released once below — never per-instance here.
   }

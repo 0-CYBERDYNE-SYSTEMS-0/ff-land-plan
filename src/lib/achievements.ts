@@ -82,7 +82,11 @@ export function createAchievementSystem(): AchievementSystem {
 
   return {
     achievements,
-    unlocked: achievements.filter((a) => a.unlocked),
+    // Live getter: check() mutates records after creation, so a plain array
+    // would freeze at the construction-time unlock set.
+    get unlocked() {
+      return achievements.filter((a) => a.unlocked);
+    },
     check,
     isUnlocked,
     stats,

@@ -21,6 +21,13 @@ export interface Engine {
  * @param canvas - The canvas element to render into.
  * @param theme  - 'light' or 'dark' to set the scene background.
  */
+export function setEngineOrbitEnabled(engine: Engine, enabled: boolean): void {
+  // One-finger/left-drag orbits only while inspecting; painting tools claim
+  // that drag for strokes, and orbiting during a paint gesture corrupts both.
+  engine.controls.mouseButtons.left = enabled ? CameraControls.ACTION.ROTATE : CameraControls.ACTION.NONE;
+  engine.controls.touches.one = enabled ? CameraControls.ACTION.TOUCH_ROTATE : CameraControls.ACTION.NONE;
+}
+
 export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark'): Engine {
   // --- Renderer -----------------------------------------------------------
   const renderer = new THREE.WebGLRenderer({
