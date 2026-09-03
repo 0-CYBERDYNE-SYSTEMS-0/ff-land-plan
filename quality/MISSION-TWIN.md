@@ -285,4 +285,34 @@ and memoized per session accordingly.
 
 ## Verification Log
 
-> Filled at close-out.
+### Wave 1 — GREEN (validated 2026-09-03, HEAD `975b72c`)
+
+Scope: `e7ab50e` (WS-B), `3961094` (WS-C), `975b72c` (WS-D). Independent
+validation agent; all gates PASS, zero findings attributable to the mission.
+
+1. **Typecheck** — exit 0 both on the working tree AND on a `git archive HEAD`
+   extraction (mission commits without the third-party in-flight files) —
+   clean attribution in both directions.
+2. **Build** — exit 0; three.js lazy chunk byte-identical pre/post mission
+   (782.62 kB); main index +6.4 kB (+1.2%, soil card + growth ctx).
+3. **Code review** — no `Math.random`; `climate.ts`/`soil.ts` never reject
+   (catch-all → null, failed lookups un-memoized for retry); versioned
+   `ff-pro:climate|soil:<lat2dp>,<lng2dp>` caches, corrupt-blob safe;
+   zero `any`; `growthCtxRef` never in a dep array (no rebuild loop), init
+   effect still `[sceneReady, farmId]`, ambient landing triggers a
+   plants-only rebuild; `Api`/`Simulations`/`localApi` untouched.
+   Non-blocking: `deriveClimateNormals` export awaits its WS-A consumer.
+4. **Determinism probe** — bundled growth model: lettuce at ambient 34 °C
+   outdoor → `{rate 0.46, stress 0.9}`; undefined ctx → `{1, 0}`;
+   34 °C in a tent → `{1, 0}` (shelter 0.12); repeat calls byte-identical.
+5. **Route smoke 5/5** — map / weather / simulations / monitoring / world
+   (`?ffview=world&fftime=0.5` before the hash): every GATE line "zero
+   runtime errors", real PNG renders. The new **Soil Profile card rendered
+   with live data** on the weather route: "Luvisols · ISRIC SoilGrids" for
+   demo farm 1 (Portland Urban-land map unit → SDA-no-horizon → SoilGrids
+   fallback, exactly the documented degradation), alongside live Open-Meteo
+   readings. (One infra flake: the dev server died mid-suite on HMR churn
+   from the *third-party* session's edits — passed clean on retry.)
+6. **Offline honesty** — `?? undefined` fallbacks confirmed at both ambient
+   call sites; undefined-ctx algebra is byte-identical to the pre-mission
+   constant-baseline formula.
