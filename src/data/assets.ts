@@ -48,6 +48,12 @@ export const assetLibrary: GardenAsset[] = [
     emoji: '🌳', plantable: false,
     description: 'Canopy footprint of a semi-dwarf tree (~3 m).',
   },
+  {
+    slug: 'grow-tent', label: 'Grow Tent', category: 'growing',
+    defaultWM: 1.5, defaultHM: 1.5, colorHex: '#4A4A52', pattern: 'cross',
+    emoji: '⛺', plantable: true,
+    description: 'Reflective indoor grow tent; herbs and greens under grow lights.',
+  },
   // --- Infrastructure ---------------------------------------------------
   {
     slug: 'path-gravel', label: 'Gravel Path', category: 'infrastructure',

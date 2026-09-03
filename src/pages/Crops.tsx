@@ -37,6 +37,7 @@ const CATEGORIES: { value: CropCategory | 'all'; label: string }[] = [
   { value: 'herb', label: 'Herbs' },
   { value: 'cover_crop', label: 'Cover Crops' },
   { value: 'flower', label: 'Flowers' },
+  { value: 'fungus', label: 'Fungi' },
 ];
 
 const NITROGEN_TONE: Record<string, string> = {
@@ -167,7 +168,7 @@ function CropCard({ crop, cropBySlug }: { crop: Crop; cropBySlug: Map<string, Cr
 
 const SCHEMA = z.object({
   name: z.string().min(1),
-  category: z.enum(['vegetable', 'grain', 'fruit', 'herb', 'cover_crop', 'flower']),
+  category: z.enum(['vegetable', 'grain', 'fruit', 'herb', 'cover_crop', 'flower', 'fungus']),
   growthDays: z.coerce.number().min(1),
   waterNeedMmDay: z.coerce.number().min(0),
   yieldTonHa: z.coerce.number().min(0),

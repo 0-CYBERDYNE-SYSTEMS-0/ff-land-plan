@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { PlanState, Crop } from '@/types';
+import type { PlanState, Crop, ScenarioType } from '@/types';
 import { parseKey } from '@/lib/plan';
+import { growthProgress, scenarioGrowthMod, stageForScale } from '@/lib/growth';
 import { makeCropFor } from '@/creative/crops/map';
 
 /**
@@ -51,6 +52,7 @@ const HEIGHT_RANGE: Record<string, [number, number]> = {
   grain: [0.8, 1.5],
   flower: [0.5, 1.6],
   cover_crop: [0.2, 0.45],
+  fungus: [0.35, 0.9],
 };
 
 const DEFAULT_HEIGHT_RANGE: [number, number] = [0.7, 1.4];
@@ -61,23 +63,6 @@ function getPlantHeight(crop: Crop): number {
   // Normalize growthDays (clamp 50-100) to 0-1, then lerp.
   const t = Math.max(0, Math.min(1, (crop.growthDays - 50) / 50));
   return minH + t * (maxH - minH);
-}
-
-/** Compute growth scale (0-1) for a crop at a given date. */
-function getGrowthScale(crop: Crop, plantedAt: string | undefined, currentDate: Date): number {
-  if (!plantedAt) {
-    // No planting date: show full-grown for visual appeal
-    return 1;
-  }
-  const planted = new Date(plantedAt);
-  const daysSince = (currentDate.getTime() - planted.getTime()) / 86_400_000;
-  const maturityDays = crop.growthDays ?? 60;
-  return Math.max(0, Math.min(1, daysSince / maturityDays));
-}
-
-/** Map a growth scale (0-1) to a discrete voxel-asset stage 0..5. */
-function stageForScale(scale: number): number {
-  return Math.max(0, Math.min(5, Math.round(scale * 5)));
 }
 
 /** Deterministic pseudo-random jitter seeded by cell coordinates. */
@@ -287,14 +272,20 @@ function mergeTemplateGeometry(root: THREE.Object3D): THREE.BufferGeometry | nul
   return merged;
 }
 
-/** Shared vertex-colored material for all instanced plant batches. */
+/** Shared vertex-colored material for unstressed instanced plant batches. */
 let sharedPlantMaterial: THREE.MeshLambertMaterial | null = null;
 
-function getPlantMaterial(): THREE.MeshLambertMaterial {
-  if (!sharedPlantMaterial) {
-    sharedPlantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+/** Vertex-colored material; stressed crops get their own tinted clone. */
+function getPlantMaterial(stress: number): THREE.MeshLambertMaterial {
+  if (stress <= 0.2) {
+    if (!sharedPlantMaterial) {
+      sharedPlantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    }
+    return sharedPlantMaterial;
   }
-  return sharedPlantMaterial;
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  m.color.setRGB(1, 1 - stress * 0.35, 1 - stress * 0.55);
+  return m;
 }
 
 /** Build InstancedMesh batches: one draw call per (crop, stage) template. */
@@ -303,6 +294,7 @@ export function buildPlants(
   cropById: Map<number, Crop>,
   scene: THREE.Scene,
   currentDate?: Date,
+  scenario?: ScenarioType,
 ): PlantBatch[] {
   // Group cells by crop id.
   const cellsByCropId = new Map<number, string[]>();
@@ -325,6 +317,8 @@ export function buildPlants(
     if (!crop) continue;
 
     const fullHeight = getPlantHeight(crop);
+    const mod = scenario ? scenarioGrowthMod(crop, scenario) : null;
+    const cropStress = mod?.stress ?? 0;
     const group = new THREE.Group();
     group.name = `plants:${crop.name}`;
 
@@ -357,14 +351,19 @@ export function buildPlants(
       if (voxelRoot) {
         const geometry = mergeTemplateGeometry(voxelRoot);
         if (geometry) {
-          const mesh = new THREE.InstancedMesh(geometry, getPlantMaterial(), Math.max(keys.length, 1));
+          const material = getPlantMaterial(cropStress);
+          const mesh = new THREE.InstancedMesh(geometry, material, Math.max(keys.length, 1));
           mesh.name = `plants-inst:${crop.name}:s${stage}`;
           mesh.castShadow = false;
           mesh.receiveShadow = false;
           mesh.count = 0; // filled in below; shrink to actual usage at the end
           mesh.frustumCulled = false; // instances span the whole plan
           group.add(mesh);
-          const tpl: PlantTemplate = { instancedMesh: mesh, geometry };
+          const tpl: PlantTemplate = {
+            instancedMesh: mesh,
+            geometry,
+            ...(cropStress > 0.2 ? { material } : {}),
+          };
           templates.set(stage, tpl);
           return tpl;
         }
@@ -395,7 +394,7 @@ export function buildPlants(
       const z = cellY * plan.cellM + plan.cellM / 2 + offsetZ;
       const y = 0.01; // sit on ground plane
 
-      const growthScale = currentDate ? getGrowthScale(crop, plantedAtMap[key], now) : 1;
+      const growthScale = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
       const stage = stageForScale(growthScale);
 
       const tpl = getTemplate(stage);
@@ -471,9 +470,10 @@ export function updatePlants(
   cropById: Map<number, Crop>,
   scene: THREE.Scene,
   currentDate?: Date,
+  scenario?: ScenarioType,
 ): PlantBatch[] {
   disposePlants(batches);
-  return buildPlants(plan, cropById, scene, currentDate);
+  return buildPlants(plan, cropById, scene, currentDate, scenario);
 }
 
 /**

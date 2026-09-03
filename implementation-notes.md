@@ -318,3 +318,40 @@ still its own lazy chunk.
 - Dead code candidate: src/three/groundTexture.ts (zero importers).
 - Animal spawning remains indirect (paint barn/coop/hive/pond); palette hint
   improvement discussed but not implemented.
+
+## 2026-09-03 — Demo farms + asset-linkage pass (pro-upgrade)
+
+**Seed plans were dead code.** `store.ts` seeded `plans: {}`, so `seedPlans`
+never loaded and every farm opened a blank `createDefaultPlan`. Now seeded, and
+`load()` re-seeds missing farms/plans idempotently (user edits to existing ids
+win; farm-id counter pinned above max present id so new seed farms can't
+collide with user-created ones).
+
+**New assets (editor ↔ 3D fully wired):** `grow-tent` structure (mylar shell,
+open front, glow bars, seedling trays; plantable; soil underlay) and a
+`mushroom` crop archetype (substrate block → pins → flush; s5 adds a dominant
+cap) behind three new catalog crops — Oyster/Button/Shiitake (ids 48–50) —
+under a new `fungus` CropCategory (HEIGHT_RANGE `fungus: [0.35, 0.9]`;
+CropIcon + Crops page z.enum/CATEGORIES extended). `fruit-tree` is now a real
+3D orchard tree (was placeable-but-invisible).
+
+**Four demo farms (ids 3–6):** Backyard Homestead (18×14 m — shed, greenhouse,
+cold frame, 3 raised beds + trellis, in-ground roots, pond, hive, coop, herb
+bed, specimen fruit tree, picket perimeter), Market Field (40×24 m — corn +
+wheat blocks, cover crops, sunflower border, barn/hay/crates, polytunnel +
+greenhouse, irrigation runs, fruit-tree orchard), Indoor Grow Tent Op (six
+tents of herbs/microgreens + poly veg room + IBC/tap utility wall), Mushroom
+Farm (four fruiting rooms — greenhouse/polytunnel pairs — planted oyster,
+button, shiitake over a packing/substrate yard). All stamped with per-crop
+`plantedAt` so the World3D season sim opens mid-growth.
+
+**World3D footer HUD cap:** with 14–26 distinct crops the per-crop growth list
+ballooned and its stack of `bg-background/90` pills buried the scene (farms
+1–3). List now `max-h-24 overflow-y-auto`.
+
+**Trap (cost us an hour):** headless `appshot` screenshots never composite 2D
+canvas content — `--screenshot` + `--virtual-time-budget` drops 2D-canvas
+layers entirely (minimal repro: red-rect-on-blue page captures as pure blue;
+WebGL captures fine). A "blank" Blueprint in an appshot proves nothing: the
+canvas is drawn (verified via getImageData probes) — judge Blueprint work
+through the GATE/EXPECT lines or a real browser, never the PNG.

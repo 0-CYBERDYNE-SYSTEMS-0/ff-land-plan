@@ -542,3 +542,73 @@ export function makeChickenCoop(): THREE.Object3D {
 
   return solidMesh(solid);
 }
+
+// ---------------------------------------------------------------------------
+// Indoor grow tent — mylar grow room: black shell, open front, glow bars
+// ---------------------------------------------------------------------------
+
+export function makeGrowTent(): THREE.Object3D {
+  const rand = rng(3701);
+  const solid: Voxel[] = [];
+  const W = 20; // x: 0..19
+  const D = 20; // z: 0..19, open front at z = D-1
+  const H = 23;
+
+  const shell = mixColor(PALETTE.charcoal, PALETTE.black, 0.35);
+  const shellLight = mixColor(shell, PALETTE.metalDark, 0.3);
+  const wall = (): number => (rand() < 0.1 ? shellLight : shell);
+
+  // reflective white floor tray
+  for (let x = 0; x < W; x++)
+    for (let z = 0; z < D; z++)
+      solid.push({ x, y: 0, z, s: 0.98, color: rand() < 0.18 ? mixColor(C.frameWhite, PALETTE.gravel, 0.18) : C.frameWhite });
+
+  // black shell: back wall, both side walls, ceiling (front left open)
+  for (let z = 0; z < 1; z++)
+    for (let x = 0; x < W; x++)
+      for (let y = 1; y <= H - 1; y++) solid.push({ x, y, z, color: wall() });
+  for (const x of [0, W - 1])
+    for (let z = 1; z < D; z++)
+      for (let y = 1; y <= H - 1; y++) solid.push({ x, y, z, color: wall() });
+  for (let x = 0; x < W; x++)
+    for (let z = 0; z < D; z++)
+      solid.push({ x, y: H, z, color: wall() });
+
+  // reflective mylar inner lining (bright) on the interior faces
+  for (let z = 1; z < D - 1; z++)
+    for (let y = 1; y <= H - 1; y++) {
+      solid.push({ x: 1, y, z, s: 0.96, color: C.frameWhite });
+      solid.push({ x: W - 2, y, z, s: 0.96, color: C.frameWhite });
+    }
+  for (let x = 1; x < W - 1; x++)
+    for (let y = 1; y <= H - 1; y++)
+      solid.push({ x, y, z: 1, s: 0.96, color: C.frameWhite });
+
+  // front opening trim (door frame around the open face)
+  for (let y = 1; y <= H - 1; y++)
+    for (const x of [0, W - 1]) solid.push({ x, y, z: D - 1, s: 1.05, color: wall() });
+  for (let x = 0; x < W; x++) solid.push({ x, y: H, z: D - 1, s: 1.05, color: wall() });
+
+  // hanging grow-light bars (two rows) — bright so they read as lit
+  const glow = mixColor(PALETTE.flowerYellow, PALETTE.white, 0.35);
+  for (const lx of [5, 14])
+    for (let lz = 3; lz < D - 3; lz++)
+      solid.push({ x: lx, y: H - 2, z: lz, s: 0.8, color: glow });
+  for (const lx of [5, 14])
+    for (const lz of [4, D - 4]) solid.push({ x: lx, y: H - 1, z: lz, s: 0.45, color: PALETTE.metal });
+
+  // seedling trays on the floor
+  for (let x = 3; x <= 16; x += 2)
+    for (let z = 4; z <= 15; z += 2) {
+      solid.push({ x, y: 0.9, z, s: 0.9, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.2) });
+      solid.push({ x, y: 1.5, z, s: 0.5, color: PALETTE.leafYoung });
+      solid.push({ x, y: 1.9, z, s: 0.3, color: PALETTE.leaf });
+    }
+
+  // roof exhaust duct + fan
+  for (let i = 0; i < 4; i++) solid.push({ x: 9, y: H + 1 + i, z: 9, s: 1.1, color: PALETTE.metalDark });
+  solid.push({ x: 9, y: H + 4.4, z: 9, s: 1.3, color: PALETTE.metal });
+  solid.push({ x: 9, y: H + 4.4, z: 9.4, s: 0.5, color: PALETTE.iron });
+
+  return solidMesh(solid);
+}

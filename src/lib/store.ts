@@ -17,6 +17,7 @@ import {
   seedCells,
   seedFarms,
   seedNdvi,
+  seedPlans,
   seedReadings,
   seedSensors,
   seedSimulations,
@@ -52,7 +53,7 @@ function seedState(): AppState {
     readings: { ...seedReadings },
     simulations: [...seedSimulations],
     ndvi: { ...seedNdvi },
-    plans: {},
+    plans: { ...seedPlans },
     alertReads: {},
     counters: {
       farm: farms.length + 1,
@@ -65,14 +66,29 @@ function seedState(): AppState {
 }
 
 function load(): AppState {
+  const fresh = seedState();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedState();
+    if (!raw) return fresh;
     const parsed = JSON.parse(raw) as AppState;
     // Forward-compat: merge over a fresh seed shape so missing keys get defaults.
-    return { ...seedState(), ...parsed };
+    const merged = { ...fresh, ...parsed };
+    // Idempotently re-seed farms/plans this version adds but a saved blob lacks,
+    // WITHOUT clobbering user edits to farms/plans that already exist.
+    for (const farm of fresh.farms) {
+      if (!merged.farms.some((f) => f.id === farm.id)) merged.farms.push(farm);
+    }
+    for (const [key, plan] of Object.entries(fresh.plans)) {
+      const id = Number(key);
+      if (!(id in merged.plans)) merged.plans[id] = plan;
+    }
+    // Keep the farm-id counter ahead of every present farm so newly-added seed
+    // farms can never collide with future user-created farms.
+    const maxFarmId = merged.farms.reduce((m, f) => Math.max(m, f.id), 0);
+    merged.counters.farm = Math.max(merged.counters.farm, maxFarmId + 1);
+    return merged;
   } catch {
-    return seedState();
+    return fresh;
   }
 }
 

@@ -54,6 +54,7 @@ const SLUG_TILES: Record<string, TileId> = {
   greenhouse: 'soil-tilled-dry',
   polytunnel: 'soil-tilled-dry',
   'cold-frame': 'soil-tilled-dry',
+  'grow-tent': 'soil-tilled-dry',
   shed: 'soil-tilled-dry',
   'compost-bin': 'soil-tilled-dry',
 };

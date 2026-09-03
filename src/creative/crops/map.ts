@@ -32,12 +32,13 @@ import {
   DILL_PAL, PARSLEY_PAL, SAGE_PAL, THYME_PAL, CHIVES_PAL,
 } from './herbs';
 import { makeBerryBush, makeAppleTree, BERRYBUSH_PAL, APPLETREE_PAL, BLUEBERRY_PAL } from './bushes';
+import { makeMushroom, MUSHROOM_PAL } from './mushrooms';
 
 export type ArchetypeId =
   | 'tomato' | 'leafy-head' | 'wheat' | 'corn' | 'root-carrot' | 'allium'
   | 'potato' | 'brassica' | 'greens-open' | 'cucurbit-vine' | 'legume-trellis'
   | 'bush-bean' | 'strawberry' | 'herb-clump' | 'herb-shrub' | 'berry-bush'
-  | 'apple-tree';
+  | 'apple-tree' | 'mushroom';
 
 export interface CropAssetMapping {
   archetype: ArchetypeId;
@@ -67,6 +68,7 @@ export const ARCHETYPE_DEFAULTS: Record<ArchetypeId, CropPalette> = {
   'herb-shrub': HERBSHRUB_PAL,
   'berry-bush': BERRYBUSH_PAL,
   'apple-tree': APPLETREE_PAL,
+  mushroom: MUSHROOM_PAL,
 };
 
 type BuildFn = (stage: number, pal: CropPalette, opts?: { variant?: 'feathery' | 'mat' | 'tubes' }) => THREE.Object3D;
@@ -89,6 +91,7 @@ const BUILDERS: Record<ArchetypeId, BuildFn> = {
   'herb-shrub': (s, p, o) => makeHerbShrub(s, p, o ?? {}),
   'berry-bush': (s, p) => makeBerryBush(s, p),
   'apple-tree': (s, p) => makeAppleTree(s, p),
+  mushroom: (s, p) => makeMushroom(s, p),
 };
 
 export const cropAssetMap: Record<string, CropAssetMapping> = {
@@ -151,6 +154,11 @@ export const cropAssetMap: Record<string, CropAssetMapping> = {
   // --- cover crops ------------------------------------------------------------
   'Crimson Clover': { archetype: 'greens-open', scale: 0.7, palette: { mature: 0x4f8a44, accent: 0xa93226, fruit: 0xc23b2c } },
   'Winter Rye': { archetype: 'wheat', palette: { young: 0x84b062, mature: 0x5c8450, fruit: 0xc9ab62 } },
+
+  // --- fungi -------------------------------------------------------------------
+  'Oyster Mushroom': { archetype: 'mushroom', palette: { fruit: 0xd9d2c0, unripe: 0xb8b2a0, mature: 0xd2cbb8, accent: 0xb6ab90 } },
+  'Button Mushroom': { archetype: 'mushroom', palette: { fruit: 0xede7da, unripe: 0xcfc6b4, mature: 0xe2dccd, accent: 0xd8a88c, stem: 0xe8e0d2 } },
+  'Shiitake': { archetype: 'mushroom', palette: { fruit: 0x8a5a33, unripe: 0x9c6b44, mature: 0x7a4f2c, dark: 0x543620, light: 0xb07a4a } },
 };
 
 /** Build the plant for a catalog crop name at a growth stage (null if unmapped). */

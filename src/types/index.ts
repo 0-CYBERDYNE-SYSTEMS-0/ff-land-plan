@@ -142,7 +142,7 @@ export interface Simulation {
   createdAt: string;
 }
 
-export type CropCategory = 'vegetable' | 'grain' | 'fruit' | 'herb' | 'cover_crop' | 'flower';
+export type CropCategory = 'vegetable' | 'grain' | 'fruit' | 'herb' | 'cover_crop' | 'flower' | 'fungus';
 
 export type FrostTolerance = 'tender' | 'half-hardy' | 'hardy';
 

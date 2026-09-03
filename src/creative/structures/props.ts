@@ -527,3 +527,48 @@ export function makeScarecrow(): THREE.Object3D {
   solid.push({ x: -4.6, y: 13.4, z: 0, s: 0.4, color: PALETTE.black });    // tail flick
   return solidMesh(solid);
 }
+
+// ---------------------------------------------------------------------------
+// Fruit tree — deciduous orchard tree: trunk, canopy, ripe fruit dots
+// ---------------------------------------------------------------------------
+
+export function makeFruitTree(): THREE.Object3D {
+  const rand = rng(4501);
+  const solid: Voxel[] = [];
+
+  // trunk + a couple of lower branches
+  for (let y = 0; y <= 8; y++)
+    solid.push({ x: 0, y, z: 0, s: 1.15, color: y % 3 === 0 ? PALETTE.woodDark : PALETTE.wood });
+  for (const [bx, bz, by] of [[1, 0, 6], [-1, 0, 5], [0, 1, 5], [0, -1, 6], [1, 1, 7], [-1, -1, 7]] as Array<[number, number, number]>)
+    solid.push({ x: bx, y: by, z: bz, s: 0.7, color: PALETTE.woodDark });
+
+  // canopy: rough sphere of leaves centered around y≈11
+  const canopyR = 4;
+  for (let x = -canopyR; x <= canopyR; x++)
+    for (let y = 8; y <= 8 + canopyR * 2; y++)
+      for (let z = -canopyR; z <= canopyR; z++) {
+        const dx = x, dy = y - 11, dz = z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > canopyR * canopyR + 1) continue;
+        let c: number = rand() < 0.5 ? PALETTE.leaf : PALETTE.leafDark;
+        if (d2 > (canopyR - 1) * (canopyR - 1)) c = mixColor(c, PALETTE.leafLight, 0.35);
+        solid.push({ x, y, z, color: c });
+      }
+
+  // ripe fruit dots scattered through the canopy
+  for (let i = 0; i < 8; i++) {
+    const a = rand() * Math.PI * 2;
+    const r = 1 + rand() * (canopyR - 1);
+    solid.push({
+      x: Math.round(Math.cos(a) * r),
+      y: 9 + Math.round(rand() * 4),
+      z: Math.round(Math.sin(a) * r),
+      s: 0.6, color: PALETTE.fruitRed,
+    });
+  }
+
+  // grass tuft at the base
+  solid.push({ x: 0, y: 0.5, z: 0, s: 0.4, color: PALETTE.grass });
+
+  return solidMesh(solid);
+}

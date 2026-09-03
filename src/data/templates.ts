@@ -2,8 +2,8 @@
 // no logic. `ground` values MUST be asset slugs that exist in `assetLibrary`
 // (src/data/assets.ts); `planting` values are crop NAMES resolved against the
 // loaded catalog at apply time (see TemplatesCard) so custom crops and future
-// catalog edits never invalidate this file. Layouts are sparse with realistic
-// 0.25 m-cell spacing; every design stays under ~60 painted cells.
+// catalog edits never invalidate this file. Layouts use realistic 0.25 m-cell
+// spacing; garden designs stay under ~60 cells, the field design is larger.
 
 export interface GardenTemplate {
   id: string;
@@ -13,6 +13,9 @@ export interface GardenTemplate {
   ground: Record<string, string>;
   /** "x,y" -> crop name exactly as spelled in the catalog. */
   planting: Record<string, string>;
+  /** "Crop name" -> days before today to backdate that crop's cells at apply
+   *  time, so a template opens with crops already at different growth stages. */
+  plantedAtDaysAgo?: Record<string, number>;
 }
 
 export const templates: GardenTemplate[] = [
@@ -96,6 +99,28 @@ export const templates: GardenTemplate[] = [
       '16,0': 'Tomato', '16,2': 'Pepper',
     },
   },
+  {
+    id: 'three-sisters-field',
+    name: 'Three Sisters Field',
+    description: 'A 6 m field of corn, pole beans and pumpkin — three crops growing together, ready to simulate.',
+    ground: {
+      ...bed('inground-bed', 0, 0, 23, 23),
+    },
+    planting: {
+      // Corn blocks (wind-pollination-friendly) in three bands.
+      ...block('Sweet Corn', 2, 2, 21, 3),
+      ...block('Sweet Corn', 2, 10, 21, 11),
+      ...block('Sweet Corn', 2, 18, 21, 19),
+      // Pole beans climbing beside each corn band.
+      ...row('Pole Bean', 2, 4, 21),
+      ...row('Pole Bean', 2, 12, 21),
+      ...row('Pole Bean', 2, 20, 21),
+      // Pumpkin ground cover between bands, spaced ~1 m apart.
+      '2,7': 'Pumpkin', '6,7': 'Pumpkin', '10,7': 'Pumpkin', '14,7': 'Pumpkin', '18,7': 'Pumpkin',
+      '2,15': 'Pumpkin', '6,15': 'Pumpkin', '10,15': 'Pumpkin', '14,15': 'Pumpkin', '18,15': 'Pumpkin',
+    },
+    plantedAtDaysAgo: { 'Sweet Corn': 40, 'Pole Bean': 30, 'Pumpkin': 15 },
+  },
 ];
 
 // --- key helpers (module-private; keep template literals terse) --------------
@@ -111,5 +136,13 @@ function bed(slug: string, x0: number, y0: number, x1: number, y1: number): Reco
 function row(cropName: string, x0: number, y: number, x1: number): Record<string, string> {
   const out: Record<string, string> = {};
   for (let x = x0; x <= x1; x++) out[`${x},${y}`] = cropName;
+  return out;
+}
+
+function block(cropName: string, x0: number, y0: number, x1: number, y1: number): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) out[`${x},${y}`] = cropName;
+  }
   return out;
 }

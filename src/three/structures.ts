@@ -26,11 +26,10 @@
  *    segments visually tile into continuous runs.
  *  - Instances sit at y=0 base. Linear items get a deterministic hash-based
  *    0/90/180/270° rotation variety; everything else stays axis-aligned.
- *  - `pond` and `fruit-tree` are skipped here entirely: the pond tile
- *    (src/creative/terrain/water.ts, rendered by src/three/ground.ts) already
- *    draws depth-tinted water, mud banks and cattail reeds, so the old
- *    procedural rock-ring fallback was removed — it only cluttered the
- *    shoreline. Fruit trees are rendered by the crop system.
+ *  - `pond` is skipped here entirely: the pond tile (src/creative/terrain/water.ts,
+ *    rendered by src/three/ground.ts) already draws depth-tinted water, mud banks
+ *    and cattail reeds, so the old procedural rock-ring fallback was removed — it
+ *    only cluttered the shoreline. `fruit-tree` renders a dedicated orchard tree.
  */
 import * as THREE from 'three';
 import type { PlanState } from '@/types';
@@ -82,6 +81,8 @@ const SLUG_MAP: Record<string, SlugMapping> = {
   'ibc-tote':      { entryId: 'ibc-tote' },
   'water-tap':     { entryId: 'water-tap' },
   beehive:         { entryId: 'beehive' },
+  'grow-tent':     { entryId: 'grow-tent' },
+  'fruit-tree':    { entryId: 'fruit-tree' },
   // Linear — connective per-cell placement so runs read continuously.
   fence:           { entryId: 'fence-post-rail', targetSizeM: 0.55, linear: true },
   'picket-fence':  { entryId: 'fence-picket', targetSizeM: 0.55, linear: true },

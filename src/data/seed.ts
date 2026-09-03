@@ -35,6 +35,46 @@ export const seedFarms: Farm[] = [
     soilType: 'clay',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 200).toISOString(),
   },
+  {
+    id: 3,
+    name: 'Backyard Homestead',
+    description: 'Suburban backyard: raised beds, greenhouse, coop and an orchard',
+    lat: 45.5231,
+    lng: -122.6765,
+    areHa: 0.025,
+    soilType: 'loam',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
+  },
+  {
+    id: 4,
+    name: 'Market Field',
+    description: 'Row-crop field with polytunnels, orchard and grain blocks',
+    lat: 45.5101,
+    lng: -122.6901,
+    areHa: 0.096,
+    soilType: 'clay',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 120).toISOString(),
+  },
+  {
+    id: 5,
+    name: 'Indoor Grow Tent Op',
+    description: 'Stacked grow tents under LEDs — herbs and microgreens year-round',
+    lat: 45.5301,
+    lng: -122.6601,
+    areHa: 0.014,
+    soilType: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 15).toISOString(),
+  },
+  {
+    id: 6,
+    name: 'Mushroom Farm',
+    description: 'Commercial fruiting rooms — oyster, button and shiitake on blocks',
+    lat: 45.5401,
+    lng: -122.6401,
+    areHa: 0.019,
+    soilType: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 45).toISOString(),
+  },
 ];
 
 // --- Plot plans (designer showcase) -----------------------------------------
@@ -327,55 +367,315 @@ function buildSouthWheatPlan(): PlanState {
   // --- Cover crop: crimson clover (col 80-100, row 74-86) ---
   fillCrop(plan, 80, 74, 21, 13, 46); // crimson clover (nitrogen fixer)
 
-  // --- plantedAt dates ---
+  // --- plantedAt dates (keyed by CELL "x,y", matching the renderer + editor) ---
+  // plants.ts and usePlanEditor read/write `plantedAt` by cell key, so stamp
+  // every planted cell from its crop's date rather than keying by crop id.
   const now = Date.now();
   const dayMs = 1000 * 60 * 60 * 24;
+  const daysAgo = (d: number) => new Date(now - dayMs * d).toISOString();
 
-  // Spring crops (brassicas, roots, peas, lettuce, spinach) - ~60 days ago
-  const springDate = new Date(now - dayMs * 60).toISOString();
-  [20, 19, 18, 21, 9, 10, 12, 13, 14, 29, 2, 15].forEach((id) => {
-    plan.plantedAt![id] = springDate;
+  const plantedAtByCrop: Record<number, string> = {
+    // Spring crops (brassicas, roots, peas, lettuce, spinach) — ~60 days ago.
+    20: daysAgo(60), 19: daysAgo(60), 18: daysAgo(60), 21: daysAgo(60),
+    9: daysAgo(60), 10: daysAgo(60), 12: daysAgo(60), 13: daysAgo(60), 14: daysAgo(60),
+    29: daysAgo(60), 2: daysAgo(60), 15: daysAgo(60),
+    // Summer crops — ~30 days ago (melon included).
+    1: daysAgo(30), 6: daysAgo(30), 7: daysAgo(30), 22: daysAgo(30),
+    23: daysAgo(30), 27: daysAgo(30), 25: daysAgo(30),
+    // Herbs — ~45 days ago.
+    5: daysAgo(45), 33: daysAgo(45), 36: daysAgo(45), 37: daysAgo(45),
+    40: daysAgo(45), 35: daysAgo(45),
+    // Flowers — ~40 days ago.
+    42: daysAgo(40), 43: daysAgo(40), 44: daysAgo(40), 45: daysAgo(40),
+    // Perennials & field crops.
+    30: daysAgo(90), // strawberry
+    3: daysAgo(20),  // wheat
+    46: daysAgo(10), // crimson clover
+    4: daysAgo(365), // apple tree
+  };
+
+  for (const [key, cropId] of Object.entries(plan.planting)) {
+    const date = plantedAtByCrop[cropId];
+    if (date) plan.plantedAt![key] = date;
+  }
+
+  return plan;
+}
+
+// --- Demo farms 3–6 (backyard, market field, grow tent, mushroom) -----------
+
+const DAY_MS = 86_400_000;
+
+/** Stamp every planted cell with a per-crop "days ago" date so the growth
+ *  simulation opens mid-season and animates day-by-day. */
+function stampPlantedAt(plan: PlanState, daysAgoByCrop: Record<number, number>, fallbackDays = 20): void {
+  const now = Date.now();
+  const plantedAt: Record<string, string> = {};
+  for (const [key, cropId] of Object.entries(plan.planting)) {
+    const days = daysAgoByCrop[cropId] ?? fallbackDays;
+    plantedAt[key] = new Date(now - days * DAY_MS).toISOString();
+  }
+  plan.plantedAt = plantedAt;
+}
+
+// Crop ids used below (from data/crops.ts).
+const TOMATO = 1, LETTUCE = 2, WHEAT = 3, BASIL = 5, PEPPER = 6, CARROT = 9,
+  BEET = 10, RADISH = 11, ONION = 12, GARLIC = 13, SPINACH = 15, ARUGULA = 16,
+  CUCUMBER = 22, ZUCCHINI = 23, MELON = 25, CORN = 26, BUSH_BEAN = 27, POLE_BEAN = 28,
+  STRAWBERRY = 30, BLUEBERRY = 32, PARSLEY = 33, CILANTRO = 34, DILL = 35, THYME = 36,
+  CHIVES = 40, MINT = 41, MARIGOLD = 42, NASTURTIUM = 43, SUNFLOWER = 44,
+  BORAGE = 45, CRIMSON_CLOVER = 46, WINTER_RYE = 47,
+  OYSTER = 48, BUTTON = 49, SHIITAKE = 50;
+
+function buildBackyardPlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 3, widthM: 18, heightM: 14, cellM: 0.25, allowOutsideBeds: false,
+    planting: {}, ground: {}, updatedAt: new Date().toISOString(),
+  };
+
+  // Perimeter picket fence + front gate.
+  fillGround(plan, 0, 0, 72, 1, 'picket-fence');
+  fillGround(plan, 0, 55, 72, 1, 'picket-fence');
+  fillGround(plan, 0, 1, 1, 54, 'picket-fence');
+  fillGround(plan, 71, 1, 1, 54, 'picket-fence');
+  fillGround(plan, 35, 55, 2, 1, 'gate');
+
+  // Central gravel path from the gate up through the yard.
+  fillGround(plan, 35, 1, 2, 54, 'path-gravel');
+
+  // Left of path: shed + water, then greenhouse + cold frame.
+  fillGround(plan, 4, 4, 8, 12, 'shed');
+  fillGround(plan, 13, 4, 3, 3, 'rain-barrel');
+  fillGround(plan, 16, 4, 1, 1, 'water-tap');
+  fillGround(plan, 4, 20, 10, 16, 'greenhouse');
+  fillGround(plan, 15, 20, 3, 5, 'cold-frame');
+
+  // Right of path: compost, three raised beds + trellis, in-ground bed.
+  fillGround(plan, 58, 4, 4, 12, 'compost-bin');
+  fillGround(plan, 40, 4, 5, 10, 'raised-bed');
+  fillGround(plan, 46, 4, 5, 10, 'raised-bed');
+  fillGround(plan, 52, 4, 5, 10, 'raised-bed');
+  fillGround(plan, 40, 3, 17, 1, 'trellis');
+  fillGround(plan, 58, 20, 12, 12, 'inground-bed');
+
+  // Bottom: pond + beehive, chicken coop, herb bed, specimen fruit tree.
+  fillGround(plan, 40, 36, 8, 6, 'pond');
+  fillGround(plan, 49, 37, 2, 2, 'beehive');
+  fillGround(plan, 58, 38, 8, 16, 'chicken-coop');
+  fillGround(plan, 20, 4, 12, 10, 'inground-bed'); // herb bed
+  fillGround(plan, 6, 44, 4, 4, 'fruit-tree');      // specimen tree
+
+  // --- planting ---
+  // Greenhouse: tender crops.
+  fillCrop(plan, 5, 21, 4, 6, TOMATO);
+  fillCrop(plan, 9, 21, 4, 6, PEPPER);
+  fillCrop(plan, 5, 27, 4, 4, BASIL);
+  fillCrop(plan, 9, 27, 4, 4, SPINACH);
+  // Cold frame: early lettuce.
+  fillCrop(plan, 15, 21, 2, 4, LETTUCE);
+  // Herb bed (left of path).
+  fillCrop(plan, 21, 5, 3, 4, BASIL);
+  fillCrop(plan, 24, 5, 3, 4, PARSLEY);
+  fillCrop(plan, 27, 5, 3, 4, CHIVES);
+  fillCrop(plan, 21, 9, 3, 4, DILL);
+  fillCrop(plan, 24, 9, 3, 4, MINT);
+  fillCrop(plan, 27, 9, 3, 4, THYME);
+  // Raised bed 1: tomato guild.
+  fillCrop(plan, 40, 5, 2, 4, TOMATO);
+  fillCrop(plan, 42, 5, 2, 4, BASIL);
+  fillCrop(plan, 44, 5, 1, 4, MARIGOLD);
+  // Raised bed 2: salad.
+  fillCrop(plan, 46, 5, 2, 4, LETTUCE);
+  fillCrop(plan, 48, 5, 2, 4, CARROT);
+  // Raised bed 3: legumes + roots.
+  fillCrop(plan, 52, 5, 2, 4, BUSH_BEAN);
+  fillCrop(plan, 54, 5, 2, 4, RADISH);
+  // Trellis: pole beans climbing.
+  fillCrop(plan, 40, 3, 17, 1, POLE_BEAN);
+  // In-ground bed: roots + alliums.
+  fillCrop(plan, 59, 21, 5, 4, CARROT);
+  fillCrop(plan, 64, 21, 5, 4, BEET);
+  fillCrop(plan, 59, 26, 5, 4, ONION);
+  fillCrop(plan, 64, 26, 5, 4, GARLIC);
+  // Pollinator flowers near the pond + beehive.
+  fillCrop(plan, 36, 32, 2, 2, MARIGOLD);
+  fillCrop(plan, 36, 44, 2, 2, BORAGE);
+  fillCrop(plan, 44, 43, 2, 2, NASTURTIUM);
+  // Berry patch near the chicken coop.
+  fillCrop(plan, 52, 44, 2, 2, STRAWBERRY);
+  fillCrop(plan, 55, 44, 2, 2, BLUEBERRY);
+
+  stampPlantedAt(plan, {
+    [TOMATO]: 60, [PEPPER]: 55, [BASIL]: 40, [SPINACH]: 30, [LETTUCE]: 25,
+    [PARSLEY]: 45, [CHIVES]: 45, [DILL]: 40, [MINT]: 40, [THYME]: 50,
+    [CARROT]: 55, [BEET]: 40, [RADISH]: 20, [ONION]: 70, [GARLIC]: 90,
+    [BUSH_BEAN]: 40, [POLE_BEAN]: 45, [MARIGOLD]: 35, [BORAGE]: 35,
+    [NASTURTIUM]: 40, [STRAWBERRY]: 60, [BLUEBERRY]: 200,
   });
+  return plan;
+}
 
-  // Summer crops (tomato, pepper, eggplant, cucumber, zucchini, bush bean) - ~30 days ago
-  const summerDate = new Date(now - dayMs * 30).toISOString();
-  [1, 6, 7, 22, 23, 27].forEach((id) => {
-    plan.plantedAt![id] = summerDate;
+function buildMarketFieldPlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 4, widthM: 40, heightM: 24, cellM: 0.25, allowOutsideBeds: false,
+    planting: {}, ground: {}, updatedAt: new Date().toISOString(),
+  };
+
+  // Perimeter fence + central crossing paths.
+  fillGround(plan, 0, 0, 160, 1, 'fence');
+  fillGround(plan, 0, 95, 160, 1, 'fence');
+  fillGround(plan, 0, 1, 1, 94, 'fence');
+  fillGround(plan, 159, 1, 1, 94, 'fence');
+  fillGround(plan, 2, 46, 156, 4, 'path-gravel');
+  fillGround(plan, 78, 1, 4, 94, 'path-gravel');
+
+  // Barn + storage cluster (top-right corner, kept clear of crops).
+  fillGround(plan, 130, 2, 18, 12, 'barn');
+  fillGround(plan, 150, 4, 4, 2, 'hay-bale');
+  fillGround(plan, 150, 7, 4, 2, 'hay-bale');
+  fillGround(plan, 152, 11, 3, 3, 'crate-stack');
+
+  // Field hand.
+  fillGround(plan, 80, 6, 2, 2, 'scarecrow');
+
+  // Protected growing + water (bottom-left).
+  fillGround(plan, 6, 78, 12, 16, 'polytunnel');
+  fillGround(plan, 20, 80, 10, 12, 'greenhouse');
+  fillGround(plan, 32, 82, 5, 5, 'ibc-tote');
+  fillGround(plan, 38, 82, 1, 1, 'water-tap');
+
+  // Irrigation runs across the field.
+  fillGround(plan, 2, 30, 74, 1, 'irrigation-line');
+  fillGround(plan, 82, 30, 74, 1, 'irrigation-line');
+  fillGround(plan, 2, 60, 74, 1, 'irrigation-line');
+  fillGround(plan, 82, 60, 74, 1, 'irrigation-line');
+
+  // Orchard (bottom-centre) — new fruit-tree structure.
+  fillGround(plan, 44, 88, 4, 4, 'fruit-tree');
+  fillGround(plan, 52, 88, 4, 4, 'fruit-tree');
+  fillGround(plan, 60, 88, 4, 4, 'fruit-tree');
+  fillGround(plan, 68, 88, 4, 4, 'fruit-tree');
+
+  // --- planting ---
+  // Corn block (left of the vertical path).
+  fillCrop(plan, 4, 6, 70, 22, CORN);
+  // Wheat block (right of the vertical path, clear of the barn).
+  fillCrop(plan, 82, 6, 46, 22, WHEAT);
+  // Cover crops between the crop blocks and the central path.
+  fillCrop(plan, 4, 32, 70, 10, CRIMSON_CLOVER);
+  fillCrop(plan, 82, 32, 46, 10, WINTER_RYE);
+  // Sunflower pollinator border.
+  fillCrop(plan, 4, 42, 70, 2, SUNFLOWER);
+  fillCrop(plan, 82, 42, 46, 2, SUNFLOWER);
+  // Polytunnel: warm-season cucurbits.
+  fillCrop(plan, 7, 79, 4, 6, ZUCCHINI);
+  fillCrop(plan, 11, 79, 4, 6, MELON);
+  fillCrop(plan, 7, 86, 4, 6, CUCUMBER);
+  // Greenhouse: tender crops.
+  fillCrop(plan, 21, 81, 4, 5, TOMATO);
+  fillCrop(plan, 25, 81, 3, 5, PEPPER);
+  fillCrop(plan, 21, 87, 3, 4, BASIL);
+
+  stampPlantedAt(plan, {
+    [CORN]: 45, [WHEAT]: 90, [CRIMSON_CLOVER]: 55, [WINTER_RYE]: 80,
+    [SUNFLOWER]: 50, [ZUCCHINI]: 35, [MELON]: 45, [CUCUMBER]: 40,
+    [TOMATO]: 60, [PEPPER]: 55, [BASIL]: 40,
   });
+  return plan;
+}
 
-  // Herbs - ~45 days ago
-  const herbDate = new Date(now - dayMs * 45).toISOString();
-  [5, 33, 36, 37, 40, 35].forEach((id) => {
-    plan.plantedAt![id] = herbDate;
+function buildGrowTentPlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 5, widthM: 14, heightM: 10, cellM: 0.25, allowOutsideBeds: false,
+    planting: {}, ground: {}, updatedAt: new Date().toISOString(),
+  };
+
+  // Central walkway.
+  fillGround(plan, 26, 2, 4, 36, 'path-gravel');
+
+  // Two rows of grow tents.
+  fillGround(plan, 4, 4, 6, 6, 'grow-tent');
+  fillGround(plan, 12, 4, 6, 6, 'grow-tent');
+  fillGround(plan, 20, 4, 6, 6, 'grow-tent');
+  fillGround(plan, 4, 16, 6, 6, 'grow-tent');
+  fillGround(plan, 12, 16, 6, 6, 'grow-tent');
+  fillGround(plan, 20, 16, 6, 6, 'grow-tent');
+
+  // A poly veg room + water/utility wall.
+  fillGround(plan, 4, 28, 12, 8, 'polytunnel');
+  fillGround(plan, 44, 4, 5, 5, 'ibc-tote');
+  fillGround(plan, 50, 4, 1, 1, 'water-tap');
+  fillGround(plan, 44, 12, 3, 3, 'crate-stack');
+  fillGround(plan, 48, 18, 1, 1, 'signpost');
+  fillGround(plan, 28, 6, 2, 1, 'irrigation-line');
+  fillGround(plan, 28, 18, 2, 1, 'irrigation-line');
+
+  // --- planting (herbs + microgreens inside the tents) ---
+  fillCrop(plan, 5, 5, 4, 4, LETTUCE);
+  fillCrop(plan, 13, 5, 4, 4, BASIL);
+  fillCrop(plan, 21, 5, 4, 4, ARUGULA);
+  fillCrop(plan, 5, 17, 4, 4, SPINACH);
+  fillCrop(plan, 13, 17, 4, 4, CILANTRO);
+  fillCrop(plan, 21, 17, 4, 4, RADISH);
+  // Poly room: tomatoes + peppers.
+  fillCrop(plan, 5, 29, 4, 5, PEPPER);
+  fillCrop(plan, 9, 29, 4, 5, TOMATO);
+
+  stampPlantedAt(plan, {
+    [LETTUCE]: 25, [BASIL]: 35, [ARUGULA]: 22, [SPINACH]: 28, [CILANTRO]: 30,
+    [RADISH]: 14, [PEPPER]: 45, [TOMATO]: 55,
   });
+  return plan;
+}
 
-  // Flowers - ~40 days ago
-  const flowerDate = new Date(now - dayMs * 40).toISOString();
-  [42, 43, 44, 45].forEach((id) => {
-    plan.plantedAt![id] = flowerDate;
+function buildMushroomPlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 6, widthM: 16, heightM: 12, cellM: 0.25, allowOutsideBeds: false,
+    planting: {}, ground: {}, updatedAt: new Date().toISOString(),
+  };
+
+  // Four fruiting rooms + aisles between them.
+  fillGround(plan, 4, 4, 10, 16, 'greenhouse');
+  fillGround(plan, 18, 4, 12, 16, 'polytunnel');
+  fillGround(plan, 34, 4, 10, 16, 'greenhouse');
+  fillGround(plan, 48, 4, 12, 16, 'polytunnel');
+  fillGround(plan, 14, 4, 4, 16, 'path-gravel');
+  fillGround(plan, 30, 4, 4, 16, 'path-gravel');
+  fillGround(plan, 44, 4, 4, 16, 'path-gravel');
+
+  // Packing / substrate / utility zone along the bottom.
+  fillGround(plan, 2, 26, 8, 12, 'shed');
+  fillGround(plan, 12, 26, 4, 12, 'compost-bin');
+  fillGround(plan, 18, 28, 3, 3, 'crate-stack');
+  fillGround(plan, 24, 28, 3, 3, 'crate-stack');
+  fillGround(plan, 30, 26, 5, 5, 'ibc-tote');
+  fillGround(plan, 36, 26, 1, 1, 'water-tap');
+  fillGround(plan, 40, 40, 1, 1, 'signpost');
+  fillGround(plan, 52, 40, 1, 1, 'signpost');
+
+  // --- planting: mushroom blocks inside each fruiting room ---
+  fillCrop(plan, 5, 5, 8, 6, OYSTER);
+  fillCrop(plan, 5, 12, 8, 6, OYSTER);
+  fillCrop(plan, 19, 5, 10, 6, BUTTON);
+  fillCrop(plan, 19, 12, 10, 6, BUTTON);
+  fillCrop(plan, 35, 5, 8, 6, SHIITAKE);
+  fillCrop(plan, 35, 12, 8, 6, SHIITAKE);
+  fillCrop(plan, 49, 5, 10, 6, OYSTER);
+  fillCrop(plan, 49, 12, 10, 6, BUTTON);
+
+  stampPlantedAt(plan, {
+    [OYSTER]: 18, [BUTTON]: 22, [SHIITAKE]: 28,
   });
-
-  // Strawberries - perennial, ~90 days ago
-  plan.plantedAt![30] = new Date(now - dayMs * 90).toISOString();
-
-  // Wheat - ~20 days ago (spring wheat)
-  plan.plantedAt![3] = new Date(now - dayMs * 20).toISOString();
-
-  // Cover crop (crimson clover) - ~10 days ago
-  plan.plantedAt![46] = new Date(now - dayMs * 10).toISOString();
-
-  // Apple trees - perennial, ~365 days ago
-  plan.plantedAt![4] = new Date(now - dayMs * 365).toISOString();
-
-  // Melon (in polytunnel) - ~30 days ago (summer crop)
-  plan.plantedAt![25] = summerDate;
-
   return plan;
 }
 
 export const seedPlans: Record<number, PlanState> = {
   1: buildNorthMeadowPlan(),
   2: buildSouthWheatPlan(),
+  3: buildBackyardPlan(),
+  4: buildMarketFieldPlan(),
+  5: buildGrowTentPlan(),
+  6: buildMushroomPlan(),
 };
 
 // --- Cells (legacy voxel grid; Monitoring still reads these) --------------

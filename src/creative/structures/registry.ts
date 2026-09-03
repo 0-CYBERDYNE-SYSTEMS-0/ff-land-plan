@@ -2,6 +2,7 @@ import type { AssetEntry } from '@/creative/registry-types';
 import { makeBarn } from './barn';
 import {
   makeShed, makeGreenhouse, makePolytunnel, makeColdFrame, makeChickenCoop,
+  makeGrowTent,
 } from './buildings';
 import {
   makeFencePostRail, makeFencePicket, makeGate, makeTrellis,
@@ -9,6 +10,7 @@ import {
 import {
   makeCompostBin, makeRainBarrel, makeIbcTote, makeWaterTap, makeIrrigationLine,
   makeBeehive, makeHayBale, makeCrateStack, makeSignpost, makeScarecrow,
+  makeFruitTree,
 } from './props';
 
 /**
@@ -37,4 +39,6 @@ export const entries: AssetEntry[] = [
   { id: 'crate-stack', label: 'Harvest Crate Stack', make: makeCrateStack },
   { id: 'signpost', label: 'Plot Signpost', make: makeSignpost },
   { id: 'scarecrow', label: 'Scarecrow + Crow', make: makeScarecrow },
+  { id: 'grow-tent', label: 'Indoor Grow Tent', make: makeGrowTent },
+  { id: 'fruit-tree', label: 'Fruit Tree', make: makeFruitTree },
 ];

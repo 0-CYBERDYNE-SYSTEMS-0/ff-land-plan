@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 import type { PlanEditor } from '@/components/designer/usePlanEditor';
 import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
-import type { Weather, WeatherCurrent } from '@/types';
+import { SCENARIOS, growthProgress, scenarioGrowthMod, stageForScale } from '@/lib/growth';
+import type { ScenarioType, Weather, WeatherCurrent } from '@/types';
 import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '@/three/animals';
 import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
 import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
@@ -100,6 +101,9 @@ export default function World3D({ editor }: World3DProps) {
     return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.4;
   });
   const [autoTime, setAutoTime] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [simSpeed, setSimSpeed] = useState<1 | 7 | 30>(7);
+  const [scenario, setScenario] = useState<ScenarioType>('baseline');
   const timeRef = useRef(timeOfDay);
   const autoTimeRef = useRef(false);
   const audioOnRef = useRef(false);
@@ -117,6 +121,8 @@ export default function World3D({ editor }: World3DProps) {
   cropByIdRef.current = editor.cropById;
   const scrubDateRef = useRef(scrubDate);
   scrubDateRef.current = scrubDate;
+  const scenarioRef = useRef<ScenarioType>(scenario);
+  scenarioRef.current = scenario;
   showDebugRef.current = showDebug;
 
   const achievements = useRef(createAchievementSystem());
@@ -201,7 +207,7 @@ export default function World3D({ editor }: World3DProps) {
 
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
-    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current));
+    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current);
     waterPlanesRef.current = buildWaterPlanes(plan, engine.scene);
 
     // Animals
@@ -405,7 +411,7 @@ export default function World3D({ editor }: World3DProps) {
 
     // Structures & plants
     structureBatchesRef.current = updateStructures(structureBatchesRef.current, plan, engine.scene);
-    plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDate));
+    plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current);
 
     // Water planes
     disposeWaterPlanes(waterPlanesRef.current);
@@ -475,7 +481,23 @@ export default function World3D({ editor }: World3DProps) {
       if (slug === 'chicken-coop') achievements.current.check('chickens');
       if (slug === 'greenhouse') achievements.current.check('greenhouse');
     }
-  }, [editor.planVersion, editor.cropById, scrubDate, showHistory]);
+  }, [editor.planVersion, editor.cropById, showHistory]);
+
+  // Growth-only update: advancing the sim date (or switching scenario) must
+  // NOT rebuild ground/structures/animals — only the plant stages change.
+  useEffect(() => {
+    const engine = engineRef.current;
+    const plan = editor.planRef.current;
+    if (!engine || !plan) return;
+    plantBatchesRef.current = updatePlants(
+      plantBatchesRef.current,
+      plan,
+      editor.cropById,
+      engine.scene,
+      new Date(scrubDate),
+      scenario,
+    );
+  }, [scrubDate, scenario, editor.cropById]);
 
   // Check rain/snow achievement
   useEffect(() => {
@@ -501,6 +523,61 @@ export default function World3D({ editor }: World3DProps) {
   // Keep refs in sync
   useEffect(() => { autoTimeRef.current = autoTime; }, [autoTime]);
   useEffect(() => { audioOnRef.current = audioOn; }, [audioOn]);
+
+  // Simulate playback: advance the calendar day-by-day while playing.
+  useEffect(() => {
+    if (!playing) return;
+    const daysPerTick = Math.max(1, Math.round(simSpeed * 0.5));
+    const id = window.setInterval(() => {
+      setScrubDate((prev) => {
+        const next = new Date(prev);
+        next.setDate(next.getDate() + daysPerTick);
+        return next.toISOString().slice(0, 10);
+      });
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [playing, simSpeed]);
+
+  // Earliest planting date in the plan, for the "Day N" season readout.
+  const earliestPlantedAt = useMemo(() => {
+    const plan = editor.planRef.current;
+    if (!plan?.plantedAt) return null;
+    const dates = Object.values(plan.plantedAt)
+      .map((d) => Date.parse(d))
+      .filter((n) => Number.isFinite(n));
+    if (dates.length === 0) return null;
+    return new Date(Math.min(...dates));
+  }, [editor.planVersion]);
+
+  const seasonDay = useMemo(() => {
+    if (!earliestPlantedAt) return null;
+    return Math.max(0, Math.floor((new Date(scrubDate).getTime() - earliestPlantedAt.getTime()) / 86_400_000));
+  }, [earliestPlantedAt, scrubDate]);
+
+  // Per-crop growth stage/progress for the HUD.
+  const cropProgress = useMemo(() => {
+    const plan = editor.planRef.current;
+    if (!plan) return [];
+    const date = new Date(scrubDate);
+    const rows: { id: number; name: string; stage: number; pct: number; stress: number }[] = [];
+    const seen = new Set<number>();
+    for (const [key, cropId] of Object.entries(plan.planting)) {
+      if (seen.has(cropId)) continue;
+      seen.add(cropId);
+      const crop = editor.cropById.get(cropId);
+      if (!crop) continue;
+      const mod = scenarioGrowthMod(crop, scenario);
+      const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
+      rows.push({
+        id: cropId,
+        name: crop.name,
+        stage: stageForScale(prog),
+        pct: Math.round(prog * 100),
+        stress: mod.stress,
+      });
+    }
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  }, [editor.cropById, editor.planVersion, scenario, scrubDate]);
 
   // Update weather FX + audio params in the rAF loop already handles audio
   const lastAchievement = achievements.current.unlocked[achievements.current.unlocked.length - 1];
@@ -561,6 +638,52 @@ export default function World3D({ editor }: World3DProps) {
               {autoTime ? 'Auto' : 'Manual'}
             </button>
           </label>
+        </div>
+
+        {/* Simulate: play a growing season with an optional stress scenario */}
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-md bg-background/90 px-3 py-2 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setPlaying((p) => !p)}
+            className={`rounded px-2 py-1 text-xs font-medium ${playing ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+          >
+            {playing ? '⏸ Pause' : '▶ Simulate'}
+          </button>
+          <select
+            value={simSpeed}
+            onChange={(e) => setSimSpeed(Number(e.target.value) as 1 | 7 | 30)}
+            className="rounded border border-border bg-background px-1.5 py-1 text-xs"
+            title="Simulation speed"
+          >
+            <option value={1}>1×/day</option>
+            <option value={7}>1×/week</option>
+            <option value={30}>1×/month</option>
+          </select>
+          <select
+            value={scenario}
+            onChange={(e) => setScenario(e.target.value as ScenarioType)}
+            className="rounded border border-border bg-background px-1.5 py-1 text-xs"
+            title="Stress scenario"
+          >
+            {(Object.keys(SCENARIOS) as ScenarioType[]).map((s) => (
+              <option key={s} value={s}>{SCENARIOS[s].label}</option>
+            ))}
+          </select>
+          {seasonDay !== null && (
+            <span className="text-xs text-muted-foreground">Day {Math.min(seasonDay, 365)}</span>
+          )}
+          <div className="flex max-h-24 flex-col gap-0.5 overflow-y-auto border-l border-border pl-2" title="Per-crop growth stage at the scrubbed date (scroll for more)">
+            {cropProgress.map((r) => (
+              <div key={r.id} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span className="w-20 truncate">{r.name}</span>
+                <span className="tracking-tighter text-foreground">
+                  {'●'.repeat(r.stage)}{'○'.repeat(5 - r.stage)}
+                </span>
+                <span>{r.pct}%</span>
+                {r.stress > 0.2 && <span className="text-amber-500">stress</span>}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Reset camera — escapes geometry after a bad zoom/orbit */}

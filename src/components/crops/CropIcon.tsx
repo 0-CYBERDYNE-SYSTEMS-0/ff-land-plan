@@ -14,6 +14,7 @@ const iconMap = {
   herb: Flower2,
   cover_crop: Sprout,
   flower: Flower,
+  fungus: Sprout,
 } satisfies Record<CropCategory, React.ComponentType<{ className?: string; style?: React.CSSProperties }>>;
 
 export function CropIcon({ category, className, style }: CropIconProps) {

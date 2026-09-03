@@ -73,7 +73,8 @@ export function TemplatesCard({ editor }: { editor: PlanEditor }) {
         continue;
       }
       planting[key] = id;
-      plantedAt[key] = plantedAtIso;
+      const daysAgo = tpl.plantedAtDaysAgo?.[cropName] ?? 0;
+      plantedAt[key] = daysAgo > 0 ? new Date(Date.now() - daysAgo * 86_400_000).toISOString() : plantedAtIso;
     }
     const next: PlanState = {
       ...plan,

@@ -14,6 +14,7 @@ import { makeRootCarrot, makeAllium, makePotato } from './roots';
 import { makeCucurbit, makeLegumeTrellis, makeBushBean, makeStrawberry } from './vines';
 import { makeHerbClump, makeHerbShrub } from './herbs';
 import { makeBerryBush, makeAppleTree } from './bushes';
+import { makeMushroom } from './mushrooms';
 
 export interface ArchDef {
   id: string;
@@ -39,6 +40,7 @@ export const ARCHETYPES: ArchDef[] = [
   { id: 'herb-shrub', name: 'Herb Shrub', build: (s) => makeHerbShrub(s) },
   { id: 'berry-bush', name: 'Berry Bush', build: (s) => makeBerryBush(s) },
   { id: 'apple-tree', name: 'Apple Tree', build: (s) => makeAppleTree(s) },
+  { id: 'mushroom', name: 'Mushroom', build: (s) => makeMushroom(s) },
 ];
 
 /** Canonical exhibit: one tomato through its whole life, spaced along X. */
