@@ -14,7 +14,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { PlanState } from '@/types';
+import type { PlanState, PlanSurface } from '@/types';
 import {
   makeGrass01, makeGrass02, makeGrass03, makeGrassFlower,
   makeSoilTilledDry,
@@ -22,6 +22,7 @@ import {
 } from '@/creative/terrain/tiles';
 import { makeBedRaisedCutaway, makeBedInground } from '@/creative/terrain/beds';
 import { makePondCenterEntry } from '@/creative/terrain/water';
+import { makeFloorMylar, makeFloorConcrete, makeFloorGreenhouse } from '@/creative/terrain/floors';
 
 export interface GroundBatch {
   mesh: THREE.InstancedMesh;
@@ -39,9 +40,18 @@ type TileId =
   | 'soil-tilled-dry'
   | 'path-gravel' | 'path-woodchip' | 'path-stone'
   | 'bed-raised' | 'bed-inground'
-  | 'pond';
+  | 'pond'
+  | 'floor-mylar' | 'floor-concrete' | 'floor-greenhouse';
 
 const GRASS_VARIANTS: TileId[] = ['grass-01', 'grass-02', 'grass-03'];
+
+/** Default underlay tile per plan surface — enclosed canvases never show grass. */
+const SURFACE_FLOOR: Record<PlanSurface, TileId | null> = {
+  outdoor: null,
+  greenhouse: 'floor-greenhouse',
+  tent: 'floor-mylar',
+  indoor: 'floor-concrete',
+};
 
 const SLUG_TILES: Record<string, TileId> = {
   'raised-bed': 'bed-raised',
@@ -69,8 +79,11 @@ function hash2(x: number, z: number): number {
   return ((h ^ (h >>> 16)) >>> 0);
 }
 
-function resolveTileId(slug: string | null, x: number, z: number): TileId {
+function resolveTileId(slug: string | null, x: number, z: number, surface: PlanSurface = 'outdoor'): TileId {
+  const floor = SURFACE_FLOOR[surface];
   if (slug === null || slug === undefined) {
+    // Enclosed surfaces tile their own floor; outdoors it's grass.
+    if (floor) return floor;
     // default grass — deterministic variant per cell, occasional flower patch
     const h = hash2(x, z);
     if (h % 19 === 0) return 'grass-flower';
@@ -78,16 +91,14 @@ function resolveTileId(slug: string | null, x: number, z: number): TileId {
   }
   const mapped = SLUG_TILES[slug];
   if (mapped) return mapped;
-  if (slug === 'grass') {
+  if (slug === 'grass' && !floor) {
     const h = hash2(x, z);
     if (h % 19 === 0) return 'grass-flower';
     return GRASS_VARIANTS[h % GRASS_VARIANTS.length] ?? 'grass-01';
   }
-  // any other slug (fence, gate, trellis, fruit-tree, beehive, chicken-coop,
-  // rain-barrel, ibc-tote, water-tap, irrigation-line, …): grass underlay;
-  // Lane C draws the structure on top.
-  const h = hash2(x, z);
-  return GRASS_VARIANTS[h % GRASS_VARIANTS.length] ?? 'grass-01';
+  // Any other unmapped slug: enclosed surfaces keep their floor underlay;
+  // outdoors it's grass and Lane C draws the structure on top.
+  return floor ?? (GRASS_VARIANTS[hash2(x, z) % GRASS_VARIANTS.length] ?? 'grass-01');
 }
 
 // --- template cache -----------------------------------------------------------
@@ -110,6 +121,9 @@ const TILE_MAKERS: Record<TileId, () => THREE.Object3D> = {
   'bed-raised': makeBedRaisedCutaway,
   'bed-inground': makeBedInground,
   pond: makePondCenterEntry,
+  'floor-mylar': makeFloorMylar,
+  'floor-concrete': makeFloorConcrete,
+  'floor-greenhouse': makeFloorGreenhouse,
 };
 
 let sharedMaterial: THREE.MeshStandardMaterial | null = null;
@@ -182,11 +196,12 @@ export function buildGround(plan: PlanState, scene: THREE.Scene): GroundBatch[] 
   const cellM = plan.cellM;
 
   // Group cells by resolved tile id
+  const surface = plan.surface ?? 'outdoor';
   const cellsByType = new Map<TileId, { x: number; z: number }[]>();
   for (let cz = 0; cz < rows; cz++) {
     for (let cx = 0; cx < cols; cx++) {
       const slug = plan.ground[`${cx},${cz}`] ?? null;
-      const id = resolveTileId(slug, cx, cz);
+      const id = resolveTileId(slug, cx, cz, surface);
       const arr = cellsByType.get(id) ?? [];
       arr.push({ x: cx, z: cz });
       cellsByType.set(id, arr);

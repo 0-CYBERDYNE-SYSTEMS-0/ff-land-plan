@@ -2,9 +2,17 @@
 // both draw through here. Pure text/vector drawing only — never drawImage from
 // a remote URL, or the export canvas taints and toBlob() throws.
 
-import type { Crop, GardenAsset, PlanState } from '@/types';
+import type { Crop, GardenAsset, PlanState, PlanSurface } from '@/types';
 import { assetBySlug } from '@/data/assets';
 import { cellKey, parseKey, planCols, planRows } from '@/lib/plan';
+
+/** Plan-canvas floor colors per surface (2D blueprint + PNG export). */
+export const SURFACE_BG: Record<PlanSurface, { dark: string; light: string }> = {
+  outdoor: { dark: '#1a2419', light: '#efe9df' },
+  greenhouse: { dark: '#20302a', light: '#e8eee4' },
+  tent: { dark: '#26232c', light: '#d4d0da' },
+  indoor: { dark: '#282a2d', light: '#d8dadb' },
+};
 
 export interface RenderOptions {
   cellPx: number;
@@ -17,6 +25,8 @@ export interface RenderOptions {
   viewW: number;
   viewH: number;
   theme: 'light' | 'dark';
+  /** Plan canvas surface — picks the floor color. Default 'outdoor'. */
+  surface?: PlanSurface;
   // --- Opt-in overlays (risk #1, shared-renderer leakage) ---------------------
   // Every field below defaults to OFF/undefined so drawPlan's pixels are
   // byte-identical for callers that don't pass it:
@@ -76,16 +86,18 @@ function drawAssetPattern(
 
 export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: RenderOptions): void {
   const { cellPx, offsetX, offsetY, cropById, conflictCells, viewW, viewH, theme } = opts;
+  const surface = opts.surface ?? plan.surface ?? 'outdoor';
   const cols = planCols(plan);
   const rows = planRows(plan);
   const dark = theme === 'dark';
 
   ctx.clearRect(0, 0, viewW, viewH);
 
-  // Plot background (bare soil).
+  // Plot background — the surface floor.
   const planW = cols * cellPx;
   const planH = rows * cellPx;
-  ctx.fillStyle = dark ? '#1a2419' : '#efe9df';
+  const bg = SURFACE_BG[surface] ?? SURFACE_BG.outdoor;
+  ctx.fillStyle = dark ? bg.dark : bg.light;
   ctx.fillRect(offsetX, offsetY, planW, planH);
 
   // Layer visibility (opt-in `layers`): hiding the ground layer leaves a
@@ -381,6 +393,7 @@ export function renderPlanToPng(
     viewW: W,
     viewH: headerH + planH + 2,
     theme: 'light',
+    surface: plan.surface ?? 'outdoor',
   });
 
   // Scale bar: 1 m.

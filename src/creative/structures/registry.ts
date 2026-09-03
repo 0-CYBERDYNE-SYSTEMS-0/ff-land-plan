@@ -12,6 +12,9 @@ import {
   makeBeehive, makeHayBale, makeCrateStack, makeSignpost, makeScarecrow,
   makeFruitTree,
 } from './props';
+import {
+  makeGrowLight, makePlantRack, makeHydroChannel, makeClipFan, makeHvacUnit, makeGrowBench,
+} from './equipment';
 
 /**
  * Lane C — Structures & infrastructure.
@@ -41,4 +44,11 @@ export const entries: AssetEntry[] = [
   { id: 'scarecrow', label: 'Scarecrow + Crow', make: makeScarecrow },
   { id: 'grow-tent', label: 'Indoor Grow Tent', make: makeGrowTent },
   { id: 'fruit-tree', label: 'Fruit Tree', make: makeFruitTree },
+  // Lane C equipment — indoor canvases (tent / warehouse / greenhouse).
+  { id: 'grow-light', label: 'LED Light Bar', make: makeGrowLight },
+  { id: 'plant-rack', label: 'Vertical Grow Rack', make: makePlantRack },
+  { id: 'hydro-channel', label: 'Hydro NFT Channel', make: makeHydroChannel },
+  { id: 'clip-fan', label: 'Clip Fan', make: makeClipFan },
+  { id: 'hvac-unit', label: 'HVAC Unit', make: makeHvacUnit },
+  { id: 'grow-bench', label: 'Potting Bench', make: makeGrowBench },
 ];

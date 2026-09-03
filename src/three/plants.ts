@@ -57,6 +57,22 @@ const HEIGHT_RANGE: Record<string, [number, number]> = {
 
 const DEFAULT_HEIGHT_RANGE: [number, number] = [0.7, 1.4];
 
+/**
+ * Vertical-growing ground slugs lift planted crops onto shelf decks (y in
+ * metres). A deterministic per-cell pick spreads instances across the levels
+ * so a painted rack reads as a full vertical wall of crops.
+ */
+const SHELF_LIFTS: Record<string, [number, number, number]> = {
+  'plant-rack': [0.28, 0.68, 1.08],
+  'hydro-channel': [0.32, 0.64, 0.96],
+  'grow-bench': [0.58, 0.58, 0.58],
+};
+
+/** Deterministic shelf pick (0..2) for a cell. */
+function shelfForCell(cellX: number, cellY: number): number {
+  return Math.abs((cellX * 73856093 ^ cellY * 19349663) | 0) % 3;
+}
+
 /** Map growthDays into a height range for a given crop category. */
 function getPlantHeight(crop: Crop): number {
   const [minH, maxH] = HEIGHT_RANGE[crop.category] ?? DEFAULT_HEIGHT_RANGE;
@@ -317,7 +333,7 @@ export function buildPlants(
     if (!crop) continue;
 
     const fullHeight = getPlantHeight(crop);
-    const mod = scenario ? scenarioGrowthMod(crop, scenario) : null;
+    const mod = scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor') : null;
     const cropStress = mod?.stress ?? 0;
     const group = new THREE.Group();
     group.name = `plants:${crop.name}`;
@@ -401,6 +417,8 @@ export function buildPlants(
       if (!tpl) continue;
 
       const jitter = jitterForCell(cellX, cellY, plan.cellM);
+      const liftSlugs = SHELF_LIFTS[plan.ground[key] ?? ''];
+      const lift = liftSlugs ? liftSlugs[shelfForCell(cellX, cellY)]! : 0;
 
       if (tpl.instancedMesh) {
         const dummy = new THREE.Object3D();
@@ -409,7 +427,7 @@ export function buildPlants(
         // unit scale, base baked at local y=0. Per-cell vertical jitter scales
         // uniformly around the base.
         dummy.scale.setScalar(jitter.scaleY);
-        dummy.position.set(x + jitter.offsetX, y, z + jitter.offsetZ);
+        dummy.position.set(x + jitter.offsetX, y + lift, z + jitter.offsetZ);
         dummy.updateMatrix();
 
         const idx = writeIndex.get(tpl) ?? 0;
@@ -425,7 +443,7 @@ export function buildPlants(
       inst.name = `plant:${crop.name}:${key}`;
       inst.rotation.y = jitter.rotY;
       inst.scale.setScalar(jitter.scaleY);
-      inst.position.set(x + jitter.offsetX, y, z + jitter.offsetZ);
+      inst.position.set(x + jitter.offsetX, y + lift, z + jitter.offsetZ);
       group.add(inst);
       anyPlaced = true;
     }

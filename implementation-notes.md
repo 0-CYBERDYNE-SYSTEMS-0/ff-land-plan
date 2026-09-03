@@ -355,3 +355,50 @@ layers entirely (minimal repro: red-rect-on-blue page captures as pure blue;
 WebGL captures fine). A "blank" Blueprint in an appshot proves nothing: the
 canvas is drawn (verified via getImageData probes) — judge Blueprint work
 through the GATE/EXPECT lines or a real browser, never the PNG.
+
+## 2026-09-03 — Surface zones (outdoor / greenhouse / tent / indoor) — "second canvas"
+
+**Model:** `PlanState.surface?: 'outdoor' | 'greenhouse' | 'tent' | 'indoor'`
+(missing = outdoor; REST contract unaffected). Switchable per farm in
+Settings → Surface; demo farms 5/6/7 exercise the three enclosed zones.
+
+**Enclosure shell (`src/three/shell.ts`):** built/disposed alongside ground in
+World3D (init effect + planVersion effect). Tent/warehouse are DOLLHOUSE
+cutaways — only the two far walls are solid, ceiling is an open beam frame —
+because the default camera sits above roof height; a solid lid walls off the
+view (v3 mistake, fixed in v4). Greenhouse is fully glazed + frame posts so
+the live sky reads through it. Wall height per surface: tent 1.9 m,
+warehouse 2.6 m. Interior LED bars use unlit MeshBasic so they glow; linear
+`grow-light` slugs mount at yOffsetM 0.85 (new SlugMapping.yOffsetM in
+structures.ts).
+
+**Floors:** three new terrain tiles (`terrain/floors.ts`: mylar, concrete,
+greenhouse walkway; 24×24 slabs at path-height y=3). `resolveTileId` now takes
+surface — enclosed canvases never fall back to grass (empty cells, unknown
+slugs AND the 'grass' slug all resolve to the surface floor).
+
+**Equipment palette:** new AssetCategory 'equipment' + `GardenAsset.surfaces?`
+tag; AssetPalette hides tagged assets unless the plan surface matches. New
+structures: LED light bar (linear), vertical grow rack (plantable, 3 decks),
+hydro NFT channel (linear, plantable), clip fan, HVAC unit, potting bench
+(plantable). Vertical growing: plants.ts SHELF_LIFTS lifts crops on
+rack/channel/bench cells onto deterministic shelf heights.
+
+**Twin semantics:** `scenarioGrowthMod(crop, scenario, surface)` attenuates
+scenario temp/precip by SURFACE_SHELTER (outdoor 1, greenhouse 0.35, tent
+0.12, indoor 0.15) — same plan, drought outside, business as usual in the
+tent. World3D dims ambient per surface (0.55/0.6/0.88) and skips rain/snow FX
+indoors.
+
+**2D blueprint:** drawPlan takes `surface` (editor redraw + PNG export pass
+plan.surface); SURFACE_BG floor colors per surface, dark+light themes.
+
+**Demo rework:** farm 5 is now a true tent interior (6×5 m: 3 racks, 2 NFT
+runs, 3 LED bars, fans, mylar aisle); farm 6 a sealed mushroom warehouse
+(12×8 m: 24 racks in species bands, HVAC wall, fans, packing corner);
+farm 7 new Greenhouse Range (10×7 m: bench rows of fruiting crops + salads,
+NFT channels, LED + glass shell).
+
+**Trap (v3):** don't give enclosed shells a solid ceiling — the default
+isometric camera looks down into the room and the lid eats the whole frame.
+Open-top beam frame + cutaway walls is the house style now.

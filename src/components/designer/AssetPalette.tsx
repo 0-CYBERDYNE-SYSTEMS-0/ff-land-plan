@@ -25,10 +25,17 @@ function loadRecentAssetSlugs(): string[] {
   }
 }
 
-const ASSET_CATEGORIES: AssetCategory[] = ['growing', 'infrastructure', 'life'];
+const ASSET_CATEGORIES: AssetCategory[] = ['growing', 'equipment', 'infrastructure', 'life'];
+
+const CATEGORY_LABELS: Record<AssetCategory, string> = {
+  growing: 'Growing',
+  equipment: 'Equipment (indoor)',
+  infrastructure: 'Infrastructure',
+  life: 'Life',
+};
 
 export function AssetPalette({ editor }: { editor: PlanEditor }) {
-  const { activeAssetSlug, setActiveAssetSlug, tool, setTool } = editor;
+  const { activeAssetSlug, setActiveAssetSlug, tool, setTool, surface } = editor;
   const [assetSearch, setAssetSearch] = useState('');
   const [recentSlugs, setRecentSlugs] = useState<string[]>(loadRecentAssetSlugs);
 
@@ -47,13 +54,18 @@ export function AssetPalette({ editor }: { editor: PlanEditor }) {
 
   const query = assetSearch.trim().toLowerCase();
   const filteredAssets = useMemo(() => {
-    if (!query) return assetLibrary;
-    return assetLibrary.filter((asset) =>
+    // Surface-aware palette: assets tagged with `surfaces` only appear when the
+    // plan canvas matches (e.g. grow lights on tent/indoor/greenhouse).
+    const onSurface = assetLibrary.filter(
+      (asset) => !asset.surfaces || asset.surfaces.includes(surface),
+    );
+    if (!query) return onSurface;
+    return onSurface.filter((asset) =>
       asset.label.toLowerCase().includes(query) ||
       asset.slug.toLowerCase().includes(query) ||
       asset.description.toLowerCase().includes(query),
     );
-  }, [query]);
+  }, [query, surface]);
 
   const recentAssets = recentSlugs
     .map((slug) => assetBySlug(slug))
@@ -98,7 +110,7 @@ export function AssetPalette({ editor }: { editor: PlanEditor }) {
           if (entries.length === 0) return null;
           return (
             <div key={category} className="space-y-1.5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{category}</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{CATEGORY_LABELS[category]}</div>
               <div className="grid grid-cols-2 gap-2">
                 {entries.map((asset) => (
                   <button

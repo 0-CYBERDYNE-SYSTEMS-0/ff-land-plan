@@ -23,7 +23,7 @@ import {
 import { drawPlan, renderPlanToPng, type RenderOptions } from '@/lib/renderPlan';
 import { useFarm } from '@/hooks/useFarms';
 import { useTheme } from '@/hooks/useTheme';
-import type { Crop, GardenAsset, PlanState } from '@/types';
+import type { Crop, GardenAsset, PlanState, PlanSurface } from '@/types';
 
 export type Tool = 'select' | 'brush' | 'rect' | 'asset' | 'erase' | 'pick' | 'fill' | 'line';
 export type BrushSize = 1 | 3 | 5;
@@ -254,6 +254,7 @@ export function usePlanEditor(farmId: number) {
   const [draftWidth, setDraftWidth] = useState(20);
   const [draftHeight, setDraftHeight] = useState(12);
   const [draftAllowOutsideBeds, setDraftAllowOutsideBeds] = useState(true);
+  const [draftSurface, setDraftSurface] = useState<PlanSurface>('outdoor');
   // P0-4: interaction cursors derive from STATE so re-renders track them live.
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -417,6 +418,7 @@ export function usePlanEditor(farmId: number) {
       hoverKey,
       rectPreview,
       theme,
+      surface: plan.surface ?? 'outdoor',
       ...overlayOpts,
     };
     drawPlan(ctx, plan, opts);
@@ -1000,11 +1002,12 @@ export function usePlanEditor(farmId: number) {
       widthM: clampMeters(draftWidth),
       heightM: clampMeters(draftHeight),
       allowOutsideBeds: draftAllowOutsideBeds,
+      surface: draftSurface,
     }));
     replacePlan(next, { save: true, recordHistory: before });
     setSettingsOpen(false);
     fitToView();
-  }, [draftAllowOutsideBeds, draftHeight, draftWidth, fitToView, replacePlan]);
+  }, [draftAllowOutsideBeds, draftHeight, draftSurface, draftWidth, fitToView, replacePlan]);
 
   const exportPng = useCallback(async () => {
     const plan = planRef.current;
@@ -1047,6 +1050,7 @@ export function usePlanEditor(farmId: number) {
     setDraftWidth(plan.widthM);
     setDraftHeight(plan.heightM);
     setDraftAllowOutsideBeds(plan.allowOutsideBeds);
+    setDraftSurface(plan.surface ?? 'outdoor');
     updateStats(plan);
     setPlanVersion((v) => v + 1);
     didInitialFitRef.current = false;
@@ -1248,6 +1252,10 @@ export function usePlanEditor(farmId: number) {
     setDraftHeight,
     draftAllowOutsideBeds,
     setDraftAllowOutsideBeds,
+    draftSurface,
+    setDraftSurface,
+    /** Current plan surface ('outdoor' when unset) — palettes filter on this. */
+    surface: (planRef.current?.surface ?? 'outdoor') as PlanSurface,
     spaceHeld,
     isPanning,
 

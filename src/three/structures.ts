@@ -62,6 +62,8 @@ interface SlugMapping {
    * segments visually connect; everything else merges into regions.
    */
   linear?: boolean;
+  /** Mount height above the floor (mounted equipment, e.g. LED bars). */
+  yOffsetM?: number;
 }
 
 const SLUG_MAP: Record<string, SlugMapping> = {
@@ -83,6 +85,14 @@ const SLUG_MAP: Record<string, SlugMapping> = {
   beehive:         { entryId: 'beehive' },
   'grow-tent':     { entryId: 'grow-tent' },
   'fruit-tree':    { entryId: 'fruit-tree' },
+  // Equipment — light bars & NFT channels are linear so rows tile; racks,
+  // benches, fans and HVAC are one instance per contiguous region.
+  'grow-light':    { entryId: 'grow-light', targetSizeM: 0.6, linear: true, yOffsetM: 0.85 },
+  'plant-rack':    { entryId: 'plant-rack' },
+  'hydro-channel': { entryId: 'hydro-channel', targetSizeM: 0.55, linear: true },
+  'clip-fan':      { entryId: 'clip-fan' },
+  'hvac-unit':     { entryId: 'hvac-unit' },
+  'grow-bench':    { entryId: 'grow-bench' },
   // Linear — connective per-cell placement so runs read continuously.
   fence:           { entryId: 'fence-post-rail', targetSizeM: 0.55, linear: true },
   'picket-fence':  { entryId: 'fence-picket', targetSizeM: 0.55, linear: true },
@@ -184,8 +194,8 @@ export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureG
   const offsetZ = -(plan.heightM / 2);
   const roots: THREE.Group[] = [];
 
-  const placeRoot = (root: THREE.Object3D, cxWorld: number, czWorld: number): void => {
-    root.position.set(cxWorld, 0, czWorld);
+  const placeRoot = (root: THREE.Object3D, cxWorld: number, czWorld: number, yWorld = 0): void => {
+    root.position.set(cxWorld, yWorld, czWorld);
     scene.add(root);
     roots.push(root as THREE.Group);
   };
@@ -222,7 +232,7 @@ export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureG
           // Deterministic quarter-turn variety; gates stay aligned to paths.
           inst.rotation.y = (hashCell(cx, cz) % 4) * (Math.PI / 2);
         }
-        placeRoot(inst, wx, wz);
+        placeRoot(inst, wx, wz, mapping.yOffsetM);
       }
     } else {
       // ONE instance per contiguous region, centred on the region's bbox.
@@ -239,7 +249,7 @@ export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureG
         const wz = ((minCz + maxCz + 1) / 2) * cellM + offsetZ;
         const inst = tpl.obj.clone();
         inst.scale.setScalar(scaleBase);
-        placeRoot(inst, wx, wz);
+        placeRoot(inst, wx, wz, mapping.yOffsetM);
       }
     }
   }

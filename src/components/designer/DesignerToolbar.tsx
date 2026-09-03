@@ -20,9 +20,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import type { PlanSurface } from '@/types';
 import { DESIGNER_CONSTANTS, type EraseLayer, type PlanEditor, type RectMode, type Tool } from './usePlanEditor';
 
 const { MIN_DIM_M, MAX_DIM_M } = DESIGNER_CONSTANTS;
+
+const SURFACE_OPTIONS: { value: PlanSurface; label: string }[] = [
+  { value: 'outdoor', label: 'Outdoor Plot' },
+  { value: 'greenhouse', label: 'Greenhouse' },
+  { value: 'tent', label: 'Grow Tent' },
+  { value: 'indoor', label: 'Indoor Warehouse' },
+];
 
 const TOOL_OPTIONS: { tool: Tool; label: string; key: string; icon: typeof MousePointer2 }[] = [
   { tool: 'select', label: 'Select', key: 'V', icon: MousePointer2 },
@@ -47,6 +55,7 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
     draftWidth, setDraftWidth,
     draftHeight, setDraftHeight,
     draftAllowOutsideBeds, setDraftAllowOutsideBeds,
+    draftSurface, setDraftSurface,
     applySettings,
     showSpacing, toggleSpacing,
     showCompanions, toggleCompanions,
@@ -165,6 +174,19 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
           <div className="space-y-1">
             <Label className="text-xs">Height (m)</Label>
             <Input type="number" min={MIN_DIM_M} max={MAX_DIM_M} step="0.25" value={draftHeight} onChange={(e) => setDraftHeight(Number(e.target.value))} className="h-8" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Surface</Label>
+            <Select value={draftSurface} onValueChange={(v) => setDraftSurface(v as PlanSurface)}>
+              <SelectTrigger className="h-8 text-xs" title="Canvas surface — swaps floor, enclosure shell, weather and equipment palette">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SURFACE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <label className="flex items-center gap-2 pt-5 text-sm">
             <input

@@ -54,6 +54,49 @@ export const assetLibrary: GardenAsset[] = [
     emoji: '⛺', plantable: true,
     description: 'Reflective indoor grow tent; herbs and greens under grow lights.',
   },
+  // --- Equipment (indoor canvases: tent / warehouse / greenhouse) ----------
+  {
+    slug: 'grow-light', label: 'LED Light Bar', category: 'equipment',
+    defaultWM: 0.5, defaultHM: 0.25, colorHex: '#FFE9A8', pattern: 'stripes',
+    emoji: '💡', plantable: false,
+    surfaces: ['tent', 'indoor', 'greenhouse'],
+    description: 'Full-spectrum LED bar; paint rows to tile continuous light runs.',
+  },
+  {
+    slug: 'plant-rack', label: 'Vertical Grow Rack', category: 'equipment',
+    defaultWM: 0.9, defaultHM: 0.6, colorHex: '#6B7280', pattern: 'stripes',
+    emoji: '🗄️', plantable: true,
+    surfaces: ['tent', 'indoor', 'greenhouse'],
+    description: 'Three-deck vertical shelving; crops paint onto the shelf levels.',
+  },
+  {
+    slug: 'hydro-channel', label: 'Hydro NFT Channel', category: 'equipment',
+    defaultWM: 1, defaultHM: 0.25, colorHex: '#BFD8D2', pattern: 'dots',
+    emoji: '🟩', plantable: true,
+    surfaces: ['tent', 'indoor', 'greenhouse'],
+    description: 'Sloped NFT channel for lettuce/greens; paint rows, plant the holes.',
+  },
+  {
+    slug: 'clip-fan', label: 'Clip Fan', category: 'equipment',
+    defaultWM: 0.3, defaultHM: 0.3, colorHex: '#9AA2A8', pattern: 'dots',
+    emoji: '🌀', plantable: false,
+    surfaces: ['tent', 'indoor', 'greenhouse'],
+    description: 'Airflow fan — keeps canopy moving and mold away.',
+  },
+  {
+    slug: 'hvac-unit', label: 'HVAC Unit', category: 'equipment',
+    defaultWM: 1, defaultHM: 0.4, colorHex: '#E8E6E1', pattern: 'solid',
+    emoji: '❄️', plantable: false,
+    surfaces: ['indoor', 'tent'],
+    description: 'Climate control for sealed rooms; the twin dials it into the model.',
+  },
+  {
+    slug: 'grow-bench', label: 'Potting Bench', category: 'equipment',
+    defaultWM: 1.2, defaultHM: 0.6, colorHex: '#C7CDD3', pattern: 'cross',
+    emoji: '🧰', plantable: true,
+    surfaces: ['greenhouse', 'tent', 'indoor'],
+    description: 'Waist-high bench with a galvanized top; trays and pots grow on it.',
+  },
   // --- Infrastructure ---------------------------------------------------
   {
     slug: 'path-gravel', label: 'Gravel Path', category: 'infrastructure',

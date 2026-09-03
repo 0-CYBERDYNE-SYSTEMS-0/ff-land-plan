@@ -15,6 +15,7 @@ import { createFlightCamera, type FlightCamera } from '@/three/flight';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
 import { buildPlants, disposePlants, type PlantBatch, swayPlants, updatePlants } from '@/three/plants';
 import { buildGround, disposeGround, updateGround, type GroundBatch } from '@/three/ground';
+import { buildShell, disposeShell, type ShellGroup } from '@/three/shell';
 import { createSky, type Sky } from '@/three/sky';
 import { buildStructures, disposeStructures, type StructureGroup, updateStructures } from '@/three/structures';
 import { createTour, generateTourWaypoints, type Tour } from '@/three/tour';
@@ -41,6 +42,15 @@ const DEFAULT_WEATHER: WeatherCurrent = {
   soilMoisture: 40,
   weatherCode: 0,
   weatherDesc: 'Clear',
+};
+
+/** Ambient-light multiplier per surface — enclosed interiors read dimmer; the
+ * shell's own LED bars (see three/shell.ts) provide the "artificial" light. */
+const SURFACE_AMBIENT: Record<string, number> = {
+  outdoor: 1,
+  greenhouse: 0.88,
+  tent: 0.55,
+  indoor: 0.6,
 };
 
 /**
@@ -73,6 +83,7 @@ export default function World3D({ editor }: World3DProps) {
   const structureBatchesRef = useRef<StructureGroup[]>([]);
   const plantBatchesRef = useRef<PlantBatch[]>([]);
   const waterPlanesRef = useRef<WaterPlane[]>([]);
+  const shellRef = useRef<ShellGroup | null>(null);
   const undoGhostsRef = useRef<GhostBatch[]>([]);
   const redoGhostsRef = useRef<GhostBatch[]>([]);
 
@@ -205,6 +216,9 @@ export default function World3D({ editor }: World3DProps) {
     // 3D voxel ground blocks (replaces flat texture plane)
     groundBatchesRef.current = buildGround(plan, engine.scene);
 
+    // Enclosure shell for non-outdoor surfaces (tent / warehouse / greenhouse)
+    shellRef.current = buildShell(plan, engine.scene);
+
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
     plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current);
@@ -226,10 +240,12 @@ export default function World3D({ editor }: World3DProps) {
     // Audio
     audioRef.current = createAudioAtmosphere();
 
-    // Camera — isometric angle like Tiny World Builder
+    // Camera — isometric angle like Tiny World Builder. Framed for everything
+    // from a 3 m tent interior to a 60 m field: pulled back + high enough to
+    // look down into enclosed canvas shells.
     const maxDim = Math.max(plan.widthM, plan.heightM);
-    const dist = maxDim * 0.6;
-    engine.camera.position.set(dist * 0.7, dist * 0.5, dist * 0.7);
+    const dist = maxDim * 0.75 + 2;
+    engine.camera.position.set(dist * 0.7, Math.max(dist * 0.55, 3), dist * 0.7);
     engine.camera.lookAt(0, 0, 0);
     engine.controls.setTarget(0, 0, 0);
     engine.controls.azimuthAngle = -Math.PI / 4;
@@ -274,9 +290,11 @@ export default function World3D({ editor }: World3DProps) {
       if (ambientLight) {
         // Sky owns the full lighting model: hue from the palette, strength
         // with a legible night floor. The single sun directional is driven
-        // inside sky.update() itself (position/color/intensity).
+        // inside sky.update() itself (position/color/intensity). Enclosed
+        // surfaces dim the ambient so the shell's LED bars carry the light.
+        const surface = editor.planRef.current?.surface ?? 'outdoor';
         ambientLight.color.copy(sky.state.ambientColor);
-        ambientLight.intensity = sky.state.ambientIntensity;
+        ambientLight.intensity = sky.state.ambientIntensity * (SURFACE_AMBIENT[surface] ?? 1);
       }
 
       // Clouds / weather FX / audio — live weather via ref, defaults until it
@@ -284,8 +302,10 @@ export default function World3D({ editor }: World3DProps) {
       const w = weatherRef.current ?? DEFAULT_WEATHER;
       clouds.update(dt, w.windSpeedKmh, w.cloudCover);
 
-      // Weather
-      weatherFX.update(dt, w);
+      // Weather — rain/snow only outdoors; enclosed canvases are climate-controlled.
+      if ((editor.planRef.current?.surface ?? 'outdoor') === 'outdoor') {
+        weatherFX.update(dt, w);
+      }
 
       // Water planes
       updateWaterPlanes(waterPlanesRef.current, t);
@@ -381,6 +401,8 @@ export default function World3D({ editor }: World3DProps) {
       disposeStructures(structureBatchesRef.current);
       disposePlants(plantBatchesRef.current);
       disposeWaterPlanes(waterPlanesRef.current);
+      disposeShell(shellRef.current);
+      shellRef.current = null;
       disposeGhostPlants(undoGhostsRef.current);
       disposeGhostPlants(redoGhostsRef.current);
       disposeAnimals(animalsRef.current!);
@@ -406,8 +428,10 @@ export default function World3D({ editor }: World3DProps) {
     const cropById = editor.cropById;
     if (!engine || !plan) return;
 
-    // Rebuild 3D ground blocks
+    // Rebuild 3D ground blocks + enclosure shell (surface / dims may have changed)
     groundBatchesRef.current = updateGround(groundBatchesRef.current, plan, engine.scene);
+    disposeShell(shellRef.current);
+    shellRef.current = buildShell(plan, engine.scene);
 
     // Structures & plants
     structureBatchesRef.current = updateStructures(structureBatchesRef.current, plan, engine.scene);
@@ -566,7 +590,7 @@ export default function World3D({ editor }: World3DProps) {
       seen.add(cropId);
       const crop = editor.cropById.get(cropId);
       if (!crop) continue;
-      const mod = scenarioGrowthMod(crop, scenario);
+      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor');
       const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
       rows.push({
         id: cropId,

@@ -1,6 +1,6 @@
 // Growth model shared by the 3D plant renderer and the World3D simulation HUD.
 // Deterministic, catalog-driven, scenario-aware.
-import type { Crop, ScenarioType } from '@/types';
+import type { Crop, PlanSurface, ScenarioType } from '@/types';
 
 export interface ScenarioParams {
   label: string;
@@ -29,18 +29,38 @@ export interface GrowthMod {
 }
 
 /**
+ * How much of the outdoor climate scenario reaches the crop on each surface.
+ * A tent with HVAC shrugs off drought/heat; a greenhouse moderates it; the
+ * open field takes the full scenario. This is the digital-twin payoff of
+ * enclosed canvases: identical plans, radically different stress outcomes.
+ */
+export const SURFACE_SHELTER: Record<PlanSurface, number> = {
+  outdoor: 1,
+  greenhouse: 0.35,
+  tent: 0.12,
+  indoor: 0.15,
+};
+
+/**
  * How a scenario modulates one crop's growth, from its real temp/water
  * tolerance. Heat/cold stress when the scenario temp leaves [minTempC, maxTempC];
- * water stress when precipitation is cut and the crop is thirsty.
+ * water stress when precipitation is cut and the crop is thirsty. Enclosed
+ * surfaces attenuate the scenario by SURFACE_SHELTER.
  */
-export function scenarioGrowthMod(crop: Crop, scenario: ScenarioType): GrowthMod {
+export function scenarioGrowthMod(
+  crop: Crop,
+  scenario: ScenarioType,
+  surface: PlanSurface = 'outdoor',
+): GrowthMod {
   const p = SCENARIOS[scenario];
-  const effTemp = BASELINE_TEMP_C + p.tempDeltaC;
+  const effTemp = BASELINE_TEMP_C + p.tempDeltaC * SURFACE_SHELTER[surface];
 
   let stress = 0;
   if (effTemp > crop.maxTempC) stress += Math.min(1, (effTemp - crop.maxTempC) / 10);
   else if (effTemp < crop.minTempC) stress += Math.min(1, (crop.minTempC - effTemp) / 10);
-  if (p.precipMultiplier < 1) stress += (1 - p.precipMultiplier) * Math.min(1, crop.waterNeedMmDay / 5);
+  if (p.precipMultiplier < 1) {
+    stress += (1 - p.precipMultiplier) * SURFACE_SHELTER[surface] * Math.min(1, crop.waterNeedMmDay / 5);
+  }
 
   if (p.fertilizerBoost > 0) stress = Math.max(0, stress - p.fertilizerBoost * 0.05);
   stress = Math.max(0, Math.min(1, stress));

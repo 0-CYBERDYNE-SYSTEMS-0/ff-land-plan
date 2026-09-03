@@ -57,23 +57,33 @@ export const seedFarms: Farm[] = [
   },
   {
     id: 5,
-    name: 'Indoor Grow Tent Op',
-    description: 'Stacked grow tents under LEDs — herbs and microgreens year-round',
+    name: 'Grow Tent — Room 1',
+    description: 'Inside a 6×5 m tent: racks, NFT channels and LED runs',
     lat: 45.5301,
     lng: -122.6601,
-    areHa: 0.014,
+    areHa: 0.003,
     soilType: null,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 15).toISOString(),
   },
   {
     id: 6,
-    name: 'Mushroom Farm',
-    description: 'Commercial fruiting rooms — oyster, button and shiitake on blocks',
+    name: 'Mushroom Warehouse',
+    description: 'Sealed indoor room — vertical racks of oyster, button and shiitake',
     lat: 45.5401,
     lng: -122.6401,
-    areHa: 0.019,
+    areHa: 0.01,
     soilType: null,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 45).toISOString(),
+  },
+  {
+    id: 7,
+    name: 'Greenhouse Range',
+    description: 'Glasshouse benches and NFT channels under the sun and LEDs',
+    lat: 45.5451,
+    lng: -122.6301,
+    areHa: 0.007,
+    soilType: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 60).toISOString(),
   },
 ];
 
@@ -586,86 +596,113 @@ function buildMarketFieldPlan(): PlanState {
 
 function buildGrowTentPlan(): PlanState {
   const plan: PlanState = {
-    farmId: 5, widthM: 14, heightM: 10, cellM: 0.25, allowOutsideBeds: false,
+    farmId: 5, widthM: 6, heightM: 5, cellM: 0.25, allowOutsideBeds: false,
+    surface: 'tent',
     planting: {}, ground: {}, updatedAt: new Date().toISOString(),
   };
 
-  // Central walkway.
-  fillGround(plan, 26, 2, 4, 36, 'path-gravel');
+  // The canvas IS the tent interior: mylar floor (surface), racks along the
+  // back wall, NFT channel runs down the middle, LED bars over every run, and
+  // a clear mylar aisle at the front.
+  fillGround(plan, 1, 1, 4, 2, 'plant-rack');
+  fillGround(plan, 8, 1, 4, 2, 'plant-rack');
+  fillGround(plan, 15, 1, 4, 2, 'plant-rack');
+  fillGround(plan, 1, 4, 18, 1, 'grow-light');
+  fillGround(plan, 1, 8, 20, 1, 'hydro-channel');
+  fillGround(plan, 1, 9, 20, 1, 'grow-light');
+  fillGround(plan, 1, 12, 20, 1, 'hydro-channel');
+  fillGround(plan, 1, 13, 20, 1, 'grow-light');
+  fillGround(plan, 0, 6, 1, 1, 'clip-fan');
+  fillGround(plan, 23, 10, 1, 1, 'clip-fan');
 
-  // Two rows of grow tents.
-  fillGround(plan, 4, 4, 6, 6, 'grow-tent');
-  fillGround(plan, 12, 4, 6, 6, 'grow-tent');
-  fillGround(plan, 20, 4, 6, 6, 'grow-tent');
-  fillGround(plan, 4, 16, 6, 6, 'grow-tent');
-  fillGround(plan, 12, 16, 6, 6, 'grow-tent');
-  fillGround(plan, 20, 16, 6, 6, 'grow-tent');
-
-  // A poly veg room + water/utility wall.
-  fillGround(plan, 4, 28, 12, 8, 'polytunnel');
-  fillGround(plan, 44, 4, 5, 5, 'ibc-tote');
-  fillGround(plan, 50, 4, 1, 1, 'water-tap');
-  fillGround(plan, 44, 12, 3, 3, 'crate-stack');
-  fillGround(plan, 48, 18, 1, 1, 'signpost');
-  fillGround(plan, 28, 6, 2, 1, 'irrigation-line');
-  fillGround(plan, 28, 18, 2, 1, 'irrigation-line');
-
-  // --- planting (herbs + microgreens inside the tents) ---
-  fillCrop(plan, 5, 5, 4, 4, LETTUCE);
-  fillCrop(plan, 13, 5, 4, 4, BASIL);
-  fillCrop(plan, 21, 5, 4, 4, ARUGULA);
-  fillCrop(plan, 5, 17, 4, 4, SPINACH);
-  fillCrop(plan, 13, 17, 4, 4, CILANTRO);
-  fillCrop(plan, 21, 17, 4, 4, RADISH);
-  // Poly room: tomatoes + peppers.
-  fillCrop(plan, 5, 29, 4, 5, PEPPER);
-  fillCrop(plan, 9, 29, 4, 5, TOMATO);
+  // Herbs up the racks (plants lift onto the shelf decks), greens in the channels.
+  fillCrop(plan, 1, 1, 4, 2, BASIL);
+  fillCrop(plan, 8, 1, 4, 2, MINT);
+  fillCrop(plan, 15, 1, 4, 2, CHIVES);
+  fillCrop(plan, 1, 8, 20, 1, LETTUCE);
+  fillCrop(plan, 1, 12, 20, 1, SPINACH);
 
   stampPlantedAt(plan, {
-    [LETTUCE]: 25, [BASIL]: 35, [ARUGULA]: 22, [SPINACH]: 28, [CILANTRO]: 30,
-    [RADISH]: 14, [PEPPER]: 45, [TOMATO]: 55,
-  });
+    [BASIL]: 30, [MINT]: 35, [CHIVES]: 40, [LETTUCE]: 22, [SPINACH]: 26,
+  }, 28);
   return plan;
 }
 
 function buildMushroomPlan(): PlanState {
   const plan: PlanState = {
-    farmId: 6, widthM: 16, heightM: 12, cellM: 0.25, allowOutsideBeds: false,
+    farmId: 6, widthM: 12, heightM: 8, cellM: 0.25, allowOutsideBeds: false,
+    surface: 'indoor',
     planting: {}, ground: {}, updatedAt: new Date().toISOString(),
   };
 
-  // Four fruiting rooms + aisles between them.
-  fillGround(plan, 4, 4, 10, 16, 'greenhouse');
-  fillGround(plan, 18, 4, 12, 16, 'polytunnel');
-  fillGround(plan, 34, 4, 10, 16, 'greenhouse');
-  fillGround(plan, 48, 4, 12, 16, 'polytunnel');
-  fillGround(plan, 14, 4, 4, 16, 'path-gravel');
-  fillGround(plan, 30, 4, 4, 16, 'path-gravel');
-  fillGround(plan, 44, 4, 4, 16, 'path-gravel');
+  // Sealed warehouse: vertical rack walls of mushrooms in four fruiting aisles,
+  // climate gear along the walls, packing corner by the door.
+  const rackCols = [3, 10, 17, 24, 31, 38];
+  for (const bandRow of [3, 9, 15, 21]) {
+    for (const rx of rackCols) fillGround(plan, rx, bandRow, 4, 2, 'plant-rack');
+  }
+  fillGround(plan, 2, 0, 4, 1, 'hvac-unit');
+  fillGround(plan, 20, 0, 4, 1, 'hvac-unit');
+  fillGround(plan, 38, 0, 4, 1, 'hvac-unit');
+  fillGround(plan, 0, 6, 1, 1, 'clip-fan');
+  fillGround(plan, 12, 6, 1, 1, 'clip-fan');
+  fillGround(plan, 26, 6, 1, 1, 'clip-fan');
+  fillGround(plan, 40, 6, 1, 1, 'clip-fan');
+  fillGround(plan, 43, 26, 5, 5, 'ibc-tote');
+  fillGround(plan, 43, 20, 1, 1, 'water-tap');
+  fillGround(plan, 36, 27, 3, 3, 'crate-stack');
+  fillGround(plan, 40, 28, 3, 3, 'crate-stack');
+  fillGround(plan, 33, 28, 1, 1, 'signpost');
 
-  // Packing / substrate / utility zone along the bottom.
-  fillGround(plan, 2, 26, 8, 12, 'shed');
-  fillGround(plan, 12, 26, 4, 12, 'compost-bin');
-  fillGround(plan, 18, 28, 3, 3, 'crate-stack');
-  fillGround(plan, 24, 28, 3, 3, 'crate-stack');
-  fillGround(plan, 30, 26, 5, 5, 'ibc-tote');
-  fillGround(plan, 36, 26, 1, 1, 'water-tap');
-  fillGround(plan, 40, 40, 1, 1, 'signpost');
-  fillGround(plan, 52, 40, 1, 1, 'signpost');
+  // Mushroom species per rack band — oyster front, button middle, shiitake back.
+  const bandCrop: Record<number, number> = { 3: OYSTER, 9: BUTTON, 15: SHIITAKE, 21: OYSTER };
+  for (const bandRow of [3, 9, 15, 21]) {
+    for (const rx of rackCols) fillCrop(plan, rx, bandRow, 4, 2, bandCrop[bandRow]!);
+  }
 
-  // --- planting: mushroom blocks inside each fruiting room ---
-  fillCrop(plan, 5, 5, 8, 6, OYSTER);
-  fillCrop(plan, 5, 12, 8, 6, OYSTER);
-  fillCrop(plan, 19, 5, 10, 6, BUTTON);
-  fillCrop(plan, 19, 12, 10, 6, BUTTON);
-  fillCrop(plan, 35, 5, 8, 6, SHIITAKE);
-  fillCrop(plan, 35, 12, 8, 6, SHIITAKE);
-  fillCrop(plan, 49, 5, 10, 6, OYSTER);
-  fillCrop(plan, 49, 12, 10, 6, BUTTON);
+  stampPlantedAt(plan, { [OYSTER]: 16, [BUTTON]: 20, [SHIITAKE]: 26 }, 20);
+  return plan;
+}
+
+function buildGreenhousePlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 7, widthM: 10, heightM: 7, cellM: 0.25, allowOutsideBeds: false,
+    surface: 'greenhouse',
+    planting: {}, ground: {}, updatedAt: new Date().toISOString(),
+  };
+
+  // Glass range: bench rows of tender crops, NFT channels of greens, supplemental
+  // LED runs, airflow fans in the corners. Gravel-floor surface does the rest.
+  const benchXs = [2, 9, 16, 23, 30];
+  for (const bx of benchXs) {
+    fillGround(plan, bx, 3, 5, 2, 'grow-bench');
+    fillGround(plan, bx, 8, 5, 2, 'grow-bench');
+  }
+  fillGround(plan, 2, 6, 33, 1, 'grow-light');
+  fillGround(plan, 2, 11, 33, 1, 'grow-light');
+  fillGround(plan, 2, 14, 36, 1, 'hydro-channel');
+  fillGround(plan, 2, 16, 36, 1, 'hydro-channel');
+  fillGround(plan, 0, 0, 1, 1, 'clip-fan');
+  fillGround(plan, 39, 0, 1, 1, 'clip-fan');
+  fillGround(plan, 0, 26, 1, 1, 'clip-fan');
+  fillGround(plan, 39, 26, 1, 1, 'clip-fan');
+  fillGround(plan, 37, 19, 2, 2, 'water-tap');
+  fillGround(plan, 30, 19, 1, 1, 'signpost');
+
+  // Benches: fruiting crops front, salads and berries behind.
+  const benchCrops = [TOMATO, PEPPER, BASIL, CUCUMBER, STRAWBERRY];
+  const benchCrops2 = [LETTUCE, ARUGULA, PARSLEY, CILANTRO, SPINACH];
+  benchXs.forEach((bx, i) => {
+    fillCrop(plan, bx, 3, 5, 2, benchCrops[i]!);
+    fillCrop(plan, bx, 8, 5, 2, benchCrops2[i]!);
+  });
+  fillCrop(plan, 2, 14, 36, 1, LETTUCE);
+  fillCrop(plan, 2, 16, 36, 1, SPINACH);
 
   stampPlantedAt(plan, {
-    [OYSTER]: 18, [BUTTON]: 22, [SHIITAKE]: 28,
-  });
+    [TOMATO]: 55, [PEPPER]: 50, [BASIL]: 35, [CUCUMBER]: 40, [STRAWBERRY]: 70,
+    [LETTUCE]: 24, [ARUGULA]: 20, [PARSLEY]: 40, [CILANTRO]: 28, [SPINACH]: 27,
+  }, 30);
   return plan;
 }
 
@@ -676,6 +713,7 @@ export const seedPlans: Record<number, PlanState> = {
   4: buildMarketFieldPlan(),
   5: buildGrowTentPlan(),
   6: buildMushroomPlan(),
+  7: buildGreenhousePlan(),
 };
 
 // --- Cells (legacy voxel grid; Monitoring still reads these) --------------

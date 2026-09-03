@@ -183,8 +183,15 @@ export interface Crop {
 
 // --- Plot plan (sparse, replaces FarmCell for the designer) -----------------
 
-export type AssetCategory = 'growing' | 'infrastructure' | 'life';
+export type AssetCategory = 'growing' | 'equipment' | 'infrastructure' | 'life';
 export type AssetPattern = 'solid' | 'stripes' | 'dots' | 'cross';
+
+/**
+ * Simulation surface of a plan canvas. Enclosed surfaces swap the 3D floor +
+ * add an enclosure shell, gate weather, and dampen climate stress in the
+ * growth model (see lib/growth.ts). Missing/undefined = 'outdoor'.
+ */
+export type PlanSurface = 'outdoor' | 'greenhouse' | 'tent' | 'indoor';
 
 export interface GardenAsset {
   slug: string;
@@ -197,6 +204,8 @@ export interface GardenAsset {
   emoji: string;
   plantable: boolean;
   description: string;
+  /** Surfaces this asset is offered on. Omitted = available everywhere. */
+  surfaces?: PlanSurface[];
 }
 
 export interface PlanState {
@@ -205,6 +214,8 @@ export interface PlanState {
   heightM: number;
   cellM: number;
   allowOutsideBeds: boolean;
+  /** Simulation surface (canvas zone). Missing = 'outdoor'. */
+  surface?: PlanSurface;
   planting: Record<string, number>; // "x,y" -> cropId
   ground: Record<string, string>; // "x,y" -> asset slug
   updatedAt: string;

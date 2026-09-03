@@ -73,17 +73,22 @@ function load(): AppState {
     const parsed = JSON.parse(raw) as AppState;
     // Forward-compat: merge over a fresh seed shape so missing keys get defaults.
     const merged = { ...fresh, ...parsed };
-    // Idempotently re-seed farms/plans this version adds but a saved blob lacks,
-    // WITHOUT clobbering user edits to farms/plans that already exist.
-    for (const farm of fresh.farms) {
-      if (!merged.farms.some((f) => f.id === farm.id)) merged.farms.push(farm);
+
+    // Demo farms (ids shipped in seedFarms) are SHOWCASE content: re-seed their
+    // records and plans on every load so demos always render their intended
+    // layout, and deleting/messing up one is fixed by a reload. User-created
+    // farms and plans (ids above the seed range) always win untouched.
+    const seedFarmIds = new Set(fresh.farms.map((f) => f.id));
+    merged.farms = [
+      ...fresh.farms,
+      ...parsed.farms.filter((f) => !seedFarmIds.has(f.id)),
+    ];
+    for (const key of Object.keys(fresh.plans)) {
+      merged.plans[Number(key)] = fresh.plans[Number(key)]!;
     }
-    for (const [key, plan] of Object.entries(fresh.plans)) {
-      const id = Number(key);
-      if (!(id in merged.plans)) merged.plans[id] = plan;
-    }
-    // Keep the farm-id counter ahead of every present farm so newly-added seed
-    // farms can never collide with future user-created farms.
+
+    // Keep the farm-id counter ahead of every present farm so it can never
+    // collide with the seed range or itself.
     const maxFarmId = merged.farms.reduce((m, f) => Math.max(m, f.id), 0);
     merged.counters.farm = Math.max(merged.counters.farm, maxFarmId + 1);
     return merged;
