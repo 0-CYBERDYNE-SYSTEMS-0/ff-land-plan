@@ -18,8 +18,20 @@ export const SCENARIOS: Record<ScenarioType, ScenarioParams> = {
   climate_change: { label: 'Climate +2°C', tempDeltaC: 2, precipMultiplier: 0.8, fertilizerBoost: 0 },
 };
 
-/** Baseline growing-season temperature (°C) the scenario deltas apply against. */
-const BASELINE_TEMP_C = 20;
+/** Default baseline growing-season temperature (°C) the scenario deltas apply
+ * against when no farm-specific climate context is provided (offline / no
+ * climate data yet). */
+export const DEFAULT_BASELINE_TEMP_C = 20;
+
+/** Optional real-climate inputs for the growth model. `ambientTempC` is the
+ * live right-now temperature (a 34 °C heatwave should stress cool-season
+ * crops today); `baselineTempC` is the seasonal mean (climate normals).
+ * Ambient wins when both are present. Both are optional so callers degrade
+ * gracefully offline. */
+export interface GrowthModCtx {
+  baselineTempC?: number;
+  ambientTempC?: number;
+}
 
 export interface GrowthMod {
   /** Multiplier on growth rate (1 = catalog growthDays). <1 = slower/smaller. */
@@ -43,17 +55,32 @@ export const SURFACE_SHELTER: Record<PlanSurface, number> = {
 
 /**
  * How a scenario modulates one crop's growth, from its real temp/water
- * tolerance. Heat/cold stress when the scenario temp leaves [minTempC, maxTempC];
- * water stress when precipitation is cut and the crop is thirsty. Enclosed
- * surfaces attenuate the scenario by SURFACE_SHELTER.
+ * tolerance. Heat/cold stress when the effective temp leaves
+ * [minTempC, maxTempC]; water stress when precipitation is cut and the crop
+ * is thirsty. Enclosed surfaces attenuate the scenario by SURFACE_SHELTER.
+ *
+ * The effective base temperature comes from the optional `ctx`: the live
+ * `ambientTempC` when connected (right-now weather stress), else the
+ * seasonal `baselineTempC`, else the legacy 20 °C constant — so an
+ * undefined ctx is byte-identical to the pre-climate behavior and offline
+ * callers never crash. Like the scenario ΔT, the ambient DEVIATION from the
+ * baseline is sheltered by the surface: a 34 °C heatwave sways an outdoor
+ * bed but barely reaches a ventilated tent.
  */
 export function scenarioGrowthMod(
   crop: Crop,
   scenario: ScenarioType,
   surface: PlanSurface = 'outdoor',
+  ctx?: GrowthModCtx,
 ): GrowthMod {
   const p = SCENARIOS[scenario];
-  const effTemp = BASELINE_TEMP_C + p.tempDeltaC * SURFACE_SHELTER[surface];
+  const shelter = SURFACE_SHELTER[surface];
+  const baseline = ctx?.baselineTempC ?? DEFAULT_BASELINE_TEMP_C;
+  const effBase =
+    ctx?.ambientTempC !== undefined
+      ? baseline + (ctx.ambientTempC - baseline) * shelter
+      : baseline;
+  const effTemp = effBase + p.tempDeltaC * shelter;
 
   let stress = 0;
   if (effTemp > crop.maxTempC) stress += Math.min(1, (effTemp - crop.maxTempC) / 10);

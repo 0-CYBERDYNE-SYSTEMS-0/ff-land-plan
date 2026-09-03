@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { PlanState, Crop, ScenarioType } from '@/types';
 import { parseKey } from '@/lib/plan';
-import { growthProgress, scenarioGrowthMod, stageForScale } from '@/lib/growth';
+import { growthProgress, scenarioGrowthMod, stageForScale, type GrowthModCtx } from '@/lib/growth';
 import { makeCropFor } from '@/creative/crops/map';
 
 /**
@@ -311,6 +311,7 @@ export function buildPlants(
   scene: THREE.Scene,
   currentDate?: Date,
   scenario?: ScenarioType,
+  growthCtx?: GrowthModCtx,
 ): PlantBatch[] {
   // Group cells by crop id.
   const cellsByCropId = new Map<number, string[]>();
@@ -333,7 +334,7 @@ export function buildPlants(
     if (!crop) continue;
 
     const fullHeight = getPlantHeight(crop);
-    const mod = scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor') : null;
+    const mod = scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx) : null;
     const cropStress = mod?.stress ?? 0;
     const group = new THREE.Group();
     group.name = `plants:${crop.name}`;
@@ -489,9 +490,10 @@ export function updatePlants(
   scene: THREE.Scene,
   currentDate?: Date,
   scenario?: ScenarioType,
+  growthCtx?: GrowthModCtx,
 ): PlantBatch[] {
   disposePlants(batches);
-  return buildPlants(plan, cropById, scene, currentDate, scenario);
+  return buildPlants(plan, cropById, scene, currentDate, scenario, growthCtx);
 }
 
 /**

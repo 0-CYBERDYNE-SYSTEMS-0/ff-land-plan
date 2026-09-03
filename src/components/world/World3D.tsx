@@ -10,7 +10,7 @@ import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '
 import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
 import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
 import { createClouds, type Clouds } from '@/three/clouds';
-import { createEngine, type Engine } from '@/three/engine';
+import { createEngine, setEngineOrbitEnabled, type Engine } from '@/three/engine';
 import { createFlightCamera, type FlightCamera } from '@/three/flight';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
 import { buildPlants, disposePlants, type PlantBatch, swayPlants, updatePlants } from '@/three/plants';
@@ -73,7 +73,7 @@ type PointerHandler2 = (camera: THREE.Camera, scene: THREE.Scene, ndcX: number, 
 interface PointerHandlers {
   down: PointerHandler2;
   move: PointerHandler2;
-  up: () => void;
+  up: (camera: THREE.Camera, scene: THREE.Scene, ndcX?: number, ndcY?: number) => void;
 }
 
 export default function World3D({ editor }: World3DProps) {
@@ -101,6 +101,9 @@ export default function World3D({ editor }: World3DProps) {
 
   // Live weather consumed by the rAF loop each frame (state below is only for the chip).
   const weatherRef = useRef<WeatherCurrent | null>(null);
+  // Growth-model climate context fed to buildPlants/updatePlants/HUD; empty
+  // (legacy 20 °C baseline) until live weather arrives.
+  const growthCtxRef = useRef<{ ambientTempC?: number }>({});
 
   // Launch params (test hooks): fftime = initial timeOfDay, ffdebug = open Perf HUD.
   const [scrubDate, setScrubDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -122,6 +125,9 @@ export default function World3D({ editor }: World3DProps) {
   const [tourProgress, setTourProgress] = useState(0);
   const [weather, setWeather] = useState<WeatherCurrent | null>(null);
   const [weatherCached, setWeatherCached] = useState(false);
+  // State mirror of weatherRef.tempC so memoized growth rows recompute when
+  // the live reading lands (refs alone don't trigger renders).
+  const [ambientTempC, setAmbientTempC] = useState<number | null>(null);
   const [showDebug, setShowDebug] = useState(() => readLaunchParams().get('ffdebug') === '1');
   const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
   const [audioOn, setAudioOn] = useState(false);
@@ -147,6 +153,15 @@ export default function World3D({ editor }: World3DProps) {
   const handlersRef = useRef<PointerHandlers>({ down: handlePointerDown, move: handlePointerMove, up: handlePointerUp });
   handlersRef.current = { down: handlePointerDown, move: handlePointerMove, up: handlePointerUp };
 
+  // Painting tools claim left-drag/one-finger for strokes; orbit stays enabled
+  // only while the select tool is active. Synced render-phase like handlersRef
+  // (CameraControls reads its action map when its own listeners fire).
+  const toolRef = useRef(editor.tool);
+  toolRef.current = editor.tool;
+  if (engineRef.current) {
+    setEngineOrbitEnabled(engineRef.current, editor.tool === 'select');
+  }
+
   // Fetch weather (graceful offline: warn + keep defaults, never an unhandled rejection)
   useEffect(() => {
     const farm = editor.farm;
@@ -157,7 +172,9 @@ export default function World3D({ editor }: World3DProps) {
       .then((w: Weather) => {
         if (cancelled) return;
         weatherRef.current = w.current; // rAF loop reads this every frame
+        growthCtxRef.current = { ambientTempC: w.current.tempC }; // growth model reads live ambient
         setWeather(w.current);          // footer chip
+        setAmbientTempC(w.current.tempC); // growth ctx for memoized HUD rows
         setWeatherCached(Boolean(w.cached));
       })
       .catch((err: unknown) => {
@@ -200,6 +217,7 @@ export default function World3D({ editor }: World3DProps) {
     const engine = createEngine(canvas, 'light');
     engine.scene.background = null; // sky dome handles background
     engineRef.current = engine;
+    setEngineOrbitEnabled(engine, toolRef.current === 'select');
 
     // Sky system
     const sky = createSky(engine.scene);
@@ -221,7 +239,7 @@ export default function World3D({ editor }: World3DProps) {
 
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
-    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current);
+    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxRef.current);
     waterPlanesRef.current = buildWaterPlanes(plan, engine.scene);
 
     // Animals
@@ -374,7 +392,8 @@ export default function World3D({ editor }: World3DProps) {
       handlersRef.current.move(engine.camera, engine.scene, ndc.x, ndc.y);
     };
     const onPointerUp = (e: PointerEvent) => {
-      handlersRef.current.up();
+      const ndc = getNDC(e);
+      handlersRef.current.up(engine.camera, engine.scene, ndc.x, ndc.y);
       canvas.releasePointerCapture(e.pointerId);
     };
 
@@ -435,7 +454,7 @@ export default function World3D({ editor }: World3DProps) {
 
     // Structures & plants
     structureBatchesRef.current = updateStructures(structureBatchesRef.current, plan, engine.scene);
-    plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current);
+    plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxRef.current);
 
     // Water planes
     disposeWaterPlanes(waterPlanesRef.current);
@@ -507,8 +526,9 @@ export default function World3D({ editor }: World3DProps) {
     }
   }, [editor.planVersion, editor.cropById, showHistory]);
 
-  // Growth-only update: advancing the sim date (or switching scenario) must
-  // NOT rebuild ground/structures/animals — only the plant stages change.
+  // Growth-only update: advancing the sim date (or switching scenario, or the
+  // live ambient temp landing) must NOT rebuild ground/structures/animals —
+  // only the plant stages change.
   useEffect(() => {
     const engine = engineRef.current;
     const plan = editor.planRef.current;
@@ -520,8 +540,9 @@ export default function World3D({ editor }: World3DProps) {
       engine.scene,
       new Date(scrubDate),
       scenario,
+      { ambientTempC: ambientTempC ?? undefined },
     );
-  }, [scrubDate, scenario, editor.cropById]);
+  }, [scrubDate, scenario, ambientTempC, editor.cropById]);
 
   // Check rain/snow achievement
   useEffect(() => {
@@ -590,7 +611,7 @@ export default function World3D({ editor }: World3DProps) {
       seen.add(cropId);
       const crop = editor.cropById.get(cropId);
       if (!crop) continue;
-      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor');
+      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', { ambientTempC: ambientTempC ?? undefined });
       const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
       rows.push({
         id: cropId,
@@ -601,7 +622,7 @@ export default function World3D({ editor }: World3DProps) {
       });
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name));
-  }, [editor.cropById, editor.planVersion, scenario, scrubDate]);
+  }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC]);
 
   // Update weather FX + audio params in the rAF loop already handles audio
   const lastAchievement = achievements.current.unlocked[achievements.current.unlocked.length - 1];
