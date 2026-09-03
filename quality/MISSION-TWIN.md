@@ -133,23 +133,33 @@ edits (callers land in WS-A/WS-B):
 
 ### WS-D — Soil profile from open data (`src/lib/soil.ts` + Weather page card) — WAVE 1
 
-- New `src/lib/soil.ts`: ISRIC SoilGrids v2 point query
-  (`https://rest.isric.org/soilgrids/v2.0/properties/query?lat=..&lon=..&property=pH,texture_class...`
-  — verify exact property list against docs during implementation: pH, sand,
-  silt, clay, organic carbon, nitrogen, CEC at 0–5 cm and 5–15 cm depths).
-  Values arrive in depth-weighted means with scale factors (e.g. pH×10,
-  cg/cm³) — convert to conventional units and document.
-- Derive a `SoilType` classification from sand/silt/clay fractions (USDA
-  triangle, simplified: clay/sandy/silt/loam) so a farm's `soilType` can be
-  suggested from data.
-- localStorage cache keyed `ff-pro:soil:<lat>,<lng>` (soil doesn't change —
-  cache ~forever, refresh button only). Return `null` + never throw on
-  failure; show "soil data unavailable (offline)" state.
-- UI: "Soil Profile" card on the Weather page (it already shows live soil
-  temp/moisture from the forecast model — the card adds the ground truth:
-  texture bars, pH, organic carbon, CEC, derived classification). Small
-  "ISRIC SoilGrids" attribution line. Card is skeleton-while-loading and
-  hides cleanly when data is unavailable.
+- New `src/lib/soil.ts`. **Primary source: USDA Soil Data Access (SDA)** —
+  live-verified keyless with open CORS on 2026-09-03 (OPTIONS/200/400 all send
+  `ACAO: *`). `POST https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest`
+  body `format=JSON&query=<urlencoded SQL>`; point→map unit via
+  `SELECT mukey, muname FROM mapunit WHERE mukey IN (SELECT * FROM
+  SDA_Get_Mukey_from_intersection_with_WktWgs84('point(<lng> <lat>)'))`
+  (WKT is `point(lon lat)`), then a component/chorizon join for sand/silt/clay
+  totals, `ph1to1h2o_r`, `om_r`, `cec7_r`, `awc_r`. US-only coverage; errors
+  come back as XML even when JSON was requested — parse defensively.
+- **Fallback for non-US (or SDA failure): ISRIC SoilGrids**
+  `https://rest.isric.org/soilgrids/v2.0/classification/query?lat=..&lon=..&number=5`
+  (verified still working; gives WRB + USDA class names). The SoilGrids
+  `properties/query` endpoint is **verifiably paused (all values null as of
+  2026-09-03)** — attempt it only behind null-guards with a short timeout so
+  it lights up automatically if ISRIC restores it; one property per call
+  (comma lists 500), divide values by the response's `unit_measure.d_factor`.
+- Shape: `{ source: 'usda-sda' | 'soilgrids' | null, name, texture:
+  {sand,silt,clay}, ph, organicMatterPct, cec, awc, soilType }` where
+  `soilType` derives from texture fractions (simplified USDA triangle:
+  clay/sandy/silt/loam). Return `null` + never throw on failure.
+- localStorage cache keyed `ff-pro:soil:<lat2>,<lng2>` (soil doesn't change —
+  cache ~forever, refresh button only).
+- UI: "Soil Profile" card on the Weather page (which already shows live soil
+  temp/moisture from the forecast model — the card adds ground truth: texture
+  bars, pH, organic matter, CEC/AWC, derived classification, map-unit name).
+  Attribution line ("USDA NRCS Soil Data Access" / "ISRIC SoilGrids"). Card is
+  skeleton-while-loading and hides cleanly when data is unavailable.
 
 ### WS-A — Real simulation engine (`src/lib/sim.ts` + `localApi.ts`) — WAVE 2
 
@@ -250,12 +260,28 @@ populated. SPEC scope addendum if the simulation contract changes shape.
 
 ---
 
-## Appendix — Open-data source verification (research lane)
+## Appendix — Open-data source verification (research lane, 2026-09-03)
 
-> Pending: background research agent is verifying keyless/CORS status of
-> Open-Meteo Archive/CMIP6/Air-Quality, NASA POWER, SoilGrids, USDA SDA,
-> elevation, and crop-nutrient references. This section is finalized before
-> WS-C/WS-D workers dispatch; worker specs embed the verified endpoints.
+All CORS claims below were **live-tested with `Origin` headers** against the
+real endpoints on 2026-09-03 — not recalled from docs.
+
+| Source | Keyless | CORS | Status / notes |
+|---|---|---|---|
+| Open-Meteo Archive (ERA5, 1940→) | ✅ | ✅ `*` | **Adopted (WS-C/A).** Daily tmin/tmax/precip/**ET₀**; hourly soil temp/moisture (layer names differ from forecast API: `soil_temperature_0_to_7cm` etc. — normalize in the seam). Free tier: 10k calls/day, non-commercial. |
+| Open-Meteo Climate (CMIP6, 1950→2050) | ✅ | ✅ `*` | Verified; heavy weighted calls — cache aggressively. Future: model-based scenario sims. |
+| Open-Meteo Air Quality (CAMS) | ✅ | ✅ `*` | Verified. Ozone/NH₃/pollen — future leaf-damage + pollinator modifiers. |
+| Open-Meteo Geocoding / Elevation / Flood (GloFAS) / Marine | ✅ | ✅ `*` | All verified. Elevation = Copernicus DEM 90 m (≤100 pts/call). Flood = river discharge 1984→+210 d. |
+| NASA POWER (AG daily, 1981→) | ✅ | ✅ `*` | Verified working, keyless. Solar `ALLSKY_SFC_SW_DWN` MJ/m²/day (FAO-56 Rₛ), T2M, RH2M, `PRECTOTCORR` (no `PRECCIP` — corrected name only), −9999 sentinels. Blocks same-cell hammering — permanent per-farm cache. Not adopted this mission (independent-source sanity layer, future). |
+| **USDA SDA (SSURGO)** | ✅ | ✅ `*` (**new — outdated lore says blocked**) | **Adopted (WS-D primary).** `POST …/post.rest`, `format=JSON&query=<SQL>`; `SDA_Get_Mukey_from_intersection_with_WktWgs84('point(lon lat)')`. US-only; XML error bodies; be polite, cache. |
+| **ISRIC SoilGrids** | ✅ | ✅ `*` | ⚠️ **properties/query PAUSED — every value null (verified at 3 global sites; ISRIC notice 2026-09).** classification/query still works → WS-D fallback only, properties behind null-guards. |
+| Open-Elevation | ✅ | ✅ | Works but community-hosted, outage-prone — not adopted. **OpenTopoData FAILS CORS** (200, no ACAO header) — do not use. |
+| FAO-56 Kc/Ky tables | n/a | n/a | Free HTML (fao.org/4/x0490e/). Correct client-side move = one-time transcription into a TS data file. **Out of scope this mission** — WS-A uses archive ET₀ + catalog waterNeedMmDay instead; Kc refinement is a follow-up. |
+| GBIF occurrences | ✅ | ✅ `*` | Verified. Future pollinator/companion hints. |
+| NOAA CO-OPS tides | ✅ | ✅ `*` | Verified, US coastal only. Not adopted. |
+
+Free-tier reality: the whole Open-Meteo family is non-commercial, ≤10k
+calls/day, 5k/hour, 600/min — every adopted source is cached in localStorage
+and memoized per session accordingly.
 
 ## Verification Log
 
