@@ -316,3 +316,39 @@ validation agent; all gates PASS, zero findings attributable to the mission.
 6. **Offline honesty** — `?? undefined` fallbacks confirmed at both ambient
    call sites; undefined-ctx algebra is byte-identical to the pre-mission
    constant-baseline formula.
+
+### Wave 2 — GREEN (validated 2026-09-03, branch `mission-twin`, base `5e27890`)
+
+Scope: `499f506` (WS-A engine + stitch), `de30a7d` (WS-E monitoring truth),
+`09447db` (World3D ERA5 baseline). Independent validation agent; all gates
+PASS; `git status` scoped to exactly the six mission files; `types/index.ts`
+untouched.
+
+1. **Typecheck/build** — exit 0 both; three.js lazy chunk byte-identical
+   (782.62 kB).
+2. **Diff review** — no `Math.random` (documented `startDate`/`sampledAt`
+   anchors only); every sim constant carries an origin comment; `Api`
+   interface untouched (diff = imports + createSimulation body); old saved
+   sims render untouched (optional intersection keys, all guarded);
+   zero residual `getNdvi`/`listCells`/"SAR proxy" in Monitoring; every new
+   query has explicit queryFn + overridden staleTime; `growthCtxRef` never
+   in a dep array; init effect still `[sceneReady, farmId]`.
+3. **Determinism + twin semantics probe** (bundled engine): identical runs
+   byte-identical; different plan ⇒ different outcome; drought stress
+   outdoor 26.7 vs tent 17.4 (shelter works); fallow path provenance
+   `plan:'fallow'`.
+4. **Route smoke 4/4** — simulations/monitoring/weather/world on a
+   strict-port worktree dev server, every GATE line "zero runtime errors"
+   (one Chrome-hang infra flake on first weather attempt, clean on retry —
+   matches the Wave 1 precedent).
+5. **API stitch trace** — `localApi.createSimulation`: farm → forecast
+   (try/catch) → ERA5 normals → `runSimulation(farm, plan, crops, input,
+   forecast, climate)` → outcome JSON persisted; `SimOutcome` structurally
+   satisfies `SimulationResults`.
+
+**Mission complete.** The What-If simulation now simulates THE farm; the
+3D twin grows on the farm's real climate; soil identity comes from USDA
+SDA/SoilGrids; Monitoring numbers are plan- or weather-derived and honestly
+labeled. Known deferred polish: FAO-56 Kc stage tables (ET₀ currently
+uncorrected), CMIP6 scenario sims, soil data feeding the sim engine's
+nutrient model directly.

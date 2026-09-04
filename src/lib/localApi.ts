@@ -21,6 +21,8 @@ import type {
 import { cropLibrary } from '@/data/crops';
 import { state, persist } from '@/lib/store';
 import { deriveAlerts, fetchFarmWeather, type FarmWeather } from '@/lib/weather';
+import { fetchClimateNormals } from '@/lib/climate';
+import { runSimulation } from '@/lib/sim';
 
 function farmOrThrow(id: number): Farm {
   const f = state.farms.find((x) => x.id === id);
@@ -233,32 +235,27 @@ export const localApi: Api = {
   // Simulations
   listSimulations: async (farmId) => state.simulations.filter((s) => s.farmId === farmId),
   createSimulation: async (farmId, input) => {
-    const baseYield = 30;
-    const tempPenalty = Math.max(0, Math.abs(input.tempDeltaC) - 1) * 3;
-    const precipPenalty = input.precipMultiplier < 1 ? (1 - input.precipMultiplier) * 25 : 0;
-    const fertilizerBoost = input.fertilizerBoost * 1.5;
-    const yieldTonHa = Math.max(2, baseYield - tempPenalty - precipPenalty + fertilizerBoost);
-    const waterUseMm = Math.round(input.durationDays * 4.5 * input.precipMultiplier);
-    const carbonKgHa = Math.round(700 + input.fertilizerBoost * 60);
-    const profitUsdHa = Math.round(yieldTonHa * 60 - waterUseMm * 0.4 - input.fertilizerBoost * 30);
-    const stressScore = Math.min(
-      100,
-      Math.round(tempPenalty * 4 + precipPenalty * 2 + (input.fertilizerBoost > 4 ? 30 : 0)),
-    );
-    const summary =
-      input.scenarioType === 'baseline'
-        ? 'Standard weather produces a healthy baseline yield.'
-        : input.scenarioType === 'drought'
-          ? 'Reduced precipitation drops yield and increases stress markedly.'
-          : input.scenarioType === 'heat_stress'
-            ? 'Elevated temperature shortens the growing window and reduces yield.'
-            : input.scenarioType === 'optimal'
-              ? 'Optimal inputs boost yield with minimal crop stress.'
-              : 'Climate change scenario shows the impact of +2°C warming.';
-
-    const results: SimulationResults = {
-      yieldTonHa, waterUseMm, carbonKgHa, profitUsdHa, stressScore, summary,
-    };
+    // Real plan-aware engine (lib/sim.ts): inventory from the actual plan,
+    // daily series from the live forecast + ERA5 normals, per-crop stress →
+    // outcomes. Every fetch is graceful: offline degrades to cached weather
+    // and/or the climate-derived series, never a rejection.
+    const farm = farmOrThrow(farmId);
+    let forecast;
+    try {
+      forecast = (await farmWeather(farm)).forecast;
+    } catch {
+      // offline → engine uses climate normals / documented fallback
+    }
+    const climate = await fetchClimateNormals(farm.lat, farm.lng);
+    const outcome = runSimulation({
+      farm,
+      plan: state.plans[farmId] ?? null,
+      crops: [...cropLibrary, ...state.customCrops],
+      input,
+      forecast,
+      climate,
+    });
+    const results: SimulationResults = outcome;
 
     const sim: Simulation = {
       id: state.counters.sim++,

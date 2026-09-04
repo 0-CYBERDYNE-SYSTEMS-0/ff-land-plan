@@ -18,6 +18,7 @@ import { LineChart, Line, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { apiFetch } from '@/lib/api';
 import { useFarm } from '@/hooks/useFarms';
+import { planNdviGrid } from '@/lib/ndvi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Stat } from '@/components/shared/Stat';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ndviColor, ndviLabel } from '@/components/ndvi/ndviColor';
-import type { Alert, NdviEstimate, Sensor, SensorType } from '@/types';
+import type { Alert, Crop, PlanState, Sensor, SensorType, Weather, WeatherHistoryPoint } from '@/types';
 
 const SENSOR_ICON: Record<SensorType, typeof Droplets> = {
   soil_moisture: Droplets,
@@ -42,6 +43,31 @@ function isInRange(sensor: Sensor, v: number): boolean {
   if (sensor.sensorType === 'temperature') return v > 5 && v < 35;
   return true;
 }
+
+// Weather-derived virtual reading for a sensor slot, or null when offline /
+// unsupported type. series is null for rainfall (no history field for it).
+function virtualReading(
+  sensor: Sensor,
+  weather: Weather | null,
+  history: WeatherHistoryPoint[] | undefined,
+): { value: number; unit: string; series: { i: number; value: number }[] | null } | null {
+  if (!weather) return null;
+  const c = weather.current;
+  switch (sensor.sensorType) {
+    case 'soil_moisture':
+      return { value: c.soilMoisture, unit: '%', series: history?.map((h, i) => ({ i, value: h.soilMoisture })) ?? [] };
+    case 'temperature':
+      return { value: c.tempC, unit: '°C', series: history?.map((h, i) => ({ i, value: h.tempC })) ?? [] };
+    case 'humidity':
+      return { value: c.humidity, unit: '%', series: history?.map((h, i) => ({ i, value: h.humidity })) ?? [] };
+    case 'rainfall':
+      return { value: c.precipMm, unit: 'mm', series: null };
+    default:
+      return null;
+  }
+}
+
+const MS_24H = 24 * 60 * 60 * 1000;
 
 function AlertItem({ alert, onRead }: { alert: Alert; onRead: (id: number) => void }) {
   const variant = alert.severity === 'critical' ? 'destructive' : alert.severity === 'warning' ? 'secondary' : 'outline';
@@ -70,7 +96,17 @@ function AlertItem({ alert, onRead }: { alert: Alert; onRead: (id: number) => vo
   );
 }
 
-function SensorCard({ sensor, farmId }: { sensor: Sensor; farmId: number }) {
+function SensorCard({
+  sensor,
+  farmId,
+  weather,
+  history,
+}: {
+  sensor: Sensor;
+  farmId: number;
+  weather: Weather | null;
+  history: WeatherHistoryPoint[] | undefined;
+}) {
   const qc = useQueryClient();
   const { data: readings = [] } = useQuery({
     queryKey: ['readings', sensor.id],
@@ -96,8 +132,17 @@ function SensorCard({ sensor, farmId }: { sensor: Sensor; farmId: number }) {
     },
   });
 
-  const chartData = [...readings].reverse().map((r, i) => ({ i, value: r.value }));
-  const inRange = sensor.lastValue !== null ? isInRange(sensor, sensor.lastValue) : true;
+  // Truth pass: manual reading is authoritative only when fresh (< 24 h);
+  // otherwise a weather-fed virtual reading takes over, honestly badged.
+  const manualFresh = sensor.lastReadingAt !== null && Date.now() - new Date(sensor.lastReadingAt).getTime() < MS_24H;
+  const virtual = manualFresh ? null : virtualReading(sensor, weather, history);
+  const shownValue = manualFresh ? sensor.lastValue : virtual ? virtual.value : null;
+  const shownUnit = manualFresh ? sensor.lastUnit : virtual ? virtual.unit : sensor.lastUnit;
+  const chartData =
+    manualFresh || virtual?.series === null
+      ? [...readings].reverse().map((r, i) => ({ i, value: r.value }))
+      : virtual?.series ?? [];
+  const inRange = shownValue !== null && sensor.sensorType !== 'rainfall' ? isInRange(sensor, shownValue) : shownValue !== null;
 
   return (
     <Card>
@@ -108,15 +153,18 @@ function SensorCard({ sensor, farmId }: { sensor: Sensor; farmId: number }) {
             <CardTitle className="text-sm">{sensor.name}</CardTitle>
           </div>
           <div className="flex items-center gap-1.5">
-            {sensor.isActive ? (
-              <span className="flex items-center gap-1 text-xs text-green-600">
-                <span className="live-pulse w-2 h-2 rounded-full bg-green-500 block" /> Live
+            {virtual ? (
+              // Pulse only when the virtual feed is actually hydrating the card.
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="live-pulse w-2 h-2 rounded-full bg-blue-500 block" /> Virtual · Open-Meteo
               </span>
-            ) : (
+            ) : manualFresh ? (
+              <span className="text-xs text-green-600">Live</span>
+            ) : !sensor.isActive ? (
               <Badge variant="secondary" className="text-xs">
                 Offline
               </Badge>
-            )}
+            ) : null}
             <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={() => del.mutate()}>
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
@@ -126,10 +174,10 @@ function SensorCard({ sensor, farmId }: { sensor: Sensor; farmId: number }) {
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <span className="text-2xl font-bold">{sensor.lastValue !== null ? sensor.lastValue.toFixed(1) : '—'}</span>
-            <span className="text-sm text-muted-foreground ml-1">{sensor.lastUnit ?? ''}</span>
+            <span className="text-2xl font-bold">{shownValue !== null ? shownValue.toFixed(1) : '—'}</span>
+            <span className="text-sm text-muted-foreground ml-1">{shownUnit ?? ''}</span>
           </div>
-          {sensor.lastValue !== null &&
+          {shownValue !== null &&
             (inRange ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <AlertTriangle className="w-5 h-5 text-yellow-500" />)}
         </div>
         {chartData.length > 1 && (
@@ -169,20 +217,44 @@ function SensorCard({ sensor, farmId }: { sensor: Sensor; farmId: number }) {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          {sensor.lastReadingAt ? `Last: ${new Date(sensor.lastReadingAt).toLocaleTimeString()}` : 'No readings yet'}
+          {manualFresh && sensor.lastReadingAt
+            ? `Last manual: ${new Date(sensor.lastReadingAt).toLocaleTimeString()}`
+            : virtual
+              ? 'From live Open-Meteo weather'
+              : 'No readings yet'}
         </p>
       </CardContent>
     </Card>
   );
 }
 
-function NdviPanel({ farmId }: { farmId: number }) {
-  const { data, isFetching, refetch } = useQuery<NdviEstimate>({
-    queryKey: ['ndvi', farmId],
-    queryFn: () => apiFetch.getNdvi(farmId),
+interface NdviData {
+  cells: { x: number; y: number; ndvi: number }[];
+  sampledAt: string;
+  note: string;
+}
+
+function NdviPanel({
+  farmId,
+  plan,
+  crops,
+}: {
+  farmId: number;
+  plan: PlanState | null | undefined;
+  crops: Crop[] | undefined;
+}) {
+  const qc = useQueryClient();
+  const cropById = new Map((crops ?? []).map((c) => [c.id, c]));
+  const { data, isFetching, refetch } = useQuery<NdviData>({
+    queryKey: ['ndvi-modeled', farmId, plan?.updatedAt, crops?.length],
+    queryFn: () => {
+      if (!plan) return { cells: [], sampledAt: new Date().toISOString(), note: 'No plan yet' };
+      return planNdviGrid(plan, cropById);
+    },
+    enabled: !!plan,
     staleTime: 60_000,
   });
-  const grid = data?.ndviGrid ?? [];
+  const grid = data?.cells ?? [];
   const avg = grid.length > 0 ? grid.reduce((s, c) => s + c.ndvi, 0) / grid.length : 0;
   const buckets = [
     { label: '< 0.2 (Bare)', count: grid.filter((c) => c.ndvi < 0.2).length, color: '#D4380D' },
@@ -200,7 +272,16 @@ function NdviPanel({ farmId }: { farmId: number }) {
               Modeled
             </Badge>
           </CardTitle>
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => refetch()} disabled={isFetching}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => {
+              qc.invalidateQueries({ queryKey: ['ndvi-modeled', farmId] });
+              refetch();
+            }}
+            disabled={isFetching}
+          >
             <Activity className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -213,7 +294,7 @@ function NdviPanel({ farmId }: { farmId: number }) {
             </div>
             <div className="text-xs text-muted-foreground">Average NDVI</div>
           </div>
-          <div className="text-right text-xs text-muted-foreground">{ndviLabel(avg)}</div>
+          <div className="text-right text-xs text-muted-foreground">{grid.length > 0 ? ndviLabel(avg) : 'No plan yet'}</div>
         </div>
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
@@ -238,8 +319,8 @@ function NdviPanel({ farmId }: { farmId: number }) {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Source: FarmFriend weather-fusion model (SAR proxy).{' '}
-          {data ? `Updated ${new Date(data.timestamp).toLocaleTimeString()}` : ''}
+          {data?.note ?? 'No plan yet'}.{' '}
+          {data ? `Updated ${new Date(data.sampledAt).toLocaleTimeString()}` : ''}
         </p>
       </CardContent>
     </Card>
@@ -263,9 +344,28 @@ export function Monitoring({ farmId }: { farmId: number }) {
     staleTime: 15 * 60 * 1000,
     refetchInterval: 60_000,
   });
-  const { data: cells = [] } = useQuery({
-    queryKey: ['cells', farmId],
-    queryFn: () => apiFetch.listCells(farmId),
+  // Plan + catalog drive the stat row (replaces the legacy seed-noise cells).
+  const { data: plan } = useQuery<PlanState | null>({
+    queryKey: ['plan', farmId],
+    queryFn: () => apiFetch.getPlan(farmId),
+  });
+  const { data: crops } = useQuery<Crop[]>({
+    queryKey: ['crops'],
+    queryFn: () => apiFetch.listCrops(),
+  });
+  // Live weather: explicit queryFn + overridden staleTime (global defaults are
+  // hostile: staleTime Infinity + URL-joining queryFn).
+  const { data: weather } = useQuery<Weather>({
+    queryKey: ['weather', farmId],
+    queryFn: () => apiFetch.getWeather(farmId),
+    staleTime: 15 * 60 * 1000,
+    retry: false,
+  });
+  const { data: history } = useQuery<WeatherHistoryPoint[]>({
+    queryKey: ['weather-history', farmId],
+    queryFn: () => apiFetch.getWeatherHistory(farmId, 24),
+    staleTime: 15 * 60 * 1000,
+    retry: false,
   });
 
   const addSensor = useMutation({
@@ -286,10 +386,27 @@ export function Monitoring({ farmId }: { farmId: number }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts', farmId] }),
   });
 
-  const totalCells = cells.length;
-  const avgMoisture = totalCells > 0 ? cells.reduce((s, c) => s + (c.soilMoisture ?? 0), 0) / totalCells : 0;
-  const avgNitrogen = totalCells > 0 ? cells.reduce((s, c) => s + (c.nitrogenLevel ?? 0), 0) / totalCells : 0;
-  const dryCells = cells.filter((c) => (c.soilMoisture ?? 0) < 25).length;
+  // --- Plan-derived stat row (honest estimates, not telemetry) --------------
+  const cropById = new Map((crops ?? []).map((c) => [c.id, c]));
+  const plantedEntries = Object.entries(plan?.planting ?? {});
+  const plantedCount = plantedEntries.length;
+  const moisture = weather?.current.soilMoisture ?? null;
+
+  const needsIrrigation =
+    moisture !== null &&
+    plantedEntries.some(([, id]) => {
+      const crop = cropById.get(id);
+      return crop && crop.waterNeedMmDay > 4 && moisture < 30 && !(plan?.surface && plan.surface !== 'outdoor');
+    });
+  const thirstyCount = plantedEntries.filter(([, id]) => (cropById.get(id)?.waterNeedMmDay ?? 0) > 4).length;
+  const demandingShare =
+    plantedCount > 0
+      ? plantedEntries.filter(([, id]) => {
+          const need = cropById.get(id)?.nitrogenNeed;
+          return need === 'high' || need === 'medium';
+        }).length / plantedCount
+      : 0;
+
   const unreadAlerts = alerts.filter((a) => !a.isRead).length;
 
   return (
@@ -300,17 +417,33 @@ export function Monitoring({ farmId }: { farmId: number }) {
         </Button>
         <div className="flex-1">
           <h1 className="text-xl font-bold">Monitoring</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{farm?.name} — sensors, alerts &amp; satellite health</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{farm?.name} — sensors, alerts &amp; plant health</p>
         </div>
         <Button size="sm" onClick={() => setAddOpen((v) => !v)} className="gap-1.5" data-testid="btn-add-sensor">
           <Plus className="w-4 h-4" /> Add Sensor
         </Button>
       </div>
 
+      <p className="text-xs text-muted-foreground">Plan-based estimates — not sensor telemetry</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Soil Moisture" value={`${avgMoisture.toFixed(0)}%`} sub={avgMoisture < 30 ? 'Irrigation needed' : 'Adequate'} progress={avgMoisture} />
-        <Stat label="Nitrogen Level" value={`${avgNitrogen.toFixed(0)}%`} sub={avgNitrogen < 35 ? 'Apply fertilizer' : 'Good'} progress={avgNitrogen} />
-        <Stat label="Dry Cells" value={dryCells} sub={`of ${totalCells} total`} progress={(dryCells / Math.max(totalCells, 1)) * 100} />
+        <Stat
+          label="Soil Moisture"
+          value={moisture !== null ? `${moisture.toFixed(0)}%` : '—'}
+          sub={moisture === null ? (plantedCount === 0 ? 'No plan yet' : 'Weather unavailable') : needsIrrigation ? 'Irrigation needed' : 'Adequate'}
+          progress={moisture ?? 0}
+        />
+        <Stat
+          label="Nitrogen Level"
+          value={plantedCount > 0 ? `${Math.round(demandingShare * 100)}%` : '—'}
+          sub={plantedCount === 0 ? 'No plan yet' : demandingShare >= 0.5 ? 'Supplement recommended' : 'Adequate'}
+          progress={demandingShare * 100}
+        />
+        <Stat
+          label="Thirsty Cells"
+          value={thirstyCount}
+          sub={plantedCount === 0 ? 'No plan yet' : `of ${plantedCount} planted cells`}
+          progress={(thirstyCount / Math.max(plantedCount, 1)) * 100}
+        />
         <Stat label="Active Alerts" value={unreadAlerts} sub={unreadAlerts > 0 ? 'Needs attention' : 'All clear'} progress={Math.min(100, unreadAlerts * 20)} />
       </div>
 
@@ -366,7 +499,7 @@ export function Monitoring({ farmId }: { farmId: number }) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {sensors.map((s) => (
-                  <SensorCard key={s.id} sensor={s} farmId={farmId} />
+                  <SensorCard key={s.id} sensor={s} farmId={farmId} weather={weather ?? null} history={history} />
                 ))}
               </div>
             )}
@@ -374,7 +507,7 @@ export function Monitoring({ farmId }: { farmId: number }) {
         </div>
 
         <div className="space-y-4">
-          <NdviPanel farmId={farmId} />
+          <NdviPanel farmId={farmId} plan={plan} crops={crops} />
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
