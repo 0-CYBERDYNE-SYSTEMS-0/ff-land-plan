@@ -46,6 +46,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { ScenarioType, Simulation, SimulationResults } from '@/types';
+import type { SimCropResult, SimProvenance } from '@/lib/sim';
+
+type ParsedResults = SimulationResults & { perCrop?: SimCropResult[]; provenance?: SimProvenance };
 
 const PRESETS: { type: ScenarioType; label: string; desc: string; icon: typeof Sprout; tempDelta: number; precip: number; fert: number }[] = [
   { type: 'baseline', label: 'Current Conditions', desc: "Simulate with today's data", icon: Sprout, tempDelta: 0, precip: 1, fert: 0 },
@@ -74,7 +77,7 @@ const SCENARIO_COLOR: Record<ScenarioType, string> = {
 };
 
 function SimulationCard({ sim }: { sim: Simulation }) {
-  const results: SimulationResults | null = sim.results ? JSON.parse(sim.results) : null;
+  const results: ParsedResults | null = sim.results ? JSON.parse(sim.results) : null;
   const qc = useQueryClient();
   const del = useMutation({
     mutationFn: () => apiFetch.deleteSimulation(sim.id),
@@ -140,6 +143,36 @@ function SimulationCard({ sim }: { sim: Simulation }) {
               </RadarChart>
             </ResponsiveContainer>
           </div>
+          {results.provenance && (
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="secondary" className="text-[10px]">
+                {results.provenance.weather === 'live-forecast' ? 'live forecast' : 'climate model'}
+              </Badge>
+              {results.provenance.climate === 'era5-normals' && (
+                <Badge variant="secondary" className="text-[10px]">ERA5 normals</Badge>
+              )}
+              <Badge variant={results.provenance.plan === 'plan-aware' ? 'default' : 'outline'} className="text-[10px]">
+                {results.provenance.plan === 'plan-aware' ? 'plan-aware' : 'fallow'}
+              </Badge>
+            </div>
+          )}
+          {results.perCrop && results.perCrop.length > 0 && (
+            <div className="space-y-0.5">
+              {results.perCrop.map((c) => (
+                <div key={c.cropId} className="flex items-center justify-between text-xs">
+                  <span className="truncate">
+                    {c.name} <span className="text-muted-foreground">×{c.cells}</span>
+                  </span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="text-green-600 font-medium">{c.yieldTonHa} t</span>
+                    <span className={c.stressScore > 50 ? 'text-red-500' : 'text-muted-foreground'}>
+                      stress {Math.round(c.stressScore)}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-muted-foreground italic">{results.summary}</p>
         </CardContent>
       )}
