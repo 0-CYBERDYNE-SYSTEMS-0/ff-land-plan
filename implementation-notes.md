@@ -402,3 +402,39 @@ NFT channels, LED + glass shell).
 **Trap (v3):** don't give enclosed shells a solid ceiling — the default
 isometric camera looks down into the room and the lid eats the whole frame.
 Open-top beam frame + cutaway walls is the house style now.
+
+## Mission TWIN — Wave 2 (2026-09-03, branch `mission-twin`)
+
+**Real simulation engine (`lib/sim.ts`):** `runSimulation(farm, plan, crops,
+input, forecast?, climate?, startDate?)` — pure, deterministic, plan-aware.
+Daily series = live forecast first, then ERA5 monthly normals (linear
+mid-month blend), then a documented generic fallback. Per-crop: GDD (base =
+clamp(minTempC, 0, 10)), heat/cold stress days vs catalog tolerances, water
+deficit vs `waterNeedMmDay` (irrigation proxy = ET₀ × 0.7), nutrient stress
+relieved by fertilizerBoost. Stress → Ky-style growthFactor (1 − 0.6·stress);
+yield = catalog `yieldTonHa` × area × factor. Carbon = category residue base
+× (1 + 0.1·boost); profit = price bands by category − water/fert costs. All
+constants carry origin comments. `localApi.createSimulation` wires it (same
+`Api` signature); results JSON gains optional `perCrop` + `provenance` —
+old saved sims render untouched.
+
+**Monitoring truth pass:** NDVI grid is now `planNdviGrid(plan, crops)` —
+stage-driven proxy off the real planting map (soil 0.12, stage curve
+0.25→0.75, category nudges, ≤4 000-pt stride) with the honest label
+"Modeled from plan (not satellite imagery)". The fictional "weather-fusion
+model (SAR proxy)" line and the `listCells` seed-noise stat row are gone
+from the page (endpoints kept for compat). Sensors: soil_moisture/
+temperature/humidity/rainfall hydrate from live Open-Meteo as "Virtual ·
+Open-Meteo"; the pulse badge appears only when a virtual feed is live or a
+manual read is <24 h old. Stat row = plan-based estimates (thirsty cells,
+nitrogen-demand share, live soil moisture vs crop need; enclosed surfaces
+exempt from irrigation nagging).
+
+**World3D climate identity:** `fetchClimateNormals` baseline threads into
+`growthCtxRef.baselineTempC` (state mirror + growth-effect/HUD deps). A
+date-scrub to March now runs a Portland farm against its real 17.4 °C
+growing-season math, not a hardcoded 20. Provenance chip "ERA5 2016–2025"
+in the footer when connected; offline = byte-identical legacy behavior.
+
+**Validation:** Wave 2 GREEN — determinism/plan-awareness/shelter probes,
+4/4 route smoke, diff review in `quality/MISSION-TWIN.md` Verification Log.
