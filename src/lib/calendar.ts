@@ -62,9 +62,15 @@ export function buildPlantingCalendar(farm: Farm, plan: PlanState, crops: Crop[]
   const planCrops = uniquePlanCrops(plan, crops);
   const today = new Date();
   // Treat malformed stored frost strings (legacy free-form input) as absent
-  // rather than feeding NaN months into date math.
-  const lastFrost = farm.lastFrost && isValidMonthDay(farm.lastFrost) ? dateFromMonthDay(farm.lastFrost, year) : null;
-  const firstFrost = farm.firstFrost && isValidMonthDay(farm.firstFrost) ? dateFromMonthDay(farm.firstFrost, year) : null;
+  // rather than feeding NaN months into date math. Southern-hemisphere farms
+  // wrap the heuristic (last frost ~Nov, first ~Apr), so first frost lands in
+  // the NEXT calendar year whenever it precedes last frost — keeping the
+  // season and frost-risk checks chronological.
+  let lastFrost = farm.lastFrost && isValidMonthDay(farm.lastFrost) ? dateFromMonthDay(farm.lastFrost, year) : null;
+  let firstFrost = farm.firstFrost && isValidMonthDay(farm.firstFrost) ? dateFromMonthDay(farm.firstFrost, year) : null;
+  if (lastFrost && firstFrost && firstFrost.getTime() <= lastFrost.getTime()) {
+    firstFrost = dateFromMonthDay(farm.firstFrost!, year + 1);
+  }
   const actions: CalendarAction[] = [];
 
   for (const crop of planCrops) {
@@ -129,8 +135,10 @@ export function calendarPercent(doyValue: number): number {
 }
 
 export function frostDoy(farm: Farm): { last: number | null; first: number | null } {
-  return {
-    last: farm.lastFrost && isValidMonthDay(farm.lastFrost) ? monthDayToDoy(farm.lastFrost) : null,
-    first: farm.firstFrost && isValidMonthDay(farm.firstFrost) ? monthDayToDoy(farm.firstFrost) : null,
-  };
+  const last = farm.lastFrost && isValidMonthDay(farm.lastFrost) ? monthDayToDoy(farm.lastFrost) : null;
+  let first = farm.firstFrost && isValidMonthDay(farm.firstFrost) ? monthDayToDoy(farm.firstFrost) : null;
+  // Southern hemisphere: first frost falls after last frost in the wrap (Apr
+  // follows Nov), i.e. in the next seasonal cycle — push it past the year mark.
+  if (last !== null && first !== null && first <= last) first += 365;
+  return { last, first };
 }

@@ -84,11 +84,12 @@ export interface PlanStats {
 const DEFAULT_SPACING_CM = 30;
 
 export function plantsForArea(crop: Crop, cells: number): number {
-  if (cells === 0) return 0;
+  // SPEC amendment 3 (binding): floor(area / spacingArea) with no minimum —
+  // an area smaller than one spacing footprint counts zero plants.
   const areaM2 = cells * CELL_AREA_M2;
   const spacing = (crop.spacingCm ?? DEFAULT_SPACING_CM) / 100;
   const rowSpacing = (crop.rowSpacingCm ?? crop.spacingCm ?? DEFAULT_SPACING_CM) / 100;
-  return Math.max(1, Math.floor(areaM2 / (spacing * rowSpacing)));
+  return Math.floor(areaM2 / (spacing * rowSpacing));
 }
 
 export function computeStats(plan: PlanState, crops: Crop[]): PlanStats {

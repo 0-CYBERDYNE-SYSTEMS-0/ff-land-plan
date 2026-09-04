@@ -122,6 +122,10 @@ export default function World3D({ editor }: World3DProps) {
   const autoTimeRef = useRef(false);
   const audioOnRef = useRef(false);
   const [tourActive, setTourActive] = useState(false);
+  // Mirrored flight state: the live flag sits behind flightRef (mutated by the
+  // button and by Escape inside flight.ts), which alone never re-renders React.
+  const [flightActive, setFlightActive] = useState(false);
+  const flightActiveRef = useRef(false);
   const [tourProgress, setTourProgress] = useState(0);
   const [weather, setWeather] = useState<WeatherCurrent | null>(null);
   const [weatherCached, setWeatherCached] = useState(false);
@@ -351,6 +355,11 @@ export default function World3D({ editor }: World3DProps) {
         if (flightTime.current > 60) {
           achievements.current.check('flight_time');
         }
+      }
+      const flightNow = flightRef.current?.active ?? false;
+      if (flightNow !== flightActiveRef.current) {
+        flightActiveRef.current = flightNow;
+        setFlightActive(flightNow);
       }
 
       // Perf HUD
@@ -798,9 +807,9 @@ export default function World3D({ editor }: World3DProps) {
               flightRef.current?.activate();
             }
           }}
-          className="pointer-events-auto rounded-md bg-background/90 px-3 py-2 text-xs font-medium text-muted-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
+          className={`pointer-events-auto rounded-md px-3 py-2 text-xs font-medium shadow-sm ${flightActive ? 'bg-destructive text-destructive-foreground' : 'bg-background/90 text-muted-foreground hover:bg-primary hover:text-primary-foreground'}`}
         >
-          {flightRef.current?.active ? '✈ Exit Flight' : '✈ Fly'}
+          {flightActive ? '✈ Exit Flight' : '✈ Fly'}
         </button>
 
         {/* Weather info */}

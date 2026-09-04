@@ -172,7 +172,9 @@ export function fetchSoilProfile(lat: number, lng: number): Promise<SoilProfile 
       profile = null; // never throw past the module
     }
     if (profile) writeCache(key, profile);
-    else inflight.delete(key); // failed lookup: allow a retry on the next call
+    // Settled: drop the entry so Refresh can actually refetch (the map exists
+    // only to dedupe concurrent requests, not to memoize resolved ones).
+    inflight.delete(key);
     return profile;
   })();
   inflight.set(key, promise);
