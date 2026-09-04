@@ -386,11 +386,12 @@ sim-integration stitch follows the same orchestrator pattern as Wave 2).
   (`archive-api.open-meteo.com/v1/archive`, verified keyless/CORS); on
   failure, per-year NASA POWER daily (`power.larc.nasa.gov/api/temporal/daily/point`,
   params `T2M_MAX,T2M_MIN,PRECTOTCORR`, `community=AG`, dates `YYYYMMDD`,
-  −9999 sentinels → skip day; ET₀ from POWER is unavailable → derive proxy
-  `et0 ≈ 0.5 × max(0, tmean)/14 × ...` NO — document a simple Hargreaves-style
-  `et0 ≈ 0.0023 × RA_MJ × (tmeanC + 17.8) × sqrt(tmax−tmin)` with RA
-  approximated by latitude month table, OR simpler documented constant-K
-  proxy — worker chooses and documents, determinism required). POWER source
+  −9999 sentinels → skip day). POWER has no ET₀ variable: derive it with the
+  documented Hargreaves proxy `et0 = 0.0023 × RA × (tmeanC + 17.8) ×
+  sqrt(max(0, tmax − tmin))`, where RA (extraterrestrial radiation, MJ/m²/day)
+  comes from a small exported latitude×month lookup table (12 values, mid-month
+  day-of-year, standard table — cite FAO-56 Annex). Deterministic, commented.
+  POWER source
   ⇒ `source: 'nasa-power'`. Cache `ff-pro:seasons:<lat2dp>,<lng2dp>`
   (versioned; ~10 y × 365 × 3 ≈ small). Never throw; <3 usable years ⇒ null.
 - `src/lib/cmip6.ts`:
@@ -401,7 +402,9 @@ sim-integration stitch follows the same orchestrator pattern as Wave 2).
   `climate-api.open-meteo.com/v1/climate` (verified keyless/CORS; weighted
   calls are heavy — keep it to TWO short windows: 2021–2025 vs 2041–2045,
   single model `MRI_AGCM3_2_S`, daily `temperature_2m_mean,precipitation_sum`).
-  Deltas: tmean difference, precip % change (2040s vs 2020s). Cache FOREVER
+  Deltas: tmean difference; precip % change GUARDED — if either window's
+  mean monthly precip < 5 mm, set deltaPrecipPct to null (type:
+  `number | null`) and the sim applies the temperature delta only. Cache FOREVER
   (`ff-pro:cmip6:<lat2dp>,<lng2dp>`; projections don't change). Never throw.
 - `src/lib/sim.ts` (extension, backward-compatible):
   - `runSimulation` args gain `ensembles?: SeasonEnsembles | null` and
@@ -409,8 +412,9 @@ sim-integration stitch follows the same orchestrator pattern as Wave 2).
   - Refactor the daily-series core so the whole per-crop outcome computation
     can run against ANY daily series (already nearly true); run it once per
     ensemble year → `SimOutcome.range?: { lowYieldTonHa; medianYieldTonHa;
-    highYieldTonHa; years: number }` (median = middle of sorted years; years
-    < 3 ⇒ omit range).
+    highYieldTonHa; years: number }` (median = for an even
+    year count, the average of the two middle sorted values (documented, keeps
+    determinism unambiguous); fewer than 3 usable years ⇒ omit range).
   - `climate_change` scenario: when `projection` present, apply
     `deltaTempC`/`deltaPrecipPct` (converted to the same shelter/attenuation
     path as `tempDeltaC`/`precipMultiplier` — document the mapping) INSTEAD
