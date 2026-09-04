@@ -352,3 +352,115 @@ SDA/SoilGrids; Monitoring numbers are plan- or weather-derived and honestly
 labeled. Known deferred polish: FAO-56 Kc stage tables (ET₀ currently
 uncorrected), CMIP6 scenario sims, soil data feeding the sim engine's
 nutrient model directly.
+
+---
+
+# WAVE 3 — Tier-2 Data Wiring (spec written 2026-09-04, branch `twin-w3`)
+
+Goal: simulation outputs become distributions instead of single numbers, the
+climate-change scenario becomes real projected data, and the twin gains
+environmental awareness (ozone stress, flood risk). Two lanes, disjoint files:
+
+| Lane | Owns | Delivers |
+|---|---|---|
+| L1 "Seasons & Scenarios" | `src/lib/ensembles.ts` (new), `src/lib/cmip6.ts` (new), `src/lib/sim.ts`, `src/pages/Simulations.tsx` | Per-year yield ranges (ERA5 ensembles w/ NASA POWER fallback), CMIP6-driven climate scenario |
+| L2 "Environment" | `src/lib/airquality.ts` (new), `src/lib/flood.ts` (new), `src/pages/Weather.tsx` | CAMS ozone card + GloFAS flood-risk chip on the Weather page |
+
+Deferred this wave (recorded, not forgotten): DLI/radiation light model for
+enclosed surfaces (#9 — needs World3D threading of radiation data; separate
+small effort), NASA POWER as a *primary* source (used only as L1's resilience
+fallback), ozone/flood feeding the growth model (L2 ships display + data; the
+sim-integration stitch follows the same orchestrator pattern as Wave 2).
+
+## L1 spec — Seasons & Scenarios
+
+- `src/lib/ensembles.ts`:
+  ```ts
+  export interface SeasonYear { year: number; daily: { tmeanC: number; precipMm: number; et0Mm: number }[] }
+  export interface SeasonEnsembles { years: SeasonYear[]; source: 'era5' | 'nasa-power' }
+  export function fetchSeasonEnsembles(lat: number, lng: number): Promise<SeasonEnsembles | null>
+  ```
+  ONE archive request (same 10-complete-years window as climate.ts — reuse
+  the window logic, not the module's privates): daily tmean/precip/ET₀ arrays
+  split per calendar year, values rounded to 2 dp. ERA5 primary
+  (`archive-api.open-meteo.com/v1/archive`, verified keyless/CORS); on
+  failure, per-year NASA POWER daily (`power.larc.nasa.gov/api/temporal/daily/point`,
+  params `T2M_MAX,T2M_MIN,PRECTOTCORR`, `community=AG`, dates `YYYYMMDD`,
+  −9999 sentinels → skip day; ET₀ from POWER is unavailable → derive proxy
+  `et0 ≈ 0.5 × max(0, tmean)/14 × ...` NO — document a simple Hargreaves-style
+  `et0 ≈ 0.0023 × RA_MJ × (tmeanC + 17.8) × sqrt(tmax−tmin)` with RA
+  approximated by latitude month table, OR simpler documented constant-K
+  proxy — worker chooses and documents, determinism required). POWER source
+  ⇒ `source: 'nasa-power'`. Cache `ff-pro:seasons:<lat2dp>,<lng2dp>`
+  (versioned; ~10 y × 365 × 3 ≈ small). Never throw; <3 usable years ⇒ null.
+- `src/lib/cmip6.ts`:
+  ```ts
+  export interface ClimateProjection { model: string; horizon: string; deltaTempC: number; deltaPrecipPct: number }
+  export function fetchClimateProjection(lat: number, lng: number): Promise<ClimateProjection | null>
+  ```
+  `climate-api.open-meteo.com/v1/climate` (verified keyless/CORS; weighted
+  calls are heavy — keep it to TWO short windows: 2021–2025 vs 2041–2045,
+  single model `MRI_AGCM3_2_S`, daily `temperature_2m_mean,precipitation_sum`).
+  Deltas: tmean difference, precip % change (2040s vs 2020s). Cache FOREVER
+  (`ff-pro:cmip6:<lat2dp>,<lng2dp>`; projections don't change). Never throw.
+- `src/lib/sim.ts` (extension, backward-compatible):
+  - `runSimulation` args gain `ensembles?: SeasonEnsembles | null` and
+    `projection?: ClimateProjection | null`.
+  - Refactor the daily-series core so the whole per-crop outcome computation
+    can run against ANY daily series (already nearly true); run it once per
+    ensemble year → `SimOutcome.range?: { lowYieldTonHa; medianYieldTonHa;
+    highYieldTonHa; years: number }` (median = middle of sorted years; years
+    < 3 ⇒ omit range).
+  - `climate_change` scenario: when `projection` present, apply
+    `deltaTempC`/`deltaPrecipPct` (converted to the same shelter/attenuation
+    path as `tempDeltaC`/`precipMultiplier` — document the mapping) INSTEAD
+    of the legacy constant +2 °C; fallback unchanged.
+  - `SimProvenance.climate` union extends with `'era5-ensemble'` (set when a
+    range was computed) — existing values stay valid; old stored sims keep
+    rendering.
+  - Summary line appends range when present: "yield range 5.1–9.8 t/ha
+    (median 7.2, 10 seasons)".
+- `src/pages/Simulations.tsx`: render `range` as a compact
+  low–median–high line/chips in SimulationCard; provenance chip
+  "CMIP6 2040s" when the climate_change run used a projection. Absent keys
+  degrade silently. All testids intact.
+
+## L2 spec — Environment
+
+- `src/lib/airquality.ts`:
+  ```ts
+  export interface AirQuality { ozoneUgM3: number | null; fetchedAt: string }
+  export function fetchAirQuality(lat: number, lng: number): Promise<AirQuality | null>
+  ```
+  `air-quality-api.open-meteo.com/v1/air-quality` (verified keyless/CORS),
+  `hourly=ozone`, `forecast_days=3`, current-hour index (same hourly-index
+  pattern as weather.ts — reuse the approach). 1 h TTL cache +
+  in-flight dedupe. Never throw.
+- `src/lib/flood.ts`:
+  ```ts
+  export interface FloodRisk { dischargeM3s: number; riskLevel: 'low' | 'elevated' | 'high'; fetchedAt: string }
+  export function fetchFloodRisk(lat: number, lng: number): Promise<FloodRisk | null>
+  ```
+  `flood-api.open-meteo.com/v1/flood` (verified keyless/CORS),
+  `daily=river_discharge` over a window of `past_days`-equivalent 30 d
+  history + 7 d forecast (GloFAS supports arbitrary start/end; pick the
+  smallest pair of calls that yields both). Risk = forecast-window max vs
+  the 30-day distribution: ≥ p95 'high', ≥ p75 'elevated', else 'low'
+  (documented heuristic — no absolute thresholds exist in GloFAS). 12 h TTL
+  cache + dedupe. Never throw. Coastal points with no river ⇒ nulls/empty
+  array ⇒ null (hidden UI).
+- `src/pages/Weather.tsx`: additive "Environment" card below Soil Profile:
+  ozone μg/m³ with documented threshold chip (≥ 100 μg/m³ ⇒ "leaf-damage
+  risk for sensitive crops", EU target value ≈ 120 — cite in comment),
+  flood chip when 'elevated'/'high' with discharge figure, skeleton loading,
+  hide-when-null, attribution "CAMS · Copernicus" / "GloFAS · Copernicus",
+  explicit queryFn + sane staleTime (hostile defaults trap).
+
+## Verification gates (Wave 3)
+
+Same suite as Wave 2: typecheck/build (three.js chunk byte-identical),
+determinism probes (ensembles: same inputs ⇒ byte-identical range; projection
+path deterministic), route smoke on simulations + weather routes, diff review
+scoped to the five files, backward-compat (old sims, old provenance values,
+no new required localStorage keys), never-throw module boundaries, 10k/day
+free-tier discipline (count requests per cache miss: L1 ≤ 3, L2 ≤ 2).
