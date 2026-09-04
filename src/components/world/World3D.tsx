@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { PlanEditor } from '@/components/designer/usePlanEditor';
 import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
+import { fetchClimateNormals } from '@/lib/climate';
 import { SCENARIOS, growthProgress, scenarioGrowthMod, stageForScale } from '@/lib/growth';
 import type { ScenarioType, Weather, WeatherCurrent } from '@/types';
 import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '@/three/animals';
@@ -102,8 +103,8 @@ export default function World3D({ editor }: World3DProps) {
   // Live weather consumed by the rAF loop each frame (state below is only for the chip).
   const weatherRef = useRef<WeatherCurrent | null>(null);
   // Growth-model climate context fed to buildPlants/updatePlants/HUD; empty
-  // (legacy 20 °C baseline) until live weather arrives.
-  const growthCtxRef = useRef<{ ambientTempC?: number }>({});
+  // (legacy 20 °C baseline) until live weather / climate normals arrive.
+  const growthCtxRef = useRef<{ ambientTempC?: number; baselineTempC?: number }>({});
 
   // Launch params (test hooks): fftime = initial timeOfDay, ffdebug = open Perf HUD.
   const [scrubDate, setScrubDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -132,6 +133,10 @@ export default function World3D({ editor }: World3DProps) {
   // State mirror of weatherRef.tempC so memoized growth rows recompute when
   // the live reading lands (refs alone don't trigger renders).
   const [ambientTempC, setAmbientTempC] = useState<number | null>(null);
+  // State mirror of the farm's ERA5 climate-normals baseline (null = offline /
+  // not yet fetched → growth falls back to the legacy 20 °C constant).
+  const [climateBaselineC, setClimateBaselineC] = useState<number | null>(null);
+  const [climateLabel, setClimateLabel] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(() => readLaunchParams().get('ffdebug') === '1');
   const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
   const [audioOn, setAudioOn] = useState(false);
@@ -180,6 +185,16 @@ export default function World3D({ editor }: World3DProps) {
         setWeather(w.current);          // footer chip
         setAmbientTempC(w.current.tempC); // growth ctx for memoized HUD rows
         setWeatherCached(Boolean(w.cached));
+        // Seasonal climate identity: fire-and-forget (localStorage-cached, so
+        // usually instant; resolves null offline — never rejects).
+        fetchClimateNormals(farm.lat, farm.lng)
+          .then((n) => {
+            if (cancelled || !n || typeof n.baselineTempC !== 'number') return;
+            growthCtxRef.current = { ...growthCtxRef.current, baselineTempC: n.baselineTempC };
+            setClimateBaselineC(n.baselineTempC);
+            setClimateLabel(`ERA5 ${n.startYear}–${n.endYear}`);
+          })
+          .catch(() => {});
       })
       .catch((err: unknown) => {
         console.warn('weather unavailable, using defaults', err);
@@ -549,9 +564,9 @@ export default function World3D({ editor }: World3DProps) {
       engine.scene,
       new Date(scrubDate),
       scenario,
-      { ambientTempC: ambientTempC ?? undefined },
+      { ambientTempC: ambientTempC ?? undefined, baselineTempC: climateBaselineC ?? undefined },
     );
-  }, [scrubDate, scenario, ambientTempC, editor.cropById]);
+  }, [scrubDate, scenario, ambientTempC, climateBaselineC, editor.cropById]);
 
   // Check rain/snow achievement
   useEffect(() => {
@@ -620,7 +635,10 @@ export default function World3D({ editor }: World3DProps) {
       seen.add(cropId);
       const crop = editor.cropById.get(cropId);
       if (!crop) continue;
-      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', { ambientTempC: ambientTempC ?? undefined });
+      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', {
+        ambientTempC: ambientTempC ?? undefined,
+        baselineTempC: climateBaselineC ?? undefined,
+      });
       const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
       rows.push({
         id: cropId,
@@ -631,7 +649,7 @@ export default function World3D({ editor }: World3DProps) {
       });
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name));
-  }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC]);
+  }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC, climateBaselineC]);
 
   // Update weather FX + audio params in the rAF loop already handles audio
   const lastAchievement = achievements.current.unlocked[achievements.current.unlocked.length - 1];
@@ -816,6 +834,14 @@ export default function World3D({ editor }: World3DProps) {
         {weather && (
           <div className="pointer-events-auto flex items-center gap-1.5 rounded-md bg-background/90 px-3 py-2 shadow-sm text-xs text-muted-foreground">
             <span>{weather.tempC}°C · 💨{weather.windSpeedKmh}km/h · 🌧{weather.precipMm}mm</span>
+            {climateBaselineC !== null && climateLabel && (
+              <span
+                title={`Farm climate baseline ${climateBaselineC.toFixed(1)} °C (growing-season mean, Open-Meteo ${climateLabel} normals)`}
+                className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
+              >
+                {climateLabel}
+              </span>
+            )}
             {weatherCached && (
               <span
                 title="Live fetch failed earlier — showing last-good cached weather"
