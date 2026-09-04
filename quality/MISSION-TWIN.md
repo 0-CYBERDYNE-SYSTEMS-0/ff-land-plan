@@ -468,3 +468,28 @@ path deterministic), route smoke on simulations + weather routes, diff review
 scoped to the five files, backward-compat (old sims, old provenance values,
 no new required localStorage keys), never-throw module boundaries, 10k/day
 free-tier discipline (count requests per cache miss: L1 ≤ 3, L2 ≤ 2).
+
+### Wave 3 — GREEN (validated 2026-09-04, branch `twin-w3`, base `16d7815`)
+
+Scope: two lanes + orchestrator stitch across eight files. All gates PASS;
+three.js chunk byte-identical; `Api` interface unchanged; old stored sims
+proven byte-identical (no `range` key, same provenance) — the sim refactor
+(`simulateOnSeries`/`scenarioAdjust`) is a pure extraction verified against
+the base commit's inline algebra.
+
+- **Determinism/range probes**: identical ensemble runs byte-identical;
+  4-year even-count median correct; CMIP6 path with `deltaPrecipPct: null`
+  applies temperature only; a synthetic 20 °C/−50 % projection moves yield
+  8.59 → 5.9 t/ha (monotonic, explainable).
+- **Live route smoke**: Environment card rendered REAL data — ozone
+  74 µg/m³, flood risk "High" at 1.98 m³/s (Johnson Creek), CAMS/GloFAS
+  attribution — exercising all four never-throw fetch modules on the
+  network with zero console errors.
+- **Request budget**: cold-cache happy path = 1 (ensembles) + 0–2 (CMIP6,
+  climate_change-only, forever-cached) + 1 (air) + 1 (flood) — within spec.
+  POWER fallback verified dormant on the ERA5 success path.
+- Non-blocking notes for the record: (1) when the CMIP6 precip guard fires,
+  the climate_change preset's −20 % precip multiplier survives alongside the
+  projected temperature delta (defensible under the spec's INSTEAD clause;
+  commented in code); (2) cmip6.ts lacks in-flight dedupe (forever-cache +
+  single caller make it moot).
