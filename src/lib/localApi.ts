@@ -22,6 +22,8 @@ import { cropLibrary } from '@/data/crops';
 import { state, persist } from '@/lib/store';
 import { deriveAlerts, fetchFarmWeather, type FarmWeather } from '@/lib/weather';
 import { fetchClimateNormals } from '@/lib/climate';
+import { fetchSeasonEnsembles } from '@/lib/ensembles';
+import { fetchClimateProjection } from '@/lib/cmip6';
 import { runSimulation } from '@/lib/sim';
 
 function farmOrThrow(id: number): Farm {
@@ -247,6 +249,14 @@ export const localApi: Api = {
       // offline → engine uses climate normals / documented fallback
     }
     const climate = await fetchClimateNormals(farm.lat, farm.lng);
+    // Season ensembles (cache-served after the first run) power the yield
+    // range; the CMIP6 projection is heavy + forever-cached, so only fetch it
+    // when the climate_change scenario will actually use it.
+    const ensembles = await fetchSeasonEnsembles(farm.lat, farm.lng);
+    const projection =
+      input.scenarioType === 'climate_change'
+        ? await fetchClimateProjection(farm.lat, farm.lng)
+        : null;
     const outcome = runSimulation({
       farm,
       plan: state.plans[farmId] ?? null,
@@ -254,6 +264,8 @@ export const localApi: Api = {
       input,
       forecast,
       climate,
+      ensembles,
+      projection,
     });
     const results: SimulationResults = outcome;
 

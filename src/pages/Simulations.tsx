@@ -46,9 +46,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { ScenarioType, Simulation, SimulationResults } from '@/types';
-import type { SimCropResult, SimProvenance } from '@/lib/sim';
+import type { SimCropResult, SimProvenance, YieldRange } from '@/lib/sim';
 
-type ParsedResults = SimulationResults & { perCrop?: SimCropResult[]; provenance?: SimProvenance };
+type ParsedResults = SimulationResults & { perCrop?: SimCropResult[]; provenance?: SimProvenance; range?: YieldRange };
 
 const PRESETS: { type: ScenarioType; label: string; desc: string; icon: typeof Sprout; tempDelta: number; precip: number; fert: number }[] = [
   { type: 'baseline', label: 'Current Conditions', desc: "Simulate with today's data", icon: Sprout, tempDelta: 0, precip: 1, fert: 0 },
@@ -151,9 +151,25 @@ function SimulationCard({ sim }: { sim: Simulation }) {
               {results.provenance.climate === 'era5-normals' && (
                 <Badge variant="secondary" className="text-[10px]">ERA5 normals</Badge>
               )}
+              {results.provenance.climate === 'era5-ensemble' && (
+                <Badge variant="secondary" className="text-[10px]">ERA5 ensemble</Badge>
+              )}
+              {results.provenance.cmip6Model && (
+                <Badge variant="secondary" className="text-[10px]">CMIP6 2040s</Badge>
+              )}
               <Badge variant={results.provenance.plan === 'plan-aware' ? 'default' : 'outline'} className="text-[10px]">
                 {results.provenance.plan === 'plan-aware' ? 'plan-aware' : 'fallow'}
               </Badge>
+            </div>
+          )}
+          {results.range && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Range</span>
+              <Badge variant="outline" className="text-[10px] text-green-700">
+                {results.range.lowYieldTonHa}–{results.range.highYieldTonHa} t/ha
+              </Badge>
+              <Badge variant="outline" className="text-[10px]">median {results.range.medianYieldTonHa}</Badge>
+              <Badge variant="outline" className="text-[10px]">{results.range.years} seasons</Badge>
             </div>
           )}
           {results.perCrop && results.perCrop.length > 0 && (

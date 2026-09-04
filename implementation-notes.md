@@ -438,3 +438,29 @@ in the footer when connected; offline = byte-identical legacy behavior.
 
 **Validation:** Wave 2 GREEN — determinism/plan-awareness/shelter probes,
 4/4 route smoke, diff review in `quality/MISSION-TWIN.md` Verification Log.
+
+## Mission TWIN — Wave 3 (2026-09-04, branch `twin-w3`)
+
+**Yield ranges, not single numbers:** `fetchSeasonEnsembles` (one ERA5
+archive request, 10 complete years, per-year daily tmean/precip/ET₀;
+NASA POWER `T2M_MAX/T2M_MIN/PRECTOTCORR` fallback with Hargreaves ET₀ via
+the FAO-56 Annex 2 RA mid-month table) feeds `runSimulation`'s new
+`ensembles` arg — the per-crop core now runs once per historical season and
+SimOutcome gains `range {low, median, high, years}`. Median uses the
+even-count average-of-middle rule. `ff-pro:seasons:*` cache keyed to the
+exact window.
+
+**Real climate scenarios:** `fetchClimateProjection` (CMIP6 MRI_AGCM3_2_S,
+2021–2025 vs 2041–2045, forever-cached `ff-pro:cmip6:*`, fetched only when
+the climate_change scenario runs) replaces the legacy constant +2 °C with
+the farm's projected deltas; precip delta guarded to null under ~5 mm/month
+baselines (then the preset's multiplier survives — documented reading).
+
+**Environment awareness:** CAMS ozone (1 h TTL, current-hour index) and
+GloFAS river discharge (12 h TTL; forecast max vs 30-day sorted-index
+p95/p75 ⇒ high/elevated/low; oceans ⇒ null) power the Weather page's
+Environment card — Portland showed ozone 74 µg/m³ and "High" 1.98 m³/s
+live during validation.
+
+**Budget:** happy path ≤3 requests (L1) + 2 (L2) per cold cache; every
+module catch-all → null; old stored sims byte-identical.
