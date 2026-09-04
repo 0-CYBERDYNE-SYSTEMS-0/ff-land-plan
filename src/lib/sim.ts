@@ -5,6 +5,8 @@
 
 import { SURFACE_SHELTER } from '@/lib/growth';
 import type { ClimateNormals } from '@/lib/climate';
+import type { SeasonEnsembles } from '@/lib/ensembles';
+import type { ClimateProjection } from '@/lib/cmip6';
 import type { Crop, Farm, ForecastDay, PlanState, ScenarioType } from '@/types';
 
 export interface SimInput {
@@ -19,19 +21,26 @@ export interface SimCropResult {
 
 export interface SimProvenance {
   weather: 'live-forecast' | 'climate-model';
-  climate: 'era5-normals' | 'none';
+  climate: 'era5-normals' | 'era5-ensemble' | 'none'; // 'era5-ensemble' = a yield range was computed (Wave 3)
   plan: 'plan-aware' | 'fallow';
+  cmip6Model?: string; // set when the climate_change scenario ran on a CMIP6 projection (old sims lack it — guarded render)
+}
+
+export interface YieldRange {
+  lowYieldTonHa: number; medianYieldTonHa: number; highYieldTonHa: number; years: number;
 }
 
 export interface SimOutcome {
   yieldTonHa: number; waterUseMm: number; carbonKgHa: number; profitUsdHa: number;
   stressScore: number; summary: string;
   perCrop: SimCropResult[]; provenance: SimProvenance;
+  range?: YieldRange; // per-year ensemble spread — absent when ensembles were not supplied or <3 usable years
 }
 
 export function runSimulation(args: {
   farm: Farm; plan: PlanState | null; crops: Crop[]; input: SimInput;
   forecast?: ForecastDay[]; climate?: ClimateNormals | null; startDate?: Date;
+  ensembles?: SeasonEnsembles | null; projection?: ClimateProjection | null;
 }): SimOutcome {
   const { farm, crops, input } = args;
   const plan = args.plan;
@@ -39,10 +48,23 @@ export function runSimulation(args: {
   const surface = plan?.surface ?? 'outdoor';
   const shelter = SURFACE_SHELTER[surface];
 
+  // --- Effective scenario deltas ---
+  // climate_change + projection ⇒ the CMIP6 deltas REPLACE the legacy preset
+  // (+2 °C / −20 % precip from the page). Mapping to the manual paths:
+  // deltaTempC → tempDeltaC (same shelter attenuation), deltaPrecipPct →
+  // multiplier 1 + pct/100 fed through the SAME precipMultiplier attenuation
+  // (drying is sheltered like manual reduction; wetter simply multiplies).
+  const useProjection = input.scenarioType === 'climate_change' && args.projection != null;
+  const effTempDelta = useProjection ? args.projection!.deltaTempC : input.tempDeltaC;
+  const effPrecipMult =
+    useProjection && args.projection!.deltaPrecipPct !== null
+      ? 1 + args.projection!.deltaPrecipPct / 100
+      : input.precipMultiplier;
+
   // --- Daily weather series (scenario-adjusted) ---
   const forecast = args.forecast ?? [];
   const weather: SimProvenance['weather'] = forecast.length > 0 ? 'live-forecast' : 'climate-model';
-  const climateProv: SimProvenance['climate'] = args.climate ? 'era5-normals' : 'none';
+  let climateProv: SimProvenance['climate'] = args.climate ? 'era5-normals' : 'none';
 
   const days: DailyPoint[] = [];
   for (let i = 0; i < input.durationDays; i++) {
@@ -56,14 +78,7 @@ export function runSimulation(args: {
     } else {
       pt = { tmeanC: FALLBACK_TMEAN_C, precipMm: FALLBACK_PRECIP_MM, et0Mm: FALLBACK_ET0_MM };
     }
-    // Scenario deltas attenuated by surface shelter (one source of truth in
-    // growth.ts): outdoor takes the full force, a tent barely feels a heatwave.
-    const tmean = pt.tmeanC + input.tempDeltaC * shelter;
-    const precip =
-      input.precipMultiplier < 1
-        ? pt.precipMm * (1 - (1 - input.precipMultiplier) * shelter)
-        : pt.precipMm * input.precipMultiplier;
-    days.push({ tmeanC: tmean, precipMm: precip, et0Mm: pt.et0Mm });
+    days.push(scenarioAdjust(pt, effTempDelta, effPrecipMult, shelter));
   }
 
   // --- Inventory ---
@@ -84,12 +99,95 @@ export function runSimulation(args: {
       `${climateProv === 'era5-normals' ? ' + ERA5 normals' : ''}`;
     return {
       yieldTonHa: 0, waterUseMm, carbonKgHa: 0, profitUsdHa: 0, stressScore: 0, summary,
-      perCrop: [], provenance: { weather, climate: climateProv, plan: 'fallow' },
+      perCrop: [], provenance: { weather, climate: climateProv, plan: 'fallow', ...(useProjection ? { cmip6Model: args.projection!.model } : {}) },
     };
   }
 
-  // --- Per-crop daily loop ---
+  // --- Per-crop daily loop (extracted so any daily series can be scored —
+  // ensemble years reuse the exact same core; Wave 3) ---
   const fertCoverage = clamp01(input.fertilizerBoost * FERT_COVERAGE_PER_UNIT);
+  const core = simulateOnSeries(days, {
+    cropById, cellsByCrop, cellM,
+    durationDays: input.durationDays,
+    fertCoverage,
+    fertilizerBoost: input.fertilizerBoost,
+  });
+  const perCrop = core.perCrop;
+
+  // --- Ensemble range (Wave 3): run the identical core once per historical
+  // year with the same effective scenario deltas; median uses the documented
+  // even-count rule (average of the two middle sorted values) so output stays
+  // deterministic. <3 usable years ⇒ no range. ---
+  let range: YieldRange | undefined;
+  const ensYears = [...(args.ensembles?.years ?? [])].sort((a, b) => a.year - b.year);
+  if (ensYears.length >= 3) {
+    const yields: number[] = [];
+    for (const y of ensYears) {
+      const series = y.daily.slice(0, input.durationDays).map((pt) => scenarioAdjust(pt, effTempDelta, effPrecipMult, shelter));
+      if (series.length === 0) continue;
+      yields.push(simulateOnSeries(series, { cropById, cellsByCrop, cellM, durationDays: series.length, fertCoverage, fertilizerBoost: input.fertilizerBoost }).yieldTonHa);
+    }
+    if (yields.length >= 3) {
+      const s = [...yields].sort((a, b) => a - b);
+      const mid = s.length >> 1;
+      const median = s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
+      range = {
+        lowYieldTonHa: s[0]!,
+        medianYieldTonHa: round2(median),
+        highYieldTonHa: s[s.length - 1]!,
+        years: s.length,
+      };
+      climateProv = 'era5-ensemble';
+    }
+  }
+
+  const weatherLabel =
+    weather === 'live-forecast'
+      ? `live forecast${climateProv === 'era5-normals' ? ' + ERA5 normals' : ''}`
+      : climateProv === 'era5-normals' ? 'ERA5 normals' : 'generic climate model';
+
+  const summary =
+    `${perCrop.length} crop${perCrop.length === 1 ? '' : 's'} on ${Math.round(core.totalAreaHa * 10_000)} m²` +
+    ` over ${input.durationDays} days: ${core.totalStressDays} stress-days, ${core.deficitMean} mm deficit — yield ${core.yieldTonHa} t/ha` +
+    ` — weather: ${weatherLabel}` +
+    (range ? ` — yield range ${range.lowYieldTonHa}–${range.highYieldTonHa} t/ha (median ${range.medianYieldTonHa}, ${range.years} seasons)` : '');
+
+  return {
+    yieldTonHa: core.yieldTonHa, waterUseMm: core.waterUseMm, carbonKgHa: core.carbonKgHa,
+    profitUsdHa: core.profitUsdHa, stressScore: core.stressScore, summary,
+    perCrop: perCrop.sort((a, b) => b.areaHa - a.areaHa),
+    provenance: {
+      weather, climate: climateProv, plan: 'plan-aware',
+      ...(useProjection ? { cmip6Model: args.projection!.model } : {}),
+    },
+    ...(range ? { range } : {}),
+  };
+}
+
+// Scenario deltas attenuated by surface shelter (one source of truth in
+// growth.ts): outdoor takes the full force, a tent barely feels a heatwave.
+// Precip reduction is sheltered; increase (multiplier ≥ 1) applies in full.
+function scenarioAdjust(pt: DailyPoint, tempDeltaC: number, precipMultiplier: number, shelter: number): DailyPoint {
+  return {
+    tmeanC: pt.tmeanC + tempDeltaC * shelter,
+    precipMm:
+      precipMultiplier < 1
+        ? pt.precipMm * (1 - (1 - precipMultiplier) * shelter)
+        : pt.precipMm * precipMultiplier,
+    et0Mm: pt.et0Mm,
+  };
+}
+
+// Core per-crop scoring over ANY daily series — the single computation both
+// the primary run and every ensemble year go through (deterministic, pure).
+function simulateOnSeries(
+  days: readonly DailyPoint[],
+  ctx: { cropById: Map<number, Crop>; cellsByCrop: Map<number, number>; cellM: number; durationDays: number; fertCoverage: number; fertilizerBoost: number },
+): {
+  perCrop: SimCropResult[]; totalAreaHa: number; totalStressDays: number; deficitMean: number;
+  yieldTonHa: number; waterUseMm: number; carbonKgHa: number; profitUsdHa: number; stressScore: number;
+} {
+  const { cropById, cellsByCrop, cellM, durationDays, fertCoverage, fertilizerBoost } = ctx;
   const perCrop: SimCropResult[] = [];
   let totalAreaHa = 0;
   let yieldPerHaSum = 0; // area-weighted
@@ -116,10 +214,10 @@ export function runSimulation(args: {
       deficitMm += Math.max(0, crop.waterNeedMmDay - supply);
       metMm += Math.min(crop.waterNeedMmDay, supply);
     }
-    const deficitRatio = clamp01(deficitMm / Math.max(1, crop.waterNeedMmDay * input.durationDays));
+    const deficitRatio = clamp01(deficitMm / Math.max(1, crop.waterNeedMmDay * durationDays));
     const nutrientGap = STRESS_NUTRIENT_NEED[crop.nitrogenNeed] * (1 - fertCoverage);
     const stressScore = round2(clamp01(
-      STRESS_W_THERMAL * Math.min(1, stressDays / Math.max(1, input.durationDays)) +
+      STRESS_W_THERMAL * Math.min(1, stressDays / Math.max(1, durationDays)) +
       STRESS_W_WATER * deficitRatio +
       STRESS_W_NUTRIENT * nutrientGap,
     ) * 100);
@@ -137,34 +235,23 @@ export function runSimulation(args: {
     stressSum += stressScore * areaHa;
     deficitAreaSum += deficitMm * areaHa;
     totalStressDays += stressDays;
-    carbonAreaSum += CARBON_RESIDUE_KGHA[crop.category] * (1 + CARBON_FERT_FACTOR * input.fertilizerBoost) * areaHa;
+    carbonAreaSum += CARBON_RESIDUE_KGHA[crop.category] * (1 + CARBON_FERT_FACTOR * fertilizerBoost) * areaHa;
     profitAreaSum += (yieldPerHa * PRICE_USD_T[crop.category]
       - metMm * WATER_COST_USD_MM
-      - FERT_COST_USD_PER_BOOST * input.fertilizerBoost) * areaHa;
+      - FERT_COST_USD_PER_BOOST * fertilizerBoost) * areaHa;
   }
 
   const area = totalAreaHa > 0 ? totalAreaHa : 1;
-  const yieldTonHa = round2(yieldPerHaSum / area);
-  const waterUseMm = round1(demandSum / area);
-  const carbonKgHa = Math.round(carbonAreaSum / area);
-  const profitUsdHa = Math.round(profitAreaSum / area);
-  const stressScore = round1(stressSum / area);
-  const deficitMean = round1(deficitAreaSum / area);
-
-  const weatherLabel =
-    weather === 'live-forecast'
-      ? `live forecast${climateProv === 'era5-normals' ? ' + ERA5 normals' : ''}`
-      : climateProv === 'era5-normals' ? 'ERA5 normals' : 'generic climate model';
-
-  const summary =
-    `${perCrop.length} crop${perCrop.length === 1 ? '' : 's'} on ${Math.round(totalAreaHa * 10_000)} m²` +
-    ` over ${input.durationDays} days: ${totalStressDays} stress-days, ${deficitMean} mm deficit — yield ${yieldTonHa} t/ha` +
-    ` — weather: ${weatherLabel}`;
-
   return {
-    yieldTonHa, waterUseMm, carbonKgHa, profitUsdHa, stressScore, summary,
-    perCrop: perCrop.sort((a, b) => b.areaHa - a.areaHa),
-    provenance: { weather, climate: climateProv, plan: 'plan-aware' },
+    perCrop,
+    totalAreaHa,
+    totalStressDays,
+    deficitMean: round1(deficitAreaSum / area),
+    yieldTonHa: round2(yieldPerHaSum / area),
+    waterUseMm: round1(demandSum / area),
+    carbonKgHa: Math.round(carbonAreaSum / area),
+    profitUsdHa: Math.round(profitAreaSum / area),
+    stressScore: round1(stressSum / area),
   };
 }
 
