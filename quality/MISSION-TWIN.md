@@ -1,0 +1,318 @@
+# MISSION TWIN — Make the Simulation a Real Digital Twin
+
+Goal: close the gap between "farm app with a weather feed" and "digital twin":
+the What-If simulation must simulate **THE farm** (its plan, crops, location,
+live + historical weather), the 3D growth model must run on the farm's actual
+climate instead of a hardcoded constant, soil baselines must come from real
+open soil data, and Monitoring must stop presenting decorative numbers as
+instrument readings.
+
+Written by mission control 2026-09-03, from source inspection at HEAD
+`9f1bf11` on `pro-upgrade`. Every gap below was **verified in source**, not
+speculated. Companion research (open-data API verification) lands in the
+Appendix at the bottom.
+
+---
+
+## Digital-twin fidelity audit (evidence)
+
+### What is genuinely real today
+
+| Capability | Evidence | Verdict |
+|---|---|---|
+| Live weather (current, hourly soil temp/moisture, 7-day forecast) | `src/lib/weather.ts` — Open-Meteo, keyless, CORS; 15-min memo + last-good localStorage cache | REAL |
+| Weather-derived alerts | `deriveAlerts()` in `weather.ts` — frost/heat/flood/drought thresholds over the real forecast | REAL |
+| Live weather drives 3D atmosphere (clouds, rain FX, audio, plant sway) | `src/three/weather-fx.ts`, ref-plumbed rAF (beta mission) | REAL (visual) |
+| Growth-stage model uses real catalog agronomy | `src/lib/growth.ts` — per-crop minTempC/maxTempC/waterNeedMmDay/growthDays; surface shelter factors | REAL MODEL, WRONG INPUTS (see F1) |
+| Frost-date defaults | `src/lib/frost.ts` — documented latitude heuristic, user-overridable | HONEST HEURISTIC (upgradeable, see F4) |
+
+### The fake / disconnected layer
+
+**F1 — Growth baseline is a constant, not the farm's climate.**
+`src/lib/growth.ts:22` — `BASELINE_TEMP_C = 20`. Every scenario temperature is
+`20 + tempDelta × shelter`, regardless of whether the farm sits in Oslo or
+Seville. The live weather we already fetch never modulates plant growth: a
+heatwave, a cold snap, or a drought week in the REAL forecast leaves the twin's
+plants untouched. The world's "simulation HUD" (`World3D.tsx:582-604`) and the
+plant-stage instancing (`plants.ts:336-414`) both consume this constant-baseline
+model. **The twin ignores its own weather feed for growth.**
+
+**F2 — The What-If simulation is not a simulation.**
+`src/lib/localApi.ts:235-257` (`createSimulation`): yield is `30 − |ΔT|·3 −
+precip penalties + fert·1.5`, water is `days × 4.5 × precip`, carbon/profit are
+linear slider arithmetic. It never reads `state.plans[farmId]`, the crop
+catalog, the farm coordinates, or any weather data. Two completely different
+farms produce byte-identical results for the same slider inputs. The page even
+promises "model crop outcomes" (`Simulations.tsx:207`). This is the single
+biggest digital-twin failure.
+
+**F3 — Monitoring presents decoration as instrumentation.**
+- NDVI grid is a seeded sine/cosine pattern (`src/data/seed.ts:876`), and the
+  panel copy claims a nonexistent source: *"FarmFriend weather-fusion model
+  (SAR proxy)"* (`Monitoring.tsx:241`).
+- Legacy cell moisture is `30 + ((i*7) % 40)` (`seed.ts:734`) and cell nitrogen
+  is seed noise; the Monitoring page's "Soil Moisture / Nitrogen Level / Dry
+  Cells" stat row (`Monitoring.tsx:310-315`) is computed from those constants —
+  **disconnected from the actual plan** (`PlanState`), which the Monitoring page
+  never reads.
+- Sensors render a pulsing "Live" badge (`Monitoring.tsx:113`) but readings are
+  manual-only (`localApi.addReading`). Meanwhile Open-Meteo already delivers
+  real soil moisture, soil temperature, humidity and rainfall that we could bind
+  virtual sensors to.
+
+**F4 — Frost/calendar/climate inputs are latitude folk-math.**
+`frost.ts` is a documented heuristic (fine as fallback), but Open-Meteo's
+Historical Weather API (ERA5 archive) can compute real local frost dates,
+growing-degree-day accumulations, and monthly climate normals from ~80 years of
+daily data — which would also give F1 a real baseline and F2 a real climate
+history. Nothing fetches it today.
+
+**F5 — No soil identity beyond a label.**
+`Farm.soilType` is a user/seed string (`'loam'`, `'clay'`). No pH, texture
+fractions, organic carbon, or nitrogen exist anywhere, yet crops carry
+`nitrogenNeed` and SimulationResults implies nutrient effects. ISRIC SoilGrids
+offers exactly these properties, keyless, for any lat/lng.
+
+### What a real digital twin needs (mission bar)
+
+1. Same plan + same location + same weather ⇒ same, explainable simulation
+   outcome; changing the plan changes the outcome; moving the farm changes the
+   outcome.
+2. The 3D world's growth responds to the farm's actual climate (live weather
+   now, climate normals as seasonal context).
+3. Soil baselines (texture, pH, organic carbon) fetched from open data with
+   cache + graceful offline, and exposed where agronomy decisions are made.
+4. Monitoring shows plan-derived or weather-derived values, honestly labeled —
+   no fictional data-source claims, no "Live" badges on manual inputs.
+5. Everything degrades gracefully offline (last-good caches, defaults), never
+   throws into the UI, never breaks PNG export or the render seams.
+
+---
+
+## Workstreams (implementation specs)
+
+Sequencing: **Wave 1** = WS-B, WS-C, WS-D (independent files, parallel);
+**Wave 2** = WS-A, WS-E (consume Wave 1 modules). Orchestrator commits after
+each validated workstream. All work on `pro-upgrade`; **nothing merges to main
+until the whole mission is green** (typecheck + build + route smoke).
+
+### WS-C — Climate archive module (`src/lib/climate.ts`) — WAVE 1
+
+Open-Meteo Archive API (ERA5), keyless + CORS. New module, zero existing-file
+edits (callers land in WS-A/WS-B):
+
+- `fetchClimateNormals(lat, lng)` → last ~10 full years of daily
+  `temperature_2m_max/min, precipitation_sum`; derives: monthly mean min/max
+  temps, monthly precip totals, real last-spring/first-fall frost dates
+  (0 °C threshold over the window), mean annual GDD (base 10 °C), and a
+  `baselineTempC` (growing-season Apr–Sep N-hemisphere / Oct–Mar S-hemisphere
+  mean).
+- Cache the derived blob in `localStorage` (`ff-pro:climate:<lat>,<lng>`) with
+  the fetched year range — this is a one-time ~10-year daily pull (~3,650
+  rows), so persist aggressively and never refetch inside a session unless the
+  key is missing.
+- Graceful failure: return `null` on fetch error (caller decides fallback);
+  never throw past the module boundary.
+- Export a `ClimateNormals` type; document units inline.
+
+### WS-B — Location-aware growth baseline (`growth.ts` + `World3D.tsx` + `plants.ts`) — WAVE 1
+
+- `scenarioGrowthMod(crop, scenario, surface, baselineTempC?)`: new optional
+  4th param, default `20` (legacy behavior for any un-migrated caller).
+  All internal math uses the passed baseline. Also accept optional
+  `ambientTempC?` — when provided, blend: the scenario's effective temperature
+  starts from the real current ambient instead of the seasonal baseline
+  (scenario ΔT still applies on top, still sheltered by surface).
+- `World3D.tsx` and `plants.ts` call sites thread the farm's live
+  `weather.current.tempC` (already available in both files' plumbing) and the
+  climate baseline when `useClimate()` (WS-C) has data. Fall back silently to
+  the constant when weather is unavailable — growth must never crash offline.
+- HUD: the per-crop growth rows should show stress sourced from real ambient
+  temp when connected (e.g. a 34 °C heatwave day visibly stresses
+  cool-season crops in the HUD instead of showing perfect health).
+
+### WS-D — Soil profile from open data (`src/lib/soil.ts` + Weather page card) — WAVE 1
+
+- New `src/lib/soil.ts`. **Primary source: USDA Soil Data Access (SDA)** —
+  live-verified keyless with open CORS on 2026-09-03 (OPTIONS/200/400 all send
+  `ACAO: *`). `POST https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest`
+  body `format=JSON&query=<urlencoded SQL>`; point→map unit via
+  `SELECT mukey, muname FROM mapunit WHERE mukey IN (SELECT * FROM
+  SDA_Get_Mukey_from_intersection_with_WktWgs84('point(<lng> <lat>)'))`
+  (WKT is `point(lon lat)`), then a component/chorizon join for sand/silt/clay
+  totals, `ph1to1h2o_r`, `om_r`, `cec7_r`, `awc_r`. US-only coverage; errors
+  come back as XML even when JSON was requested — parse defensively.
+- **Fallback for non-US (or SDA failure): ISRIC SoilGrids**
+  `https://rest.isric.org/soilgrids/v2.0/classification/query?lat=..&lon=..&number=5`
+  (verified still working; gives WRB + USDA class names). The SoilGrids
+  `properties/query` endpoint is **verifiably paused (all values null as of
+  2026-09-03)** — attempt it only behind null-guards with a short timeout so
+  it lights up automatically if ISRIC restores it; one property per call
+  (comma lists 500), divide values by the response's `unit_measure.d_factor`.
+- Shape: `{ source: 'usda-sda' | 'soilgrids' | null, name, texture:
+  {sand,silt,clay}, ph, organicMatterPct, cec, awc, soilType }` where
+  `soilType` derives from texture fractions (simplified USDA triangle:
+  clay/sandy/silt/loam). Return `null` + never throw on failure.
+- localStorage cache keyed `ff-pro:soil:<lat2>,<lng2>` (soil doesn't change —
+  cache ~forever, refresh button only).
+- UI: "Soil Profile" card on the Weather page (which already shows live soil
+  temp/moisture from the forecast model — the card adds ground truth: texture
+  bars, pH, organic matter, CEC/AWC, derived classification, map-unit name).
+  Attribution line ("USDA NRCS Soil Data Access" / "ISRIC SoilGrids"). Card is
+  skeleton-while-loading and hides cleanly when data is unavailable.
+
+### WS-A — Real simulation engine (`src/lib/sim.ts` + `localApi.ts`) — WAVE 2
+
+Replace the slider arithmetic in `localApi.createSimulation` with a genuine
+plan-aware engine. **The `Api` interface signature stays unchanged** (input =
+the existing form fields; farmId already passed) so `restApi.ts` and all pages
+keep compiling.
+
+- New `src/lib/sim.ts`, `runSimulation(farm, plan, crops, input, weather, climate)`:
+  1. **Inventory**: crop cells from `plan.planting` (id → count, area via
+     `cellM²`; fenced zones respect `plan.surface` per canvas when present).
+  2. **Climate series**: WS-C normals when cached (or a fresh fetch), else
+     forecast-only. Build a `durationDays` daily series: temp = daily mean +
+     `tempDeltaC` (scenario), precip = daily sum × `precipMultiplier`.
+     Outdoor takes the full series; enclosed surfaces attenuate via
+     `SURFACE_SHELTER` (reuse from growth.ts — one source of truth).
+  3. **Per-crop loop**: GDD accumulation (base = max(0, minTempC adjusted
+     category floor — document choice)), water-balance stress (deficit =
+     `waterNeedMmDay − effective precip`, cumulated), heat/frost stress days
+     vs `minTempC/maxTempC`, `fertilizerBoost` reduces nitrogen-stress only
+     for crops with `nitrogenNeed !== 'low'` (nutritional realism).
+  4. **Outcomes**: `yieldTonHa` = area-weighted catalog `yieldTonHa` × growth
+     factor from the stressors (bounded, monotonic, explainable);
+     `waterUseMm` = actual ET-proxy demand met/shortfall;
+     `carbonKgHa` = residue + input model (documented simple factors by
+     category, fertilizer-responsive); `profitUsdHa` = yield × price band by
+     category − water/fertilizer cost factors; `stressScore` 0–100 from the
+     computed stress days. Every constant gets a named, commented origin.
+  5. **Summary text** references the plan ("1,240 cells across 6 crops, 3
+     stress days, 41 mm deficit") — never canned per-scenario strings.
+- `SimulationResults` JSON shape unchanged (optional new fields appended are
+  fine — the results JSON is opaque to the UI except for the known keys);
+  Simulations page may surface per-crop breakdown if WS-A adds a structured
+  extra key (UI work optional, only if it stays small).
+- Offline/no-plan: farm with no plan simulates a documented fallow baseline;
+  no weather + no cache ⇒ deterministic climate-default series (labeled in
+  summary), never a rejection.
+- **Fixture discipline**: identical inputs ⇒ identical outputs (no
+  Math.random anywhere in sim code — same rule as `src/creative/voxel.ts`).
+
+### WS-E — Monitoring truth pass (`Monitoring.tsx`, `localApi.ts`, `seed.ts`) — WAVE 2
+
+1. **Plan-derived NDVI proxy**: `getNdvi` computes a grid from the farm's
+   `PlanState` (cell resolution ~1 m → downsample): planted cell in growth
+   stage s ⇒ NDVI proxy curve (bare soil ≈ 0.1, young ≈ 0.3, dense ≈ 0.7+,
+   by category); structures/paths ⇒ low; empty ground ⇒ soil value. Copy
+   becomes "Modeled from plan (not satellite)" — the fictional "SAR proxy /
+   weather-fusion" line dies.
+2. **Virtual sensors**: soil_moisture / temperature / humidity / rainfall
+   sensors get a "Virtual (Open-Meteo)" mode automatically: when the farm
+   weather query is fresh, their lastValue/lastUnit and a trailing reading
+   series hydrate from the live feed (soil moisture from the hourly soil
+   series we already fetch). Manual "Log" stays available for real probes;
+   badge shows "Live · virtual" vs "Live" only for sensors with real manual
+   reads in the last 24 h. No fake pulse on manual-only sensors.
+3. **Stat row honesty**: Soil Moisture / Nitrogen / Dry Cells recompute from
+   the plan + live weather (moisture = live farm soil moisture vs crop
+   `waterNeedMmDay` buckets; nitrogen = demand-weighted `nitrogenNeed`
+   coverage), labeled "plan-based estimate". Remove seed-noise dependence:
+   `seedCells` stays for backward compat but stops feeding the stat row.
+4. FarmCell/setCellCrop endpoints stay (HANDOFF: legacy kept on purpose) —
+   they just stop being the source of headline numbers.
+
+### Docs lane — close-out
+
+`HANDOFF.md` status + traps (soil/climate caches keys, archive API trap),
+`README.md` data-source contract additions, `implementation-notes.md` ledger
+entries per workstream, this file's Appendix finalized + Verification Log
+populated. SPEC scope addendum if the simulation contract changes shape.
+
+---
+
+## Verification gates (whole mission)
+
+1. `npm run typecheck` clean; `npm run build` clean (three.js stays in its own
+   lazy chunk).
+2. Route smoke via `tools/appshot.mjs --gate --expect` on: dashboard, map,
+   weather, simulations, monitoring (scratch PNGs in `$TMPDIR`).
+3. **Twin determinism**: two runs of the same simulation produce identical
+   results; changing plan/precip/temp changes results in the right direction
+   (worker asserts via a temporary probe or Node-side re-derivation).
+4. Offline honesty: with weather fetch failing, every new surface renders a
+   labeled fallback — no unhandled rejections (GATE catches), no "Live" lies.
+5. Export/world seams untouched: `renderPlan.ts` gains no remote `drawImage`;
+   no new render layer without an opt-in `RenderOptions` flag.
+
+## Rules every worker must honor (from HANDOFF traps)
+
+- TS strict + `noUnusedLocals` — unused imports fail the build.
+- QueryClient defaults are hostile: new queries pass explicit `queryFn` and
+  weather-adjacent queries override `staleTime`.
+- Query params BEFORE the hash for test URLs.
+- localStorage merge is additive-optional only; new persisted keys must
+  degrade when absent (old blobs must keep loading).
+- Never add a second sun; never write `planRef.current` outside snapshot
+  paths; no `Math.random` in deterministic modules.
+- No Claude/Anthropic/co-author references in commits or files.
+
+---
+
+## Appendix — Open-data source verification (research lane, 2026-09-03)
+
+All CORS claims below were **live-tested with `Origin` headers** against the
+real endpoints on 2026-09-03 — not recalled from docs.
+
+| Source | Keyless | CORS | Status / notes |
+|---|---|---|---|
+| Open-Meteo Archive (ERA5, 1940→) | ✅ | ✅ `*` | **Adopted (WS-C/A).** Daily tmin/tmax/precip/**ET₀**; hourly soil temp/moisture (layer names differ from forecast API: `soil_temperature_0_to_7cm` etc. — normalize in the seam). Free tier: 10k calls/day, non-commercial. |
+| Open-Meteo Climate (CMIP6, 1950→2050) | ✅ | ✅ `*` | Verified; heavy weighted calls — cache aggressively. Future: model-based scenario sims. |
+| Open-Meteo Air Quality (CAMS) | ✅ | ✅ `*` | Verified. Ozone/NH₃/pollen — future leaf-damage + pollinator modifiers. |
+| Open-Meteo Geocoding / Elevation / Flood (GloFAS) / Marine | ✅ | ✅ `*` | All verified. Elevation = Copernicus DEM 90 m (≤100 pts/call). Flood = river discharge 1984→+210 d. |
+| NASA POWER (AG daily, 1981→) | ✅ | ✅ `*` | Verified working, keyless. Solar `ALLSKY_SFC_SW_DWN` MJ/m²/day (FAO-56 Rₛ), T2M, RH2M, `PRECTOTCORR` (no `PRECCIP` — corrected name only), −9999 sentinels. Blocks same-cell hammering — permanent per-farm cache. Not adopted this mission (independent-source sanity layer, future). |
+| **USDA SDA (SSURGO)** | ✅ | ✅ `*` (**new — outdated lore says blocked**) | **Adopted (WS-D primary).** `POST …/post.rest`, `format=JSON&query=<SQL>`; `SDA_Get_Mukey_from_intersection_with_WktWgs84('point(lon lat)')`. US-only; XML error bodies; be polite, cache. |
+| **ISRIC SoilGrids** | ✅ | ✅ `*` | ⚠️ **properties/query PAUSED — every value null (verified at 3 global sites; ISRIC notice 2026-09).** classification/query still works → WS-D fallback only, properties behind null-guards. |
+| Open-Elevation | ✅ | ✅ | Works but community-hosted, outage-prone — not adopted. **OpenTopoData FAILS CORS** (200, no ACAO header) — do not use. |
+| FAO-56 Kc/Ky tables | n/a | n/a | Free HTML (fao.org/4/x0490e/). Correct client-side move = one-time transcription into a TS data file. **Out of scope this mission** — WS-A uses archive ET₀ + catalog waterNeedMmDay instead; Kc refinement is a follow-up. |
+| GBIF occurrences | ✅ | ✅ `*` | Verified. Future pollinator/companion hints. |
+| NOAA CO-OPS tides | ✅ | ✅ `*` | Verified, US coastal only. Not adopted. |
+
+Free-tier reality: the whole Open-Meteo family is non-commercial, ≤10k
+calls/day, 5k/hour, 600/min — every adopted source is cached in localStorage
+and memoized per session accordingly.
+
+## Verification Log
+
+### Wave 1 — GREEN (validated 2026-09-03, HEAD `975b72c`)
+
+Scope: `e7ab50e` (WS-B), `3961094` (WS-C), `975b72c` (WS-D). Independent
+validation agent; all gates PASS, zero findings attributable to the mission.
+
+1. **Typecheck** — exit 0 both on the working tree AND on a `git archive HEAD`
+   extraction (mission commits without the third-party in-flight files) —
+   clean attribution in both directions.
+2. **Build** — exit 0; three.js lazy chunk byte-identical pre/post mission
+   (782.62 kB); main index +6.4 kB (+1.2%, soil card + growth ctx).
+3. **Code review** — no `Math.random`; `climate.ts`/`soil.ts` never reject
+   (catch-all → null, failed lookups un-memoized for retry); versioned
+   `ff-pro:climate|soil:<lat2dp>,<lng2dp>` caches, corrupt-blob safe;
+   zero `any`; `growthCtxRef` never in a dep array (no rebuild loop), init
+   effect still `[sceneReady, farmId]`, ambient landing triggers a
+   plants-only rebuild; `Api`/`Simulations`/`localApi` untouched.
+   Non-blocking: `deriveClimateNormals` export awaits its WS-A consumer.
+4. **Determinism probe** — bundled growth model: lettuce at ambient 34 °C
+   outdoor → `{rate 0.46, stress 0.9}`; undefined ctx → `{1, 0}`;
+   34 °C in a tent → `{1, 0}` (shelter 0.12); repeat calls byte-identical.
+5. **Route smoke 5/5** — map / weather / simulations / monitoring / world
+   (`?ffview=world&fftime=0.5` before the hash): every GATE line "zero
+   runtime errors", real PNG renders. The new **Soil Profile card rendered
+   with live data** on the weather route: "Luvisols · ISRIC SoilGrids" for
+   demo farm 1 (Portland Urban-land map unit → SDA-no-horizon → SoilGrids
+   fallback, exactly the documented degradation), alongside live Open-Meteo
+   readings. (One infra flake: the dev server died mid-suite on HMR churn
+   from the *third-party* session's edits — passed clean on retry.)
+6. **Offline honesty** — `?? undefined` fallbacks confirmed at both ambient
+   call sites; undefined-ctx algebra is byte-identical to the pre-mission
+   constant-baseline formula.

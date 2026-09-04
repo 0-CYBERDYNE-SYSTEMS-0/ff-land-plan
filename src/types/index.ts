@@ -13,6 +13,11 @@ export interface Farm {
   areHa: number;
   soilType: SoilType | null;
   createdAt: string;
+  elevationM?: number | null;
+  // "MM-DD", user-overridable; defaulted from the latitude heuristic in lib/frost.ts.
+  // null = frost-free climate (|lat| < 10).
+  lastFrost?: string | null;
+  firstFrost?: string | null;
 }
 
 export interface WeatherCurrent {
@@ -137,7 +142,9 @@ export interface Simulation {
   createdAt: string;
 }
 
-export type CropCategory = 'vegetable' | 'grain' | 'fruit' | 'herb' | 'cover_crop';
+export type CropCategory = 'vegetable' | 'grain' | 'fruit' | 'herb' | 'cover_crop' | 'flower' | 'fungus';
+
+export type FrostTolerance = 'tender' | 'half-hardy' | 'hardy';
 
 export interface Crop {
   id: number;
@@ -154,4 +161,64 @@ export interface Crop {
   colorHex: string;
   description: string | null;
   isCustom: boolean;
+  // Agronomy fields (optional so legacy/custom crops stay valid; helpers in
+  // lib/plan.ts fall back to defaults when absent).
+  slug?: string;
+  family?: string;
+  spacingCm?: number;
+  rowSpacingCm?: number;
+  sowDepthCm?: number;
+  frostTolerance?: FrostTolerance;
+  // Calendar offsets in weeks relative to the farm's last spring frost.
+  sowIndoorsWeeksBeforeLastFrost?: number | null;
+  transplantWeeksAfterLastFrost?: number | null;
+  directSowStartWeeks?: number | null;
+  directSowEndWeeks?: number | null;
+  harvestWindowDays?: number;
+  yieldKgPerPlant?: number;
+  companions?: string[]; // crop slugs
+  antagonists?: string[]; // crop slugs
+  emoji?: string;
+}
+
+// --- Plot plan (sparse, replaces FarmCell for the designer) -----------------
+
+export type AssetCategory = 'growing' | 'equipment' | 'infrastructure' | 'life';
+export type AssetPattern = 'solid' | 'stripes' | 'dots' | 'cross';
+
+/**
+ * Simulation surface of a plan canvas. Enclosed surfaces swap the 3D floor +
+ * add an enclosure shell, gate weather, and dampen climate stress in the
+ * growth model (see lib/growth.ts). Missing/undefined = 'outdoor'.
+ */
+export type PlanSurface = 'outdoor' | 'greenhouse' | 'tent' | 'indoor';
+
+export interface GardenAsset {
+  slug: string;
+  label: string;
+  category: AssetCategory;
+  defaultWM: number;
+  defaultHM: number;
+  colorHex: string;
+  pattern: AssetPattern;
+  emoji: string;
+  plantable: boolean;
+  description: string;
+  /** Surfaces this asset is offered on. Omitted = available everywhere. */
+  surfaces?: PlanSurface[];
+}
+
+export interface PlanState {
+  farmId: number;
+  widthM: number;
+  heightM: number;
+  cellM: number;
+  allowOutsideBeds: boolean;
+  /** Simulation surface (canvas zone). Missing = 'outdoor'. */
+  surface?: PlanSurface;
+  planting: Record<string, number>; // "x,y" -> cropId
+  ground: Record<string, string>; // "x,y" -> asset slug
+  updatedAt: string;
+  // Optional: when each cell was planted (ISO date). Fallback: derive from calendar.
+  plantedAt?: Record<string, string>;
 }

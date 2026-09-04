@@ -1,6 +1,7 @@
-// In-memory mock API that lets the whole app boot without a backend.
-// Mirrors the contract of the original server so a real `fetch`-based
-// client can drop in without touching the page components.
+// Local-first API. Same surface the pages always consumed (via the
+// `src/lib/api.ts` seam), now backed by the persistent store — and the weather
+// methods hit Open-Meteo for real. A fetch-based server client can still drop
+// in behind the same interface.
 
 import type {
   Alert,
@@ -9,6 +10,7 @@ import type {
   FarmCell,
   ForecastDay,
   NdviEstimate,
+  PlanState,
   Sensor,
   SensorReading,
   Simulation,
@@ -16,59 +18,14 @@ import type {
   Weather,
   WeatherHistoryPoint,
 } from '@/types';
-import {
-  seedAlerts,
-  seedCells,
-  seedCrops,
-  seedFarms,
-  seedForecast,
-  seedHistory,
-  seedNdvi,
-  seedReadings,
-  seedSensors,
-  seedSimulations,
-  seedWeather,
-} from './seed';
-
-// Mutable in-memory state. The dev session is single-user; persistence is
-// intentionally ephemeral so a refresh resets to a known-good baseline.
-
-const state = {
-  farms: [...seedFarms] as Farm[],
-  crops: [...seedCrops] as Crop[],
-  cells: [...seedCells] as FarmCell[],
-  sensors: [...seedSensors] as Sensor[],
-  readings: { ...seedReadings } as Record<number, SensorReading[]>,
-  alerts: [...seedAlerts] as Alert[],
-  simulations: [...seedSimulations] as Simulation[],
-  ndvi: { ...seedNdvi } as Record<number, NdviEstimate>,
-  weather: { ...seedWeather } as Weather,
-  history: [...seedHistory] as WeatherHistoryPoint[],
-  forecast: [...seedForecast] as ForecastDay[],
-};
-
-let nextFarmId = state.farms.length + 1;
-let nextCropId = state.crops.length + 1;
-let nextSensorId = state.sensors.length + 1;
-let nextReadingId = 100;
-let nextAlertId = state.alerts.length + 1;
-let nextSimId = state.simulations.length + 1;
-let nextCellId = state.cells.length + 1;
-
-function delay<T>(value: T, ms = 120): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms));
-}
+import { cropLibrary } from '@/data/crops';
+import { state, persist } from '@/lib/store';
+import { deriveAlerts, fetchFarmWeather, type FarmWeather } from '@/lib/weather';
 
 function farmOrThrow(id: number): Farm {
   const f = state.farms.find((x) => x.id === id);
   if (!f) throw new Error(`Farm ${id} not found`);
   return f;
-}
-
-function cropOrThrow(id: number): Crop {
-  const c = state.crops.find((x) => x.id === id);
-  if (!c) throw new Error(`Crop ${id} not found`);
-  return c;
 }
 
 function sensorOrThrow(id: number): Sensor {
@@ -77,7 +34,24 @@ function sensorOrThrow(id: number): Sensor {
   return s;
 }
 
-export interface MockApi {
+// One Open-Meteo call serves weather + forecast + history for a farm; memoize
+// per coordinate for 15 minutes and dedupe in-flight requests.
+const WEATHER_TTL_MS = 15 * 60 * 1000;
+const weatherMemo = new Map<string, { at: number; promise: Promise<FarmWeather> }>();
+
+function farmWeather(farm: Farm): Promise<FarmWeather> {
+  const key = `${farm.lat.toFixed(2)},${farm.lng.toFixed(2)}`;
+  const hit = weatherMemo.get(key);
+  if (hit && Date.now() - hit.at < WEATHER_TTL_MS) return hit.promise;
+  const promise = fetchFarmWeather(farm.lat, farm.lng).catch((err) => {
+    weatherMemo.delete(key); // don't cache failures
+    throw err;
+  });
+  weatherMemo.set(key, { at: Date.now(), promise });
+  return promise;
+}
+
+export interface Api {
   // Farms
   listFarms: () => Promise<Farm[]>;
   getFarm: (id: number) => Promise<Farm>;
@@ -85,27 +59,31 @@ export interface MockApi {
   updateFarm: (id: number, patch: Partial<Farm>) => Promise<Farm>;
   deleteFarm: (id: number) => Promise<void>;
 
-  // Weather
+  // Weather (real, Open-Meteo)
   getWeather: (farmId: number) => Promise<Weather>;
   getForecast: (farmId: number) => Promise<ForecastDay[]>;
   getWeatherHistory: (farmId: number, limit?: number) => Promise<WeatherHistoryPoint[]>;
 
-  // Alerts
+  // Alerts (derived from the real forecast)
   listAlerts: (farmId: number) => Promise<Alert[]>;
   markAlertRead: (id: number) => Promise<Alert>;
   markAllAlertsRead: (farmId: number) => Promise<{ updated: number }>;
 
-  // Sensors
+  // Sensors (manual readings)
   listSensors: (farmId: number) => Promise<Sensor[]>;
   createSensor: (farmId: number, input: { name: string; sensorType: Sensor['sensorType'] }) => Promise<Sensor>;
   deleteSensor: (id: number) => Promise<void>;
   listReadings: (sensorId: number, limit?: number) => Promise<SensorReading[]>;
   addReading: (sensorId: number, value: number, unit: string) => Promise<SensorReading>;
 
-  // Cells / NDVI
+  // Legacy voxel cells / NDVI (Monitoring page)
   listCells: (farmId: number) => Promise<FarmCell[]>;
   setCellCrop: (farmId: number, cellId: number, cropId: number | null) => Promise<FarmCell>;
   getNdvi: (farmId: number) => Promise<NdviEstimate>;
+
+  // Plot plans (designer)
+  getPlan: (farmId: number) => Promise<PlanState | null>;
+  savePlan: (plan: PlanState) => Promise<PlanState>;
 
   // Simulations
   listSimulations: (farmId: number) => Promise<Simulation[]>;
@@ -120,57 +98,80 @@ export interface MockApi {
   createCrop: (input: Omit<Crop, 'id' | 'isCustom'>) => Promise<Crop>;
 }
 
-export const mockApi: MockApi = {
+export const localApi: Api = {
   // Farms
-  listFarms: () => delay([...state.farms]),
-  getFarm: (id) => delay({ ...farmOrThrow(id) }),
-  createFarm: (input) => {
+  listFarms: async () => [...state.farms],
+  getFarm: async (id) => ({ ...farmOrThrow(id) }),
+  createFarm: async (input) => {
     const farm: Farm = {
       ...input,
-      id: nextFarmId++,
+      id: state.counters.farm++,
       createdAt: new Date().toISOString(),
     };
     state.farms = [farm, ...state.farms];
-    return delay(farm);
+    persist();
+    return farm;
   },
-  updateFarm: (id, patch) => {
+  updateFarm: async (id, patch) => {
     const f = farmOrThrow(id);
     Object.assign(f, patch);
-    return delay({ ...f });
+    persist();
+    return { ...f };
   },
-  deleteFarm: (id) => {
+  deleteFarm: async (id) => {
     state.farms = state.farms.filter((f) => f.id !== id);
     state.cells = state.cells.filter((c) => c.farmId !== id);
-    state.alerts = state.alerts.filter((a) => a.farmId !== id);
     state.simulations = state.simulations.filter((s) => s.farmId !== id);
     state.sensors = state.sensors.filter((s) => s.farmId !== id);
-    return delay(undefined);
+    delete state.plans[id];
+    persist();
   },
 
   // Weather
-  getWeather: () => delay({ ...state.weather }),
-  getForecast: () => delay([...state.forecast]),
-  getWeatherHistory: (_farmId, limit = 24) => delay(state.history.slice(0, limit)),
+  getWeather: async (farmId) => (await farmWeather(farmOrThrow(farmId))).weather,
+  getForecast: async (farmId) => (await farmWeather(farmOrThrow(farmId))).forecast,
+  getWeatherHistory: async (farmId, limit = 24) =>
+    (await farmWeather(farmOrThrow(farmId))).history.slice(-limit),
 
   // Alerts
-  listAlerts: (farmId) => delay(state.alerts.filter((a) => a.farmId === farmId)),
-  markAlertRead: (id) => {
-    const a = state.alerts.find((x) => x.id === id);
-    if (!a) throw new Error(`Alert ${id} not found`);
-    a.isRead = true;
-    return delay({ ...a });
+  listAlerts: async (farmId) => {
+    const farm = farmOrThrow(farmId);
+    try {
+      const { forecast } = await farmWeather(farm);
+      return deriveAlerts(farmId, forecast, (id) => !!state.alertReads[id]);
+    } catch {
+      return []; // offline with no cache → no alerts rather than an error wall
+    }
   },
-  markAllAlertsRead: (farmId) => {
-    const before = state.alerts.filter((a) => a.farmId === farmId && !a.isRead).length;
-    state.alerts = state.alerts.map((a) => (a.farmId === farmId ? { ...a, isRead: true } : a));
-    return delay({ updated: before });
+  markAlertRead: async (id) => {
+    state.alertReads[id] = true;
+    persist();
+    // Caller only uses invalidation; echo a minimal record.
+    return {
+      id, farmId: 0, alertType: 'frost', severity: 'info',
+      message: '', isRead: true, createdAt: new Date().toISOString(),
+    };
+  },
+  markAllAlertsRead: async (farmId) => {
+    const farm = farmOrThrow(farmId);
+    const { forecast } = await farmWeather(farm);
+    const alerts = deriveAlerts(farmId, forecast, () => false);
+    let updated = 0;
+    for (const a of alerts) {
+      if (!state.alertReads[a.id]) {
+        state.alertReads[a.id] = true;
+        updated++;
+      }
+    }
+    persist();
+    return { updated };
   },
 
   // Sensors
-  listSensors: (farmId) => delay(state.sensors.filter((s) => s.farmId === farmId)),
-  createSensor: (farmId, input) => {
+  listSensors: async (farmId) => state.sensors.filter((s) => s.farmId === farmId),
+  createSensor: async (farmId, input) => {
     const sensor: Sensor = {
-      id: nextSensorId++,
+      id: state.counters.sensor++,
       farmId,
       name: input.name,
       sensorType: input.sensorType,
@@ -180,21 +181,20 @@ export const mockApi: MockApi = {
       lastReadingAt: null,
     };
     state.sensors = [...state.sensors, sensor];
-    return delay(sensor);
+    persist();
+    return sensor;
   },
-  deleteSensor: (id) => {
+  deleteSensor: async (id) => {
     state.sensors = state.sensors.filter((s) => s.id !== id);
     delete state.readings[id];
-    return delay(undefined);
+    persist();
   },
-  listReadings: (sensorId, limit = 20) => {
-    const r = state.readings[sensorId] ?? [];
-    return delay(r.slice(-limit));
-  },
-  addReading: (sensorId, value, unit) => {
+  listReadings: async (sensorId, limit = 20) =>
+    (state.readings[sensorId] ?? []).slice(-limit),
+  addReading: async (sensorId, value, unit) => {
     const sensor = sensorOrThrow(sensorId);
     const reading: SensorReading = {
-      id: nextReadingId++,
+      id: state.counters.reading++,
       sensorId,
       value,
       recordedAt: new Date().toISOString(),
@@ -203,27 +203,36 @@ export const mockApi: MockApi = {
     sensor.lastValue = value;
     sensor.lastUnit = unit;
     sensor.lastReadingAt = reading.recordedAt;
-    return delay(reading);
+    persist();
+    return reading;
   },
 
-  // Cells
-  listCells: (farmId) => delay(state.cells.filter((c) => c.farmId === farmId)),
-  setCellCrop: (farmId, cellId, cropId) => {
+  // Legacy cells / NDVI
+  listCells: async (farmId) => state.cells.filter((c) => c.farmId === farmId),
+  setCellCrop: async (farmId, cellId, cropId) => {
     const c = state.cells.find((x) => x.id === cellId && x.farmId === farmId);
     if (!c) throw new Error(`Cell ${cellId} not found on farm ${farmId}`);
     c.cropId = cropId;
-    return delay({ ...c });
+    persist();
+    return { ...c };
   },
-  getNdvi: (farmId) => {
+  getNdvi: async (farmId) => {
     const n = state.ndvi[farmId];
-    if (n) return delay({ ...n });
-    const empty: NdviEstimate = { farmId, ndviGrid: [], timestamp: new Date().toISOString() };
-    return delay(empty);
+    if (n) return { ...n };
+    return { farmId, ndviGrid: [], timestamp: new Date().toISOString() };
+  },
+
+  // Plans
+  getPlan: async (farmId) => state.plans[farmId] ?? null,
+  savePlan: async (plan) => {
+    state.plans[plan.farmId] = { ...plan, updatedAt: new Date().toISOString() };
+    persist();
+    return state.plans[plan.farmId];
   },
 
   // Simulations
-  listSimulations: (farmId) => delay(state.simulations.filter((s) => s.farmId === farmId)),
-  createSimulation: (farmId, input) => {
+  listSimulations: async (farmId) => state.simulations.filter((s) => s.farmId === farmId),
+  createSimulation: async (farmId, input) => {
     const baseYield = 30;
     const tempPenalty = Math.max(0, Math.abs(input.tempDeltaC) - 1) * 3;
     const precipPenalty = input.precipMultiplier < 1 ? (1 - input.precipMultiplier) * 25 : 0;
@@ -248,16 +257,11 @@ export const mockApi: MockApi = {
               : 'Climate change scenario shows the impact of +2°C warming.';
 
     const results: SimulationResults = {
-      yieldTonHa,
-      waterUseMm,
-      carbonKgHa,
-      profitUsdHa,
-      stressScore,
-      summary,
+      yieldTonHa, waterUseMm, carbonKgHa, profitUsdHa, stressScore, summary,
     };
 
     const sim: Simulation = {
-      id: nextSimId++,
+      id: state.counters.sim++,
       farmId,
       ...input,
       status: 'complete',
@@ -265,18 +269,20 @@ export const mockApi: MockApi = {
       createdAt: new Date().toISOString(),
     };
     state.simulations = [sim, ...state.simulations];
-    return delay(sim, 400);
+    persist();
+    return sim;
   },
-  deleteSimulation: (id) => {
+  deleteSimulation: async (id) => {
     state.simulations = state.simulations.filter((s) => s.id !== id);
-    return delay(undefined);
+    persist();
   },
 
   // Crops
-  listCrops: () => delay([...state.crops]),
-  createCrop: (input) => {
-    const crop: Crop = { ...input, id: nextCropId++, isCustom: true };
-    state.crops = [crop, ...state.crops];
-    return delay(crop);
+  listCrops: async () => [...cropLibrary, ...state.customCrops],
+  createCrop: async (input) => {
+    const crop: Crop = { ...input, id: state.counters.crop++, isCustom: true };
+    state.customCrops = [crop, ...state.customCrops];
+    persist();
+    return crop;
   },
 };

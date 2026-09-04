@@ -30,6 +30,9 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Stat } from '@/components/shared/Stat';
 import { WeatherIcon } from '@/components/weather/WeatherIcon';
+import { SoilProfileCard } from '@/components/weather/SoilProfileCard';
+
+const WEATHER_STALE_MS = 15 * 60 * 1000;
 
 export function Weather({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
@@ -38,14 +41,17 @@ export function Weather({ farmId }: { farmId: number }) {
   const weather = useQuery({
     queryKey: ['weather', farmId],
     queryFn: () => apiFetch.getWeather(farmId),
+    staleTime: WEATHER_STALE_MS,
   });
   const forecast = useQuery({
     queryKey: ['forecast', farmId],
     queryFn: () => apiFetch.getForecast(farmId),
+    staleTime: WEATHER_STALE_MS,
   });
   const history = useQuery({
     queryKey: ['weather-history', farmId],
     queryFn: () => apiFetch.getWeatherHistory(farmId, 24),
+    staleTime: WEATHER_STALE_MS,
   });
 
   const c = weather.data?.current;
@@ -213,6 +219,8 @@ export function Weather({ farmId }: { farmId: number }) {
         </Card>
       )}
 
+      {farm && <SoilProfileCard lat={farm.lat} lng={farm.lng} />}
+
       {chartData.length > 1 && (
         <Card>
           <CardHeader className="pb-2">
@@ -283,6 +291,9 @@ export function Weather({ farmId }: { farmId: number }) {
           </CardContent>
         </Card>
       )}
+      <p className="text-xs text-muted-foreground">
+        Weather, forecast, soil, and UV data from Open-Meteo under CC BY 4.0.
+      </p>
     </div>
   );
 }

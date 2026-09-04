@@ -1,8 +1,16 @@
-// API client. The default `apiFetch` runs against the in-memory mock layer
-// in `src/mock/api.ts`, which lets the entire app boot and exercise every
-// route without a backend. Swap the import in pages for a real `fetch`-based
-// client to wire a real server.
+// API seam. `apiFetch` is the local-first client by default (persistent store
+// + real Open-Meteo weather via localApi). Set VITE_API_BASE_URL (see
+// .env.example) to a backend serving the README's /api/* contract and this
+// seam swaps to the fetch-based REST client in restApi.ts — no page changes.
 
-import { mockApi, type MockApi } from '@/mock/api';
+import { localApi, type Api } from '@/lib/localApi';
+import { createRestApi } from '@/lib/restApi';
 
-export const apiFetch: MockApi = mockApi;
+export type { Api };
+
+const envBaseUrl = import.meta.env.VITE_API_BASE_URL;
+
+export const apiFetch: Api =
+  typeof envBaseUrl === 'string' && envBaseUrl.trim() !== ''
+    ? createRestApi(envBaseUrl.trim())
+    : localApi;

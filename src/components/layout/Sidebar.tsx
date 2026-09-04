@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'wouter';
-import { ChartNoAxesColumn, CloudSun, FlaskConical, LayoutDashboard, Leaf, Map, Plus, Sprout, Sun, Moon, Activity } from 'lucide-react';
+import { LayoutDashboard, Leaf, Plus, Sprout, Sun, Moon } from 'lucide-react';
 
 import { useTheme } from '@/hooks/useTheme';
 import { useFarms } from '@/hooks/useFarms';
@@ -38,18 +38,18 @@ export function Sidebar() {
         {PRIMARY_LINKS.map((link) => {
           const active = location === link.href;
           return (
-            <Link key={link.href} href={link.href}>
-              <a
-                className={cn(
-                  'flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm transition-colors',
-                  active
-                    ? 'bg-primary/15 text-primary font-medium'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                <link.icon className="w-4 h-4 flex-shrink-0" />
-                {link.label}
-              </a>
+            <Link
+              key={link.href}
+              href={link.href}
+              className={cn(
+                'flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm transition-colors',
+                active
+                  ? 'bg-primary/15 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              <link.icon className="w-4 h-4 flex-shrink-0" />
+              {link.label}
             </Link>
           );
         })}
@@ -59,11 +59,9 @@ export function Sidebar() {
         <div className="px-3 py-1.5 flex items-center justify-between">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">My Farms</span>
           <Link href="/farms/new">
-            <a>
-              <Button variant="ghost" size="icon" className="h-6 w-6" data-testid="btn-new-farm">
-                <Plus className="w-3.5 h-3.5" />
-              </Button>
-            </a>
+            <Button variant="ghost" size="icon" className="h-6 w-6" data-testid="btn-new-farm">
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
           </Link>
         </div>
 
