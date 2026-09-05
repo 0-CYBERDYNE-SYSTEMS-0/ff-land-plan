@@ -4,9 +4,12 @@
 // forecast + climate normals). Every named constant documents its origin.
 
 import { SURFACE_SHELTER } from '@/lib/growth';
+import { kcAtFraction, kcForCategory, kyForCategory } from '@/data/fao56';
 import type { ClimateNormals } from '@/lib/climate';
 import type { SeasonEnsembles } from '@/lib/ensembles';
 import type { ClimateProjection } from '@/lib/cmip6';
+import { awcBufferMm, omCarbonFactor, phNutrientFactor } from '@/lib/soilEffect';
+import type { SoilProfile } from '@/lib/soil';
 import type { Crop, Farm, ForecastDay, PlanState, ScenarioType } from '@/types';
 
 export interface SimInput {
@@ -41,6 +44,7 @@ export function runSimulation(args: {
   farm: Farm; plan: PlanState | null; crops: Crop[]; input: SimInput;
   forecast?: ForecastDay[]; climate?: ClimateNormals | null; startDate?: Date;
   ensembles?: SeasonEnsembles | null; projection?: ClimateProjection | null;
+  soil?: SoilProfile | null;
 }): SimOutcome {
   const { farm, crops, input } = args;
   const plan = args.plan;
@@ -111,6 +115,7 @@ export function runSimulation(args: {
     durationDays: input.durationDays,
     fertCoverage,
     fertilizerBoost: input.fertilizerBoost,
+    soil: args.soil,
   });
   const perCrop = core.perCrop;
 
@@ -125,7 +130,7 @@ export function runSimulation(args: {
     for (const y of ensYears) {
       const series = y.daily.slice(0, input.durationDays).map((pt) => scenarioAdjust(pt, effTempDelta, effPrecipMult, shelter));
       if (series.length === 0) continue;
-      yields.push(simulateOnSeries(series, { cropById, cellsByCrop, cellM, durationDays: series.length, fertCoverage, fertilizerBoost: input.fertilizerBoost }).yieldTonHa);
+      yields.push(simulateOnSeries(series, { cropById, cellsByCrop, cellM, durationDays: series.length, fertCoverage, fertilizerBoost: input.fertilizerBoost, soil: args.soil }).yieldTonHa);
     }
     if (yields.length >= 3) {
       const s = [...yields].sort((a, b) => a - b);
@@ -182,12 +187,12 @@ function scenarioAdjust(pt: DailyPoint, tempDeltaC: number, precipMultiplier: nu
 // the primary run and every ensemble year go through (deterministic, pure).
 function simulateOnSeries(
   days: readonly DailyPoint[],
-  ctx: { cropById: Map<number, Crop>; cellsByCrop: Map<number, number>; cellM: number; durationDays: number; fertCoverage: number; fertilizerBoost: number },
+  ctx: { cropById: Map<number, Crop>; cellsByCrop: Map<number, number>; cellM: number; durationDays: number; fertCoverage: number; fertilizerBoost: number; soil?: SoilProfile | null },
 ): {
   perCrop: SimCropResult[]; totalAreaHa: number; totalStressDays: number; deficitMean: number;
   yieldTonHa: number; waterUseMm: number; carbonKgHa: number; profitUsdHa: number; stressScore: number;
 } {
-  const { cropById, cellsByCrop, cellM, durationDays, fertCoverage, fertilizerBoost } = ctx;
+  const { cropById, cellsByCrop, cellM, durationDays, fertCoverage, fertilizerBoost, soil } = ctx;
   const perCrop: SimCropResult[] = [];
   let totalAreaHa = 0;
   let yieldPerHaSum = 0; // area-weighted
@@ -203,39 +208,77 @@ function simulateOnSeries(
     if (!crop) continue;
     const areaHa = (cells * cellM * cellM) / 10_000;
     const baseT = Math.min(BASE_T_CEIL_C, Math.max(BASE_T_FLOOR_C, crop.minTempC));
+    const kcCurve = kcForCategory(crop.category);
+    const ky = kyForCategory(crop.category);
     let gdd = 0;
     let stressDays = 0;
     let deficitMm = 0;
     let metMm = 0;
-    for (const d of days) {
+    let demandMm = 0; // stage-aware FAO-56 demand total (for deficitRatio)
+    for (let di = 0; di < days.length; di++) {
+      const d = days[di]!;
       gdd += Math.max(0, d.tmeanC - baseT);
       if (d.tmeanC > crop.maxTempC || d.tmeanC < crop.minTempC) stressDays++;
+      // Stage-aware demand (Wave 4 L1, FAO-56): ETc = Kc(f) × ET0 with the
+      // season fraction f = elapsed/growthDays driving the Kc curve. The
+      // catalog floor (waterNeedMmDay × 0.6) is kept so the catalog value
+      // stays meaningful on low-ET0 days and legacy sims remain sane —
+      // Kc × ET0 alone can dip near zero in a cool week, which would make
+      // demand (and thus deficitRatio) collapse to noise.
+      const f = clamp01((di + 1) / Math.max(1, crop.growthDays));
+      const etc = kcAtFraction(kcCurve, f) * d.et0Mm;
+      const useKc =
+        Number.isFinite(d.et0Mm) && d.et0Mm >= 0 &&
+        !(crop.category === 'fungus');
+      // fungus: no Kc curve and zero transpiration demand (FAO-56 has no
+      // curve for mushrooms — they do not transpire); legacy fallback keeps
+      // the catalog floor when ET0 data is unusable.
+      const demand = useKc
+        ? Math.max(etc, crop.waterNeedMmDay * DEMAND_FLOOR_FRACTION)
+        : crop.category === 'fungus' ? 0 : crop.waterNeedMmDay;
+      demandMm += demand;
       const supply = d.precipMm + d.et0Mm * IRRIGATION_COVERAGE;
-      deficitMm += Math.max(0, crop.waterNeedMmDay - supply);
-      metMm += Math.min(crop.waterNeedMmDay, supply);
+      deficitMm += Math.max(0, demand - supply);
+      metMm += Math.min(demand, supply);
     }
-    const deficitRatio = clamp01(deficitMm / Math.max(1, crop.waterNeedMmDay * durationDays));
-    const nutrientGap = STRESS_NUTRIENT_NEED[crop.nitrogenNeed] * (1 - fertCoverage);
+    // Soil effects (Wave 4): plant-available water in the root zone relieves
+    // accumulated deficit (AWC × rooting depth, capped at the deficit); pH
+    // outside the 6-7 band degrades fertilizer effectiveness and lifts the
+    // unmet-nutrient gap (availability falloff, extension-service ranges);
+    // null soil ⇒ identity factors, legacy behavior.
+    const effDeficit = deficitMm - awcBufferMm(deficitMm, soil?.awcMmPerCm ?? null);
+    const phFactor = phNutrientFactor(soil?.ph ?? null);
+    const deficitRatio = clamp01(effDeficit / Math.max(1, demandMm));
+    const nutrientGap =
+      STRESS_NUTRIENT_NEED[crop.nitrogenNeed] * (1 - fertCoverage * phFactor) * (2 - phFactor);
     const stressScore = round2(clamp01(
       STRESS_W_THERMAL * Math.min(1, stressDays / Math.max(1, durationDays)) +
       STRESS_W_WATER * deficitRatio +
       STRESS_W_NUTRIENT * nutrientGap,
     ) * 100);
-    const growthFactor = 1 - GROWTH_STRESS_SENSITIVITY * (stressScore / 100);
-    const yieldPerHa = crop.yieldTonHa * growthFactor;
+    // Ky yield response (Wave 4 L1, FAO-56 Annex / FAO-33):
+    // 1 − Ya/Ym = Ky × (1 − ETa/ETm) ⇒ yieldFactor = 1 − Ky × deficitRatio,
+    // clamped 0..1. Monotonic in deficit (more deficit ⇒ ≤ yield).
+    // stressScore keeps its own (unchanged) formula for the UI.
+    const yieldFactor = clamp01(1 - ky * deficitRatio);
+    const yieldPerHa = crop.yieldTonHa * yieldFactor;
     const yieldTonHa = round2(yieldPerHa * areaHa);
 
     perCrop.push({
       cropId: crop.id, name: crop.name, cells, areaHa: round2(areaHa),
-      yieldTonHa, stressScore, waterDeficitMm: round1(deficitMm), stressDays,
+      yieldTonHa, stressScore, waterDeficitMm: round1(effDeficit), stressDays,
     });
     totalAreaHa += areaHa;
     yieldPerHaSum += yieldPerHa * areaHa;
     demandSum += metMm * areaHa;
     stressSum += stressScore * areaHa;
-    deficitAreaSum += deficitMm * areaHa;
+    deficitAreaSum += effDeficit * areaHa;
     totalStressDays += stressDays;
-    carbonAreaSum += CARBON_RESIDUE_KGHA[crop.category] * (1 + CARBON_FERT_FACTOR * fertilizerBoost) * areaHa;
+    carbonAreaSum +=
+      CARBON_RESIDUE_KGHA[crop.category] *
+      (1 + CARBON_FERT_FACTOR * fertilizerBoost) *
+      omCarbonFactor(soil?.organicMatterPct ?? null) *
+      areaHa;
     profitAreaSum += (yieldPerHa * PRICE_USD_T[crop.category]
       - metMm * WATER_COST_USD_MM
       - FERT_COST_USD_PER_BOOST * fertilizerBoost) * areaHa;
@@ -308,9 +351,10 @@ const STRESS_W_NUTRIENT = 0.15;
 const FERT_COVERAGE_PER_UNIT = 0.5;
 const STRESS_NUTRIENT_NEED: Record<Crop['nitrogenNeed'], number> = { low: 0, medium: 0.5, high: 1 };
 
-// Growth response: Ky-style simplification (FAO-33 relative yield loss ≈
-// Ky × relative stress) with Ky folded to 0.6 — bounded, monotonic.
-const GROWTH_STRESS_SENSITIVITY = 0.6;
+// Stage-aware demand floor (Wave 4 L1): on low-ET0 days Kc × ET0 can dip
+// near zero; keeping 60 % of the catalog waterNeedMmDay as the minimum
+// demand keeps deficitRatio meaningful and legacy numbers in range.
+const DEMAND_FLOOR_FRACTION = 0.6;
 
 interface DailyPoint { tmeanC: number; precipMm: number; et0Mm: number }
 

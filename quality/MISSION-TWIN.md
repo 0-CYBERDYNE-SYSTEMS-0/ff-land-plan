@@ -493,3 +493,126 @@ the base commit's inline algebra.
   projected temperature delta (defensible under the spec's INSTEAD clause;
   commented in code); (2) cmip6.ts lacks in-flight dedupe (forever-cache +
   single caller make it moot).
+
+---
+
+# WAVE 4 — Remaining Tier 2/3 to Verifiable Completion (spec 2026-09-04, branch `twin-w4`)
+
+Four worker lanes (disjoint files) + orchestrator stitches + validator +
+skill-based review. **Blocked on credentials (documented, not faked):**
+Sentinel-2 ground-truth NDVI (needs a free Copernicus Data Space account) and
+USDA NASS market prices (free key) — both recorded here; neither is wired.
+
+| Lane | Owns | Delivers |
+|---|---|---|
+| L1 "FAO-56 agronomy" | `src/data/fao56.ts` (new), `src/lib/sim.ts` | Stage-aware crop ET (Kc curve) + Ky yield response replacing the flat fold |
+| L2 "Soil→sim" | `src/lib/soilEffect.ts` (new, pure) | AWC water buffering, pH nutrient gating, OM carbon factor — pure fns + probe; orchestrator stitches into sim/localApi |
+| L3 "Light model" | `src/lib/light.ts` (new), `src/lib/growth.ts`, `src/components/world/World3D.tsx` | Monthly DLI per farm; enclosed-surface light stress in the growth model; World3D threads it (scrub-date month aware) |
+| L4 "Disease pressure" | `src/lib/disease.ts` (new), `src/pages/Weather.tsx` | 7-day blight/mildew pressure index from hourly temp+RH (own small request, 1 h TTL); Weather-page card |
+
+## L1 — FAO-56 Kc/Ky (`fao56.ts` + sim.ts)
+
+- `src/data/fao56.ts`: per-`CropCategory` Kc curves `KcCurve { ini; mid; end;
+  iniFrac; devFrac; midFrac }` (stage-length fractions of total season,
+  defaults ~0.2/0.3/0.35/0.15, adjusted per category per FAO-56 Table 11
+  norms) + single `Ky` yield-response factor per category. Values
+  transcribed from FAO-56 Table 12 representative crops per category
+  (vegetable≈tomato, grain≈maize, fruit≈citrus/orchard, herb≈small, flower,
+  cover_crop≈grass; fungus ⇒ 0 demand, no curve). Each number block gets a
+  citation comment ("FAO-56 Table 12, tomato").
+- `sim.ts`: water demand becomes stage-aware `ETc = Kc(stageFrac) × day.et0Mm`
+  (interpolate ini→mid→end linearly across the season fraction; legacy
+  `waterNeedMmDay` remains the floor — demand = max(ETc, need×0.6), documented)
+  and the yield fold becomes Ky-based:
+  `1 − Ky × deficitRatio` (clamped, defaulting to the current 0.6 behavior
+  per category via its Ky). growthDays drives stage fraction. Determinism +
+  monotonicity preserved; old stored sims render unchanged (shape untouched).
+
+## L2 — Soil→sim pure functions (`soilEffect.ts`)
+
+```ts
+export function awcBufferMm(deficitMm, awcMmPerCm | null, rootingCm?): number  // deficit relieved by plant-available water, capped (default rooting 25 cm, documented)
+export function phNutrientFactor(ph: number | null): number  // 1.0 in 6.0–7.0; linear falloff to 0.6 at 4.5/9.0 (documented, cited extension-service ranges)
+export function omCarbonFactor(omPct: number | null): number // 1.0 at 2% OM; ±0.05 per % point, clamped 0.8–1.3
+```
+All null-safe ⇒ identity when data absent. Node probe with the real Boring OR
+numbers from the Wave-1 log (silt loam, pH 5.6, OM 5, AWC 2.3). Orchestrator
+stitches: sim args gain `soil?`, deficit/nutrient/carbon paths consume the
+factors; localApi passes `fetchSoilProfile` (forever cache, one localStorage
+read after first fetch).
+
+## L3 — Light model (`light.ts` + growth.ts + World3D)
+
+- `src/lib/light.ts`: ONE archive request (last full calendar year, daily
+  `shortwave_radiation_sum`) → `monthlyDliMol: number[12]` via the documented
+  conversion `DLI_mol ≈ MJ × 2.02` (≈45% PAR fraction × 4.5 mol/MJ PAR — cite
+  horticultural lighting norms). Cache `ff-pro:light:<lat2dp>,<lng2dp>`
+  (versioned; yearly refresh check). Never throw ⇒ null.
+- `growth.ts`: `GrowthModCtx` gains `dliMol?: number` + `month?: number`;
+  new light-stress term applies ONLY to enclosed surfaces (outdoor takes full
+  sun by definition): crop DLI need per category table (documented: fruiting
+  ≈20, vegetable ≈14, herb/flower ≈10, grain ≈18, cover_crop ≈8, fungus ⇒
+  never light-stressed); stress += deficit-fraction when `dliMol` present and
+  below need (terse doc: supplemental LEDs can cover the gap — this models
+  the *unlit* case). Undefined ctx fields ⇒ byte-identical legacy behavior.
+- `World3D.tsx`: fetch `monthlyDliMol` in the existing climate fetch path;
+  store in a ref + state mirror (EXACT pattern of climateBaselineC — no
+  effect-deps refs); thread `dliMol` from the SCRUB DATE's month (date-scrub
+  to December shows winter greenhouse light stress) into the growth ctx at
+  the existing three call sites. Optional tiny chip extension if trivial.
+
+## L4 — Disease pressure (`disease.ts` + Weather.tsx)
+
+- `src/lib/disease.ts`: ONE request
+  `hourly=temperature_2m,relative_humidity_2m`, 7-day forecast window →
+  documented blight/mildew pressure index: hourly risk when RH ≥ 90 % and
+  10 °C ≤ T ≤ 25 °C (cite classic late-blight Hjärne-type thresholds);
+  daily score → 7-day index 0–100; riskLevel low/moderate/high. 1 h TTL
+  cache + dedupe; never throw ⇒ null. Probe against live Portland data.
+- `Weather.tsx`: "Disease pressure" card under Environment — index, level
+  chip, one-line guidance ("scout for blight on solanaceae" at high),
+  skeleton/hide-when-null/attribution "computed from Open-Meteo hourly
+  forecast". Explicit queryFn + sane staleTime.
+
+## Verification gates (Wave 4)
+
+Standard suite: typecheck/build (three.js byte-identical), per-lane Node
+probes (determinism, monotonicity: more deficit ⇒ less yield with Ky; AWC
+buffer relieves deficit; pH 5.6 factor < pH 6.5; December DLI < June at
+Portland), route smoke (weather + world + simulations), backcompat probes
+(undefined ctx / no soil / no light ⇒ legacy outputs), request budget
+(+1 archive, +1 hourly per cold cache). Orchestrator stitches
+localApi+sim-soil AFTER L1/L2 land; validator runs last; skill-based
+code review precedes commit.
+
+### Wave 4 — GREEN (validated 2026-09-04, branch `twin-w4`, base `d21b1f6`)
+
+Scope: four worker lanes + orchestrator soil stitch across nine files.
+Validator: all gates PASS (typecheck/build, three.js chunk byte-identical,
+nine-file diff review, determinism/backcompat probes, route smoke with LIVE
+disease-pressure + environment cards rendering, request budget +2/cold cache,
+`Api` untouched).
+
+**Skill-based second-model review (autoreview/Codex) — 3 passes:**
+- **Pass 1 (5 P2s, all verified real, all fixed):** UTC-parsing of the scrub
+  date shifted the DLI month in TZs behind UTC (now read from the calendar
+  string at both sites); DLI fetch was gated behind weather success (now
+  independent); farm switches kept stale DLI (now cleared per farm);
+  missing radiation months cached as 0 = "false darkness" (now imputed from
+  nearest usable neighbors); failed disease lookups occupied the 1 h TTL
+  (now evicted).
+- **Pass 2 (3 P2s, all fixed):** builder path indexed `dli[m]` after m became
+  1-based (off-by-one — fixed to `m-1`); the in-weather DLI fetch copy had
+  not been removed (duplicate requests — removed, independent copy kept);
+  pre-imputation v1 light caches could serve 0-filled months (version bumped
+  to 2, stale blobs discarded).
+- **Pass 3:** focused re-verification of the pass-2 fixes (no-tools mode).
+- Notable: two of pass 2's findings were bugs in pass 1's fixes — the
+  review loop is doing exactly its job.
+- L2 deviation recorded: spec's "OM 1 % ⇒ 0.85" example contradicted its own
+  formula (correct value 0.95); the worker implemented the formula.
+
+**Blocked on credentials (documented, not wired):** Sentinel-2 ground-truth
+NDVI (free Copernicus Data Space account) and USDA NASS market prices (free
+key). Everything else from the Tier 2/3 list is implemented, validated, and
+review-clean.

@@ -6,6 +6,7 @@ import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
 import { fetchClimateNormals } from '@/lib/climate';
 import { SCENARIOS, growthProgress, scenarioGrowthMod, stageForScale } from '@/lib/growth';
+import { fetchMonthlyDli } from '@/lib/light';
 import type { ScenarioType, Weather, WeatherCurrent } from '@/types';
 import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '@/three/animals';
 import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
@@ -104,7 +105,11 @@ export default function World3D({ editor }: World3DProps) {
   const weatherRef = useRef<WeatherCurrent | null>(null);
   // Growth-model climate context fed to buildPlants/updatePlants/HUD; empty
   // (legacy 20 °C baseline) until live weather / climate normals arrive.
-  const growthCtxRef = useRef<{ ambientTempC?: number; baselineTempC?: number }>({});
+  const growthCtxRef = useRef<{ ambientTempC?: number; baselineTempC?: number; dliMol?: number }>({});
+  // Latest monthly DLI (mol/m²/day, index 0 = January) consumed via helper
+  // below by the ref-based plant builders; mirrors climateBaselineC's
+  // ref+state pattern (refs never appear in dep arrays).
+  const monthlyDliRef = useRef<number[] | null>(null);
 
   // Launch params (test hooks): fftime = initial timeOfDay, ffdebug = open Perf HUD.
   const [scrubDate, setScrubDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -136,6 +141,9 @@ export default function World3D({ editor }: World3DProps) {
   // State mirror of the farm's ERA5 climate-normals baseline (null = offline /
   // not yet fetched → growth falls back to the legacy 20 °C constant).
   const [climateBaselineC, setClimateBaselineC] = useState<number | null>(null);
+  // State mirror of monthlyDliRef so the growth-only effect and the HUD memo
+  // recompute when the DLI series lands (refs alone don't trigger renders).
+  const [monthlyDli, setMonthlyDli] = useState<number[] | null>(null);
   const [climateLabel, setClimateLabel] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(() => readLaunchParams().get('ffdebug') === '1');
   const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
@@ -150,6 +158,15 @@ export default function World3D({ editor }: World3DProps) {
   const scenarioRef = useRef<ScenarioType>(scenario);
   scenarioRef.current = scenario;
   showDebugRef.current = showDebug;
+
+  // Growth ctx for the ref-based plant builders (mount-once init + plan-change
+  // effects): the latest climate ctx plus the DLI of the SCRUB DATE's month,
+  // so a December scrub shows winter light stress even on later plan edits.
+  const growthCtxForBuilders = (): typeof growthCtxRef.current => {
+    const dli = monthlyDliRef.current;
+    const m = Number(scrubDateRef.current.slice(5, 7)); // calendar month from the string — new Date('YYYY-MM-DD') parses UTC and shifts the day in TZ behind UTC
+    return { ...growthCtxRef.current, dliMol: dli ? (dli[m - 1] ?? undefined) : undefined }; // m is 1..12; MonthlyDli is 0-based
+  };
 
   const achievements = useRef(createAchievementSystem());
   const flightTime = useRef(0);
@@ -176,6 +193,10 @@ export default function World3D({ editor }: World3DProps) {
     const farm = editor.farm;
     if (!farm) return;
     let cancelled = false;
+    // Stale-data guard: switching farms must not keep serving the previous
+    // farm's DLI until a replacement arrives.
+    monthlyDliRef.current = null;
+    setMonthlyDli(null);
     apiFetch
       .getWeather(farm.id)
       .then((w: Weather) => {
@@ -199,6 +220,16 @@ export default function World3D({ editor }: World3DProps) {
       .catch((err: unknown) => {
         console.warn('weather unavailable, using defaults', err);
       });
+    // Monthly light (DLI): fetched independently of the weather request so a
+    // weather failure (offline, no cache) can't suppress it; localStorage-
+    // cached, resolves null offline, never rejects.
+    fetchMonthlyDli(farm.lat, farm.lng)
+      .then((dli) => {
+        if (cancelled || !dli) return;
+        monthlyDliRef.current = dli;
+        setMonthlyDli(dli);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [editor.farm]);
 
@@ -258,7 +289,7 @@ export default function World3D({ editor }: World3DProps) {
 
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
-    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxRef.current);
+    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders());
     waterPlanesRef.current = buildWaterPlanes(plan, engine.scene);
 
     // Animals
@@ -478,7 +509,7 @@ export default function World3D({ editor }: World3DProps) {
 
     // Structures & plants
     structureBatchesRef.current = updateStructures(structureBatchesRef.current, plan, engine.scene);
-    plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxRef.current);
+    plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders());
 
     // Water planes
     disposeWaterPlanes(waterPlanesRef.current);
@@ -550,6 +581,14 @@ export default function World3D({ editor }: World3DProps) {
     }
   }, [editor.planVersion, editor.cropById, showHistory]);
 
+  // Scrub month 1..12 — memo-friendly integer derived where scrubDate is
+  // already a dep; feeds the DLI lookup at every growth-ctx construction.
+  const scrubMonth = useMemo(() => Number(scrubDate.slice(5, 7)), [scrubDate]); // 1..12, parsed from the calendar string (UTC-parse safe)
+  const scrubDliMol = useMemo(
+    () => (monthlyDli ? (monthlyDli[scrubMonth - 1] ?? undefined) : undefined),
+    [monthlyDli, scrubMonth],
+  );
+
   // Growth-only update: advancing the sim date (or switching scenario, or the
   // live ambient temp landing) must NOT rebuild ground/structures/animals —
   // only the plant stages change.
@@ -564,9 +603,13 @@ export default function World3D({ editor }: World3DProps) {
       engine.scene,
       new Date(scrubDate),
       scenario,
-      { ambientTempC: ambientTempC ?? undefined, baselineTempC: climateBaselineC ?? undefined },
+      {
+        ambientTempC: ambientTempC ?? undefined,
+        baselineTempC: climateBaselineC ?? undefined,
+        dliMol: scrubDliMol,
+      },
     );
-  }, [scrubDate, scenario, ambientTempC, climateBaselineC, editor.cropById]);
+  }, [scrubDate, scenario, ambientTempC, climateBaselineC, scrubDliMol, editor.cropById]);
 
   // Check rain/snow achievement
   useEffect(() => {
@@ -638,6 +681,7 @@ export default function World3D({ editor }: World3DProps) {
       const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', {
         ambientTempC: ambientTempC ?? undefined,
         baselineTempC: climateBaselineC ?? undefined,
+        dliMol: scrubDliMol,
       });
       const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
       rows.push({
@@ -649,7 +693,7 @@ export default function World3D({ editor }: World3DProps) {
       });
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name));
-  }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC, climateBaselineC]);
+  }, [editor.cropById, editor.planVersion, scenario, scrubDate, scrubDliMol, ambientTempC, climateBaselineC]);
 
   // Update weather FX + audio params in the rAF loop already handles audio
   const lastAchievement = achievements.current.unlocked[achievements.current.unlocked.length - 1];
