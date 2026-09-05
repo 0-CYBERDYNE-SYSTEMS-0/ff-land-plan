@@ -515,3 +515,52 @@ pixels (ambient-motion baseline 0.27 %); the same drag with Brush changed
 3.2 % (painted strip only, no rotation); chip appears iff a paint tool is
 active. Lesson: gating a viewer's primary gesture behind shared editor
 state needs an entry-path reset or the gate feels like a dead canvas.
+
+## 2026-09-05 — CI/CD bootstrap (`ci-bootstrap` branch)
+
+Goal: `origin/main` always release-ready, changes land only through green PRs.
+
+- **ci.yml** — three parallel jobs per PR/push to `main`: `typecheck + build`
+  (Node 22, `dist/` artifact, 7-day retention); `headless smoke` (dev server on
+  :5177 + `appshot --gate --expect "Plot Designer"` on `#/farms/1/map` — fresh
+  CI profiles get the seeded demo farm — and `--expect "showcase-ready"` on
+  `showcase.html`; shots uploaded for eyeballing); `secret + private-file scan`
+  (gitleaks v8.30.1 pinned binary, `--redact`, full history via
+  `fetch-depth: 0`, plus the filename-based private-file guard).
+- **tools/check-private-files.mjs** (`npm run check:private`) — fails on
+  tracked env files (`.env.example` allowlisted), key material, OS cruft,
+  sqlite dumps, farm/plan data exports, agent state dirs. Complements
+  gitleaks: pattern-scan vs filename guard. App is local-first and its external
+  APIs are keyless, so filename hygiene is the realistic PII risk.
+- **tools/appshot.mjs** — Chrome candidates now: `FF_CHROME_BIN` → macOS paths
+  → Linux runner paths (`google-chrome` etc.). No behavior change on macOS.
+  (Untracked `tools/appshot-live.mjs` still has the macOS-only list — patch it
+  the same way when it gets committed.) First CI run failed the showcase shot:
+  GPU-less runners refuse software WebGL unless Chrome gets
+  `--enable-unsafe-swiftshader` (now always passed). appshot also gained an
+  `FF_CHROME_FLAGS` env passthrough and a `--vt <ms>` virtual-time-budget
+  override (spawn ceiling = max(40 s, 4×vt)); the CI showcase shot is scoped
+  to `#only=tomato,wheat` because the full 4-lane page needs ~100 s wall under
+  SwiftShader.
+- **release.yml** — `v*` tag → typecheck + build → `dist` tarball on an
+  auto-created GitHub Release (uses `gh release create`, no third-party action).
+- **dependabot.yml** — weekly npm + github-actions updates; minor/patch grouped
+  to keep PR noise down.
+- **Branch protection** on `main` applied after first green run: required
+  checks (`typecheck + build`, `headless smoke`, `secret + private-file scan`),
+  up-to-date branches, linear history, admin enforcement on, no required
+  reviews (solo repo — self-approval is impossible, so reviews would deadlock).
+- **Baseline findings (the scans paid for themselves on day one):**
+  `.commandcode/` (agent tool state — taste prefs, plan notes) was TRACKED on
+  main → untracked (`git rm -r --cached`) + gitignored along with
+  `.code-review-graph/`. Gitleaks full-history scan found 2 `generic-api-key`
+  hits — BOTH manually verified as documentation text (MISSION-TWIN.md ERA5/
+  USDA keyless-API table; a flight-camera bullet list in the now-untracked
+  .commandcode plan), no real credentials anywhere. Verified false positives
+  are pinned in `.gitleaksignore` (4-part `commit:file:rule:line` fingerprints
+  — the 3-part report format does NOT match). Repo's 72 tracked `quality/shots`
+  PNGs are deterministic dev shots by convention, not private data. Final
+  state: guard passes on 240 tracked files, gitleaks reports `no leaks found`.
+
+Deliberately out of scope: auto-deploy/hosting (no target exists), reviving the
+broken ESLint, test runner, husky pre-commit hooks — CI is the single gate.
