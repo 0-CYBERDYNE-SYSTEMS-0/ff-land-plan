@@ -464,3 +464,31 @@ live during validation.
 
 **Budget:** happy path ≤3 requests (L1) + 2 (L2) per cold cache; every
 module catch-all → null; old stored sims byte-identical.
+
+## Mission TWIN — Wave 4 (2026-09-04, branch `twin-w4`)
+
+**FAO-56 agronomy in the sim:** per-category Kc curves + Ky factors
+(`src/data/fao56.ts`, values verified against the published FAO-56 Ch. 6
+tables — orchard 0.45/0.95/0.70 replaced the spec's sketch). Demand is now
+stage-aware `ETc = Kc(f) × ET0` with a `0.6 × waterNeedMmDay` floor; yield
+response is `1 − Ky × deficitRatio` (true relative-ET deficit — denominator
+switched to accumulated stage-aware demand). Fungus: zero demand, Ky 0.
+
+**Soil → sim:** `soilEffect.ts` (AWC deficit buffering vs 25 cm rooting,
+pH nutrient factor 1.0 in 6–7 falling to 0.6 at 4.5/9, OM carbon ±0.05/pt)
+wired through `runSimulation`'s new `soil` arg from the forever-cached USDA/
+SoilGrids profile. All nulls ⇒ identity: no soil data = Wave 3 behavior.
+
+**Light model:** `light.ts` (one ERA5 radiation request/year → 12 monthly
+DLI via the 2.02 MJ→mol conversion; missing months imputed from neighbors,
+cache v2) feeds `growth.ts`'s enclosed-surface light stress (category need
+table, ×0.4 weight; outdoor + fungus exempt). World3D threads the SCRUB
+month's DLI so December shows winter greenhouse stress. TZ trap fixed:
+calendar months parsed from the string, never `new Date('YYYY-MM-DD')`.
+
+**Disease pressure:** `disease.ts` — 7-day blight/mildew index from hourly
+RH ≥ 90 % + 10–25 °C with linear recency decay; Weather-page card with the
+computation basis printed. Failed lookups evict from the 1 h cache.
+
+**Process note:** two structured review rounds each shook out real bugs —
+including two introduced by earlier fixes. Review loops pay for themselves.

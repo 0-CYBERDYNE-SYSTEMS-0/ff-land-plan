@@ -584,3 +584,35 @@ Portland), route smoke (weather + world + simulations), backcompat probes
 (+1 archive, +1 hourly per cold cache). Orchestrator stitches
 localApi+sim-soil AFTER L1/L2 land; validator runs last; skill-based
 code review precedes commit.
+
+### Wave 4 — GREEN (validated 2026-09-04, branch `twin-w4`, base `d21b1f6`)
+
+Scope: four worker lanes + orchestrator soil stitch across nine files.
+Validator: all gates PASS (typecheck/build, three.js chunk byte-identical,
+nine-file diff review, determinism/backcompat probes, route smoke with LIVE
+disease-pressure + environment cards rendering, request budget +2/cold cache,
+`Api` untouched).
+
+**Skill-based second-model review (autoreview/Codex) — 3 passes:**
+- **Pass 1 (5 P2s, all verified real, all fixed):** UTC-parsing of the scrub
+  date shifted the DLI month in TZs behind UTC (now read from the calendar
+  string at both sites); DLI fetch was gated behind weather success (now
+  independent); farm switches kept stale DLI (now cleared per farm);
+  missing radiation months cached as 0 = "false darkness" (now imputed from
+  nearest usable neighbors); failed disease lookups occupied the 1 h TTL
+  (now evicted).
+- **Pass 2 (3 P2s, all fixed):** builder path indexed `dli[m]` after m became
+  1-based (off-by-one — fixed to `m-1`); the in-weather DLI fetch copy had
+  not been removed (duplicate requests — removed, independent copy kept);
+  pre-imputation v1 light caches could serve 0-filled months (version bumped
+  to 2, stale blobs discarded).
+- **Pass 3:** focused re-verification of the pass-2 fixes (no-tools mode).
+- Notable: two of pass 2's findings were bugs in pass 1's fixes — the
+  review loop is doing exactly its job.
+- L2 deviation recorded: spec's "OM 1 % ⇒ 0.85" example contradicted its own
+  formula (correct value 0.95); the worker implemented the formula.
+
+**Blocked on credentials (documented, not wired):** Sentinel-2 ground-truth
+NDVI (free Copernicus Data Space account) and USDA NASS market prices (free
+key). Everything else from the Tier 2/3 list is implemented, validated, and
+review-clean.

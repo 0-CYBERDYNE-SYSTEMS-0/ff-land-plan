@@ -25,6 +25,7 @@ import { fetchClimateNormals } from '@/lib/climate';
 import { fetchSeasonEnsembles } from '@/lib/ensembles';
 import { fetchClimateProjection } from '@/lib/cmip6';
 import { runSimulation } from '@/lib/sim';
+import { fetchSoilProfile } from '@/lib/soil';
 
 function farmOrThrow(id: number): Farm {
   const f = state.farms.find((x) => x.id === id);
@@ -253,6 +254,10 @@ export const localApi: Api = {
     // range; the CMIP6 projection is heavy + forever-cached, so only fetch it
     // when the climate_change scenario will actually use it.
     const ensembles = await fetchSeasonEnsembles(farm.lat, farm.lng);
+    // Ground-truth soil (USDA/SoilGrids) feeds AWC/pH/OM into the water,
+    // nutrient and carbon models; forever-cached, one localStorage read after
+    // the first fetch.
+    const soil = await fetchSoilProfile(farm.lat, farm.lng);
     const projection =
       input.scenarioType === 'climate_change'
         ? await fetchClimateProjection(farm.lat, farm.lng)
@@ -266,6 +271,7 @@ export const localApi: Api = {
       climate,
       ensembles,
       projection,
+      soil,
     });
     const results: SimulationResults = outcome;
 
