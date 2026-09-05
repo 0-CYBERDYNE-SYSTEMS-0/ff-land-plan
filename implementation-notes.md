@@ -492,3 +492,26 @@ computation basis printed. Failed lookups evict from the 1 h cache.
 
 **Process note:** two structured review rounds each shook out real bugs —
 including two introduced by earlier fixes. Review loops pay for themselves.
+
+## 2026-09-05 — World3D orbit restore (branch `fix/world3d-orbit-controls`)
+
+**Regression:** the autoreview commits (d6f43ad + e7ab50e, Sep 3) gated
+left-drag/one-finger orbit behind `tool === 'select'`
+(`setEngineOrbitEnabled`), but the editor default tool is `brush` — so
+entering the 3D world view left rotation dead (drags silently painted
+instead) while wheel zoom kept working. The arbitration itself is correct
+(paint tools must own the drag); the DEFAULT state was the bug.
+
+**Fix:** (1) `PlotDesigner` switches the tool to Select when the world view
+opens (effect keyed on viewMode only — switching tools INSIDE the world view
+must not snap back; painting in 3D stays available from the toolbar).
+(2) World3D shows a top-center hint chip while a paint tool claims the drag
+("Brush active — drag paints the plan. Press V or pick Select to orbit
+again."), suppressed while a tour owns the top strip.
+
+**Verification:** typecheck + build + appshot gate (zero runtime errors) +
+a CDP drag harness: real mouse drag with Select changed 31.5 % of canvas
+pixels (ambient-motion baseline 0.27 %); the same drag with Brush changed
+3.2 % (painted strip only, no rotation); chip appears iff a paint tool is
+active. Lesson: gating a viewer's primary gesture behind shared editor
+state needs an entry-path reset or the gate feels like a dead canvas.

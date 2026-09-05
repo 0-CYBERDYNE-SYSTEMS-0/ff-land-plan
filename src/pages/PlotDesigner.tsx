@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, Map as MapIcon } from 'lucide-react';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,18 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     if (new URLSearchParams(window.location.search).get('ffview') === 'world') return 'world';
     return 'blueprint';
   });
+
+  // The 3D view hands left-drag/one-finger to orbit ONLY while the Select tool
+  // is active (paint tools claim that drag for strokes). It is a viewer first,
+  // so entering it starts in inspect mode — arriving with a paint tool active
+  // (the editor default) used to leave rotate dead with no hint. Painting in
+  // 3D stays available by picking a paint tool from the toolbar. Deps
+  // deliberately exclude editor.tool: switching tools INSIDE the world view
+  // must not snap the user back to Select.
+  useEffect(() => {
+    if (viewMode === 'world' && editor.tool !== 'select') editor.setTool('select');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
 
   if (isLoading) {
     return <div className="p-6"><Skeleton className="h-[75vh] w-full" /></div>;

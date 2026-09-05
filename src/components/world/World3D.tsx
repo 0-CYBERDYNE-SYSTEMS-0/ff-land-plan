@@ -55,6 +55,18 @@ const SURFACE_AMBIENT: Record<string, number> = {
   indoor: 0.6,
 };
 
+/** Display names for the tools that claim left-drag for painting in here;
+ * used by the orbit hint chip so the gate never feels like a dead canvas. */
+const TOOL_LABELS: Record<string, string> = {
+  brush: 'Brush',
+  rect: 'Rect',
+  asset: 'Asset',
+  erase: 'Erase',
+  pick: 'Pick',
+  fill: 'Fill',
+  line: 'Line',
+};
+
 /**
  * Test-hook launch params, read ONCE on mount. Inert unless present.
  * Checks BOTH `?a=b` in the real query string AND inside the hash fragment
@@ -718,6 +730,18 @@ export default function World3D({ editor }: World3DProps) {
       ref={containerRef}
       className="relative h-[60dvh] min-h-[320px] bg-muted/30 xl:h-auto xl:min-h-0 xl:flex-1"
     >
+      {/* Orbit hint: paint tools claim left-drag for strokes in here too, so
+       * tell the user how to get rotation back instead of leaving the drag
+       * feeling dead. Suppressed while a tour owns the top-center strip. */}
+      {editor.tool !== 'select' && !tourActive && (
+        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+          <span className="font-medium text-foreground">{TOOL_LABELS[editor.tool] ?? editor.tool}</span>
+          {' '}active — drag paints the plan. Press{' '}
+          <kbd className="rounded border border-border bg-muted px-1 font-sans">V</kbd>
+          {' '}or pick Select to orbit again.
+        </div>
+      )}
+
       {/* Footer controls */}
       <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-center gap-2">
         {/* Date scrub */}
