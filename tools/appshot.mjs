@@ -20,10 +20,17 @@ import { existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+// Resolution order: FF_CHROME_BIN override, then macOS app bundles, then the
+// Linux paths GitHub Actions runners use (same binary, headless CI).
 const CHROME_CANDIDATES = [
+  process.env.FF_CHROME_BIN,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
-];
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+].filter((p) => p && existsSync(p));
 
 const argv = process.argv.slice(2);
 const gate = argv.includes('--gate');
@@ -38,9 +45,9 @@ if (!url || !out) {
   console.error('usage: node tools/appshot.mjs <url> <outPath> [WxH] [--gate] [--expect <text>]');
   process.exit(2);
 }
-const chrome = CHROME_CANDIDATES.find((p) => existsSync(p));
+const chrome = CHROME_CANDIDATES[0];
 if (!chrome) {
-  console.error('no Chrome/Chromium binary found');
+  console.error('no Chrome/Chromium binary found (set FF_CHROME_BIN to override)');
   process.exit(2);
 }
 const [w = '1440', h = '900'] = geom.split('x');

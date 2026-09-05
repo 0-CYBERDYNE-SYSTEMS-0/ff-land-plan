@@ -13,6 +13,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "check:private": "node tools/check-private-files.mjs",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0"
   },
   "dependencies": {

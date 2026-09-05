@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: typecheck + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+          if-no-files-found: error
+
+  smoke:
+    name: headless smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start dev server
+        run: |
+          npm run dev -- --port 5177 --strictPort > /tmp/dev-server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5177/ >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:5177/ >/dev/null || { cat /tmp/dev-server.log; exit 1; }
+      # The --gate boot probe is dev-build-only, so this must hit the dev
+      # server (not `vite preview`) to catch console errors/unhandled rejections.
+      - name: Shot — designer map (runtime-error gate)
+        run: |
+          mkdir -p smoke-shots
+          node tools/appshot.mjs "http://localhost:5177/#/farms/1/map" \
+            smoke-shots/map.png 1440x900 --gate --expect "Plot Designer"
+      - name: Shot — creative showcase
+        run: |
+          node tools/appshot.mjs "http://localhost:5177/showcase.html" \
+            smoke-shots/showcase.png 1440x900 --expect "showcase-ready"
+      - name: Upload smoke shots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-shots
+          path: smoke-shots
+          retention-days: 7
+          if-no-files-found: error
+
+  secrets:
+    name: secret + private-file scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (full history)
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tgz
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          # .gitleaksignore holds 2 fingerprints manually verified on 2026-09-05
+          # as documentation text (keyless-API table, flight-camera notes).
+          /tmp/gitleaks detect --redact --exit-code 1 --verbose
+      - name: private-file guard
+        run: node tools/check-private-files.mjs
