@@ -5,8 +5,11 @@ updates:
     schedule:
       interval: weekly
     groups:
+      react-ecosystem:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       minor-and-patch:
         update-types: [minor, patch]
+        exclude-patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
     open-pull-requests-limit: 5
   - package-ecosystem: github-actions
     directory: /
