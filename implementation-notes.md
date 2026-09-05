@@ -535,7 +535,13 @@ Goal: `origin/main` always release-ready, changes land only through green PRs.
 - **tools/appshot.mjs** — Chrome candidates now: `FF_CHROME_BIN` → macOS paths
   → Linux runner paths (`google-chrome` etc.). No behavior change on macOS.
   (Untracked `tools/appshot-live.mjs` still has the macOS-only list — patch it
-  the same way when it gets committed.)
+  the same way when it gets committed.) First CI run failed the showcase shot:
+  GPU-less runners refuse software WebGL unless Chrome gets
+  `--enable-unsafe-swiftshader` (now always passed). appshot also gained an
+  `FF_CHROME_FLAGS` env passthrough and a `--vt <ms>` virtual-time-budget
+  override (spawn ceiling = max(40 s, 4×vt)); the CI showcase shot is scoped
+  to `#only=tomato,wheat` because the full 4-lane page needs ~100 s wall under
+  SwiftShader.
 - **release.yml** — `v*` tag → typecheck + build → `dist` tarball on an
   auto-created GitHub Release (uses `gh release create`, no third-party action).
 - **dependabot.yml** — weekly npm + github-actions updates; minor/patch grouped

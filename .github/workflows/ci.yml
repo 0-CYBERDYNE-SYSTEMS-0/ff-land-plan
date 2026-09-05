@@ -61,10 +61,14 @@ jobs:
           mkdir -p smoke-shots
           node tools/appshot.mjs "http://localhost:5177/#/farms/1/map" \
             smoke-shots/map.png 1440x900 --gate --expect "Plot Designer"
-      - name: Shot — creative showcase
+      # CI runners are GPU-less: --enable-unsafe-swiftshader (added in appshot)
+      # opts into software WebGL so three.js contexts actually come up. The
+      # showcase is scoped to two crop archetypes — the full 4-lane page takes
+      # ~100 s wall under SwiftShader; --vt 25000 raises the spawn ceiling.
+      - name: Shot — creative showcase (crops, software GL)
         run: |
-          node tools/appshot.mjs "http://localhost:5177/showcase.html" \
-            smoke-shots/showcase.png 1440x900 --expect "showcase-ready"
+          node tools/appshot.mjs "http://localhost:5177/showcase.html#only=tomato,wheat" \
+            smoke-shots/showcase.png 1440x900 --expect "showcase-ready" --vt 25000
       - name: Upload smoke shots
         uses: actions/upload-artifact@v4
         if: always()

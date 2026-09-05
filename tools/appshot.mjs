@@ -36,9 +36,12 @@ const argv = process.argv.slice(2);
 const gate = argv.includes('--gate');
 const expectIdx = argv.indexOf('--expect');
 const expectText = expectIdx !== -1 ? argv[expectIdx + 1] : null;
-// Drop --gate, and (only when --expect is actually present) the flag + its value.
+const vtIdx = argv.indexOf('--vt');
+const vtMs = vtIdx !== -1 ? Number(argv[vtIdx + 1]) || 6000 : 6000;
+// Drop --gate, and (only when --expect/--vt are actually present) flag + value.
 const skip = new Set([argv.indexOf('--gate')]);
 if (expectIdx !== -1) { skip.add(expectIdx); skip.add(expectIdx + 1); }
+if (vtIdx !== -1) { skip.add(vtIdx); skip.add(vtIdx + 1); }
 const rest = argv.filter((a, i) => !skip.has(i));
 const [url = '', out = '', geom = ''] = rest;
 if (!url || !out) {
@@ -76,13 +79,20 @@ function chromeRun(extraFlags, opts = {}) {
         `--user-data-dir=${profileDir}`,
         `--window-size=${w},${h}`,
         // Budget: enough virtual time for the lazy three.js chunk + WebGL
-        // warm-up. NOTE: with a dev-server HMR socket open, Chrome performs
+        // warm-up; `--vt <ms>` raises it for slow software-GL runners.
+        // --enable-unsafe-swiftshader: GPU-less CI runners need explicit
+        // opt-in for software WebGL or three.js contexts never come up.
+        // NOTE: with a dev-server HMR socket open, Chrome performs
         // its actions quickly but never exits gracefully — the spawn timeout
         // below is the expected terminator; we validate outputs afterwards.
-        '--virtual-time-budget=6000',
+        `--virtual-time-budget=${vtMs}`,
+        '--enable-unsafe-swiftshader',
+        ...(process.env.FF_CHROME_FLAGS
+          ? process.env.FF_CHROME_FLAGS.split(' ').filter(Boolean)
+          : []),
         ...extraFlags,
       ],
-      { timeout: 40_000, stdio: ['ignore', 'pipe', 'pipe'], ...opts },
+      { timeout: Math.max(40_000, vtMs * 4), stdio: ['ignore', 'pipe', 'pipe'], ...opts },
     );
   } finally {
     rmSync(profileDir, { recursive: true, force: true });
