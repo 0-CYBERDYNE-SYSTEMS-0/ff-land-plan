@@ -30,9 +30,13 @@ and `secret + private-file scan` (gitleaks over full git history, pinned
 binary, plus `tools/check-private-files.mjs` — locally:
 `npm run check:private`). Pushing a `v*` tag triggers `release.yml` → typed +
 built tarball attached to an auto-created GitHub Release. Dependabot opens
-weekly npm/Actions bump PRs. `tools/appshot.mjs` resolves Chrome via
-`FF_CHROME_BIN`, then macOS paths, then Linux paths (CI uses the runner's
-`google-chrome`). `main` is branch-protected: changes land via green PRs only.
+weekly npm/Actions bump PRs (react/react-dom/@types/* bump as one unit).
+`tools/appshot.mjs` resolves Chrome via `FF_CHROME_BIN`, then macOS paths,
+then Linux paths (CI uses the runner's `google-chrome`); it passes
+`--enable-unsafe-swiftshader` for GPU-less runners and accepts `--vt <ms>`
+and `FF_CHROME_FLAGS`. Branch protection is plan-gated, so `main-guard.yml`
+is the enforcement: any non-merge commit landing on `main` without an
+associated PR turns that run red — land ALL changes via green PRs.
 
 Caveats:
 
