@@ -655,3 +655,77 @@ live screenshots (`$TMPDIR/struct-qa/`) show farm 1 polytunnel, greenhouse,
 shed and coop fully on-platform; farm 2 coop sits at the east edge because
 the seed paints it there (clamp holds it inside); farm 5 tent interior
 unaffected.
+
+## 2026-09-08 — Sim Core waves 1+2: living-ecosystem engine, runs, provenance (SPEC-SIM-ECOSYSTEM)
+
+Implemented per `quality/SPEC-SIM-ECOSYSTEM.md` by a 5-agent team (A: 3D
+foundations, B: engine, C: integration/UI, D: ecosystem depth, plus a
+persistent validator that gated each wave). Rollback point: `c438019`;
+wave 1: `59598c8`.
+
+**Wave 1 (Phases 0+1).** `src/three/plants.ts`: module-level (crop,stage)
+template cache (session lifetime, height in key) + reconcile-based
+`updatePlants` (per-cell diff, swap-with-last removal, no dispose-all) +
+`advancePlantGrowth` per-frame easing (uniform scale off the y=0 base,
+module-scratch objects — zero per-frame allocation). World3D: setInterval
+playback replaced by rAF-dt accumulation (dt clamp 0.25 s; commits only on
+whole sim-days; UTC day-number math via `isoDayNumber` so DST nights can't
+stall it); all-mature auto-pause ignores undated cells; drawer rows keyed
+(cropId, plantedAt); monotonic progress clamp in the legacy scrub path (runs
+make it obsolete). `fetchClimateNormals` now feeds `growthCtxRef.baselineTempC`
+— the invisible 20 °C-everywhere default is dead (drawer chip shows
+"baseline 17.4 °C · ERA5"). `src/lib/sim/` (B): deterministic engine
+(createRun/stepDay/simulateRun; FNV-1a+splitmix32 keyed PRNG; copy-on-write
+cells), `buildEnvSeries` (Open-Meteo daily archive for past dates, forever-ish
+`ff-pro:simenv:` cache bounded 12 → ERA5-normals synth → temperate default;
+per-field provenance tags incl. `scenario-delta` and `model-estimate`),
+soil-water bucket (AWC mm/cm × 30 cm root depth, FAO-56-shaped Kc, ET0 real
+when available else documented proxy), GDD drivers (required = growthDays ×
+meanDailyGdd from normals, fallback 10; stress ×(1−0.6·max)), and
+`AppState.simRuns` persistence (RunRecord = config + envSeries + summary —
+replay IS the storage; legacy `createSimulation` still present at wave 1).
+
+**Wave 2 (integration + provenance + ecosystem).** `useSimRun` (C): own rAF
+tick loop (never setInterval), simStateRef as render truth, React commits
+throttled ~5/s, replay folds ONLY record.config × record.envSeries (ctx soil +
+crops fetched once per startRun, cached-forever modules — byte-identical to
+create-time summary), seekDay refolds from day 0 and never fires
+celebrations. World3D run mode: separate growth effect feeds biomass into
+`updatePlants` via `progressByCell` through a read-only plan shim
+(plantedAt 9999-12-31 ⇒ closed-form 0 ⇒ run biomass wins the max() clamp;
+shim never touches plan state — validator-verified). `GrowthFX.celebrate()`
+finally wired (harvest-ready events via event-sink ref, ≤12 cells/call,
+ref nulled in teardown). SimDrawer → RunInspector: run transport, timeline
+with intervention/event markers, per-day provenance chips, clickable crop
+rows with a "why" panel (GDD gain, bucket vs AWC, per-term stress with
+sources), opt-in moisture overlay (4 InstancedMesh bands, ≤4 draws, keyed on
+sim DAY not tickVersion). Simulations page is now a run manager (cards with
+honest-unit summaries, create form, comparison table, Open-in-world via
+`?ffrun=` before the hash, confirm-delete); farm-blind `createSimulation`
+DELETED from Api/localApi/restApi/README (legacy Simulation type + records
+stay readable/deletable). Ecosystem depth (D, `src/lib/sim/ecosystem.ts`):
+nitrogen pool (init OM%×250 clamp [200,1200]; mineralization
+0.002·pool·f(tMean); uptake ∝ growth; leach ×0.9 on >20 mm days; N stress in
+the GDD max + yield), neighbor cache (Chebyshev r=2, built once, rebuilt on
+plant) with companions +4%/cap +12% GDD rate and antagonists +0.05/cap 0.15
+stress (asymmetric by list), pest pressure (favorable warm+wet days
++0.015·density·u, frost ×0.2, outbreak hysteresis 0.6/<0.3, yield
+×(1−0.3·peak)), creatures (bees/butterflies ∝ flowering, pests ∝ pressure —
+for animals.ts wiring later), autoHarvest default true (payout 3 days after
+b=1.0, crop stands; manual pays at b≥0.8 else `harvest-too-early`); yield =
+yieldKgPerPlant ×(1−0.5·season-mean stress)×(1−0.3·peakPest); RunSummary
+gains waterUseMm/stressDays/outbreakDays/meanNitrogenKgHa.
+
+Verified: typecheck + build green after each wave; validator rounds 1+2 PASS
+(10/10 and 9/9 checks: determinism byte-identical, no Math.random in sim/,
+init deps frozen, shim isolation, seam sync incl. README, localStorage
+discipline, drawer presentational, overlay dispose); appshot GATE/EXPECT pass
+(world farm 1+2, simulations page); CDP end-to-end create→reload(?ffrun)→play
+(Day 0→34, 0 console errors); D's behavioral proofs — fertilize +10.4% yield
+& ripe day 106→91, companion +3.9% / antagonist −2.1% GDD, full drought ⇒ 0 kg
+yield, 10×10 monoculture 2,701 outbreak cell-days vs checkerboard 0.
+Known gaps (report-only, accepted): 4k-cell replay is seconds-class (spec
+updated with measured numbers); run-mode stress tint not applied to plant
+materials (drawer/overlay carry it); creatures counts not yet wired into
+animals.ts; interventions authoring UI, multi-run ghost A/B, rest-world runs
+= spec Phases 3-UI/4, not started.

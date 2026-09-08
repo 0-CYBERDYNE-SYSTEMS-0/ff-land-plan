@@ -14,7 +14,6 @@ import type {
   Sensor,
   SensorReading,
   Simulation,
-  SimulationResults,
   Weather,
   WeatherHistoryPoint,
 } from '@/types';
@@ -91,16 +90,13 @@ export interface Api {
   getPlan: (farmId: number) => Promise<PlanState | null>;
   savePlan: (plan: PlanState) => Promise<PlanState>;
 
-  // Simulations
+  // Simulations (legacy records only — the farm-blind creation arithmetic was
+  // deleted with the run manager; old stored sims stay readable/deletable)
   listSimulations: (farmId: number) => Promise<Simulation[]>;
-  createSimulation: (
-    farmId: number,
-    input: Omit<Simulation, 'id' | 'farmId' | 'status' | 'results' | 'createdAt'>,
-  ) => Promise<Simulation>;
   deleteSimulation: (id: number) => Promise<void>;
 
-  // Sim runs (deterministic engine runs — SPEC-SIM-ECOSYSTEM; the legacy
-  // slider `Simulation`s above stay until the Simulations page migrates)
+  // Sim runs (deterministic engine runs — SPEC-SIM-ECOSYSTEM; the Simulations
+  // page is a run manager over these)
   createSimRun: (input: CreateSimRunInput) => Promise<RunRecord>;
   listSimRuns: (farmId: number) => Promise<RunRecord[]>;
   deleteSimRun: (id: string) => Promise<void>;
@@ -243,48 +239,8 @@ export const localApi: Api = {
     return state.plans[plan.farmId];
   },
 
-  // Simulations
+  // Simulations (legacy): list + delete only — see the Api interface note.
   listSimulations: async (farmId) => state.simulations.filter((s) => s.farmId === farmId),
-  createSimulation: async (farmId, input) => {
-    const baseYield = 30;
-    const tempPenalty = Math.max(0, Math.abs(input.tempDeltaC) - 1) * 3;
-    const precipPenalty = input.precipMultiplier < 1 ? (1 - input.precipMultiplier) * 25 : 0;
-    const fertilizerBoost = input.fertilizerBoost * 1.5;
-    const yieldTonHa = Math.max(2, baseYield - tempPenalty - precipPenalty + fertilizerBoost);
-    const waterUseMm = Math.round(input.durationDays * 4.5 * input.precipMultiplier);
-    const carbonKgHa = Math.round(700 + input.fertilizerBoost * 60);
-    const profitUsdHa = Math.round(yieldTonHa * 60 - waterUseMm * 0.4 - input.fertilizerBoost * 30);
-    const stressScore = Math.min(
-      100,
-      Math.round(tempPenalty * 4 + precipPenalty * 2 + (input.fertilizerBoost > 4 ? 30 : 0)),
-    );
-    const summary =
-      input.scenarioType === 'baseline'
-        ? 'Standard weather produces a healthy baseline yield.'
-        : input.scenarioType === 'drought'
-          ? 'Reduced precipitation drops yield and increases stress markedly.'
-          : input.scenarioType === 'heat_stress'
-            ? 'Elevated temperature shortens the growing window and reduces yield.'
-            : input.scenarioType === 'optimal'
-              ? 'Optimal inputs boost yield with minimal crop stress.'
-              : 'Climate change scenario shows the impact of +2°C warming.';
-
-    const results: SimulationResults = {
-      yieldTonHa, waterUseMm, carbonKgHa, profitUsdHa, stressScore, summary,
-    };
-
-    const sim: Simulation = {
-      id: state.counters.sim++,
-      farmId,
-      ...input,
-      status: 'complete',
-      results: JSON.stringify(results),
-      createdAt: new Date().toISOString(),
-    };
-    state.simulations = [sim, ...state.simulations];
-    persist();
-    return sim;
-  },
   deleteSimulation: async (id) => {
     state.simulations = state.simulations.filter((s) => s.id !== id);
     persist();

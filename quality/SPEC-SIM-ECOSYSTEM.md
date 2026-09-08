@@ -74,8 +74,11 @@ be consumed by a sim engine with zero new fetch machinery.
   endpoints; persisted forks need an out-of-band store (`simRuns`).
 - One localStorage blob `ff-pro:v1`, full `JSON.stringify` per persist,
   ~5 MB budget → **never store tick-by-tick state; store inputs + seed +
-  environment series and replay deterministically** (a season replay is
-  milliseconds of arithmetic). Demo farms re-seed every load — run records
+  environment series and replay deterministically** (measured after Phase 3:
+  typical farms ≤500 cells replay a season in ~100–250 ms; worst-case
+  4,000-cell farms take ~1.5–2 s — acceptable at create/seek time; incremental
+  fold checkpoints are the identified fix if 4k farms become a target).
+  Demo farms re-seed every load — run records
   must not live inside seeded plans.
 - No `Math.random` in sim code today (only visual FX) — keep it that way;
   determinism is what makes replay-as-storage work.

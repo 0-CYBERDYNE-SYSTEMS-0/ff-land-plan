@@ -1,6 +1,8 @@
 import { X } from 'lucide-react';
 import { SCENARIOS } from '@/lib/growth';
 import type { ScenarioType, WeatherCurrent } from '@/types';
+import type { DailyEnvironment, EnvSourceTag } from '@/lib/sim';
+import type { CellDiagnosticRow, SimRunTimeline } from '@/hooks/useSimRun';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
@@ -23,6 +25,47 @@ export interface ClimateBaselineInfo {
   source: 'era5-normals' | 'default-20c';
 }
 
+/** Moisture-band tint shared by the 3D overlay and this legend (spec §3.3:
+ * overlays respect the draw budget — one batch per band, ≤4 draws). */
+export const MOISTURE_BANDS: { maxFrac: number; color: string; label: string }[] = [
+  { maxFrac: 0.25, color: '#92400e', label: 'dry < 25%' },
+  { maxFrac: 0.5, color: '#ca8a04', label: '25–50%' },
+  { maxFrac: 0.75, color: '#65a30d', label: '50–75%' },
+  { maxFrac: 1.01, color: '#2563eb', label: 'wet > 75%' },
+];
+
+/** Short provenance labels for environment source tags (chip pattern). */
+const TAG_LABEL: Record<EnvSourceTag, string> = {
+  'open-meteo-archive': 'ERA5 archive',
+  'open-meteo-forecast': 'forecast',
+  'era5-normals': 'ERA5 normals',
+  'model-estimate': 'estimate',
+  'scenario-delta': 'scenario',
+  default: 'default',
+};
+
+const TAG_TITLE: Record<EnvSourceTag, string> = {
+  'open-meteo-archive': 'Observed ERA5 reanalysis value (Open-Meteo archive)',
+  'open-meteo-forecast': 'Forecast-backed day',
+  'era5-normals': 'Synthesized from ERA5 climate normals (monthly means)',
+  'model-estimate': 'Documented v1 proxy formula',
+  'scenario-delta': 'Run scenario applied on top of the raw source',
+  default: 'Built-in documented fallback (no site data)',
+};
+
+function SourceTag({ tag }: { tag: EnvSourceTag }) {
+  return (
+    <span
+      title={TAG_TITLE[tag]}
+      className="ml-1 inline-block rounded bg-muted px-1 py-px text-[9px] uppercase tracking-wide text-muted-foreground"
+    >
+      {TAG_LABEL[tag]}
+    </span>
+  );
+}
+
+const r1 = (v: number) => Math.round(v * 10) / 10;
+
 export interface SimDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -42,17 +85,86 @@ export interface SimDrawerProps {
   onSimSpeed: (v: 1 | 7 | 30) => void;
   scenario: ScenarioType;
   onScenario: (s: ScenarioType) => void;
+  /** Run mode pins the scenario (it is baked into the RunRecord). */
+  scenarioLocked?: boolean;
   weather: WeatherCurrent | null;
   weatherCached: boolean;
   /** Optional provenance chip: seasonal baseline temp the growth model uses. */
   climateBaseline?: ClimateBaselineInfo;
   cropProgress: CropProgressRow[];
+  // --- Run transport (RunInspector, spec §3.3) — all presentational ---
+  runLabel?: string;
+  runTimeline?: SimRunTimeline;
+  runPlaying?: boolean;
+  runEnded?: boolean;
+  /** Simulated days per real second while a run plays. */
+  runSpeed?: number;
+  onRunPlay?: () => void;
+  onRunPause?: () => void;
+  onRunStop?: () => void;
+  onRunSeek?: (day: number) => void;
+  onRunSpeed?: (daysPerSec: number) => void;
+  /** Env provenance for the day that produced the current state. */
+  dayProvenance?: DailyEnvironment['provenance'];
+  /** Per-row driver breakdown, keyed cropId|plantedAt (run mode). */
+  cellDiagnostics?: CellDiagnosticRow[];
+  selectedRowKey?: string | null;
+  onSelectRow?: (key: string | null) => void;
+  /** Moisture-band overlay toggle (run mode, ≤4 extra draw calls). */
+  showMoisture?: boolean;
+  onToggleMoisture?: (v: boolean) => void;
 }
 
 function formatTimeOfDay(t: number): string {
   const hours = Math.floor(t * 24);
   const minutes = Math.floor(((t * 24) % 1) * 60);
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function DiagnosticsPanel({ diag }: { diag: CellDiagnosticRow }) {
+  const s = diag.stress;
+  const stressed = s.water > 0 || s.heat > 0 || s.cold > 0 || s.nitrogen > 0;
+  const gddPct = Math.round((diag.gddAccumC / Math.max(1, diag.gddRequiredC)) * 100);
+  return (
+    <div className="mt-1 rounded-md border border-border bg-muted/30 p-2 text-[11px] leading-relaxed">
+      <div className="font-medium text-foreground">{diag.cropName} — drivers today</div>
+      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        <li>
+          GDD {r1(diag.gddAccumC)} / {r1(diag.gddRequiredC)} °C·day ({gddPct}%)
+          · +{r1(diag.todayGddC)} today
+          <SourceTag tag={diag.sources.temp} />
+        </li>
+        <li>
+          bucket {r1(diag.bucketMm)} / {r1(diag.awcCapMm)} mm
+          · AWC {diag.awcMmPerCm} mm/cm × {diag.rootDepthCm} cm ({Math.round(diag.moistureFrac * 100)}%)
+        </li>
+        <li>
+          ET0 {r1(diag.todayEtMm)} mm
+          <SourceTag tag={diag.sources.eto} />
+          · rain source
+          <SourceTag tag={diag.sources.precip} />
+        </li>
+        <li>nitrogen {r1(diag.nitrogenKgHa)} kg/ha</li>
+        {s.heat > 0 && (
+          <li className="text-amber-600">
+            heat stress {r1(s.heat)} · tMax {r1(diag.todayTMaxC)} °C &gt; max {diag.cropMaxTempC} °C
+          </li>
+        )}
+        {s.cold > 0 && (
+          <li className="text-sky-600">
+            cold stress {r1(s.cold)} · tMin {r1(diag.todayTMinC)} °C &lt; min {diag.cropMinTempC} °C
+          </li>
+        )}
+        {s.water > 0 && (
+          <li className="text-amber-600">
+            water stress {r1(s.water)} · bucket {Math.round(diag.moistureFrac * 100)}% full
+          </li>
+        )}
+        {s.nitrogen > 0 && <li className="text-amber-600">nitrogen stress {r1(s.nitrogen)}</li>}
+        {!stressed && <li className="text-muted-foreground/80">no stress — weather inside the crop's bands</li>}
+      </ul>
+    </div>
+  );
 }
 
 export function SimDrawer({
@@ -72,15 +184,37 @@ export function SimDrawer({
   onSimSpeed,
   scenario,
   onScenario,
+  scenarioLocked,
   weather,
   weatherCached,
   climateBaseline,
   cropProgress,
+  runLabel,
+  runTimeline,
+  runPlaying,
+  runEnded,
+  runSpeed,
+  onRunPlay,
+  onRunPause,
+  onRunStop,
+  onRunSeek,
+  onRunSpeed,
+  dayProvenance,
+  cellDiagnostics,
+  selectedRowKey,
+  onSelectRow,
+  showMoisture,
+  onToggleMoisture,
 }: SimDrawerProps) {
   const handleTimeOfDay = ([v]: number[]) => {
     onTimeOfDay(v);
     onAutoTime(false);
   };
+
+  const days = Math.max(1, runTimeline?.days ?? 1);
+  const eventDots = (runTimeline?.events ?? []).filter(
+    (e) => e.kind === 'stress-onset' || e.kind === 'harvest-ready',
+  );
 
   return (
     <>
@@ -138,6 +272,141 @@ export function SimDrawer({
             </div>
           )}
 
+          {runTimeline && (
+            <div className="shrink-0 rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-xs font-semibold" title={runLabel}>
+                  {runLabel ?? 'Simulation run'}
+                </span>
+                {runEnded ? (
+                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    complete
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-primary">
+                    run
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={runPlaying ? onRunPause : onRunPlay}
+                  disabled={runEnded}
+                  title={runEnded ? 'Run complete' : runPlaying ? 'Pause the run' : 'Play the run'}
+                  className={cn(
+                    'min-w-[72px] rounded px-2 py-1 text-xs font-medium',
+                    runEnded
+                      ? 'bg-muted text-muted-foreground/60'
+                      : runPlaying
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground',
+                  )}
+                >
+                  {runPlaying ? '⏸ Pause' : '▶ Play'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onRunStop}
+                  title="Exit the run — back to the live season projection"
+                  className="rounded bg-muted px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  ⏹ Exit
+                </button>
+                <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                  Day {Math.min(runTimeline.dayIndex, runTimeline.days)} of {runTimeline.days}
+                </span>
+              </div>
+              <div className="relative mt-3">
+                <Slider
+                  aria-label="Seek to run day"
+                  value={[Math.min(runTimeline.dayIndex, runTimeline.days)]}
+                  min={0}
+                  max={runTimeline.days}
+                  step={1}
+                  onValueChange={(v) => onRunSeek?.(v[0] ?? 0)}
+                />
+                <div className="pointer-events-none absolute inset-x-2 top-1/2 h-0 -translate-y-1/2">
+                  {runTimeline.interventions.map((m, i) => (
+                    <span
+                      key={`iv-${i}`}
+                      title={`Day ${m.day}: ${m.kind}`}
+                      style={{ left: `${(Math.min(m.day, days) / days) * 100}%` }}
+                      className="absolute h-2 w-px -translate-x-1/2 bg-foreground/40"
+                    />
+                  ))}
+                  {eventDots.map((m, i) => (
+                    <span
+                      key={`ev-${i}`}
+                      title={`Day ${m.day}: ${m.kind.replace('-', ' ')}`}
+                      style={{ left: `${(Math.min(m.day, days) / days) * 100}%` }}
+                      className={cn(
+                        'absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-background',
+                        m.kind === 'harvest-ready' ? 'bg-green-500' : 'bg-amber-500',
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="mt-1.5 flex items-center gap-2">
+                <span id="ff-run-speed-label" className="shrink-0 text-xs text-muted-foreground">
+                  Speed
+                </span>
+                <Select
+                  value={String(runSpeed != null && runSpeed >= 15 ? 30 : runSpeed != null && runSpeed >= 4 ? 7 : 1)}
+                  onValueChange={(v) => onRunSpeed?.(Number(v))}
+                >
+                  <SelectTrigger
+                    aria-labelledby="ff-run-speed-label"
+                    title="Simulated days per real second"
+                    className="h-7 min-w-0 flex-1 text-xs"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  {/* Portal renders at body level: lift above the z-[150] drawer */}
+                  <SelectContent className="z-[200]">
+                    <SelectItem value="1">1 day/s</SelectItem>
+                    <SelectItem value="7">1 week/s</SelectItem>
+                    <SelectItem value="30">1 month/s</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {onToggleMoisture && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Moisture overlay</span>
+                    <button
+                      type="button"
+                      onClick={() => onToggleMoisture(!showMoisture)}
+                      aria-pressed={showMoisture}
+                      title="Tint planted cells by soil-water bucket fill (4 bands)"
+                      className={cn(
+                        'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                        showMoisture ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {showMoisture ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                  {showMoisture && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                      {MOISTURE_BANDS.map((b) => (
+                        <span key={b.label} className="flex items-center gap-0.5">
+                          <span
+                            aria-hidden
+                            className="inline-block h-2 w-2 rounded-sm"
+                            style={{ backgroundColor: b.color }}
+                          />
+                          {b.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex shrink-0 items-center gap-2">
             <label htmlFor="ff-sim-date" className="w-20 shrink-0 text-xs text-muted-foreground">
               Date
@@ -154,7 +423,7 @@ export function SimDrawer({
               onClick={onToday}
               className="rounded bg-muted px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
-              Today
+              {runTimeline ? 'Start' : 'Today'}
             </button>
           </div>
 
@@ -191,52 +460,82 @@ export function SimDrawer({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <span id="ff-sim-speed-label" className="w-20 shrink-0 text-xs text-muted-foreground">
-              Speed
-            </span>
-            <Select value={String(simSpeed)} onValueChange={(v) => onSimSpeed(Number(v) as 1 | 7 | 30)}>
-              <SelectTrigger
-                aria-labelledby="ff-sim-speed-label"
-                title="Simulated days per real second"
-                className="h-8 min-w-0 flex-1 text-xs"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              {/* Portal renders at body level: lift above the z-[150] drawer */}
-              <SelectContent className="z-[200]">
-                <SelectItem value="1">1×/day</SelectItem>
-                <SelectItem value="7">1×/week</SelectItem>
-                <SelectItem value="30">1×/month</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {!runTimeline && (
+            <div className="flex shrink-0 items-center gap-2">
+              <span id="ff-sim-speed-label" className="w-20 shrink-0 text-xs text-muted-foreground">
+                Speed
+              </span>
+              <Select value={String(simSpeed)} onValueChange={(v) => onSimSpeed(Number(v) as 1 | 7 | 30)}>
+                <SelectTrigger
+                  aria-labelledby="ff-sim-speed-label"
+                  title="Simulated days per real second"
+                  className="h-8 min-w-0 flex-1 text-xs"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                {/* Portal renders at body level: lift above the z-[150] drawer */}
+                <SelectContent className="z-[200]">
+                  <SelectItem value="1">1×/day</SelectItem>
+                  <SelectItem value="7">1×/week</SelectItem>
+                  <SelectItem value="30">1×/month</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-          <div className="flex shrink-0 items-center gap-2">
-            <span id="ff-sim-scenario-label" className="w-20 shrink-0 text-xs text-muted-foreground">
-              Scenario
-            </span>
-            <Select value={scenario} onValueChange={(v) => onScenario(v as ScenarioType)}>
-              <SelectTrigger
-                aria-labelledby="ff-sim-scenario-label"
-                title="Stress scenario"
-                className="h-8 min-w-0 flex-1 text-xs"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-[200]">
-                {(Object.keys(SCENARIOS) as ScenarioType[]).map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {SCENARIOS[s].label}
-                  </SelectItem>
+          {!runTimeline && (
+            <div className="flex shrink-0 items-center gap-2">
+              <span id="ff-sim-scenario-label" className="w-20 shrink-0 text-xs text-muted-foreground">
+                Scenario
+              </span>
+              <Select value={scenario} onValueChange={(v) => onScenario(v as ScenarioType)} disabled={scenarioLocked}>
+                <SelectTrigger
+                  aria-labelledby="ff-sim-scenario-label"
+                  title={scenarioLocked ? 'Fixed by the active run' : 'Stress scenario'}
+                  className="h-8 min-w-0 flex-1 text-xs"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-[200]">
+                  {(Object.keys(SCENARIOS) as ScenarioType[]).map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {SCENARIOS[s].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {dayProvenance && (
+            <div className="shrink-0">
+              <span className="text-xs text-muted-foreground">Today's environment</span>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {(
+                  [
+                    ['tmin', dayProvenance.tMinC],
+                    ['tmax', dayProvenance.tMaxC],
+                    ['rain', dayProvenance.precipMm],
+                    ['ET0', dayProvenance.etoMm],
+                  ] as [string, EnvSourceTag][]
+                ).map(([label, tag]) => (
+                  <span
+                    key={label}
+                    title={`${label}: ${TAG_TITLE[tag]}`}
+                    className="rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground"
+                  >
+                    {label} · {TAG_LABEL[tag]}
+                  </span>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex shrink-0 items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Crop growth</span>
+              <span className="text-xs text-muted-foreground">
+                Crop growth{runTimeline ? ' (run state)' : ''}
+              </span>
               {climateBaseline && (
                 <span
                   title="Seasonal baseline temperature the growth model uses for this farm"
@@ -251,17 +550,31 @@ export function SimDrawer({
               {cropProgress.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nothing planted yet.</p>
               ) : (
-                <div className="flex flex-col gap-1">
-                  {cropProgress.map((row) => (
-                    <div key={`${row.id}|${row.plantedAt ?? ''}|${row.label ?? ''}`} className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="min-w-0 flex-1 truncate">{row.label ?? row.name}</span>
-                      <span className="tracking-tighter text-foreground">
-                        {'●'.repeat(row.stage)}{'○'.repeat(5 - row.stage)}
-                      </span>
-                      <span className="tabular-nums">{row.pct}%</span>
-                      {row.stress > 0.2 && <span className="text-amber-500">stress</span>}
-                    </div>
-                  ))}
+                <div className="flex flex-col gap-0.5">
+                  {cropProgress.map((row) => {
+                    const rowKey = `${row.id}|${row.plantedAt ?? ''}|${row.label ?? ''}`;
+                    const diagKey = `${row.id}|${row.plantedAt ?? ''}`;
+                    const selected = selectedRowKey === rowKey;
+                    const diag = cellDiagnostics?.find((d) => `${d.cropId}|${d.plantedAt}` === diagKey);
+                    return (
+                      <div key={rowKey}>
+                        <button
+                          type="button"
+                          onClick={() => onSelectRow?.(selected ? null : rowKey)}
+                          title={cellDiagnostics ? 'Click for the driver breakdown' : undefined}
+                          className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
+                        >
+                          <span className="min-w-0 flex-1 truncate">{row.label ?? row.name}</span>
+                          <span className="tracking-tighter text-foreground">
+                            {'●'.repeat(row.stage)}{'○'.repeat(5 - row.stage)}
+                          </span>
+                          <span className="tabular-nums">{row.pct}%</span>
+                          {row.stress > 0.2 && <span className="text-amber-500">stress</span>}
+                        </button>
+                        {selected && diag && <DiagnosticsPanel diag={diag} />}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

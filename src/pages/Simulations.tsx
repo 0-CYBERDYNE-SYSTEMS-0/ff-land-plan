@@ -1,7 +1,4 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -9,33 +6,21 @@ import {
   FlaskConical,
   Plus,
   Sprout,
-  Leaf,
+  CloudRain,
   Droplets,
-  DollarSign,
-  Thermometer,
-  Wind,
-  TrendingUp,
-  Zap,
+  Sun,
   Trash2,
+  Map as MapIcon,
+  AlertTriangle,
 } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell as RadarCell,
-  PolarAngleAxis,
-  PolarGrid,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 
 import { apiFetch } from '@/lib/api';
 import { useFarm } from '@/hooks/useFarms';
 import { useNavigation } from '@/hooks/useNavigation';
+import { SCENARIOS } from '@/lib/growth';
+import { isoDayNumber, isoFromDayNumber } from '@/lib/sim';
+import type { RunRecord, RunSummary } from '@/lib/sim/types';
+import type { ScenarioType, Simulation } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,25 +30,6 @@ import { Slider } from '@/components/ui/slider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
-import type { ScenarioType, Simulation, SimulationResults } from '@/types';
-
-const PRESETS: { type: ScenarioType; label: string; desc: string; icon: typeof Sprout; tempDelta: number; precip: number; fert: number }[] = [
-  { type: 'baseline', label: 'Current Conditions', desc: "Simulate with today's data", icon: Sprout, tempDelta: 0, precip: 1, fert: 0 },
-  { type: 'drought', label: 'Drought Stress', desc: '50% less precipitation', icon: Wind, tempDelta: 2, precip: 0.5, fert: 0 },
-  { type: 'heat_stress', label: 'Heat Stress', desc: '+3°C temperature', icon: Thermometer, tempDelta: 3, precip: 0.9, fert: 0 },
-  { type: 'optimal', label: 'Optimal Input', desc: 'Best irrigation + fertilizer', icon: TrendingUp, tempDelta: 0, precip: 1.2, fert: 2 },
-  { type: 'climate_change', label: 'Climate +2°C', desc: 'Climate change scenario', icon: Zap, tempDelta: 2, precip: 0.8, fert: 0 },
-];
-
-const SCHEMA = z.object({
-  name: z.string().min(1),
-  durationDays: z.coerce.number().min(1).max(365),
-  tempDeltaC: z.coerce.number().min(-10).max(10),
-  precipMultiplier: z.coerce.number().min(0).max(3),
-  fertilizerBoost: z.coerce.number().min(0).max(5),
-  scenarioType: z.enum(['baseline', 'drought', 'heat_stress', 'optimal', 'climate_change']),
-});
-type FormValues = z.infer<typeof SCHEMA>;
 
 const SCENARIO_COLOR: Record<ScenarioType, string> = {
   baseline: 'text-blue-600',
@@ -73,296 +39,403 @@ const SCENARIO_COLOR: Record<ScenarioType, string> = {
   climate_change: 'text-purple-600',
 };
 
-function SimulationCard({ sim }: { sim: Simulation }) {
-  const results: SimulationResults | null = sim.results ? JSON.parse(sim.results) : null;
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+function dateRange(run: RunRecord): string {
+  const start = run.config.startDate;
+  const end = isoFromDayNumber(isoDayNumber(start) + Math.max(0, run.config.dayCount - 1));
+  return `${start} → ${end}`;
+}
+
+/** Honest summary tiles — raw RunSummary numbers, no arbitrary scaling. */
+function SummaryTiles({ summary }: { summary: RunSummary }) {
+  const tiles: { icon: typeof Sprout; label: string; val: string }[] = [
+    { icon: Sprout, label: 'Yield', val: `${summary.totalYieldKg} kg` },
+    { icon: CloudRain, label: 'Rain', val: `${summary.rainMm} mm` },
+    { icon: Droplets, label: 'Irrigated', val: `${summary.irrigatedMm} mm` },
+    { icon: Sun, label: 'ET0', val: `${summary.etoMmTotal} mm` },
+    { icon: AlertTriangle, label: 'Stress', val: `${summary.stressCellDays} cell-days` },
+    {
+      icon: FlaskConical,
+      label: 'Mature',
+      val: `${summary.matureCells} / ${summary.cellCount} cells`,
+    },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {tiles.map((t) => (
+        <div key={t.label} className="rounded-md bg-muted p-2">
+          <div className="mb-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <t.icon className="h-3 w-3" /> {t.label}
+          </div>
+          <div className="text-sm font-semibold tabular-nums">{t.val}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RunCard({ run }: { run: RunRecord }) {
   const qc = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
   const del = useMutation({
-    mutationFn: () => apiFetch.deleteSimulation(sim.id),
+    mutationFn: () => apiFetch.deleteSimRun(run.id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['simulations', sim.farmId] });
-      toast.success('Simulation deleted');
+      qc.invalidateQueries({ queryKey: ['sim-runs', run.farmId] });
+      toast.success('Run deleted');
     },
   });
 
-  const radarData = results
-    ? [
-        { metric: 'Yield', value: Math.min(100, (results.yieldTonHa / 20) * 100) },
-        { metric: 'Water Eff.', value: Math.min(100, Math.max(0, 100 - results.waterUseMm / 10)) },
-        { metric: 'Carbon', value: Math.min(100, (results.carbonKgHa / 1000) * 100) },
-        { metric: 'Profit', value: Math.min(100, Math.max(0, (results.profitUsdHa + 500) / 15)) },
-        { metric: 'Stress', value: results.stressScore },
-      ]
-    : [];
+  const openInWorld = () => {
+    // Query param BEFORE the hash (wouter hash routing — see HANDOFF trap 9).
+    window.location.href = `/?ffrun=${encodeURIComponent(run.id)}#/farms/${run.farmId}/map`;
+  };
+
+  const ready =
+    run.summary.harvestReadyDay !== null
+      ? `day ${run.summary.harvestReadyDay}`
+      : 'never';
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="text-sm">{sim.name}</CardTitle>
-            <Badge variant="outline" className={`text-xs mt-1 ${SCENARIO_COLOR[sim.scenarioType] ?? ''}`}>
-              {sim.scenarioType.replace('_', ' ')}
-            </Badge>
+          <div className="min-w-0">
+            <CardTitle className="truncate text-sm" title={run.label}>
+              {run.label}
+            </CardTitle>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" className={`text-xs ${SCENARIO_COLOR[run.config.scenario] ?? ''}`}>
+                {run.config.scenario.replace('_', ' ')}
+              </Badge>
+              <span className="text-xs tabular-nums text-muted-foreground">{dateRange(run)}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Badge variant={sim.status === 'complete' ? 'default' : 'secondary'} className="text-xs">
-              {sim.status}
+          <div className="flex shrink-0 items-center gap-1">
+            <Badge variant={run.status === 'complete' ? 'default' : 'secondary'} className="text-xs">
+              {run.status}
             </Badge>
-            <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={() => del.mutate()}>
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
+            {confirming ? (
+              <span className="flex items-center gap-1">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => del.mutate()}
+                  disabled={del.isPending}
+                >
+                  {del.isPending ? '…' : 'Confirm'}
+                </Button>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setConfirming(false)}>
+                  No
+                </Button>
+              </span>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 hover:text-destructive"
+                aria-label={`Delete run ${run.label}`}
+                onClick={() => setConfirming(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
-      {results && (
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { icon: Sprout, label: 'Yield', val: `${results.yieldTonHa} t/ha`, color: 'text-green-600' },
-              { icon: Droplets, label: 'Water Use', val: `${results.waterUseMm} mm`, color: 'text-blue-600' },
-              { icon: Leaf, label: 'Carbon', val: `${results.carbonKgHa} kg/ha`, color: 'text-emerald-600' },
-              { icon: DollarSign, label: 'Est. Profit', val: `$${results.profitUsdHa}/ha`, color: results.profitUsdHa > 0 ? 'text-green-600' : 'text-red-500' },
-            ].map((s) => (
-              <div key={s.label} className="bg-muted rounded-md p-2">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-                  <s.icon className="w-3 h-3" /> {s.label}
-                </div>
-                <div className={`text-sm font-semibold ${s.color}`}>{s.val}</div>
-              </div>
-            ))}
-          </div>
-          <div className="h-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10 }} />
-                <Radar dataKey="value" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={1.5} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-xs text-muted-foreground italic">{results.summary}</p>
-        </CardContent>
-      )}
+      <CardContent className="space-y-3">
+        <SummaryTiles summary={run.summary} />
+        <p className="text-xs italic text-muted-foreground">
+          First harvest-ready: {ready} · {run.summary.daysSimulated} days simulated · seed {run.config.seed}
+        </p>
+        <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={openInWorld}>
+          <MapIcon className="h-3.5 w-3.5" /> Open in world
+        </Button>
+      </CardContent>
     </Card>
+  );
+}
+
+function LegacySimulationRow({ sim }: { sim: Simulation }) {
+  const qc = useQueryClient();
+  const del = useMutation({
+    mutationFn: () => apiFetch.deleteSimulation(sim.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['simulations', sim.farmId] }),
+  });
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">{sim.name}</span>
+      <span className="shrink-0 text-muted-foreground/70">{sim.scenarioType.replace('_', ' ')}</span>
+      <span className="shrink-0 text-muted-foreground/70 tabular-nums">{sim.durationDays}d</span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-5 w-5 shrink-0 hover:text-destructive"
+        aria-label={`Delete legacy simulation ${sim.name}`}
+        onClick={() => del.mutate()}
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
   );
 }
 
 export function Simulations({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
   const { data: farm } = useFarm(farmId);
-  const { data: sims = [], isLoading } = useQuery({
+  const qc = useQueryClient();
+
+  const { data: runs = [], isLoading } = useQuery({
+    queryKey: ['sim-runs', farmId],
+    queryFn: () => apiFetch.listSimRuns(farmId),
+  });
+  // Pre-engine records (read-only legacy of the old slider arithmetic).
+  const { data: legacy = [] } = useQuery({
     queryKey: ['simulations', farmId],
     queryFn: () => apiFetch.listSimulations(farmId),
   });
-  const [open, setOpen] = useState(false);
-  const qc = useQueryClient();
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(SCHEMA),
-    defaultValues: {
-      name: 'New Simulation',
-      scenarioType: 'baseline',
-      durationDays: 90,
-      tempDeltaC: 0,
-      precipMultiplier: 1,
-      fertilizerBoost: 0,
-    },
-  });
+  const [formOpen, setFormOpen] = useState(false);
+  const [label, setLabel] = useState('');
+  const [startDate, setStartDate] = useState(todayISO);
+  const [dayCount, setDayCount] = useState(90);
+  const [scenario, setScenario] = useState<ScenarioType>('baseline');
+  const [tempDeltaC, setTempDeltaC] = useState(0);
+  const [precipMultiplier, setPrecipMultiplier] = useState(1);
+  const [seed, setSeed] = useState(1);
 
   const create = useMutation({
-    mutationFn: (v: FormValues) => apiFetch.createSimulation(farmId, v),
+    mutationFn: () =>
+      apiFetch.createSimRun({
+        farmId,
+        label: label.trim() || undefined,
+        startDate,
+        dayCount,
+        scenario,
+        tempDeltaC,
+        precipMultiplier,
+        seed,
+      }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['simulations', farmId] });
-      toast.success('Simulation complete');
-      setOpen(false);
-      form.reset();
+      qc.invalidateQueries({ queryKey: ['sim-runs', farmId] });
+      toast.success('Run created — open it in the world to watch it play');
+      setFormOpen(false);
     },
-    onError: () => toast.error('Error running simulation'),
+    onError: () => toast.error('Could not create the run'),
   });
 
-  const applyPreset = (p: typeof PRESETS[number]) => {
-    form.setValue('scenarioType', p.type);
-    form.setValue('name', p.label);
-    form.setValue('tempDeltaC', p.tempDelta);
-    form.setValue('precipMultiplier', p.precip);
-    form.setValue('fertilizerBoost', p.fert);
+  const applyPreset = (s: ScenarioType) => {
+    const p = SCENARIOS[s];
+    setScenario(s);
+    setTempDeltaC(p.tempDeltaC);
+    setPrecipMultiplier(p.precipMultiplier);
   };
 
-  const chartData = sims
-    .filter((s) => s.status === 'complete' && s.results)
-    .map((s) => {
-      const r = JSON.parse(s.results!) as SimulationResults;
-      return { name: s.name.slice(0, 12), yield: r.yieldTonHa, profit: r.profitUsdHa, water: r.waterUseMm };
-    });
-
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-5">
+    <div className="mx-auto max-w-6xl space-y-5 p-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-4 w-4" />
         </Button>
         <PageHeader
-          title="What-If Simulations"
-          subtitle={`${farm?.name ?? 'Farm'} — model crop outcomes under different scenarios`}
+          title="Simulation Runs"
+          subtitle={`${farm?.name ?? 'Farm'} — deterministic runs over this farm's plan, weather and soil`}
           actions={
-            <Button size="sm" onClick={() => setOpen((v) => !v)} className="gap-1.5" data-testid="btn-new-simulation">
-              <Plus className="w-4 h-4" /> New Scenario
+            <Button size="sm" onClick={() => setFormOpen((v) => !v)} className="gap-1.5" data-testid="btn-new-simulation">
+              <Plus className="h-4 w-4" /> New Run
             </Button>
           }
         />
       </div>
 
-      {open && (
+      {formOpen && (
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <FlaskConical className="w-4 h-4 text-primary" /> Configure Scenario
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <FlaskConical className="h-4 w-4 text-primary" /> Configure Run
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <p className="text-xs text-muted-foreground mb-2">Quick presets:</p>
+              <p className="mb-2 text-xs text-muted-foreground">Scenario presets:</p>
               <div className="flex flex-wrap gap-2">
-                {PRESETS.map((p) => (
+                {(Object.keys(SCENARIOS) as ScenarioType[]).map((s) => (
                   <button
-                    key={p.type}
+                    key={s}
                     type="button"
-                    onClick={() => applyPreset(p)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-xs hover:border-primary hover:bg-primary/5 transition-colors"
+                    onClick={() => applyPreset(s)}
+                    className={`rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-primary/5 ${
+                      scenario === s ? 'border-primary bg-primary/10 font-medium' : 'border-border'
+                    }`}
                   >
-                    <p.icon className="w-3.5 h-3.5" /> {p.label}
+                    {SCENARIOS[s].label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <form onSubmit={form.handleSubmit((v) => create.mutate(v))} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Scenario Name</Label>
-                  <Input {...form.register('name')} className="h-8 text-sm" data-testid="input-sim-name" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Duration (days)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={365}
-                    className="h-8 text-sm"
-                    data-testid="input-duration"
-                    {...form.register('durationDays', { valueAsNumber: true })}
-                  />
-                </div>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Label</Label>
+                <Input
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder={`${SCENARIOS[scenario].label} · ${dayCount}d`}
+                  className="h-8 text-sm"
+                  data-testid="input-sim-name"
+                />
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Start date</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Days (60–365)</Label>
+                <Input
+                  type="number"
+                  min={60}
+                  max={365}
+                  value={dayCount}
+                  onChange={(e) => setDayCount(Math.min(365, Math.max(60, Number(e.target.value) || 60)))}
+                  className="h-8 text-sm"
+                  data-testid="input-duration"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Seed</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={seed}
+                  onChange={(e) => setSeed(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span>Temp delta</span>
-                    <span className="font-semibold text-orange-600">
-                      {form.watch('tempDeltaC') > 0 ? '+' : ''}
-                      {form.watch('tempDeltaC')}°C
-                    </span>
-                  </div>
-                  <Slider
-                    min={-10}
-                    max={10}
-                    step={0.5}
-                    value={[form.watch('tempDeltaC')]}
-                    onValueChange={([v]) => form.setValue('tempDeltaC', v)}
-                  />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span>Temp delta</span>
+                  <span className="font-semibold text-orange-600">
+                    {tempDeltaC > 0 ? '+' : ''}
+                    {tempDeltaC}°C
+                  </span>
                 </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span>Precipitation</span>
-                    <span className="font-semibold text-blue-600">{Math.round(form.watch('precipMultiplier') * 100)}%</span>
-                  </div>
-                  <Slider
-                    min={0}
-                    max={3}
-                    step={0.1}
-                    value={[form.watch('precipMultiplier')]}
-                    onValueChange={([v]) => form.setValue('precipMultiplier', v)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span>Fertilizer boost</span>
-                    <span className="font-semibold text-green-600">+{form.watch('fertilizerBoost')}×</span>
-                  </div>
-                  <Slider
-                    min={0}
-                    max={5}
-                    step={0.5}
-                    value={[form.watch('fertilizerBoost')]}
-                    onValueChange={([v]) => form.setValue('fertilizerBoost', v)}
-                  />
-                </div>
+                <Slider min={-10} max={10} step={0.5} value={[tempDeltaC]} onValueChange={([v]) => setTempDeltaC(v)} />
               </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span>Precipitation</span>
+                  <span className="font-semibold text-blue-600">{Math.round(precipMultiplier * 100)}%</span>
+                </div>
+                <Slider min={0} max={3} step={0.1} value={[precipMultiplier]} onValueChange={([v]) => setPrecipMultiplier(v)} />
+              </div>
+            </div>
 
-              <div className="flex gap-3">
-                <Button type="submit" size="sm" disabled={create.isPending} className="gap-1.5" data-testid="btn-run-simulation">
-                  <FlaskConical className="w-4 h-4" /> {create.isPending ? 'Running…' : 'Run Simulation'}
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                size="sm"
+                disabled={create.isPending}
+                className="gap-1.5"
+                data-testid="btn-run-simulation"
+                onClick={() => create.mutate()}
+              >
+                <FlaskConical className="h-4 w-4" /> {create.isPending ? 'Running…' : 'Create Run'}
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setFormOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The run forks the current plan and freezes a daily environment series (real archive weather →
+              ERA5 normals → documented fallbacks), then replays it day by day in the world.
+            </p>
           </CardContent>
         </Card>
       )}
 
-      {chartData.length > 1 && (
+      {runs.length > 1 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <BarChart className="w-4 h-4" /> Scenario Comparison — Yield (t/ha)
-            </CardTitle>
+            <CardTitle className="text-sm">Run Comparison</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={140}>
-              <BarChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -25 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip
-                  contentStyle={{
-                    background: 'hsl(var(--popover))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: 6,
-                    fontSize: 12,
-                  }}
-                />
-                <Bar dataKey="yield" radius={[3, 3, 0, 0]}>
-                  {chartData.map((_, i) => (
-                    <RadarCell key={i} fill={`hsl(var(--chart-${(i % 5) + 1}))`} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="text-muted-foreground">
+                <tr className="border-b border-border">
+                  <th className="py-1.5 pr-3 font-medium">Run</th>
+                  <th className="py-1.5 pr-3 font-medium">Scenario</th>
+                  <th className="py-1.5 pr-3 font-medium text-right">Days</th>
+                  <th className="py-1.5 pr-3 font-medium text-right">Yield (kg)</th>
+                  <th className="py-1.5 pr-3 font-medium text-right">Rain (mm)</th>
+                  <th className="py-1.5 pr-3 font-medium text-right">Irrigated (mm)</th>
+                  <th className="py-1.5 pr-3 font-medium text-right">Stress (cell-days)</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {runs.map((r) => (
+                  <tr key={r.id} className="border-b border-border/60 last:border-0">
+                    <td className="max-w-[180px] truncate py-1.5 pr-3" title={r.label}>
+                      {r.label}
+                    </td>
+                    <td className={`py-1.5 pr-3 ${SCENARIO_COLOR[r.config.scenario] ?? ''}`}>
+                      {r.config.scenario.replace('_', ' ')}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.daysSimulated}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.totalYieldKg}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.rainMm}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.irrigatedMm}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.stressCellDays}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-64" />
           ))}
         </div>
-      ) : sims.length === 0 ? (
+      ) : runs.length === 0 ? (
         <EmptyState
-          icon={<FlaskConical className="w-10 h-10 text-muted-foreground" />}
-          title="No simulations yet"
-          description="Create a scenario to model crop outcomes."
+          icon={<FlaskConical className="h-10 w-10 text-muted-foreground" />}
+          title="No runs yet"
+          description="Create a run to simulate this farm's season, then open it in the world."
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {sims.map((s) => (
-            <SimulationCard key={s.id} sim={s} />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {runs.map((r) => (
+            <RunCard key={r.id} run={r} />
           ))}
         </div>
+      )}
+
+      {legacy.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">
+              Legacy what-if simulations (read-only estimates)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {legacy.map((s) => (
+              <LegacySimulationRow key={s.id} sim={s} />
+            ))}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

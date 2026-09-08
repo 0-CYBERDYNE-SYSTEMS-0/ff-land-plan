@@ -1,10 +1,13 @@
 import { ArrowLeft, Check, Map as MapIcon } from 'lucide-react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
+import { apiFetch } from '@/lib/api';
+import type { SimEvent, SimState } from '@/lib/sim';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigation } from '@/hooks/useNavigation';
+import { useSimRun } from '@/hooks/useSimRun';
 import { AssetPalette } from '@/components/designer/AssetPalette';
 import { BlueprintCanvas } from '@/components/designer/BlueprintCanvas';
 import { CropPalette } from '@/components/designer/CropPalette';
@@ -28,6 +31,49 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
   const editor = usePlanEditor(farmId);
   const { farm, isLoading, planRef, saveState, savedAt } = editor;
+
+  // --- Sim run lifecycle (SPEC-SIM-ECOSYSTEM Phase 1/2) ---
+  // Mounted HERE because this page owns both the world and the drawer. The
+  // event sink is a ref relay: useSimRun fires it from its own rAF loop and
+  // World3D binds it to the harvest celebration without prop-drilling state.
+  const runEventsRef = useRef<((events: SimEvent[], state: SimState) => void) | null>(null);
+  const simRun = useSimRun({
+    onEvents: (events, state) => runEventsRef.current?.(events, state),
+    farmCoords: farm ? { lat: farm.lat, lng: farm.lng } : undefined,
+  });
+
+  // ?ffrun=<id> launch param (BEFORE the hash, like ?ffview): load the
+  // RunRecord once per mount and hand it to the run controller. The attempt
+  // marker is set only AFTER the load resolves — marking synchronously would
+  // swallow the run under StrictMode's effect double-invoke (first pass is
+  // cancelled, second pass must still be allowed to start it).
+  const launchRunId = useMemo(() => new URLSearchParams(window.location.search).get('ffrun'), []);
+  const launchRunDoneRef = useRef<Set<string>>(new Set());
+  // Latest-controller ref (handlersRef convention): simRun's identity changes
+  // every throttled commit while a run plays — it must not be an effect dep or
+  // the launch load re-fires each commit.
+  const simRunRef = useRef(simRun);
+  simRunRef.current = simRun;
+  useEffect(() => {
+    if (!launchRunId || launchRunDoneRef.current.has(launchRunId)) return;
+    if (simRunRef.current.record?.id === launchRunId) return; // already active
+    let cancelled = false;
+    apiFetch
+      .listSimRuns(farmId)
+      .then((runs) => {
+        if (cancelled) return;
+        launchRunDoneRef.current.add(launchRunId); // hit or miss: one resolved attempt wins
+        const rec = runs.find((r) => r.id === launchRunId);
+        if (rec) simRunRef.current.startRun(rec);
+      })
+      .catch(() => {
+        // Missing/failed run load is a silent no-op — the world stays legacy.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [launchRunId, farmId]);
+
   const [viewMode, setViewMode] = useState<'blueprint' | 'world'>(() => {
     // Test hook for headless verification (tools/appshot.mjs): ?ffview=world
     // opens the 3D view immediately, no click required. Harmless in normal use.
@@ -108,7 +154,13 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
                 </div>
               </div>
             }>
-              <World3D editor={editor} cinema={cinema} onToggleCinema={() => setCinema((c) => !c)} />
+              <World3D
+                editor={editor}
+                cinema={cinema}
+                onToggleCinema={() => setCinema((c) => !c)}
+                simRun={simRun}
+                runEventsRef={runEventsRef}
+              />
             </Suspense>
           )}
         </div>

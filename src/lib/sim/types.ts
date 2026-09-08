@@ -65,7 +65,22 @@ export interface CellStress {
   water: number;
   heat: number;
   cold: number;
-  nitrogen: number; // always 0 in Phase 1 — N dynamics land in Phase 3
+  /** Real since Phase 3: pool vs remaining seasonal N demand (ecosystem.ts). */
+  nitrogen: number;
+}
+
+/** Static per-cell neighbor context, built once per run (and on 'plant'
+ * interventions) by ecosystem.buildNeighborCache. Chebyshev radius 2 cells:
+ * at the default cellM 0.25 the window spans ~1 m ≈ 2× typical 30–45 cm
+ * spacings. Counts are one-directional (A's list decides — A liking B does
+ * not imply B liking A). */
+export interface NeighborContext {
+  /** Neighbors whose slug is listed in this crop's `companions`. */
+  companions: number;
+  /** Neighbors whose slug is listed in this crop's `antagonists`. */
+  antagonists: number;
+  /** Same-crop neighbors — pest host density (ratio over the 24-cell window). */
+  sameCrop: number;
 }
 
 /** Living per-cell state. Cells exist only for planted keys (sparse, like
@@ -77,13 +92,27 @@ export interface CellState {
   plantedAtDay: number;
   /** 0..1 of the AWC bucket capacity — the living memory. */
   moistureFrac: number;
-  /** Initialized in Phase 1 (soil OM heuristic); uptake/mineralization Phase 3. */
+  /** Plant-available N, kg/ha. OM-derived start + daily mineralization −
+   * uptake − leaching (ecosystem.ts). */
   nitrogenKgHa: number;
   gddAccumC: number;
   biomassFrac: number; // 0..1 = gddAccum / gddRequired
   stage: number; // 0..5 = round(biomass × 5)
   floweringFrac: number; // 0..1 bump across the stage 3–4 band
-  pestPressure: number; // field only in Phase 1 — dynamics land in Phase 3
+  pestPressure: number; // 0..1, daily dynamics in ecosystem.ts
+  /** Season-high pestPressure — the yield penalty reads the peak, not today. */
+  peakPestPressure?: number;
+  /** Day this cell becomes harvestable (biomass crossed 1.0 + grace days);
+   * set once, undefined until the crossing. */
+  readyAtDay?: number;
+  /** Yield already paid for this planting — counts once; the crop stays
+   * standing (a twin, not a clearing sim). */
+  harvested?: boolean;
+  /** Season stress accumulation (Σ daily meanStress and growing-day count)
+   * — the harvest yield penalty reads this mean, not the harvest-day
+   * snapshot, so season-long nitrogen/water management shows in yield. */
+  stressSum?: number;
+  stressDaysCount?: number;
   stress: CellStress;
 }
 
@@ -92,8 +121,27 @@ export interface SimState {
   /** Current run surface (shelter source); mutable mid-run via 'surface'. */
   surface: PlanSurface;
   cells: Record<string, CellState>; // sparse, planted cells only
-  creatures: Record<string, number>; // populations arrive in Phase 3 — empty for now
+  /** Neighbor context per cell key — cached (built at createRun, rebuilt on
+   * 'plant'); drivers read it, nothing rescans the grid per day. */
+  neighbors?: Record<string, NeighborContext>;
+  /** Run-wide populations for display wiring (bees/butterflies/pests) —
+   * pure derivation from cell state, recomputed each stepDay. */
+  creatures: Record<string, number>;
   events: SimEvent[]; // accumulates across stepped days (replay artifact)
+}
+
+/** Per-day aggregates folded into RunSummary by simulateRun. Returned
+ * additively by stepDay (computed inside its single per-cell pass — no
+ * second scan of the grid per day). */
+export interface DayStats {
+  liveCells: number;
+  /** Mean per-cell ET0 × Kc(post-step biomass) across live cells, mm. */
+  waterUseMm: number;
+  /** Cell-days with max stress ≥ STRESS_ONSET (any term). */
+  stressCellDays: number;
+  stressDays: { water: number; heat: number; cold: number; nitrogen: number };
+  /** Cell-days with pestPressure ≥ PEST_OUTBREAK. */
+  outbreakDays: number;
 }
 
 export type SimEventKind =
@@ -105,7 +153,10 @@ export type SimEventKind =
   | 'harvest-ready'
   | 'stress-onset'
   | 'stress-end'
-  | 'frost';
+  | 'frost'
+  | 'outbreak' // pestPressure crossed 0.6 upward (hysteresis: ends below 0.3)
+  | 'outbreak-end'
+  | 'harvest-too-early'; // manual harvest below the 0.8 biomass minimum
 
 export interface SimEvent {
   dayIndex: number;
@@ -131,6 +182,9 @@ export interface RunConfig {
   tempDeltaC: number;
   precipMultiplier: number;
   interventions: Intervention[];
+  /** Auto-harvest ripe cells (biomass 1.0 + grace days) and pay their yield.
+   * Default true; false leaves harvests to manual interventions. */
+  autoHarvest?: boolean;
   /** Climatological mean daily GDD (base 10 °C) over the run window, derived
    * from ERA5 normals — normalizes gddRequired so real weather deviation shows
    * up as schedule delay. Absent → 10 °C·day (≈ a 20 °C mean day). */
@@ -150,10 +204,19 @@ export interface RunSummary {
   yieldKgByCrop: Record<string, number>;
   /** Cell-days with max stress ≥ 0.4 (drivers.STRESS_ONSET). */
   stressCellDays: number;
+  /** Seasonal crop-water use, mm — Σ over days of the mean per-cell
+   * ET0 × Kc(biomass) across live cells (an average cell's season depth). */
+  waterUseMm: number;
+  /** Cell-days at/above STRESS_ONSET per term (nitrogen included since Phase 3). */
+  stressDays: { water: number; heat: number; cold: number; nitrogen: number };
+  /** Cell-days with pestPressure ≥ ecosystem.PEST_OUTBREAK (0.6). */
+  outbreakDays: number;
+  /** Residual plant-available N at run end, mean over live cells, kg/ha. */
+  meanNitrogenKgHa: number;
   /** First day any cell reached biomass 1.0. */
   harvestReadyDay: number | null;
-  matureCells: number; // cells at biomass ≥ 1.0 at the end
-  cellCount: number; // cells alive at the end (harvests remove theirs)
+  matureCells: number; // cells at biomass ≥ 1.0 at the end (harvest keeps them standing)
+  cellCount: number; // cells alive at the end (harvests mark, not remove)
   eventCounts: Record<string, number>;
 }
 

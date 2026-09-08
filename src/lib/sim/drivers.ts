@@ -4,7 +4,7 @@
 
 import { SURFACE_SHELTER } from '@/lib/growth';
 import type { Crop, PlanSurface } from '@/types';
-import type { CellStress, DailyEnvironment } from './types';
+import type { CellStress, DailyEnvironment, NeighborContext } from './types';
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
@@ -65,9 +65,33 @@ export function thermalStress(crop: Crop, tMinC: number, tMaxC: number): Thermal
   return { heat, cold, frost };
 }
 
-/** Today's GDD gain, reduced by the worst stress: ×(1 − 0.6·maxStress). */
-export function gddGain(env: DailyEnvironment, maxStress: number): number {
-  return env.gddBase10C * (1 - STRESS_RATE_FACTOR * clamp01(maxStress));
+/** Today's GDD gain, reduced by the worst stress and lifted by companion
+ * neighbors: ×(1 − 0.6·maxStress) ×(1 + neighborBonus). */
+export function gddGain(env: DailyEnvironment, maxStress: number, neighborBonus = 0): number {
+  return env.gddBase10C * (1 - STRESS_RATE_FACTOR * clamp01(maxStress)) * (1 + neighborBonus);
+}
+
+// Companion / antagonist neighbor terms (Phase 3, from SimState.neighbors —
+// ecosystem.buildNeighborCache). Asymmetric: only the cell whose OWN list
+// names the neighbor gets the effect.
+
+/** +4% GDD rate per listed companion, capped at +12% (3 companions). */
+export const COMPANION_RATE_BONUS = 0.04;
+export const COMPANION_BONUS_CAP = 0.12;
+
+export function companionRateBonus(n: NeighborContext | undefined): number {
+  if (!n || n.companions <= 0) return 0;
+  return Math.min(COMPANION_BONUS_CAP, n.companions * COMPANION_RATE_BONUS);
+}
+
+/** +0.05 flat stress per listed antagonist, capped at 0.15 — added on top of
+ * the max() that drives the GDD rate. */
+export const ANTAGONIST_STRESS_ADD = 0.05;
+export const ANTAGONIST_STRESS_CAP = 0.15;
+
+export function antagonistStressAdd(n: NeighborContext | undefined): number {
+  if (!n || n.antagonists <= 0) return 0;
+  return Math.min(ANTAGONIST_STRESS_CAP, n.antagonists * ANTAGONIST_STRESS_ADD);
 }
 
 export function biomassFromGdd(gddAccumC: number, gddRequired: number): number {

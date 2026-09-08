@@ -6,8 +6,19 @@ import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
 import { fetchClimateNormals } from '@/lib/climate';
 import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, type GrowthModCtx } from '@/lib/growth';
+import { parseKey } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
-import type { ScenarioType, Weather, WeatherCurrent } from '@/types';
+import type { PlanState, ScenarioType, Weather, WeatherCurrent } from '@/types';
+import type { SimEvent, SimState } from '@/lib/sim';
+import {
+  buildCellDiagnostics,
+  buildRunProgressRows,
+  runDateISO,
+  runDayEnv,
+  type CellDiagnosticRow,
+  type RunProgressRow,
+  type SimRunController,
+} from '@/hooks/useSimRun';
 import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '@/three/animals';
 import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
 import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
@@ -26,7 +37,7 @@ import { buildWaterPlanes, disposeWaterPlanes, updateWaterPlanes, type WaterPlan
 import { createGrowthFX, type GrowthFX } from '@/three/growth-fx';
 import { createPerfHUD, type PerfHUD } from '@/three/perf';
 import { createWeatherFX, type WeatherFX } from '@/three/weather-fx';
-import { SimDrawer, type CropProgressRow, type ClimateBaselineInfo } from './SimDrawer';
+import { MOISTURE_BANDS, SimDrawer, type CropProgressRow, type ClimateBaselineInfo } from './SimDrawer';
 
 /** Provenance tag for the growth model's baseline temperature (spec §3.3:
  * every number traces to its source). */
@@ -34,6 +45,11 @@ const DEFAULT_CLIMATE_BASELINE: ClimateBaselineInfo = {
   tempC: DEFAULT_BASELINE_TEMP_C,
   source: 'default-20c',
 };
+
+/** Run-mode shim: plantedAt far past any displayed date makes the closed-form
+ * growthProgress compute 0, so updatePlants' max(clamp) lets the run's
+ * biomassFrac override win (plants.ts contract — see applyRunGrowth). */
+const FAR_FUTURE_ISO = '9999-12-31';
 
 /** Home camera framing — the load-in view and the dock's Reset target share
  * one source of truth so "Reset view" restores exactly the initial shot. */
@@ -48,6 +64,13 @@ interface World3DProps {
   cinema?: boolean;
   /** Parent handler for the in-world Cinema button (PlotDesigner owns state). */
   onToggleCinema?: () => void;
+  /** Active sim run (SPEC-SIM-ECOSYSTEM Phase 1/2). When a run is active the
+   * plant reconcile reads SimState biomass instead of the closed-form scrub
+   * path; the legacy path stays fully intact as the no-run fallback. */
+  simRun?: SimRunController | null;
+  /** Outbound notable-event sink (harvest-ready → celebrate). PlotDesigner
+   * owns the ref; useSimRun fires it per stepped day. */
+  runEventsRef?: { current: ((events: SimEvent[], state: SimState) => void) | null };
 }
 
 /** Weather used by the rAF loop until live data arrives (or when offline). */
@@ -97,7 +120,7 @@ interface PointerHandlers {
   up: (camera: THREE.Camera, scene: THREE.Scene, ndcX?: number, ndcY?: number) => void;
 }
 
-export default function World3D({ editor, cinema = false, onToggleCinema }: World3DProps) {
+export default function World3D({ editor, cinema = false, onToggleCinema, simRun = null, runEventsRef }: World3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const groundBatchesRef = useRef<GroundBatch[]>([]);
@@ -175,6 +198,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
   const [audioOn, setAudioOn] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Run-mode UI state (moisture overlay is opt-in; drawer row selection).
+  const [showMoisture, setShowMoisture] = useState(false);
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
+  // Moisture-band overlay meshes (≤4 InstancedMesh batches, run mode only).
+  const moistureRef = useRef<THREE.InstancedMesh[]>([]);
 
   // Latest-value refs: the mount-once init effect and its listeners read these
   // instead of capturing render-time values.
@@ -190,6 +218,83 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   const simSpeedRef = useRef<1 | 7 | 30>(simSpeed);
   simSpeedRef.current = simSpeed;
   showDebugRef.current = showDebug;
+
+  // --- Run mode mirrors (SPEC-SIM-ECOSYSTEM Phase 1/2) ---
+  const runActive = simRun?.record != null;
+  const runRecord = simRun?.record ?? null;
+  const runTickVersion = simRun?.tickVersion ?? 0;
+  const runDayIndex = simRun?.dayIndex ?? 0;
+  const simRunRef = useRef(simRun);
+  simRunRef.current = simRun;
+  const runActiveRef = useRef(runActive);
+  runActiveRef.current = runActive;
+
+  /**
+   * Run-mode plant reconcile: SimState biomass is the growth authority.
+   * updatePlants clamps the per-cell override against the closed-form
+   * progress (max of both), so the shim points every live plan cell's
+   * plantedAt far past the displayed date — computed becomes 0 and the run's
+   * biomassFrac wins. The per-frame easing in advancePlantGrowth (already in
+   * the rAF closure) interpolates between sim days with zero rebuilds.
+   */
+  const applyRunGrowth = () => {
+    const engine = engineRef.current;
+    const plan = editor.planRef.current;
+    const run = simRunRef.current;
+    const record = run?.record ?? null;
+    const st = run?.simStateRef.current ?? null;
+    if (!engine || !plan || !record || !st) return;
+    const plantedAtShim: Record<string, string> = {};
+    for (const key of Object.keys(plan.planting)) plantedAtShim[key] = FAR_FUTURE_ISO;
+    const shimPlan: PlanState = { ...plan, plantedAt: plantedAtShim };
+    const progressByCell = new Map<string, number>();
+    for (const [key, cell] of Object.entries(st.cells)) {
+      if (plan.planting[key] === undefined) continue; // cell no longer in the live plan
+      progressByCell.set(key, cell.biomassFrac);
+    }
+    const runDate = new Date(`${runDateISO(record, st.dayIndex)}T00:00:00`);
+    plantBatchesRef.current = updatePlants(
+      plantBatchesRef.current,
+      shimPlan,
+      editor.cropById,
+      engine.scene,
+      runDate,
+      undefined,
+      growthCtxRef.current,
+      { progressByCell },
+    );
+  };
+
+  // Outbound run events → harvest celebration at the harvested cells' world
+  // positions (render-body assignment, same pattern as handlersRef; nulled on
+  // unmount by the effect below). Particle cost is bounded by capping cells.
+  if (runEventsRef) {
+    runEventsRef.current = (events) => {
+      const fx = growthFXRef.current;
+      const plan = editor.planRef.current;
+      if (!fx || !plan) return;
+      const ready = events.filter((e) => e.kind === 'harvest-ready' && typeof e.cell === 'string');
+      if (ready.length === 0) return;
+      const offsetX = -(plan.widthM / 2);
+      const offsetZ = -(plan.heightM / 2);
+      const positions: THREE.Vector3[] = [];
+      for (const ev of ready.slice(0, 12)) {
+        const [cx, cy] = parseKey(ev.cell as string);
+        positions.push(
+          new THREE.Vector3(cx * plan.cellM + plan.cellM / 2 + offsetX, 0.5, cy * plan.cellM + plan.cellM / 2 + offsetZ),
+        );
+      }
+      fx.celebrate(positions);
+    };
+  }
+
+  useEffect(() => {
+    if (!runEventsRef) return;
+    const ref = runEventsRef;
+    return () => {
+      ref.current = null; // unmounted World3D must not receive run events
+    };
+  }, [runEventsRef]);
 
   const achievements = useRef(createAchievementSystem());
   const flightTime = useRef(0);
@@ -367,7 +472,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
       // clock pauses with the world (the old setInterval kept ticking and
       // desynced). dt is clamped so a resume burst after a hidden tab doesn't
       // fast-forward the season. State commits only on whole sim-days.
-      if (playingRef.current) {
+      // Paused entirely while a sim run is active — the run owns sim time.
+      if (playingRef.current && !runActiveRef.current) {
         simDayAccumRef.current += Math.min(dt, 0.25) * simSpeedRef.current;
         if (simDayAccumRef.current >= 1) {
           const whole = Math.floor(simDayAccumRef.current);
@@ -531,6 +637,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
       clouds.dispose();
       weatherFX.dispose();
       growthFXRef.current?.dispose();
+      growthFXRef.current = null; // late run-event callbacks become no-ops
       perfHUDRef.current?.dispose();
       audioRef.current?.dispose();
       tourRef.current?.dispose();
@@ -555,7 +662,13 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
 
     // Structures & plants
     structureBatchesRef.current = updateStructures(structureBatchesRef.current, plan, engine.scene);
-    plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxRef.current);
+    if (runActiveRef.current) {
+      // Run mode owns the plant reconcile — keep run targets while the rest
+      // of the scene rebuilds (next run commit would restore them anyway).
+      applyRunGrowth();
+    } else {
+      plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxRef.current);
+    }
 
     // Water planes
     disposeWaterPlanes(waterPlanesRef.current);
@@ -632,10 +745,13 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   // rebuild ground/structures/animals — only the plant stages change, and
   // updatePlants now RECONCILES (diffs per-cell assignments) instead of
   // disposing + rebuilding geometry.
+  // Skipped while a sim run is active: the run-mode effect below owns the
+  // reconcile then; runActive in deps restores this projection on run end.
   useEffect(() => {
     const engine = engineRef.current;
     const plan = editor.planRef.current;
     if (!engine || !plan) return;
+    if (runActiveRef.current) return;
     const ctx: GrowthModCtx = {
       ambientTempC: ambientTempC ?? undefined,
       baselineTempC: climateBaseline.source === 'era5-normals' ? climateBaseline.tempC : undefined,
@@ -674,7 +790,85 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
       ctx,
       opts,
     );
-  }, [scrubDate, scenario, ambientTempC, climateBaseline, editor.cropById]);
+  }, [scrubDate, scenario, ambientTempC, climateBaseline, editor.cropById, runActive]);
+
+  // Run-mode growth reconcile: run state (per-cell biomass) is the target.
+  // Separate effect — the init effect's deps stay [sceneReady, farmId], and
+  // sceneReady covers the case where the world initializes AFTER a run was
+  // launched via ?ffrun. advancePlantGrowth (rAF) eases between sim days.
+  useEffect(() => {
+    if (!runActive) return;
+    applyRunGrowth();
+  }, [runActive, runTickVersion, sceneReady, editor.cropById, editor.planVersion]);
+
+  // Moisture overlay (spec §3.3): opt-in ground tint over planted cells,
+  // bucketed into 4 moisture bands — one InstancedMesh per band (≤4 extra
+  // draw calls), historyViz dispose discipline (own geometry+material each).
+  useEffect(() => {
+    const engine = engineRef.current;
+    const plan = editor.planRef.current;
+    if (!engine || !plan) return;
+    const disposeOverlay = () => {
+      for (const mesh of moistureRef.current) {
+        mesh.removeFromParent();
+        (mesh.material as THREE.Material).dispose();
+        mesh.geometry.dispose();
+      }
+      moistureRef.current = [];
+    };
+    const run = simRunRef.current;
+    const st = run?.simStateRef.current ?? null;
+    if (!runActive || !showMoisture || !st) {
+      disposeOverlay();
+      return;
+    }
+    const offsetX = -(plan.widthM / 2);
+    const offsetZ = -(plan.heightM / 2);
+    const byBand: string[][] = [[], [], [], []];
+    for (const [key, cell] of Object.entries(st.cells)) {
+      if (plan.planting[key] === undefined) continue;
+      const m = cell.moistureFrac;
+      const band = m < 0.25 ? 0 : m < 0.5 ? 1 : m < 0.75 ? 2 : 3;
+      byBand[band]!.push(key);
+    }
+    const meshes: THREE.InstancedMesh[] = [];
+    byBand.forEach((keys, band) => {
+      if (keys.length === 0) return;
+      const geometry = new THREE.BoxGeometry(plan.cellM * 0.96, 0.02, plan.cellM * 0.96);
+      const material = new THREE.MeshBasicMaterial({
+        color: MOISTURE_BANDS[band]!.color,
+        transparent: true,
+        opacity: 0.4,
+        depthWrite: false,
+      });
+      const mesh = new THREE.InstancedMesh(geometry, material, keys.length);
+      mesh.name = `moisture:band${band}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      const dummy = new THREE.Object3D();
+      keys.forEach((key, i) => {
+        const [cx, cy] = parseKey(key);
+        dummy.position.set(cx * plan.cellM + plan.cellM / 2 + offsetX, 0.02, cy * plan.cellM + plan.cellM / 2 + offsetZ);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      engine.scene.add(mesh);
+      meshes.push(mesh);
+    });
+    moistureRef.current = meshes;
+    return disposeOverlay;
+    // Keyed on the sim DAY, not tickVersion: moisture evolves per sim-day, so
+    // rebuilding on every throttled commit (~5/s) would just churn GPU buffers.
+  }, [runActive, showMoisture, runDayIndex, sceneReady, editor.planVersion]);
+
+  // A run activating (e.g. opened from the Simulations page) surfaces the
+  // RunInspector transport so the run is visibly controllable.
+  useEffect(() => {
+    if (runActive) setDrawerOpen(true);
+  }, [runActive]);
 
   // Check rain/snow achievement
   useEffect(() => {
@@ -708,13 +902,14 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   // pause the clock with it.
 
   // Reset the maturity anchor + completion hint when playback (re)starts...
+  // (legacy path only — runs end via their dayCount or the user stopping)
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || runActive) return;
     monotonicProgressRef.current = null; // fresh clamp window per playback run
     matureSinceRef.current = null;
     setSeasonComplete(false);
     seasonDrawerShownRef.current = false;
-  }, [playing]);
+  }, [playing, runActive]);
 
   // ...and when the growth inputs change (plan edits / scenario switch), so
   // the grace window below restarts against the new reality.
@@ -739,7 +934,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   // auto-pause) — growthProgress() returns 1 for them, so they are excluded
   // before the all-mature check.
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || runActive) return;
     const plan = editor.planRef.current;
     if (!plan || Object.keys(plan.planting).length === 0) return;
     if (matureSinceRef.current !== null) {
@@ -768,7 +963,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
     }
     if (datedCells === 0) return; // no sowing dates anywhere → never auto-pause
     if (allMature) matureSinceRef.current = scrubDate;
-  }, [playing, scrubDate, scenario, editor.planVersion]);
+  }, [playing, scrubDate, scenario, editor.planVersion, runActive]);
 
   // Earliest planting date in the plan, for the "Day N" season readout.
   const earliestPlantedAt = useMemo(() => {
@@ -834,6 +1029,32 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
       (a, b) => a.name.localeCompare(b.name) || (a.label ?? '').localeCompare(b.label ?? ''),
     );
   }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC, climateBaseline]);
+
+  // --- Run-mode drawer payloads (spec §3.3 provenance surfaces) ---
+  // Derived from live SimState at each throttled run commit; refs are read
+  // inside the memos because the ref is the source of truth between commits.
+  const runProgressRows = useMemo<RunProgressRow[]>(() => {
+    const run = simRunRef.current;
+    const rec = run?.record ?? null;
+    const st = run?.simStateRef.current ?? null;
+    if (!rec || !st) return [];
+    return buildRunProgressRows(st, rec.config.startDate, editor.cropById);
+  }, [runTickVersion, runRecord, editor.cropById]);
+
+  const cellDiagnostics = useMemo<CellDiagnosticRow[]>(() => {
+    const run = simRunRef.current;
+    const rec = run?.record ?? null;
+    const st = run?.simStateRef.current ?? null;
+    if (!rec || !st) return [];
+    return buildCellDiagnostics(st, rec, editor.cropById, runDayEnv(rec, st.dayIndex), run?.ctx?.soil);
+  }, [runTickVersion, runRecord, editor.cropById]);
+
+  // The last completed sim day produced the current state (dayIndex counts
+  // completed steps) — it drives the provenance chips and the date display.
+  const todayEnv = runRecord ? runDayEnv(runRecord, runDayIndex) : null;
+  const displayDate = runRecord ? runDateISO(runRecord, runDayIndex) : scrubDate;
+  const runEnded = simRun?.ended ?? false;
+  const runPlaying = simRun?.playing ?? false;
 
   // Update weather FX + audio params in the rAF loop already handles audio
   const lastAchievement = achievements.current.unlocked[achievements.current.unlocked.length - 1];
@@ -946,10 +1167,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
           title="Season status — click for simulation controls"
           className="pointer-events-auto flex items-center gap-1.5 rounded-md bg-background/90 px-3 py-2 text-xs font-medium text-muted-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
         >
-          <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${seasonComplete ? 'bg-amber-500' : 'bg-primary'}`} />
+          <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${runActive ? (runEnded ? 'bg-green-500' : 'bg-primary') : seasonComplete ? 'bg-amber-500' : 'bg-primary'}`} />
           <span className="whitespace-nowrap">
-            {new Date(`${scrubDate}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-            {seasonDay !== null && <> · Day {Math.min(seasonDay, 365)}</>}
+            {new Date(`${displayDate}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            {seasonDay !== null && !runActive && <> · Day {Math.min(seasonDay, 365)}</>}
+            {runActive && <> · Day {Math.min(runDayIndex, runRecord?.envSeries.length ?? 0)}</>}
           </span>
           {weatherCached && (
             <span
@@ -964,12 +1186,20 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
         <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-md bg-background/90 px-2 py-1.5 shadow-sm">
           <button
             type="button"
-            onClick={() => setPlaying((p) => !p)}
-            aria-pressed={playing}
-            title="Play the growing season forward"
-            className={`min-w-[96px] rounded px-2 py-1 text-xs font-medium ${playing ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+            onClick={() => {
+              if (runActive) {
+                // Run transport: the legacy season clock stays parked.
+                if (runPlaying) simRunRef.current?.pause();
+                else simRunRef.current?.play();
+              } else {
+                setPlaying((p) => !p);
+              }
+            }}
+            aria-pressed={runActive ? runPlaying : playing}
+            title={runActive ? 'Play/pause the simulation run' : 'Play the growing season forward'}
+            className={`min-w-[96px] rounded px-2 py-1 text-xs font-medium ${runActive ? (runPlaying ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground') : playing ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
           >
-            {playing ? '⏸ Pause' : '▶ Simulate'}
+            {runActive ? (runPlaying ? '⏸ Pause' : '▶ Run') : playing ? '⏸ Pause' : '▶ Simulate'}
           </button>
           <button
             type="button"
@@ -1028,11 +1258,23 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
       <SimDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        scrubDate={scrubDate}
-        onScrubDate={setScrubDate}
-        onToday={() => setScrubDate(new Date().toISOString().slice(0, 10))}
+        scrubDate={displayDate}
+        onScrubDate={(iso) => {
+          if (runActive && runRecord) {
+            // Run mode: the date input seeks the run (UTC day-number math).
+            const day = isoDayNumber(iso) - isoDayNumber(runRecord.config.startDate);
+            simRunRef.current?.seekDay(day);
+          } else {
+            setScrubDate(iso);
+          }
+        }}
+        onToday={
+          runActive
+            ? () => simRunRef.current?.seekDay(0)
+            : () => setScrubDate(new Date().toISOString().slice(0, 10))
+        }
         seasonDay={seasonDay}
-        seasonComplete={seasonComplete}
+        seasonComplete={runActive ? false : seasonComplete}
         onJumpSeasonStart={() => {
           if (earliestPlantedAt) setScrubDate(earliestPlantedAt.toISOString().slice(0, 10));
         }}
@@ -1041,15 +1283,36 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
         onTimeOfDay={setTimeOfDay}
         autoTime={autoTime}
         onAutoTime={setAutoTime}
-        playing={playing}
+        playing={runActive ? runPlaying : playing}
         simSpeed={simSpeed}
         onSimSpeed={setSimSpeed}
         scenario={scenario}
         onScenario={setScenario}
+        scenarioLocked={runActive}
         weather={weather}
         weatherCached={weatherCached}
         climateBaseline={climateBaseline}
-        cropProgress={cropProgress}
+        cropProgress={runActive ? runProgressRows : cropProgress}
+        runLabel={runRecord?.label}
+        runTimeline={simRun?.timeline ? { ...simRun.timeline, dayIndex: runDayIndex } : undefined}
+        runPlaying={runPlaying}
+        runEnded={runEnded}
+        runSpeed={simRun?.speed ?? 1}
+        onRunPlay={() => simRunRef.current?.play()}
+        onRunPause={() => simRunRef.current?.pause()}
+        onRunStop={() => {
+          setShowMoisture(false);
+          setSelectedRowKey(null);
+          simRunRef.current?.stopRun();
+        }}
+        onRunSeek={(day) => simRunRef.current?.seekDay(day)}
+        onRunSpeed={(v) => simRunRef.current?.setSpeed(v)}
+        dayProvenance={todayEnv?.provenance}
+        cellDiagnostics={runActive ? cellDiagnostics : undefined}
+        selectedRowKey={selectedRowKey}
+        onSelectRow={setSelectedRowKey}
+        showMoisture={showMoisture}
+        onToggleMoisture={runActive ? setShowMoisture : undefined}
       />
 
       {/* Tour progress bar */}

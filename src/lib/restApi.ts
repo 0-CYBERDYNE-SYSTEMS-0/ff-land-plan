@@ -137,13 +137,9 @@ export function createRestApi(baseUrl: string): Api {
         body: JSON.stringify(plan),
       }),
 
-    // Simulations ---------------------------------------------------------------
+    // Simulations (legacy records only — creation was deleted with the
+    // farm-blind slider arithmetic; the run manager owns new simulations) ---
     listSimulations: (farmId) => request<Simulation[]>(`/farms/${farmId}/simulations`),
-    createSimulation: (farmId, input) =>
-      request<Simulation>(`/farms/${farmId}/simulations`, {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }),
     deleteSimulation: async (id) => {
       await request<void>(`/simulations/${id}`, { method: 'DELETE' });
     },
