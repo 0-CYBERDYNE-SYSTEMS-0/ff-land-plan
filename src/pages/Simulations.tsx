@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -75,7 +75,17 @@ function SummaryTiles({ summary }: { summary: RunSummary }) {
   );
 }
 
-function RunCard({ run }: { run: RunRecord }) {
+function RunCard({
+  run,
+  selected,
+  selectDisabled,
+  onToggleSelect,
+}: {
+  run: RunRecord;
+  selected: boolean;
+  selectDisabled: boolean;
+  onToggleSelect: () => void;
+}) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const del = useMutation({
@@ -88,7 +98,7 @@ function RunCard({ run }: { run: RunRecord }) {
 
   const openInWorld = () => {
     // Query param BEFORE the hash (wouter hash routing — see HANDOFF trap 9).
-    window.location.href = `/?ffrun=${encodeURIComponent(run.id)}#/farms/${run.farmId}/map`;
+    window.location.href = openInWorldUrl(run);
   };
 
   const ready =
@@ -100,15 +110,30 @@ function RunCard({ run }: { run: RunRecord }) {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <CardTitle className="truncate text-sm" title={run.label}>
-              {run.label}
-            </CardTitle>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline" className={`text-xs ${SCENARIO_COLOR[run.config.scenario] ?? ''}`}>
-                {run.config.scenario.replace('_', ' ')}
-              </Badge>
-              <span className="text-xs tabular-nums text-muted-foreground">{dateRange(run)}</span>
+          <div className="min-w-0 flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              disabled={!selected && selectDisabled}
+              aria-label={`Select ${run.label} for comparison`}
+              title={
+                selectDisabled && !selected
+                  ? 'Up to 6 runs can be compared'
+                  : 'Select for the comparison panel'
+              }
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
+            />
+            <div className="min-w-0">
+              <CardTitle className="truncate text-sm" title={run.label}>
+                {run.label}
+              </CardTitle>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <Badge variant="outline" className={`text-xs ${SCENARIO_COLOR[run.config.scenario] ?? ''}`}>
+                  {run.config.scenario.replace('_', ' ')}
+                </Badge>
+                <span className="text-xs tabular-nums text-muted-foreground">{dateRange(run)}</span>
+              </div>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -157,6 +182,154 @@ function RunCard({ run }: { run: RunRecord }) {
   );
 }
 
+/** Max runs in one comparison (checkboxes disable past this). */
+const MAX_COMPARE = 6;
+
+function openInWorldUrl(run: RunRecord): string {
+  // Query params BEFORE the hash (wouter hash routing — see HANDOFF trap 9).
+  return `/?ffrun=${encodeURIComponent(run.id)}#/farms/${run.farmId}/map`;
+}
+
+/** A/B launch: primary = first selected, ghost = second (Phase 4). */
+function compareABUrl(a: RunRecord, b: RunRecord): string {
+  return `/?ffrun=${encodeURIComponent(a.id)}&ffghost=${encodeURIComponent(b.id)}#/farms/${a.farmId}/map`;
+}
+
+/** Comparison metrics — raw RunSummary fields with honest units, each run's
+ * delta vs the FIRST selected (baseline) run. No invented normalization; the
+ * delta color direction is documented per metric (yield: more is better;
+ * water/stress/outbreak: less is better; residual N: neutral). */
+const COMPARE_METRICS: {
+  key: string;
+  label: string;
+  unit: string;
+  get: (s: RunSummary) => number;
+  better: 'higher' | 'lower' | 'neutral';
+  digits: number;
+}[] = [
+  { key: 'yield', label: 'Yield', unit: 'kg', get: (s) => s.totalYieldKg, better: 'higher', digits: 2 },
+  { key: 'water', label: 'Water use', unit: 'mm', get: (s) => s.waterUseMm, better: 'lower', digits: 1 },
+  {
+    key: 'stress',
+    label: 'Stress cell-days',
+    unit: 'Σ of the four terms',
+    get: (s) => s.stressDays.water + s.stressDays.heat + s.stressDays.cold + s.stressDays.nitrogen,
+    better: 'lower',
+    digits: 0,
+  },
+  { key: 'outbreak', label: 'Outbreak cell-days', unit: 'pest ≥ 0.6', get: (s) => s.outbreakDays, better: 'lower', digits: 0 },
+  { key: 'nitrogen', label: 'Residual nitrogen', unit: 'kg/ha N', get: (s) => s.meanNitrogenKgHa, better: 'neutral', digits: 1 },
+];
+
+function MetricCell({ value, baseline, better, digits }: {
+  value: number;
+  baseline: number;
+  better: 'higher' | 'lower' | 'neutral';
+  digits: number;
+}) {
+  const d = value - baseline;
+  const isBetter = better === 'higher' ? d > 0 : better === 'lower' ? d < 0 : false;
+  const isWorse = better === 'higher' ? d < 0 : better === 'lower' ? d > 0 : false;
+  return (
+    <td className="py-1.5 pr-3 text-right whitespace-nowrap">
+      <span className="tabular-nums">{value.toFixed(digits)}</span>
+      {Math.abs(d) > 1e-9 && (
+        <span className={`ml-1 tabular-nums ${isBetter ? 'text-green-600' : isWorse ? 'text-red-600' : 'text-muted-foreground'}`}>
+          {d > 0 ? '+' : '−'}
+          {Math.abs(d).toFixed(digits)}
+        </span>
+      )}
+    </td>
+  );
+}
+
+function ComparePanel({ runs }: { runs: RunRecord[] }) {
+  const baseline = runs[0]!;
+  return (
+    <Card className="border-primary/30 bg-primary/5" data-testid="compare-panel">
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-sm">
+            Comparing {runs.length} runs — deltas vs {baseline.label}
+          </CardTitle>
+          {runs.length >= 2 && (
+            <Button
+              size="sm"
+              className="gap-1.5"
+              title="Open the world with the first selected run solid and the second as a ghost overlay"
+              onClick={() => {
+                window.location.href = compareABUrl(baseline, runs[1]!);
+              }}
+            >
+              <MapIcon className="h-3.5 w-3.5" /> Compare A/B in world
+            </Button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Primary = first selected ({baseline.label}), ghost = second ({runs[1]?.label ?? '—'})
+          {runs.length > 2 ? `; the other ${runs.length - 2} stay in this table only` : ''}.
+        </p>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="text-muted-foreground">
+            <tr className="border-b border-border">
+              <th className="py-1.5 pr-3 font-medium">Metric</th>
+              {runs.map((r, i) => (
+                <th key={r.id} className="py-1.5 pr-3 font-medium text-right">
+                  <span className="block max-w-[160px] truncate" title={r.label}>
+                    {i === 0 && <span className="mr-1 rounded bg-primary/15 px-1 text-[10px] uppercase text-primary">base</span>}
+                    {r.label}
+                  </span>
+                  <a
+                    href={openInWorldUrl(r)}
+                    className="text-[10px] font-normal text-primary hover:underline"
+                  >
+                    Open in world
+                  </a>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
+            {COMPARE_METRICS.map((m) => {
+              const baseVal = m.get(baseline.summary);
+              return (
+                <tr key={m.key} className="border-b border-border/60 last:border-0">
+                  <td className="py-1.5 pr-3" title={m.unit || undefined}>
+                    {m.label}
+                    {m.unit && <span className="ml-1 text-[10px] text-muted-foreground">{m.unit}</span>}
+                  </td>
+                  {runs.map((r, i) =>
+                    i === 0 ? (
+                      <td key={r.id} className="py-1.5 pr-3 text-right tabular-nums">
+                        {baseVal.toFixed(m.digits)}
+                      </td>
+                    ) : (
+                      <MetricCell
+                        key={r.id}
+                        value={m.get(r.summary)}
+                        baseline={baseVal}
+                        better={m.better}
+                        digits={m.digits}
+                      />
+                    ),
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+          Deltas are colored by direction, not judgment: green = better (more yield; less water, stress or
+          outbreak), red = worse, gray = neutral (residual nitrogen has no inherent good direction).
+          Stress cell-days = one cell under stress for one day, summed over the four stress terms.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function LegacySimulationRow({ sim }: { sim: Simulation }) {
   const qc = useQueryClient();
   const del = useMutation({
@@ -195,6 +368,31 @@ export function Simulations({ farmId }: { farmId: number }) {
     queryKey: ['simulations', farmId],
     queryFn: () => apiFetch.listSimulations(farmId),
   });
+
+  // Multi-select comparison (Phase 4): selection ORDER matters — the first
+  // selected run is the baseline, the second becomes the A/B ghost. Capped at
+  // MAX_COMPARE; pruned when runs disappear (delete). The prune must return
+  // the SAME array when nothing changed: `runs` defaults to a fresh [] each
+  // render while the query loads, so an unconditional setState here would
+  // re-render (and re-fire) forever.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  useEffect(() => {
+    setSelectedIds((ids) => {
+      const next = ids.filter((id) => runs.some((r) => r.id === id));
+      return next.length === ids.length ? ids : next;
+    });
+  }, [runs]);
+  const selectedRuns = useMemo(
+    () => selectedIds.map((id) => runs.find((r) => r.id === id)).filter((r) => r !== undefined),
+    [selectedIds, runs],
+  );
+  const toggleSelect = (id: string) => {
+    setSelectedIds((ids) => {
+      if (ids.includes(id)) return ids.filter((x) => x !== id);
+      if (ids.length >= MAX_COMPARE) return ids; // cap: no silent replacement
+      return [...ids, id];
+    });
+  };
 
   const [formOpen, setFormOpen] = useState(false);
   const [label, setLabel] = useState('');
@@ -363,6 +561,15 @@ export function Simulations({ farmId }: { farmId: number }) {
         </Card>
       )}
 
+      {selectedRuns.length >= 2 && <ComparePanel runs={selectedRuns} />}
+      {selectedRuns.length === 1 && (
+        <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+          1 run selected — pick {Math.min(MAX_COMPARE, Math.max(runs.length - 1, 1)) > 1 ? 'one or more' : 'another'}{' '}
+          run{selectedRuns.length === 1 && runs.length > 2 ? 's' : ''} to compare (up to {MAX_COMPARE}; the first
+          selected is the baseline, the second opens as the A/B ghost in the world).
+        </p>
+      )}
+
       {runs.length > 1 && (
         <Card>
           <CardHeader className="pb-2">
@@ -418,7 +625,13 @@ export function Simulations({ farmId }: { farmId: number }) {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {runs.map((r) => (
-            <RunCard key={r.id} run={r} />
+            <RunCard
+              key={r.id}
+              run={r}
+              selected={selectedIds.includes(r.id)}
+              selectDisabled={selectedIds.length >= MAX_COMPARE}
+              onToggleSelect={() => toggleSelect(r.id)}
+            />
           ))}
         </div>
       )}

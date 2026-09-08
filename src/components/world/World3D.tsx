@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 import type { PlanEditor } from '@/components/designer/usePlanEditor';
 import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
 import { fetchClimateNormals } from '@/lib/climate';
-import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, type GrowthModCtx } from '@/lib/growth';
+import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
+import { makeCropFor } from '@/creative/crops/map';
 import { parseKey } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
-import type { PlanState, ScenarioType, Weather, WeatherCurrent } from '@/types';
-import type { SimEvent, SimState } from '@/lib/sim';
+import type { PlanState, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
+import type { RunRecord, SimEvent, SimState } from '@/lib/sim';
 import {
   buildCellDiagnostics,
   buildRunProgressRows,
@@ -52,6 +54,282 @@ const DEFAULT_CLIMATE_BASELINE: ClimateBaselineInfo = {
  * biomassFrac override win (plants.ts contract — see applyRunGrowth). */
 const FAR_FUTURE_ISO = '9999-12-31';
 
+// ---------------------------------------------------------------------------
+// Ghost-run rendering (SPEC-SIM-ECOSYSTEM §3.5 Phase 4) — the A/B "what was vs
+// what if" view: a second run's plants render SEMI-TRANSPARENT beside the
+// solid primary.
+//
+// MATERIAL LIFECYCLE — READ BEFORE TOUCHING: src/three/plants.ts owns THE
+// shared session-lifetime (crop,stage) template cache, and its template
+// materials are tint-mutated IN PLACE by the stress path. It does not export
+// the cache, and sharing those materials with a transparency-overriding ghost
+// would corrupt every real plant. The creative builders (makeCropFor) are
+// DETERMINISTIC — same (name, stage) ⇒ identical geometry — so the ghost uses
+// its own parallel template cache below (geometry ONLY, session lifetime,
+// same normalization/merge math as plants.ts) and every ghost InstancedMesh
+// gets a fresh TRANSPARENT material CLONE that is disposed on ghost
+// removal/teardown. NEVER dispose or tint-mutate plants.ts's cached
+// materials from here, and never put ghost materials into any shared cache.
+// ---------------------------------------------------------------------------
+
+/** Ghost opacity — kept well under the solid plants so the A/B reads at a
+ * glance; depthWrite off avoids self-sorting artifacts between instances. */
+const GHOST_OPACITY = 0.45;
+/** Draw-cost guard: ghost batches cap at this many distinct (crop,stage)
+ * templates (a plan with more is theoretically possible via custom crops;
+ * catalog farms sit at ≤ ~20). Excess stages are dropped + reported. */
+const GHOST_MAX_TEMPLATES = 60;
+
+interface GhostRunBatch {
+  /** `${cropId}|${stage}` */
+  key: string;
+  mesh: THREE.InstancedMesh;
+  capacity: number;
+}
+
+/** Session-lifetime ghost geometry cache (geometry only — materials are
+ * per-build clones, see the lifecycle note above). */
+const ghostTemplateCache = new Map<string, THREE.BufferGeometry>();
+
+// --- Mirrors of plants.ts's non-exported normalization internals. The ghost
+// must read as the SAME crop at the SAME stage/height as the solid plants, so
+// these replicate plants.ts byte-for-byte; keep them in sync if plants.ts
+// changes its height/scale tables.
+function ghostTemplateScaleT(stage: number): number {
+  return 0.15 + 0.85 * (stage / 5);
+}
+const GHOST_HEIGHT_RANGE: Record<string, [number, number]> = {
+  vegetable: [0.7, 1.4],
+  herb: [0.35, 0.7],
+  fruit: [1.4, 2.6],
+  grain: [0.8, 1.5],
+  flower: [0.5, 1.6],
+  cover_crop: [0.2, 0.45],
+  fungus: [0.35, 0.9],
+};
+function ghostPlantHeight(crop: Crop): number {
+  const [minH, maxH] = GHOST_HEIGHT_RANGE[crop.category] ?? [0.7, 1.4];
+  const t = Math.max(0, Math.min(1, (crop.growthDays - 50) / 50));
+  return minH + t * (maxH - minH);
+}
+const GHOST_SHELF_LIFTS: Record<string, [number, number, number]> = {
+  'plant-rack': [0.28, 0.68, 1.08],
+  'hydro-channel': [0.32, 0.64, 0.96],
+  'grow-bench': [0.58, 0.58, 0.58],
+};
+function ghostShelfForCell(cellX: number, cellY: number): number {
+  return Math.abs((cellX * 73856093 ^ cellY * 19349663) | 0) % 3;
+}
+function ghostJitterForCell(cellX: number, cellY: number, cellM: number): {
+  rotY: number;
+  scaleY: number;
+  offsetX: number;
+  offsetZ: number;
+} {
+  const seed = cellX * 73856093 ^ cellY * 19349663;
+  const random = ((seed * 9301 + 49297) % 233280) / 233280;
+  return {
+    rotY: (random - 0.5) * 0.5,
+    scaleY: 0.85 + random * 0.3,
+    offsetX: (random - 0.5) * cellM * 0.3,
+    offsetZ: (((random * 1.618) % 1) - 0.5) * cellM * 0.3,
+  };
+}
+
+/** Cached ghost geometry for a (crop, stage, template height): the same
+ * normalize (bbox height → target, base at y=0) + merge vertex-colored meshes
+ * pipeline plants.ts uses. Returns null when the crop name has no creative
+ * asset (procedural-fallback crops have no ghost in v1). */
+function getGhostTemplate(crop: Crop, stage: number, height: number): THREE.BufferGeometry | null {
+  const key = `${crop.name}|${stage}|${height.toFixed(3)}`;
+  const hit = ghostTemplateCache.get(key);
+  if (hit) return hit;
+
+  const asset = makeCropFor(crop.name, stage);
+  if (!asset) return null;
+  const bbox = new THREE.Box3().setFromObject(asset);
+  const size = new THREE.Vector3();
+  bbox.getSize(size);
+  let scaleFactor = 1;
+  if (size.y > 1e-6) scaleFactor = height / size.y;
+  const holder = new THREE.Group();
+  holder.add(asset);
+  asset.scale.multiplyScalar(scaleFactor);
+  asset.position.y -= bbox.min.y * scaleFactor;
+  holder.updateMatrixWorld(true);
+
+  const parts: THREE.BufferGeometry[] = [];
+  holder.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!(mesh as unknown as { isMesh?: boolean }).isMesh) return;
+    const geo = mesh.geometry;
+    if (!geo.getAttribute('color')) return; // animated / non-voxel part
+    const clone = geo.clone();
+    clone.applyMatrix4(mesh.matrixWorld);
+    parts.push(clone);
+  });
+  if (parts.length === 0) return null;
+  const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
+  if (!merged) return null;
+  for (let i = 1; i < parts.length; i++) parts[i]?.dispose();
+
+  ghostTemplateCache.set(key, merged);
+  return merged;
+}
+
+/** Fresh transparent material for one ghost batch — a per-build CLONE in
+ * spirit: never shared, never cached, disposed with the batch (the cached
+ * template MATERIALS in plants.ts must never be mutated or disposed here). */
+function makeGhostMaterial(): THREE.MeshLambertMaterial {
+  return new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: GHOST_OPACITY,
+    depthWrite: false,
+  });
+}
+
+function disposeOneGhostBatch(batch: GhostRunBatch): void {
+  batch.mesh.removeFromParent();
+  batch.mesh.dispose(); // instance buffers
+  // Dispose ONLY the batch-owned transparent clone. The geometry lives in
+  // ghostTemplateCache (session lifetime) and is intentionally kept.
+  (batch.mesh.material as THREE.Material).dispose();
+}
+
+/**
+ * Reconcile the ghost batches (in place, day-keyed — called once per sim-day
+ * commit, never per frame): diff the wanted (crop,stage) groups against the
+ * live batches, dispose stale groups, grow/recreate undersized meshes, and
+ * rewrite instance matrices. Draw cost = distinct (crop,stage) in the ghost,
+ * capped at GHOST_MAX_TEMPLATES. Ghosts snap per-day (no advancePlantGrowth
+ * easing — documented v1 choice) and sit +0.01 above the real plants to
+ * avoid z-fighting.
+ */
+function reconcileGhostRunBatches(
+  batches: GhostRunBatch[],
+  args: {
+    record: RunRecord; // the GHOST record — basePlan is the ghost's own fork
+    state: SimState; // ghost state at the current lockstep day
+    cropById: Map<number, Crop>;
+    scene: THREE.Scene;
+  },
+): number {
+  const plan = args.record.config.basePlan;
+  const cellM = plan.cellM;
+  const offsetX = -(plan.widthM / 2);
+  const offsetZ = -(plan.heightM / 2);
+
+  // Wanted groups: ghost state cells placed on the GHOST's own plan (honest
+  // fork view — cells the live plan lost still render as the what-if).
+  interface Wanted {
+    geometry: THREE.BufferGeometry;
+    crop: Crop;
+    stage: number;
+    keys: string[];
+  }
+  const wanted = new Map<string, Wanted>();
+  let templateCount = 0;
+  let capped = false;
+  for (const [key, cell] of Object.entries(args.state.cells)) {
+    if (plan.planting[key] === undefined) continue;
+    const groupKey = `${cell.cropId}|${cell.stage}`;
+    let w = wanted.get(groupKey);
+    if (!w) {
+      if (templateCount >= GHOST_MAX_TEMPLATES) {
+        capped = true;
+        continue;
+      }
+      const crop = args.cropById.get(cell.cropId);
+      if (!crop) continue;
+      const fullHeight = ghostPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
+      const geometry = getGhostTemplate(crop, cell.stage, fullHeight * ghostTemplateScaleT(cell.stage));
+      if (!geometry) continue; // unmapped-name crop: no ghost (documented v1 gap)
+      w = { geometry, crop, stage: cell.stage, keys: [] };
+      wanted.set(groupKey, w);
+      templateCount++;
+    }
+    w.keys.push(key);
+  }
+  if (capped) {
+    // Draw-budget guard report (spec: cap and report). Console-only: the
+    // situation is a pathology, not a user action.
+    console.warn(
+      `[ghost] run ${args.record.label}: >${GHOST_MAX_TEMPLATES} distinct (crop,stage) templates — extra stages dropped`,
+    );
+  }
+
+  // Remove stale groups.
+  for (let i = batches.length - 1; i >= 0; i--) {
+    const b = batches[i]!;
+    if (!wanted.has(b.key)) {
+      disposeOneGhostBatch(b);
+      batches.splice(i, 1);
+    }
+  }
+
+  const dummy = new THREE.Object3D();
+  for (const [groupKey, w] of wanted) {
+    let b = batches.find((x) => x.key === groupKey);
+    if (!b) {
+      const mesh = new THREE.InstancedMesh(w.geometry, makeGhostMaterial(), Math.max(w.keys.length, 8));
+      mesh.name = `ghost-run:${w.crop.name}:s${w.stage}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.frustumCulled = false; // instances span the whole plan
+      mesh.count = 0;
+      args.scene.add(mesh);
+      b = { key: groupKey, mesh, capacity: Math.max(w.keys.length, 8) };
+      batches.push(b);
+    } else if (b.capacity < w.keys.length) {
+      // Grow: recreate instance buffers + the transparent clone; the cached
+      // ghost geometry is shared and NEVER disposed here.
+      disposeOneGhostBatch(b);
+      const mesh = new THREE.InstancedMesh(w.geometry, makeGhostMaterial(), w.keys.length);
+      mesh.name = `ghost-run:${w.crop.name}:s${w.stage}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.frustumCulled = false;
+      args.scene.add(mesh);
+      b.mesh = mesh;
+      b.capacity = w.keys.length;
+    }
+
+    const denom = ghostTemplateScaleT(w.stage);
+    w.keys.forEach((key, i) => {
+      const [cx, cy] = parseKey(key);
+      const jitter = ghostJitterForCell(cx, cy, cellM);
+      const liftSlugs = GHOST_SHELF_LIFTS[plan.ground[key] ?? ''];
+      const lift = liftSlugs ? liftSlugs[ghostShelfForCell(cx, cy)]! : 0;
+      // Biomass → scale: the SAME template-scale math as plants.ts
+      // writeCellMatrix, so a ghost that is "ahead" is visibly taller at the
+      // same stage boundary. Ghosts snap per-day (no easing) by design.
+      const p = Math.min(1, Math.max(0, args.state.cells[key]!.biomassFrac));
+      const scale = ((0.15 + 0.85 * p) / denom) * jitter.scaleY;
+      dummy.position.set(
+        cx * cellM + cellM / 2 + offsetX + jitter.offsetX,
+        0.02 + lift, // +0.01 over the real plants' y=0.01 — no z-fighting
+        cy * cellM + cellM / 2 + offsetZ + jitter.offsetZ,
+      );
+      dummy.rotation.set(0, jitter.rotY, 0);
+      dummy.scale.setScalar(scale);
+      dummy.updateMatrix();
+      b!.mesh.setMatrixAt(i, dummy.matrix);
+    });
+    b.mesh.count = w.keys.length;
+    b.mesh.instanceMatrix.needsUpdate = true;
+  }
+  return templateCount;
+}
+
+/** Dispose every ghost batch (ghost clear / world teardown): instance
+ * buffers + the per-batch transparent material CLONE only — cached ghost
+ * geometry persists for the session (plants.ts cache discipline). */
+function disposeGhostRunBatches(batches: GhostRunBatch[]): void {
+  for (const b of batches) disposeOneGhostBatch(b);
+  batches.length = 0;
+}
+
 /** Home camera framing — the load-in view and the dock's Reset target share
  * one source of truth so "Reset view" restores exactly the initial shot. */
 function homeFrame(plan: { widthM: number; heightM: number }) {
@@ -69,6 +347,9 @@ interface World3DProps {
    * plant reconcile reads SimState biomass instead of the closed-form scrub
    * path; the legacy path stays fully intact as the no-run fallback. */
   simRun?: SimRunController | null;
+  /** Other runs of this farm offered as ghost comparisons (Phase 4); the
+   * active primary is filtered out before the picker renders. */
+  compareRuns?: RunRecord[];
   /** Outbound notable-event sink (harvest-ready → celebrate). PlotDesigner
    * owns the ref; useSimRun fires it per stepped day. */
   runEventsRef?: { current: ((events: SimEvent[], state: SimState) => void) | null };
@@ -121,7 +402,7 @@ interface PointerHandlers {
   up: (camera: THREE.Camera, scene: THREE.Scene, ndcX?: number, ndcY?: number) => void;
 }
 
-export default function World3D({ editor, cinema = false, onToggleCinema, simRun = null, runEventsRef }: World3DProps) {
+export default function World3D({ editor, cinema = false, onToggleCinema, simRun = null, compareRuns, runEventsRef }: World3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const groundBatchesRef = useRef<GroundBatch[]>([]);
@@ -131,6 +412,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const shellRef = useRef<ShellGroup | null>(null);
   const undoGhostsRef = useRef<GhostBatch[]>([]);
   const redoGhostsRef = useRef<GhostBatch[]>([]);
+  // Ghost-run plant batches (Phase 4) — disposed on ghost clear / teardown.
+  const ghostRunBatchesRef = useRef<GhostRunBatch[]>([]);
 
   // Systems
   const skyRef = useRef<Sky | null>(null);
@@ -225,6 +508,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const runRecord = simRun?.record ?? null;
   const runTickVersion = simRun?.tickVersion ?? 0;
   const runDayIndex = simRun?.dayIndex ?? 0;
+  // Ghost comparison (Phase 4): stable dep values for the day-keyed ghost
+  // reconcile — ghostRecord/ghostVersion only change on load/clear/(re)fold.
+  const runGhostRecord = simRun?.ghostRecord ?? null;
+  const runGhostVersion = simRun?.ghostVersion ?? 0;
   const simRunRef = useRef(simRun);
   simRunRef.current = simRun;
   const runActiveRef = useRef(runActive);
@@ -640,6 +927,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       shellRef.current = null;
       disposeGhostPlants(undoGhostsRef.current);
       disposeGhostPlants(redoGhostsRef.current);
+      disposeGhostRunBatches(ghostRunBatchesRef.current); // Phase 4 ghost-run plants
       disposeAnimals(animalsRef.current!);
       if (dressingRef.current) disposeDressing(dressingRef.current);
       sky.dispose();
@@ -809,6 +1097,32 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     if (!runActive) return;
     applyRunGrowth();
   }, [runActive, runTickVersion, sceneReady, editor.cropById, editor.planVersion]);
+
+  // Ghost-run reconcile (spec §3.5 Phase 4): reconciles the semi-transparent
+  // second-run plants beside the solid primary. Day-keyed like the moisture
+  // overlay — NOT tickVersion (~5 commits/s would churn GPU buffers for a
+  // per-day change); runGhostVersion covers same-day ghost loads/clears/
+  // refolds, and planVersion re-applies after whole-scene rebuilds. In-place
+  // batch reconcile: draw cost = distinct (crop,stage) in the ghost (≤60),
+  // zero per-frame work, materials are per-batch transparent clones.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const run = simRunRef.current;
+    const gRec = run?.ghostRecord ?? null;
+    const gState = run?.ghostStateRef.current ?? null;
+    if (!runActive || !gRec || !gState) {
+      // No ghost (or not folded yet): drop whatever is on screen.
+      disposeGhostRunBatches(ghostRunBatchesRef.current);
+      return;
+    }
+    reconcileGhostRunBatches(ghostRunBatchesRef.current, {
+      record: gRec,
+      state: gState,
+      cropById: editor.cropById,
+      scene: engine.scene,
+    });
+  }, [runActive, runGhostRecord, runGhostVersion, runDayIndex, sceneReady, editor.planVersion]);
 
   // Moisture overlay (spec §3.3): opt-in ground tint over planted cells,
   // bucketed into 4 moisture bands — one InstancedMesh per band (≤4 extra
@@ -1103,6 +1417,22 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const runEnded = simRun?.ended ?? false;
   const runPlaying = simRun?.playing ?? false;
 
+  // Compare picker (Phase 4): the other runs of this farm as light items —
+  // the drawer stays presentational. The active primary is excluded.
+  const compareItems = useMemo(() => {
+    if (!runActive || !compareRuns) return [];
+    return compareRuns
+      .filter((r) => r.id !== runRecord?.id)
+      .map((r) => ({
+        id: r.id,
+        label: r.label,
+        scenario: r.config.scenario.replace('_', ' '),
+        dateRange: `${r.config.startDate} → ${isoFromDayNumber(
+          isoDayNumber(r.config.startDate) + Math.max(0, r.config.dayCount - 1),
+        )}`,
+      }));
+  }, [runActive, runRecord?.id, compareRuns]);
+
   // Update weather FX + audio params in the rAF loop already handles audio
   const lastAchievement = achievements.current.unlocked[achievements.current.unlocked.length - 1];
   const [achievementToast, setAchievementToast] = useState<string | null>(null);
@@ -1366,6 +1696,14 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
             ? (iv) => simRunRef.current?.applyIntervention(iv) ?? { ok: false, error: 'No active run.' }
             : undefined
         }
+        compareRuns={compareItems.length > 0 ? compareItems : undefined}
+        ghostLabel={simRun?.ghostRecord?.label}
+        ghostCapped={simRun?.ghostCapped}
+        onLoadGhost={(id) => {
+          const rec = compareRuns?.find((x) => x.id === id);
+          if (rec) simRunRef.current?.loadGhost(rec);
+        }}
+        onClearGhost={() => simRunRef.current?.clearGhost()}
       />
 
       {/* Tour progress bar */}

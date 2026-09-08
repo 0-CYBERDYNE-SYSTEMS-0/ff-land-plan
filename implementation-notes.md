@@ -785,3 +785,74 @@ seeded farms' per-cell coop flocks eat the 16-creature budget before bees
 plans), so run presence modulation is most visible on coop-free/painted
 plans; batch tint is crop-wide max (per-(crop,plantedAt) tinting would need
 per-group materials).
+
+## 2026-09-08 — Sim Core waves 3+4: intervention authoring, ecosystem visuals, A/B experimentation
+
+Wave 3 (commit `07ed6d8`) + wave 4, completing SPEC-SIM-ECOSYSTEM Phases 3-UI
+and 4. Team: F (interventions), G (visuals), E (Phase 4; stalled post-impl, a
+scoped finisher audited its complete diff), consistent validator rounds 3-4
+(both PASS).
+
+**Intervention authoring (F).** `useSimRun.applyIntervention(iv)` amends the
+ACTIVE record's config.interventions in memory (stable-sorted by day) and
+refolds to the CURRENT day via the existing deterministic `replayTo` —
+dayIndex never visually resets, `replayTo` still never fires `onEvents` (no
+celebration spam from rewritten history). Guards reject weather-kind (baked
+into envSeries at compose time), out-of-season dates, bad amounts.
+`unsavedChanges` + amber chip: amendments are SESSION-ONLY by design — the
+stored RunRecord keeps its frozen-provenance contract; persisting amendments
+needs a `saveSimRun(record)` seam across Api/localApi/restApi (named
+follow-up; the controller already holds the amended record). RunInspector
+gives a presentational add-form (irrigate 1-50 mm / fertilize 10-200 kg/ha N,
+sweet spot 60-150; date defaults to current sim day) + timeline markers.
+Validator live-proof: past-dated fertilize refold moved why-panel N 459.7 →
+560.4 kg/ha; localStorage record untouched.
+
+**ET0 normals bug (found by F, fixed + verified).** climate.ts monthly
+normals store precip/et0 as MEANS OF MONTHLY TOTALS; environment.ts's
+synthFromNormals fed et0 straight in as DAILY mm/day (July ≈ 150 mm/day!),
+pinning buckets at 0 on normals-only days. Fix: divide by daysInMonth like
+rain already did. Frozen envSeries in existing records replay unchanged
+(self-consistent); new runs get ~1-8 mm/day. Validator audited for a third
+total-field case — none exists (temps are means, consumed directly).
+
+**Ecosystem visuals (G).** Run-mode stress tint via
+`PlantUpdateOptions.stressByCell` (per-cell max of water/heat/cold/nitrogen
+and pest×0.8; batch tint = max across the batch's cells — draw-budget
+compromise; legacy path byte-identical when absent). `setFaunaPresence`
+scales bee/butterfly visibility fractions from SimState.creatures without
+rebuilds (day-keyed effect, hidden members keep ticking). CDP-proven:
+drought bed olive vs irrigated control green; bees appear only in the
+flowering window.
+
+**Phase 4 A/B (E + finisher).** useSimRun: `loadGhost/clearGhost` — the ghost
+folds ONE extra pure stepDay per sim-day through its OWN config × OWN
+envSeries (primary interventions structurally can't reach it; validator
+empirically probed primary replay identical with vs without a ghost). World3D:
+day-keyed ghost effect renders the second run as semi-transparent instanced
+plants (session-lifetime ghost geometry cache mirroring plants.ts's
+normalization math — audited helper-by-helper identical; per-batch transparent
+material clones, shared caches never touched; 60-template draw cap; ghost
+snaps per-day, documented). `?ffrun=<id>&ffghost=<id>` before the hash,
+StrictMode-safe, ghost deferred until primary replay ctx lands. RunInspector
+Compare block (picker/legend/clear, presentational). Simulations page:
+multi-select 2-6 runs → ComparePanel with honest-unit deltas vs the first
+selected + "Compare A/B in world". Finisher CDP: 19/19 checks incl. visual
+ghost confirmation, ghost-season-ended cap label, interventions work with a
+ghost active.
+
+**Label collision fix (validator round 4).** createSimRun default label now
+includes startDate + a time suffix so same-param runs never read
+"solid = X · ghost = X".
+
+Verified per wave: typecheck + build green (three.js lazy chunk intact);
+validator rounds 3 (8/8 + live proofs) and 4 (8/8 + determinism probe) PASS;
+appshot GATE/EXPECT on world + simulations pages each round; dev servers
+killed by PID; scratch confined to $TMPDIR.
+
+Known gaps (ledger): saveSimRun seam (amendments session-only); ghost has no
+per-day easing; procedural-fallback/custom-named crops get no ghost; ghost on
+a differently-shaped fork draws the old footprint with no visual hint;
+batch-level tint granularity (one stressed sowing yellows its crop's whole
+batch); creatures counts animate existing flocks only on coop-free seeded
+plans (16-creature budget); named experiment sets (grouping runs) deferred.

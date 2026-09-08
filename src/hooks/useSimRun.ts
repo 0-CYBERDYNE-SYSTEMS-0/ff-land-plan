@@ -149,6 +149,32 @@ export interface SimRunController {
   /** True once config.interventions diverge from the stored RunRecord
    * (session-only: nothing is persisted over the record). */
   unsavedChanges: boolean;
+  // --- Ghost comparison (spec §3.5 Phase 4) --------------------------------
+  // A ghost is a SECOND run folded in lockstep with the primary purely as the
+  // A/B comparison axis: it shares the primary's dayIndex/playing/speed
+  // transport, steps through ITS OWN config × ITS OWN envSeries (one extra
+  // pure stepDay per sim-day — never the primary's interventions), and is
+  // in-memory only (nothing is persisted). Rendered semi-transparent by
+  // World3D; the ghost state lives in a ref (weatherRef pattern).
+  /** The ghost comparison run, or null. Same farmId as the primary by guard. */
+  ghostRecord: RunRecord | null;
+  /** THE ghost render-path source of truth (read from effects, not state). */
+  ghostStateRef: RefObject<SimState | null>;
+  /** True once the primary has stepped past the ghost's season end: the ghost
+   * caps at its final day (the UI documents this as "ghost season ended"). */
+  ghostCapped: boolean;
+  /** Bumped whenever the ghost was (re)folded at the CURRENT primary day or
+   * cleared (load/seek-while-paused/ctx-landed). Lets the day-keyed ghost
+   * reconcile react to same-day ghost swaps without keying on tickVersion. */
+  ghostVersion: number;
+  /** Load a second run as the ghost comparison. Guards: requires an active
+   * primary, same farmId, and not the primary itself; the fold defers until
+   * the replay context lands when called mid-startRun (the ?ffghost launch
+   * path). In-memory only — never persisted over the record. */
+  loadGhost: (rec: RunRecord) => void;
+  /** Drop the ghost comparison and dispose its state (World3D disposes the
+   * ghost meshes on the same signal). */
+  clearGhost: () => void;
 }
 
 const COMMIT_INTERVAL_MS = 200; // ~5 React commits/s; refs carry the rest
@@ -346,6 +372,12 @@ export function useSimRun(opts: {
   const simStateRef = useRef<SimState | null>(null);
   const recordRef = useRef<RunRecord | null>(null);
   const ctxRef = useRef<SimRunCtx | null>(null);
+  // Ghost comparison (Phase 4): state in a ref for the render path, record in
+  // both (state drives the Compare block, the ref is read inside the tick).
+  const ghostStateRef = useRef<SimState | null>(null);
+  const ghostRecordRef = useRef<RunRecord | null>(null);
+  const [ghostRecord, setGhostRecord] = useState<RunRecord | null>(null);
+  const [ghostVersion, setGhostVersion] = useState(0);
   const dayIndexRef = useRef(0);
   const playingRef = useRef(false);
   const speedRef = useRef(speed);
@@ -363,6 +395,27 @@ export function useSimRun(opts: {
     setTickVersion((v) => v + 1);
   }, []);
 
+  /** Refold the GHOST from day 0 to `targetDay` (spec §3.5 Phase 4 lockstep
+   * fold). Determinism boundary: it steps the ghost's OWN config × OWN
+   * envSeries — NEVER the primary's (amended) interventions — so primary
+   * actions can't mutate the comparison. Shares the primary's replay context
+   * (same farm ⇒ same soil/crops; the guard in loadGhost enforces farmId).
+   * Days beyond the ghost's own series don't exist: the ghost caps at its end
+   * (surfaced as ghostCapped). Fires no onEvents — ghost events are never the
+   * primary's celebrations. */
+  const foldGhostTo = useCallback((targetDay: number) => {
+    const g = ghostRecordRef.current;
+    if (!g) return;
+    const runCtx = ctxRef.current ?? {};
+    const n = Math.min(Math.max(0, Math.round(targetDay)), g.envSeries.length);
+    let st = createRun(g.config, runCtx);
+    for (let i = 0; i < n; i++) {
+      st = stepDay(st, g.envSeries[i]!, g.config, runCtx).state;
+    }
+    ghostStateRef.current = st;
+    setGhostVersion((v) => v + 1);
+  }, []);
+
   // Advance exactly one sim day. Returns false when the run cannot continue
   // (no record/state, series exhausted, or just ended).
   const stepOnce = useCallback((): boolean => {
@@ -374,6 +427,20 @@ export function useSimRun(opts: {
     const { state, events } = stepDay(st, env, rec.config, ctxRef.current ?? {});
     simStateRef.current = state;
     dayIndexRef.current = state.dayIndex;
+    // Ghost lockstep (Phase 4): each primary sim-day ALSO steps the ghost one
+    // day through its own config × envSeries — exactly one extra pure stepDay
+    // (a season is ~ms, a day is sub-ms ⇒ real-time even at max speed). The
+    // ghost shares the transport; when its own season ends it simply stops.
+    // In-lockstep steps deliberately do NOT bump ghostVersion: the render
+    // reconcile is day-keyed and the throttled dayIndex commit carries it.
+    const g = ghostRecordRef.current;
+    if (g) {
+      const gst = ghostStateRef.current;
+      if (gst && gst.dayIndex < g.envSeries.length) {
+        const genv = g.envSeries[gst.dayIndex]!;
+        ghostStateRef.current = stepDay(gst, genv, g.config, ctxRef.current ?? {}).state;
+      }
+    }
     if (events.length > 0) onEventsRef.current?.(events, state);
     if (state.dayIndex >= rec.envSeries.length) {
       playingRef.current = false;
@@ -434,11 +501,14 @@ export function useSimRun(opts: {
       simStateRef.current = st;
       dayIndexRef.current = st.dayIndex;
       accumRef.current = 0;
+      // Transport lockstep: a seek re-derives BOTH runs at the same day
+      // (foldGhostTo clamps to the ghost's own season length).
+      foldGhostTo(n);
       setEnded(n >= rec.envSeries.length);
       if (playingRef.current && n >= rec.envSeries.length) stopTicking();
       maybeCommit(true);
     },
-    [maybeCommit, stopTicking],
+    [foldGhostTo, maybeCommit, stopTicking],
   );
 
   const startRun = useCallback(
@@ -448,6 +518,12 @@ export function useSimRun(opts: {
       const loadId = loadIdRef.current;
       recordRef.current = rec;
       setRecord(rec);
+      // A new primary invalidates any ghost comparison (Phase 4): a ghost
+      // always belongs to the run it was loaded against. ?ffrun+?ffghost
+      // re-load the ghost right after this via loadGhost.
+      ghostRecordRef.current = null;
+      ghostStateRef.current = null;
+      setGhostRecord(null);
       setEnded(false);
       setUnsavedChanges(false);
       simStateRef.current = null;
@@ -474,9 +550,12 @@ export function useSimRun(opts: {
         pendingSeekRef.current = null;
         replayTo(target);
         setTimeline(buildTimeline(rec, runCtx));
+        // A ghost loaded while the context was in flight (?ffrun=…&ffghost=…
+        // launches both in one tick) folds now that the shared ctx exists.
+        if (ghostRecordRef.current) foldGhostTo(dayIndexRef.current);
       });
     },
-    [maybeCommit, replayTo, stopTicking],
+    [foldGhostTo, maybeCommit, replayTo, stopTicking],
   );
 
   const play = useCallback(() => {
@@ -588,17 +667,50 @@ export function useSimRun(opts: {
     };
   }, [replayTo]);
 
+  /** Load a second run as the GHOST comparison (spec §3.5 Phase 4). Guards:
+   * requires an active primary, same farmId, and not the primary itself. When
+   * the replay context hasn't landed yet (the ?ffrun+?ffghost launch calls
+   * this right after startRun) the fold defers to startRun's ctx resolution.
+   * The ghost keeps its OWN config and envSeries forever — primary
+   * interventions never leak into it — and shares only the transport. */
+  const loadGhost = useCallback(
+    (g: RunRecord) => {
+      const rec = recordRef.current;
+      if (!rec) return; // ghosts exist only against an active primary run
+      if (g.farmId !== rec.farmId) return; // a comparison crosses runs, not farms
+      if (g.id === rec.id) return; // a run cannot be its own ghost
+      ghostRecordRef.current = g;
+      setGhostRecord(g);
+      if (ctxRef.current) {
+        foldGhostTo(dayIndexRef.current);
+      }
+      // else: folded once startRun's ctx lands (it re-checks ghostRecordRef).
+    },
+    [foldGhostTo],
+  );
+
+  const clearGhost = useCallback(() => {
+    if (!ghostRecordRef.current) return;
+    ghostRecordRef.current = null;
+    ghostStateRef.current = null;
+    setGhostRecord(null);
+    setGhostVersion((v) => v + 1); // day-keyed reconcile drops the meshes
+  }, []);
+
   const stopRun = useCallback(() => {
     loadIdRef.current += 1;
     stopTicking();
     recordRef.current = null;
     ctxRef.current = null;
     simStateRef.current = null;
+    ghostRecordRef.current = null;
+    ghostStateRef.current = null;
     dayIndexRef.current = 0;
     pendingSeekRef.current = null;
     setRecord(null);
     setCtx(null);
     setTimeline(null);
+    setGhostRecord(null);
     setEnded(false);
     setUnsavedChanges(false);
     setDayIndex(0);
@@ -634,8 +746,14 @@ export function useSimRun(opts: {
       stopRun,
       applyIntervention,
       unsavedChanges,
+      ghostRecord,
+      ghostStateRef,
+      ghostCapped: ghostRecord !== null && dayIndex >= ghostRecord.envSeries.length,
+      ghostVersion,
+      loadGhost,
+      clearGhost,
     }),
-    [record, dayIndex, playing, speed, ended, tickVersion, ctx, timeline, startRun, play, pause, setSpeed, seekDay, stopRun, applyIntervention, unsavedChanges],
+    [record, dayIndex, playing, speed, ended, tickVersion, ctx, timeline, startRun, play, pause, setSpeed, seekDay, stopRun, applyIntervention, unsavedChanges, ghostRecord, ghostVersion, loadGhost, clearGhost],
   );
 }
 

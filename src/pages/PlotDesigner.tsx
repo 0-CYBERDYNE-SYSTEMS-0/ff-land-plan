@@ -1,4 +1,5 @@
 import { ArrowLeft, Check, Map as MapIcon } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiFetch } from '@/lib/api';
@@ -47,7 +48,11 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   // marker is set only AFTER the load resolves — marking synchronously would
   // swallow the run under StrictMode's effect double-invoke (first pass is
   // cancelled, second pass must still be allowed to start it).
+  // ?ffghost=<id> (Phase 4, same before-the-hash pattern): with ?ffrun
+  // present, also load that run as the GHOST comparison (alone it is inert —
+  // ghosts exist only against an active primary run).
   const launchRunId = useMemo(() => new URLSearchParams(window.location.search).get('ffrun'), []);
+  const launchGhostId = useMemo(() => new URLSearchParams(window.location.search).get('ffghost'), []);
   const launchRunDoneRef = useRef<Set<string>>(new Set());
   // Latest-controller ref (handlersRef convention): simRun's identity changes
   // every throttled commit while a run plays — it must not be an effect dep or
@@ -55,16 +60,22 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   const simRunRef = useRef(simRun);
   simRunRef.current = simRun;
   useEffect(() => {
-    if (!launchRunId || launchRunDoneRef.current.has(launchRunId)) return;
-    if (simRunRef.current.record?.id === launchRunId) return; // already active
+    if (!launchRunId && !launchGhostId) return;
+    const launchKey = `${launchRunId ?? ''}|${launchGhostId ?? ''}`;
+    if (launchRunDoneRef.current.has(launchKey)) return;
+    if (launchRunId && simRunRef.current.record?.id === launchRunId) return; // already active
     let cancelled = false;
     apiFetch
       .listSimRuns(farmId)
       .then((runs) => {
         if (cancelled) return;
-        launchRunDoneRef.current.add(launchRunId); // hit or miss: one resolved attempt wins
-        const rec = runs.find((r) => r.id === launchRunId);
+        launchRunDoneRef.current.add(launchKey); // hit or miss: one resolved attempt wins
+        const rec = launchRunId ? runs.find((r) => r.id === launchRunId) : undefined;
+        const ghost = launchGhostId ? runs.find((r) => r.id === launchGhostId) : undefined;
         if (rec) simRunRef.current.startRun(rec);
+        // loadGhost guards identity (same farm, not the primary) and defers
+        // its fold until the replay context lands inside startRun.
+        if (rec && ghost && ghost.id !== rec.id) simRunRef.current.loadGhost(ghost);
       })
       .catch(() => {
         // Missing/failed run load is a silent no-op — the world stays legacy.
@@ -72,7 +83,16 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     return () => {
       cancelled = true;
     };
-  }, [launchRunId, farmId]);
+  }, [launchRunId, launchGhostId, farmId]);
+
+  // Run list for the in-world Compare picker (Phase 4): explicit queryFn —
+  // the QueryClient's hostile default + staleTime:Infinity make casual
+  // queries a trap (HANDOFF trap). Shares the Simulations page's cache key,
+  // so a run created there appears here on the next mount.
+  const { data: allRuns = [] } = useQuery({
+    queryKey: ['sim-runs', farmId],
+    queryFn: () => apiFetch.listSimRuns(farmId),
+  });
 
   const [viewMode, setViewMode] = useState<'blueprint' | 'world'>(() => {
     // Test hook for headless verification (tools/appshot.mjs): ?ffview=world
@@ -159,6 +179,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
                 cinema={cinema}
                 onToggleCinema={() => setCinema((c) => !c)}
                 simRun={simRun}
+                compareRuns={allRuns}
                 runEventsRef={runEventsRef}
               />
             </Suspense>

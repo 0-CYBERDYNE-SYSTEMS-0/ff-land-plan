@@ -295,7 +295,11 @@ export const localApi: Api = {
     const record: RunRecord = {
       id: `run:${input.farmId}:${Date.now().toString(36)}`,
       farmId: input.farmId,
-      label: input.label?.trim() || `${preset.label} · ${config.dayCount}d`,
+      // Two identical-param creates must not share a label — the RunInspector
+      // reads "solid = X · ghost = X" when A/B-ing same-labeled runs.
+      label:
+        input.label?.trim() ||
+        `${preset.label} · ${config.startDate} · ${config.dayCount}d · ${Date.now().toString(36).slice(-4)}`,
       createdAt: new Date().toISOString(),
       config,
       envSeries,

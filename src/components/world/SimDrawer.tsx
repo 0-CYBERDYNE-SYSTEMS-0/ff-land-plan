@@ -162,6 +162,16 @@ export interface SimDrawerProps {
    * the whole Interventions section renders only when set. Returns the
    * controller's verdict so the form can flash a confirmation or reason. */
   onAddIntervention?: (iv: Intervention) => ApplyInterventionResult;
+  // --- Compare block (spec §3.5 Phase 4, presentational) ---
+  /** Other runs of the same farm offered as ghost candidates (the active
+   * primary already filtered out by World3D). */
+  compareRuns?: { id: string; label: string; scenario: string; dateRange: string }[];
+  /** Label of the active ghost comparison, if any. */
+  ghostLabel?: string;
+  /** True when the ghost's season ended before the primary's current day. */
+  ghostCapped?: boolean;
+  onLoadGhost?: (id: string) => void;
+  onClearGhost?: () => void;
 }
 
 function formatTimeOfDay(t: number): string {
@@ -256,6 +266,11 @@ export function SimDrawer({
   onToggleMoisture,
   runUnsaved,
   onAddIntervention,
+  compareRuns,
+  ghostLabel,
+  ghostCapped,
+  onLoadGhost,
+  onClearGhost,
 }: SimDrawerProps) {
   const handleTimeOfDay = ([v]: number[]) => {
     onTimeOfDay(v);
@@ -467,6 +482,58 @@ export function SimDrawer({
                         </span>
                       ))}
                     </div>
+                  )}
+                </div>
+              )}
+              {(compareRuns || ghostLabel) && (
+                <div className="mt-3 border-t border-primary/20 pt-2">
+                  <span className="text-xs font-medium text-foreground/80">Compare</span>
+                  {ghostLabel ? (
+                    <div className="mt-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={ghostLabel}>
+                          👻 ghost · {ghostLabel}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={onClearGhost}
+                          title="Remove the ghost comparison and its plants"
+                          className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                        solid = {runLabel ?? 'primary run'} · ghost = {ghostLabel}
+                        {ghostCapped && ' · ghost season ended'}
+                      </p>
+                    </div>
+                  ) : compareRuns && compareRuns.length > 0 ? (
+                    // Native select (the drawer's uncontrolled-form pattern):
+                    // fires the load and resets — it is an action, not a state.
+                    <select
+                      key={compareRuns.map((r) => r.id).join(',')}
+                      defaultValue=""
+                      aria-label="Compare against another run"
+                      title="Overlay another run of this farm as a ghost in the world"
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        e.target.value = '';
+                        if (id) onLoadGhost?.(id);
+                      }}
+                      className="mt-1 h-7 w-full rounded-md border border-input bg-background px-1 text-xs"
+                    >
+                      <option value="">Compare against…</option>
+                      {compareRuns.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.label} · {r.scenario} · {r.dateRange}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                      No other runs of this farm to compare against yet — create one on the Simulations page.
+                    </p>
                   )}
                 </div>
               )}
