@@ -402,3 +402,256 @@ NFT channels, LED + glass shell).
 **Trap (v3):** don't give enclosed shells a solid ceiling — the default
 isometric camera looks down into the room and the lid eats the whole frame.
 Open-top beam frame + cutaway walls is the house style now.
+
+## Launch kit + appshot-live (2026-09-03)
+
+- Added `tools/appshot-live.mjs`: CDP-driven screenshot variant that waits REAL
+  time instead of a virtual-time budget. Needed because recharts animations
+  (Simulations, Monitoring) and the Blueprint 2D canvas freeze/blank under
+  `--virtual-time-budget`. Connects to the page target via `/json/list` (the
+  browser WS endpoint has no Page domain), supports `--wait <ms>` and `--full`.
+- World-view capture matrix that works headless: `?ffview=world&fftime=0.25`
+  (dawn, warm), `0.5` (noon hero), `0.05` (night). `fftime=0.9` renders a flat
+  orange sky + near-black ground under SwiftShader — avoid for beauty shots;
+  golden hour lives between 0.8 and 0.9 and is very narrow.
+- `marketing/launch-kit/`: rebuildable press kit (`build.mjs` → index.html +
+  deck.html → FarmFriend-Launch.pdf; `build-cards.mjs` → voxel quote cards).
+  26 social assets in `social/` named `<subject>-<WxH>.png`. Copy in
+  `copy/social-copy.md`. All images judged pass (2 judge rounds).
+
+## Growth realism + arched greenhouse (2026-09-04)
+
+- Sim playback pacing (World3D): the old 500 ms tick advancing
+  `round(speed*0.5)` days actually ran 2/8/30 days per real second, so the
+  default "1×/week" matured a 60-day crop in ~7.5 s and then sat static while
+  sky/weather looped ("overgrow and repeat"). Now a 1 s tick advances exactly
+  `simSpeed` days — labels are honest (1 day / 1 week / 1 month per second) —
+  and the default dropped to 1×/day.
+- Season-end auto-pause (World3D): once EVERY planted crop reads 100 % mature,
+  playback runs at most 14 more sim days, then auto-pauses with a
+  "Season complete" chip. Anchor date lives in `matureSinceRef`; cleared on
+  resume / scenario change / planVersion change so restarting re-arms the
+  grace window. No planted cells -> never pauses.
+- Per-surface plant scale (growth.ts + plants.ts): new
+  `SURFACE_PLANT_SCALE = { outdoor: 1, greenhouse: 0.7, tent: 0.45, indoor: 0.6 }`
+  multiplies `fullHeight` in `buildPlants` (both voxel-instanced and procedural
+  paths derive from it). Fixes biomass proportion: the grow-tent asset lands at
+  a 1.5x1.5 m footprint (~1.7 m tall) but fruit crops reached 2.6 m — plants
+  punched through the roof and filled the whole volume. Tent tomato now caps
+  ~1.17 m under the light bars.
+- Greenhouse rebuilt as an arched hoophouse-style glasshouse
+  (buildings.ts `makeGreenhouse`): gothic arch (two off-center ellipse halves,
+  crown ~2.2 m) on galvanized hoop ribs every 7 voxels + purlins + ridge tube,
+  translucent glass panes (0.42) over a 4-course brick knee wall, propped ridge
+  vents + rear louvre band, timber-panelled door; interior bench/pots/path
+  kept. Footprint contract preserved: 25x40 voxels, max horizontal 40 = 4.0 m
+  so `resolveTargetSizeM` still matches the 2.5x4 asset record. Deliberately
+  distinct from polytunnel (glass-on-steel + knee wall vs film on timber
+  rails). quality/ASSETS.md + QUALITY_BAR.md entries updated to match.
+- Verified: typecheck clean; appshot world view GATE PASS with arch reading
+  clearly and "1×/day" default visible; showcase iterations on
+  `#lane=c&only=greenhouse&mode=big` (3 rounds) for the arch silhouette.
+
+## Leftover closeout pass (2026-09-04)
+
+Swept every still-open item from "Known gaps / future work", HANDOFF's
+"Known limitations", and the per-entry "Still open" lists. Three parallel
+workers + lead integration; nothing committed yet.
+
+- **Fall frost-relative sowing windows DONE** (last open Known-gap).
+  `fallSowWeeksBeforeFirstFrost(crop)` in usePlanEditor.ts: category heuristic
+  over existing catalog fields — qualifies iff `minTempC <= 8` (catalog gap
+  7→10), `maxTempC <= 30` (heat-lovers bolt), `growthDays <= 120` (must mature
+  in one fall; garlic/rye/wheat/fruit deliberately out). Weeks =
+  `ceil(growthDays/7)+2` before first frost. `sowWindow` appends
+  "fall: sow Nw before first frost" (CSV export inherits it); SelectionPanel
+  resolves the farm's `firstFrost` "MM-DD" to concrete dates
+  ("Fall: sow around Aug 13 · first frost Oct 15") — no new queries, farm data
+  was already on the editor. Spinach 45d → 9w, kale 60d → 11w, radish 28d → 6w.
+- **staleTime Known-gap was already closed** (stale ledger line): Weather +
+  Dashboard queries carry WEATHER_STALE_MS 15 min, Monitoring uses
+  refetchInterval 30/60s. Refetch fires on route remount when stale
+  (refetchOnWindowFocus is off globally). Ledger line retired, nothing to do.
+- **Dead code removed**: `src/three/groundTexture.ts` deleted (verified zero
+  imports first; only two comment references, refreshed to say "the 3D
+  ground-tile path"). Build re-verified: main chunk 533.11 kB / 156.85 gzip,
+  three still its OWN lazy chunk (782.62 kB / 201.09 gzip), no WebGL symbols
+  leak into main.
+- **Large-plan perf BASELINE recorded** (HANDOFF limitation closed; headless
+  Chrome, appshot-live CDP at noon — the virtual-time harness distorts FPS):
+  farm 1 North Meadow 34 FPS / 273 draws / 2.3 M tris; farm 6 Mushroom
+  Warehouse 46 FPS / 82 draws / 1.6 M tris; farm 4 Market Field (40×24 m,
+  ~4,000 planted cells) 8 FPS / 665 draws / 18.6 M tris. Attribution is
+  linear: ~3.9 k tris/plant, draws unremarkable — no pathological builder, so
+  NO fix applied. The real lever for huge outdoor fields is a plant
+  LOD/imposter system (project-scale, unscheduled); real GPUs score higher.
+- **HANDOFF refreshed**: barn-livestock "interactive QA pending" bullet is now
+  a verified note (2026-08-25 QA landed); stale "farms 1–2, no farm 3" claims
+  fixed in both "How to run" and trap #9 (demo farms 1–7, see seed.ts);
+  perf bullet carries the baseline; groundTexture bullet marks deletion;
+  build-gate chunk sizes updated (~533 kB main).
+- **Animal-spawn palette hint DONE** ("discussed but not implemented" item):
+  one muted line under the AssetPalette search input — "Animals ship with
+  their structures — barn: cow · pig · sheep, coop: hens + rooster, hive:
+  bees, pond: ducks; planted beds draw butterflies." Pure presentation.
+- **Night-lighting human glance DONE** (MISSION-BETA deferral): all four
+  matrix shots readable with believable sun direction — night ground legible
+  under moon fill, noon cleanest, minor nits only (dawn sky→ground transition
+  slightly harsh; dusk orange band slightly flat/poster-like). Read-only;
+  no action taken.
+
+Still honestly open (need external inputs, not effort): REST client runtime
+exercise awaits a real backend; offline-weather fallback has no automated test
+(the repo deliberately has no test runner — decision needed before adding one).
+
+## Creative asset QA round — pre-market visual pass (2026-09-05)
+
+Full-library visual QA of all 171 showcase entries (Lane A 14, Lane B 109,
+Lane C 28, Lane D 20) against `quality/QUALITY_BAR.md`, run as three parallel
+QA agents over the headless showcase harness (`showcase.html#lane=…&only=…`,
+`tools/appshot.mjs`, `spin=0`). Every fix was re-rendered and re-judged;
+`npm run typecheck` green after every round; `npm run build` green at close.
+~30 assets revised, all verified:
+
+- **Lane A (3 fixed)**: `soil-tilled-dry/wet` — the `dips` undulation let
+  adjacent ridge columns dip at the same row, carving a 2-voxel rectangular
+  bite out of the silhouette; each ridge column now dips once in disjoint
+  interior z-bands. `pond-center` — radial depth tint + more shimmer specks so
+  it reads as water, not a blue slab.
+- **Lane B (9 archetypes fixed, 10 re-verified PASS)**: first agent pass fixed
+  tomato, wheat, corn, leafy-head, brassica, greens-open, cucurbit-vine,
+  legume-trellis, bush-bean, strawberry then stalled (inactive-timeout — no
+  code issue; its 4 edited files typechecked clean and were re-verified by the
+  follow-up pass). Follow-up fixed: `root-carrot` missing s3 umbel event +
+  s4 shoulder color; `allium` s5 gold bulb lifted into sight-lines;
+  `potato` s5 tubers rolled onto open soil (were tan-on-tan in foliage);
+  `herb-clump` rebuilt lower/wider with bud dots (was cactus pillars);
+  `herb-shrub` needle whorls break slab columns; `mushroom` domed cap tier.
+  `map.ts` audited: variants swap palette/scale only, never geometry.
+- **Lane C (13 fixed, incl. all 8 new CE assets — none were market-ready
+  before)**: dominant failure mode was seeded per-voxel speckle reading as
+  noise/holes (calmed tonal mixes) and hardware floating without grounding
+  (`grow-light` rebuilt as a floor stand, `fruit-tree` de-lollipopped with
+  root buttresses + surface fruit, `grow-tent` given fabric bands + zipper +
+  visible interior lights, `plant-rack`/`hydro-channel` given actual plants).
+  Classics: `shed` roof speckle, `chicken-coop` floating ramp tiles,
+  `beehive` white-box look, `hay-bale` twine bands, `gate` porcelain-white
+  pickets → weathered wood family. Barn/greenhouse/polytunnel PASS unchanged.
+- **Lane D (8 fixed)**: `chicken` skull 1 unit smaller; `pig` snout/ears/nostril
+  readability; `butterfly` wing fold capped ~25°; `watering-can` throat slimmed;
+  `hoe` blade plate; `pitchfork` tines flipped into the bale (read backwards);
+  `seed-bag` label patch overlap; wind-sway ripple amplitude +50% so the phase
+  offset reads in a static frame (tick now allocation-free).
+
+Residuals accepted for ship (noted, low impact at world scale): `pig` still the
+boxiest creature from pure side view; `grow-tent`/`hvac-unit` cube-dominant by
+nature; `ibc-tote` cage dither slightly noisy; allium s1/s2 chunky; s4
+"green fruit" signal subtle on berry-bush/potato. No shared-code changes were
+needed — every fix fit its lane directory (`voxel.ts` untouched). Contact
+sheets + close-ups from the pass live in `$TMPDIR/ff-asset-qa/` (ephemeral;
+regenerate via the showcase URL formulas above). `quality/ASSETS.md` inventory
+updated: mushroom archetype + the 8 CE structures were missing from the tables.
+
+## 2026-09-06 — Showcase gallery: scroll-offset fix (labels/images desync)
+
+User-reported: scrolling `showcase.html` made asset names sit under foreign
+images and some cells looked empty. Judge-verified root cause: `renderFrame`
+positioned each scissor viewport from `getBoundingClientRect()` (viewport-
+relative) while the canvas is absolutely positioned at the DOCUMENT origin —
+after scrolling by S, every WebGL image drew S px off its DOM cell. Fix: add
+`window.scrollX/Y` to the rect before converting to GL coords
+(`src/creative/showcase/main.ts`). No assets were actually missing: judge pass
+over full-page lane captures (A14/B21/C28/D20 cells) found every cell renders;
+the "missing" ones were scroll-displaced content. Full-page (unscrolled)
+captures were always correct, which matches the report. Also fixed a latent
+`tools/appshot-live.mjs` arg bug: absent `--wait`/`--scroll` made index -1
+bleed into the skip set, dropping the URL positional. Verified: typecheck +
+judge PASS on mid-scroll captures of lanes A/B/C and full lane B.
+
+## 2026-09-06 — World 3D: grab-rotate works on arrival (tool auto-resets to Select)
+
+User-reported on touchpad: wheel zoom worked in the 3D world but click-drag
+could not grab/spin the platform. Root cause: orbit (left-drag / one-finger)
+is enabled only while the Select tool is active (`setEngineOrbitEnabled` in
+`src/three/engine.ts`), and the editor defaults to Brush — so the world view
+opened with `mouseButtons.left = NONE` while the un-gated wheel kept dolling.
+Browser-verified (drag → zero camera movement; same drag after Select →
+rotates). Fix: entering the world view resets the tool to Select
+(`PlotDesigner.tsx` effect keyed on `viewMode`; `setTool` is a stable setter,
+so it fires only on view switches). Painting in 3D is unchanged — explicitly
+picking a paint tool still claims the drag for strokes and disables orbit,
+and 3D paint strokes record undo history (undo/redo verified live). Side
+benefit: click-to-inspect (SelectionPanel) works by default in 3D. Farm plans
+are untouched by this change; QA drags that painted cells during reproduce
+were reverted (localStorage restored to seed values 42,13=pepper, 47,16=spinach,
+51,21 removed). Verified: typecheck + live drag/zoom/paint/undo cycle in Chrome.
+
+## 2026-09-06 — World 3D HUD: sim dock, SimDrawer, cinema mode (SPEC-WORLD-HUD)
+
+Shipped per `quality/SPEC-WORLD-HUD.md` (3-agent build: lead = World3D
+restructure + integration, Sub A = SimDrawer, Sub B = PlotDesigner cinema +
+toast CSS). Motivation: the old wrapping footer (13+ controls) covered 40–50%
+of the 3D canvas and reflowed mid-interaction; the per-crop growth list
+hijacked wheel scroll over the scene.
+
+- `World3D.tsx`: footer replaced by a fixed-child-set bottom dock (status chip
+  [date · Day N · season dot · cached] + Simulate/Tour/Fly/Reset/Sim▸) and a
+  top-left cluster (Cinema/History/Audio/Debug; top-right is perf-HUD
+  territory). Dock never re-renders its child set — labels swap in place
+  (verified pixel-stable while playing). Reset view now shares `homeFrame()`
+  with the init camera (Reset == load-in framing; was maxDim*0.6 drift).
+  Tour progress throttled to 1% steps (was setState per rAF frame). Season
+  auto-pause now auto-opens the drawer once with an explained banner +
+  "Jump to season start"/"Keep watching" (guard ref resets with
+  seasonComplete). Toast uses a real `ff-toast-in` keyframe
+  (tailwindcss-animate was never installed — old classes were dead) and its
+  timeout cleans up on unmount. A11y: aria-pressed everywhere, audio
+  aria-label, sr-only "Sim controls…" summary stays mounted for appshot
+  --expect.
+- `SimDrawer.tsx` (new, controlled/presentational): date+Today, full-width
+  time-of-day slider (HH:MM readout, drag disables Auto), speed + scenario
+  via ui/select, full-height growth list (kills the canvas scroll-hijack),
+  weather footer. Mounted always, slides via transform; below xl it becomes a
+  bottom sheet. Trap found in live QA: Radix Select portals render at body
+  z-50 → behind the z-[150] drawer; fixed with `SelectContent
+  className="z-[200]"` (cn = tailwind-merge).
+- `PlotDesigner.tsx`: `cinema` state (world view only; `h` toggles, auto-exits
+  on blueprint switch; Escape untouched — flight owns it). Cinema unmounts
+  DesignerToolbar + right sidebar + save badge and collapses the grid to one
+  column; layout invariants (xl:h-full root, min-h-0 card, 60dvh below xl)
+  preserved. Painting-in-3D is intentionally unreachable while in cinema.
+- No changes to `usePlanEditor`, `src/three/*`, or the blueprint view.
+- Verified: typecheck + build green; appshot gate matrix 6/6 (world default,
+  night+ffdebug FPS:, tablet 820px, blueprint regression "Brush", farm 6,
+  sr-only "Sim controls"); live click-through: simulate without control
+  movement, season-end drawer auto-open + banner + dismissal, drawer
+  contents + both Radix selects, tour dim/undim, flight + Escape, cinema
+  on/off with restore, before/after screenshots at 1440×900 and 1150×760.
+
+## 2026-09-07 — Structure placement: re-center templates, fit-to-region, platform clamp
+
+Bug: non-linear 3D structures rendered shifted +½ footprint toward +X/+Z and
+could float off the ground platform (farm 1 polytunnel ~2 m into the void).
+Root cause: creative builders anchor voxels at the origin corner (polytunnel
+spans 0→6 m in +Z) while `structures.ts` placed the instance ORIGIN at the
+region's centre — plus instance size was fixed from the asset record,
+ignoring the painted region's extent.
+
+Fix (src/three/structures.ts only, +53/−8): (1) `getTemplate` measures the
+bbox at identity then re-centres the cached template horizontally
+(`position.x/z -= centre`; y untouched so instances keep their y=0 base;
+no-op for builders that already centre). (2) Non-linear regions shrink-to-fit
+their painted footprint: `fit = min(1, regionW/sizeX, regionH/sizeZ)`,
+floored at `MIN_FIT_SCALE = 0.5` (recognizability), shrink-only so voxel
+density never stretches. (3) Instance centre clamped inside plot bounds with
+a degenerate-size guard (oversized → centred). Linear slugs (fences, gates,
+trellis…) untouched. Deliberately NOT fixed by enlarging platforms —
+`buildGround` tiles every plot cell, so the platform exactly mirrors the
+blueprint; size now follows what the user paints (paint a bigger footprint →
+bigger structure, up to the record size).
+
+Verified: typecheck + build clean; appshot GATE/EXPECT pass on farms 1/2/3/5;
+live screenshots (`$TMPDIR/struct-qa/`) show farm 1 polytunnel, greenhouse,
+shed and coop fully on-platform; farm 2 coop sits at the east edge because
+the seed paints it there (clamp holds it inside); farm 5 tent interior
+unaffected.

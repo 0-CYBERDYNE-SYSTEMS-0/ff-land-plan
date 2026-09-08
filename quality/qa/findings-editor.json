@@ -1,0 +1,57 @@
+[
+  {
+    "id": "ED-1",
+    "area": "persistence/store",
+    "title": "Edits to any seed farm plan (1-7, incl. farm 1 North Meadow) are silently reverted on every reload while the UI shows 'Saved'",
+    "severity": "P1",
+    "evidence": "store.ts:86-88 — `for (const key of Object.keys(fresh.plans)) { merged.plans[Number(key)] = fresh.plans[Number(key)]!; }` re-seeds plans for ALL seed farm ids on every boot (comment at :77-80 calls this intentional demo policy). But usePlanEditor.ts:524-536 autosaves those edits, localApi.ts:227-231 writes them to localStorage, and PlotDesigner.tsx:90-93 shows a 'Saved <time>' badge. seed.ts:709-717 ships seed plans for every farm id 1-7, so the primary route #/farms/1/map always loses user edits on reload.",
+    "expected": "A plan the UI reports as Saved restores after reload (or the UI clearly marks seed-farm plans as non-persistent demo content).",
+    "actual": "Reload discards all plan edits on farms 1-7 with zero indication; the 'Saved 3:04 PM' badge is a false persistence promise.",
+    "confidence": "high",
+    "fixHint": "Only re-seed a seed farm's plan when the stored plan is unmodified vs seed (compare updatedAt or a seeded hash), or show a 'Demo — resets on reload' badge instead of 'Saved' on seed farms."
+  },
+  {
+    "id": "ED-2",
+    "area": "designer/save-state",
+    "title": "Failed autosave renders a red (destructive) badge labeled 'Ready' — no 'error' label branch exists",
+    "severity": "P2",
+    "evidence": "usePlanEditor.ts:532-535 sets saveState='error' + toast on save failure; PlotDesigner.tsx:91 label chain is `saving ? 'Saving…' : saved ? 'Saved …' : dirty ? 'Unsaved' : 'Ready'` — 'error' falls into the final else 'Ready', while :90 sets variant='destructive' for it.",
+    "expected": "A failed save shows an explicit error state (e.g. 'Not saved') and some retry affordance.",
+    "actual": "User sees a red badge that says 'Ready'; saveState stays 'error' with no retry until the next edit reschedules the autosave.",
+    "confidence": "high",
+    "fixHint": "Add an `saveState === 'error' ? 'Not saved'` branch to the badge label."
+  },
+  {
+    "id": "ED-3",
+    "area": "designer/autosave-race",
+    "title": "Stale autosave response overwrites planRef without a version bump — lost-update race under remote backend",
+    "severity": "P2",
+    "evidence": "usePlanEditor.ts:527-528 — `const saved = await apiFetch.savePlan(nextPlan); planRef.current = clonePlan(saved);`. With restApi (restApi.ts:133-138, real fetch latency), strokes made while the save is in flight mutate planRef.current in place; when the stale response resolves, planRef is replaced with the pre-stroke state WITHOUT setPlanVersion — canvas keeps showing the strokes (no redraw) while state has silently reverted, and the next autosave persists the reverted plan. With default localApi (localApi.ts:227-231, synchronous body) the await resolves in a microtask before any pointer event can interleave, so the window is benign by construction.",
+    "expected": "Saving a snapshot must never clobber plan state newer than that snapshot (e.g. compare a monotonically increasing edit counter before assigning planRef).",
+    "actual": "Under VITE_API_BASE_URL, edits made during an in-flight save are silently dropped from state.",
+    "confidence": "medium",
+    "fixHint": "Tag each scheduled save with an edit sequence number; ignore/resync responses older than the latest planVersion."
+  },
+  {
+    "id": "ED-4",
+    "area": "designer/routing",
+    "title": "'Farm not found.' / 'Plan not found.' plain-text dead ends with no navigation",
+    "severity": "P3",
+    "evidence": "PlotDesigner.tsx:68-70 — `if (!farm) return <div className=\"p-6\">Farm not found.</div>; ... if (!currentPlan) return <div className=\"p-6\">Plan not found.</div>;` — early return skips the header, back arrow (:76-78) and every panel. Reachable by typing a bad id or deleting a farm in another tab.",
+    "expected": "A not-found state offering a link back to the dashboard.",
+    "actual": "Bare sentence; user must hand-edit the URL.",
+    "confidence": "high",
+    "fixHint": "Render a 'Back to dashboard' button inside the not-found branches."
+  },
+  {
+    "id": "ED-5",
+    "area": "designer/toolbar",
+    "title": "Line tool's Erase payload silently uses the Erase tool's hidden layer selection",
+    "severity": "P3",
+    "evidence": "applyLineCells maps rectMode==='erase' to mode 'erase' (usePlanEditor.ts:671-674), and mutateCell's erase branch reads eraseLayer (:578-591). The Plants/Ground layer Select only renders when tool==='erase' (DesignerToolbar.tsx:99-109), so with Line+Erase active the erased layer is whatever was last picked in the Erase tool — possibly 'ground' — with no visible indicator.",
+    "expected": "Line+Erase erases the layer the user can see/choose, or defaults to plants.",
+    "actual": "Hidden eraseLayer state decides; switching Erase layer earlier changes Line behavior invisibly.",
+    "confidence": "high",
+    "fixHint": "Show the layer Select for line+erase too, or force eraseLayer='plants' when entering line erase mode."
+  }
+]

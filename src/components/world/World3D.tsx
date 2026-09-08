@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { PlanEditor } from '@/components/designer/usePlanEditor';
 import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
-import { SCENARIOS, growthProgress, scenarioGrowthMod, stageForScale } from '@/lib/growth';
+import { growthProgress, scenarioGrowthMod, stageForScale } from '@/lib/growth';
 import type { ScenarioType, Weather, WeatherCurrent } from '@/types';
 import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '@/three/animals';
 import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
@@ -24,9 +24,21 @@ import { buildWaterPlanes, disposeWaterPlanes, updateWaterPlanes, type WaterPlan
 import { createGrowthFX, type GrowthFX } from '@/three/growth-fx';
 import { createPerfHUD, type PerfHUD } from '@/three/perf';
 import { createWeatherFX, type WeatherFX } from '@/three/weather-fx';
+import { SimDrawer } from './SimDrawer';
+
+/** Home camera framing — the load-in view and the dock's Reset target share
+ * one source of truth so "Reset view" restores exactly the initial shot. */
+function homeFrame(plan: { widthM: number; heightM: number }) {
+  const dist = Math.max(plan.widthM, plan.heightM) * 0.75 + 2;
+  return { dist, x: dist * 0.7, y: Math.max(dist * 0.55, 3), z: dist * 0.7 };
+}
 
 interface World3DProps {
   editor: PlanEditor;
+  /** Cinema mode: persistent chrome auto-dims (PlotDesigner owns the state). */
+  cinema?: boolean;
+  /** Parent handler for the in-world Cinema button (PlotDesigner owns state). */
+  onToggleCinema?: () => void;
 }
 
 /** Weather used by the rAF loop until live data arrives (or when offline). */
@@ -76,7 +88,7 @@ interface PointerHandlers {
   up: (camera: THREE.Camera, scene: THREE.Scene, ndcX?: number, ndcY?: number) => void;
 }
 
-export default function World3D({ editor }: World3DProps) {
+export default function World3D({ editor, cinema = false, onToggleCinema }: World3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const groundBatchesRef = useRef<GroundBatch[]>([]);
@@ -116,8 +128,13 @@ export default function World3D({ editor }: World3DProps) {
   });
   const [autoTime, setAutoTime] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [simSpeed, setSimSpeed] = useState<1 | 7 | 30>(7);
+  const [simSpeed, setSimSpeed] = useState<1 | 7 | 30>(1);
   const [scenario, setScenario] = useState<ScenarioType>('baseline');
+  // Season-end auto-pause: scrub date (ISO) when EVERY planted crop first read
+  // fully mature during the current playback; null = not reached yet.
+  const matureSinceRef = useRef<string | null>(null);
+  const [seasonComplete, setSeasonComplete] = useState(false);
+  const seasonDrawerShownRef = useRef(false);
   const timeRef = useRef(timeOfDay);
   const autoTimeRef = useRef(false);
   const audioOnRef = useRef(false);
@@ -127,6 +144,7 @@ export default function World3D({ editor }: World3DProps) {
   const [flightActive, setFlightActive] = useState(false);
   const flightActiveRef = useRef(false);
   const [tourProgress, setTourProgress] = useState(0);
+  const lastTourProgressRef = useRef(0);
   const [weather, setWeather] = useState<WeatherCurrent | null>(null);
   const [weatherCached, setWeatherCached] = useState(false);
   // State mirror of weatherRef.tempC so memoized growth rows recompute when
@@ -135,6 +153,7 @@ export default function World3D({ editor }: World3DProps) {
   const [showDebug, setShowDebug] = useState(() => readLaunchParams().get('ffdebug') === '1');
   const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
   const [audioOn, setAudioOn] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Latest-value refs: the mount-once init effect and its listeners read these
   // instead of capturing render-time values.
@@ -264,19 +283,18 @@ export default function World3D({ editor }: World3DProps) {
 
     // Camera — isometric angle like Tiny World Builder. Framed for everything
     // from a 3 m tent interior to a 60 m field: pulled back + high enough to
-    // look down into enclosed canvas shells.
-    const maxDim = Math.max(plan.widthM, plan.heightM);
-    const dist = maxDim * 0.75 + 2;
-    engine.camera.position.set(dist * 0.7, Math.max(dist * 0.55, 3), dist * 0.7);
+    // look down into enclosed canvas shells. Shared with the dock's Reset.
+    const home = homeFrame(plan);
+    engine.camera.position.set(home.x, home.y, home.z);
     engine.camera.lookAt(0, 0, 0);
     engine.controls.setTarget(0, 0, 0);
     engine.controls.azimuthAngle = -Math.PI / 4;
     engine.controls.polarAngle = Math.PI / 3.5;
-    engine.controls.distance = dist;
+    engine.controls.distance = home.dist;
     // Clamp camera so it can't dive under the ground plane or fly into the void.
     engine.setBounds({
       minDistance: 2,
-      maxDistance: dist * 4,
+      maxDistance: home.dist * 4,
       maxPolarAngle: THREE.MathUtils.degToRad(88),
     });
     engine.controls.update(0);
@@ -342,10 +360,15 @@ export default function World3D({ editor }: World3DProps) {
       // Growth FX
       growthFXRef.current?.update(dt);
 
-      // Tour
+      // Tour — progress drives the top bar; throttle to ~1% steps so a 60 fps
+      // tour doesn't re-render the HUD every frame.
       if (tourRef.current?.active) {
         tourRef.current.update(dt);
-        setTourProgress(tourRef.current.progress);
+        const p = tourRef.current.progress;
+        if (Math.abs(p - lastTourProgressRef.current) > 0.01) {
+          lastTourProgressRef.current = p;
+          setTourProgress(p);
+        }
       }
 
       // Flight
@@ -578,19 +601,75 @@ export default function World3D({ editor }: World3DProps) {
   useEffect(() => { autoTimeRef.current = autoTime; }, [autoTime]);
   useEffect(() => { audioOnRef.current = audioOn; }, [audioOn]);
 
-  // Simulate playback: advance the calendar day-by-day while playing.
+  // Simulate playback: one tick per real second advancing exactly `simSpeed`
+  // sim days, so the speed labels mean what they say (1 day / 1 week /
+  // 1 month per real second).
   useEffect(() => {
     if (!playing) return;
-    const daysPerTick = Math.max(1, Math.round(simSpeed * 0.5));
     const id = window.setInterval(() => {
       setScrubDate((prev) => {
         const next = new Date(prev);
-        next.setDate(next.getDate() + daysPerTick);
+        next.setDate(next.getDate() + simSpeed);
         return next.toISOString().slice(0, 10);
       });
-    }, 500);
+    }, 1000);
     return () => window.clearInterval(id);
   }, [playing, simSpeed]);
+
+  // Reset the maturity anchor + completion hint when playback (re)starts...
+  useEffect(() => {
+    if (!playing) return;
+    matureSinceRef.current = null;
+    setSeasonComplete(false);
+    seasonDrawerShownRef.current = false;
+  }, [playing]);
+
+  // ...and when the growth inputs change (plan edits / scenario switch), so
+  // the grace window below restarts against the new reality.
+  useEffect(() => {
+    matureSinceRef.current = null;
+    setSeasonComplete(false);
+    seasonDrawerShownRef.current = false;
+  }, [scenario, editor.planVersion]);
+
+  // Explain the season-end auto-pause: open the sim drawer once per completed
+  // season (guard resets wherever seasonComplete resets above).
+  useEffect(() => {
+    if (!seasonComplete || seasonDrawerShownRef.current) return;
+    seasonDrawerShownRef.current = true;
+    setDrawerOpen(true);
+  }, [seasonComplete]);
+
+  // While playing, once EVERY planted crop is fully mature, let the season run
+  // at most 14 more sim days, then auto-pause with a completion hint. Same
+  // progress math as the cropProgress HUD rows; no planted cells never pauses;
+  // cells without plantedAt read mature (growthProgress returns 1).
+  useEffect(() => {
+    if (!playing) return;
+    const plan = editor.planRef.current;
+    if (!plan || Object.keys(plan.planting).length === 0) return;
+    if (matureSinceRef.current !== null) {
+      const days = Math.round((Date.parse(scrubDate) - Date.parse(matureSinceRef.current)) / 86_400_000);
+      if (days >= 14) {
+        matureSinceRef.current = null;
+        setPlaying(false);
+        setSeasonComplete(true);
+      }
+      return;
+    }
+    const date = new Date(scrubDate);
+    let allMature = true;
+    for (const [key, cropId] of Object.entries(plan.planting)) {
+      const crop = cropByIdRef.current.get(cropId);
+      if (!crop) continue;
+      const mod = scenarioGrowthMod(crop, scenarioRef.current, plan.surface ?? 'outdoor', growthCtxRef.current);
+      if (growthProgress(crop, plan.plantedAt?.[key], date, mod.rate) < 1) {
+        allMature = false;
+        break;
+      }
+    }
+    if (allMature) matureSinceRef.current = scrubDate;
+  }, [playing, scrubDate, scenario, editor.planVersion]);
 
   // Earliest planting date in the plan, for the "Day N" season readout.
   const earliestPlantedAt = useMemo(() => {
@@ -645,143 +724,65 @@ export default function World3D({ editor }: World3DProps) {
       const latest = achievements.current.unlocked[achievements.current.unlocked.length - 1];
       if (latest) {
         setAchievementToast(`${latest.icon} ${latest.label} — ${latest.description}`);
-        setTimeout(() => setAchievementToast(null), 3000);
       }
     }
     unlockedCountRef.current = currentCount;
   }, [lastAchievement]);
+
+  // Auto-dismiss the toast; the cleanup guards an unmount mid-toast.
+  useEffect(() => {
+    if (!achievementToast) return;
+    const id = window.setTimeout(() => setAchievementToast(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [achievementToast]);
+
+  // Chrome dims while a showcase mode owns the view: cinema opt-in, tour, or
+  // flight. Render-only — the rAF loop never reads this. Hover/focus restores.
+  const dimmed = cinema || tourActive || flightActive;
+  const dimCls = dimmed ? 'opacity-20 hover:opacity-100 focus-within:opacity-100' : 'opacity-100';
+
+  const resetToHomeView = () => {
+    const engine = engineRef.current;
+    const plan = editor.planRef.current;
+    if (!engine || !plan) return;
+    const home = homeFrame(plan);
+    engine.controls.setPosition(home.x, home.y, home.z, false);
+    engine.controls.setTarget(0, 0, 0, false);
+    engine.controls.azimuthAngle = -Math.PI / 4;
+    engine.controls.polarAngle = Math.PI / 3.5;
+    engine.controls.distance = home.dist;
+    engine.controls.update(0);
+  };
 
   return (
     <div
       ref={containerRef}
       className="relative h-[60dvh] min-h-[320px] bg-muted/30 xl:h-auto xl:min-h-0 xl:flex-1"
     >
-      {/* Footer controls */}
-      <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-center gap-2">
-        {/* Date scrub */}
-        <div className="pointer-events-auto rounded-md bg-background/90 px-3 py-2 shadow-sm">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Date:</span>
-            <input
-              type="date"
-              value={scrubDate}
-              onChange={(e) => setScrubDate(e.target.value)}
-              className="rounded border border-border bg-background px-2 py-1 text-foreground"
-            />
-          </label>
-        </div>
+      {/* Always-mounted summary so headless asserts can target the sim
+          controls while the drawer is closed. */}
+      <span className="sr-only">Sim controls: date, time of day, speed, scenario, per-crop growth</span>
 
-        {/* Time of day */}
-        <div className="pointer-events-auto rounded-md bg-background/90 px-3 py-2 shadow-sm">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Time:</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={timeOfDay}
-              onChange={(e) => { setTimeOfDay(Number(e.target.value)); setAutoTime(false); }}
-              className="w-16"
-            />
-            <button
-              type="button"
-              onClick={() => setAutoTime(!autoTime)}
-              className={`text-[10px] rounded px-1.5 py-0.5 ${autoTime ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              {autoTime ? 'Auto' : 'Manual'}
-            </button>
-          </label>
-        </div>
-
-        {/* Simulate: play a growing season with an optional stress scenario */}
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-md bg-background/90 px-3 py-2 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setPlaying((p) => !p)}
-            className={`rounded px-2 py-1 text-xs font-medium ${playing ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-          >
-            {playing ? '⏸ Pause' : '▶ Simulate'}
-          </button>
-          <select
-            value={simSpeed}
-            onChange={(e) => setSimSpeed(Number(e.target.value) as 1 | 7 | 30)}
-            className="rounded border border-border bg-background px-1.5 py-1 text-xs"
-            title="Simulation speed"
-          >
-            <option value={1}>1×/day</option>
-            <option value={7}>1×/week</option>
-            <option value={30}>1×/month</option>
-          </select>
-          <select
-            value={scenario}
-            onChange={(e) => setScenario(e.target.value as ScenarioType)}
-            className="rounded border border-border bg-background px-1.5 py-1 text-xs"
-            title="Stress scenario"
-          >
-            {(Object.keys(SCENARIOS) as ScenarioType[]).map((s) => (
-              <option key={s} value={s}>{SCENARIOS[s].label}</option>
-            ))}
-          </select>
-          {seasonDay !== null && (
-            <span className="text-xs text-muted-foreground">Day {Math.min(seasonDay, 365)}</span>
-          )}
-          <div className="flex max-h-24 flex-col gap-0.5 overflow-y-auto border-l border-border pl-2" title="Per-crop growth stage at the scrubbed date (scroll for more)">
-            {cropProgress.map((r) => (
-              <div key={r.id} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <span className="w-20 truncate">{r.name}</span>
-                <span className="tracking-tighter text-foreground">
-                  {'●'.repeat(r.stage)}{'○'.repeat(5 - r.stage)}
-                </span>
-                <span>{r.pct}%</span>
-                {r.stress > 0.2 && <span className="text-amber-500">stress</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Reset camera — escapes geometry after a bad zoom/orbit */}
+      {/* Top-left view cluster — top-right belongs to the perf HUD (z-100) */}
+      <div className={`pointer-events-none absolute left-3 top-3 flex flex-wrap gap-1.5 transition-opacity duration-300 ${dimCls}`}>
         <button
           type="button"
-          onClick={() => {
-            const engine = engineRef.current;
-            if (!engine) return;
-            const plan = editor.planRef.current;
-            const dist = plan ? Math.max(plan.widthM, plan.heightM) * 0.6 : 12;
-            engine.resetView({ distance: dist });
-          }}
+          onClick={onToggleCinema}
+          aria-pressed={cinema}
+          title="Cinema mode — dim controls and hide editor chrome (H to exit)"
           className="pointer-events-auto rounded-md bg-background/90 px-3 py-2 text-xs font-medium text-muted-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
         >
-          Reset view
+          ⛶ Cinema
         </button>
-
-        {/* History */}
         <button
           type="button"
           onClick={() => setShowHistory((s) => !s)}
+          aria-pressed={showHistory}
+          title="Ghost overlays of the last undo/redo step"
           className={`pointer-events-auto rounded-md px-3 py-2 text-xs font-medium shadow-sm ${showHistory ? 'bg-primary text-primary-foreground' : 'bg-background/90 text-muted-foreground'}`}
         >
           {showHistory ? 'Hide History' : 'Show History'}
         </button>
-
-        {/* Tour */}
-        <button
-          type="button"
-          onClick={() => {
-            if (tourActive) {
-              tourRef.current?.stop();
-              setTourActive(false);
-            } else {
-              tourRef.current?.start();
-              setTourActive(true);
-            }
-          }}
-          className={`pointer-events-auto rounded-md px-3 py-2 text-xs font-medium shadow-sm ${tourActive ? 'bg-destructive text-destructive-foreground' : 'bg-background/90 text-muted-foreground hover:bg-primary hover:text-primary-foreground'}`}
-        >
-          {tourActive ? 'Stop Tour' : '▶ Tour'}
-        </button>
-
-        {/* Audio */}
         <button
           type="button"
           onClick={() => {
@@ -792,53 +793,140 @@ export default function World3D({ editor }: World3DProps) {
             }
             setAudioOn(!audioOn);
           }}
+          aria-pressed={audioOn}
+          aria-label={audioOn ? 'Mute ambience' : 'Unmute ambience'}
+          title="Ambience sound"
           className={`pointer-events-auto rounded-md px-3 py-2 text-xs font-medium shadow-sm ${audioOn ? 'bg-primary text-primary-foreground' : 'bg-background/90 text-muted-foreground'}`}
         >
           {audioOn ? '🔊' : '🔇'}
         </button>
-
-        {/* Flight toggle */}
-        <button
-          type="button"
-          onClick={() => {
-            if (flightRef.current?.active) {
-              flightRef.current.deactivate();
-            } else {
-              flightRef.current?.activate();
-            }
-          }}
-          className={`pointer-events-auto rounded-md px-3 py-2 text-xs font-medium shadow-sm ${flightActive ? 'bg-destructive text-destructive-foreground' : 'bg-background/90 text-muted-foreground hover:bg-primary hover:text-primary-foreground'}`}
-        >
-          {flightActive ? '✈ Exit Flight' : '✈ Fly'}
-        </button>
-
-        {/* Weather info */}
-        {weather && (
-          <div className="pointer-events-auto flex items-center gap-1.5 rounded-md bg-background/90 px-3 py-2 shadow-sm text-xs text-muted-foreground">
-            <span>{weather.tempC}°C · 💨{weather.windSpeedKmh}km/h · 🌧{weather.precipMm}mm</span>
-            {weatherCached && (
-              <span
-                title="Live fetch failed earlier — showing last-good cached weather"
-                className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
-              >
-                cached
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Debug toggle */}
         <button
           type="button"
           onClick={() => {
             setShowDebug(!showDebug);
             if (perfHUDRef.current) perfHUDRef.current.visible = !showDebug;
           }}
-          className="pointer-events-auto rounded-md bg-background/90 px-2 py-1 text-[10px] text-muted-foreground shadow-sm"
+          aria-pressed={showDebug}
+          title="Performance HUD"
+          className={`pointer-events-auto rounded-md px-3 py-2 text-xs font-medium shadow-sm ${showDebug ? 'bg-primary text-primary-foreground' : 'bg-background/90 text-muted-foreground'}`}
         >
           Debug
         </button>
       </div>
+
+      {/* Bottom dock — status chip + actions. FIXED child set: labels swap in
+          place so sim state changes never reflow the controls. */}
+      <div className={`pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-end justify-center gap-2 transition-opacity duration-300 ${dimCls}`}>
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          title="Season status — click for simulation controls"
+          className="pointer-events-auto flex items-center gap-1.5 rounded-md bg-background/90 px-3 py-2 text-xs font-medium text-muted-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
+        >
+          <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${seasonComplete ? 'bg-amber-500' : 'bg-primary'}`} />
+          <span className="whitespace-nowrap">
+            {new Date(`${scrubDate}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            {seasonDay !== null && <> · Day {Math.min(seasonDay, 365)}</>}
+          </span>
+          {weatherCached && (
+            <span
+              title="Live fetch failed earlier — showing last-good cached weather"
+              className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
+            >
+              cached
+            </span>
+          )}
+        </button>
+
+        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-md bg-background/90 px-2 py-1.5 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setPlaying((p) => !p)}
+            aria-pressed={playing}
+            title="Play the growing season forward"
+            className={`min-w-[96px] rounded px-2 py-1 text-xs font-medium ${playing ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+          >
+            {playing ? '⏸ Pause' : '▶ Simulate'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (tourActive) {
+                tourRef.current?.stop();
+                setTourActive(false);
+              } else {
+                tourRef.current?.start();
+                setTourActive(true);
+              }
+            }}
+            aria-pressed={tourActive}
+            title="Guided flight through the planted plan"
+            className={`rounded px-2 py-1 text-xs font-medium ${tourActive ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground'}`}
+          >
+            {tourActive ? 'Stop Tour' : '▶ Tour'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (flightRef.current?.active) {
+                flightRef.current.deactivate();
+              } else {
+                flightRef.current?.activate();
+              }
+            }}
+            aria-pressed={flightActive}
+            title="WASD fly-over camera (Escape exits)"
+            className={`rounded px-2 py-1 text-xs font-medium ${flightActive ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground'}`}
+          >
+            {flightActive ? '✈ Exit Flight' : '✈ Fly'}
+          </button>
+          <button
+            type="button"
+            onClick={resetToHomeView}
+            title="Return the camera to the load-in view"
+            className="rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground"
+          >
+            Reset view
+          </button>
+          <span aria-hidden className="mx-0.5 h-5 w-px bg-border" />
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            aria-expanded={drawerOpen}
+            aria-haspopup="dialog"
+            title="Date, time, speed, scenario, and per-crop growth"
+            className="rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground"
+          >
+            Sim ▸
+          </button>
+        </div>
+      </div>
+
+      <SimDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        scrubDate={scrubDate}
+        onScrubDate={setScrubDate}
+        onToday={() => setScrubDate(new Date().toISOString().slice(0, 10))}
+        seasonDay={seasonDay}
+        seasonComplete={seasonComplete}
+        onJumpSeasonStart={() => {
+          if (earliestPlantedAt) setScrubDate(earliestPlantedAt.toISOString().slice(0, 10));
+        }}
+        onDismissSeason={() => setSeasonComplete(false)}
+        timeOfDay={timeOfDay}
+        onTimeOfDay={setTimeOfDay}
+        autoTime={autoTime}
+        onAutoTime={setAutoTime}
+        playing={playing}
+        simSpeed={simSpeed}
+        onSimSpeed={setSimSpeed}
+        scenario={scenario}
+        onScenario={setScenario}
+        weather={weather}
+        weatherCached={weatherCached}
+        cropProgress={cropProgress}
+      />
 
       {/* Tour progress bar */}
       {tourActive && (
@@ -855,7 +943,7 @@ export default function World3D({ editor }: World3DProps) {
       {/* Achievement toast */}
       {achievementToast && (
         <div className="pointer-events-none absolute top-8 left-1/2 -translate-x-1/2">
-          <div className="animate-in slide-in-from-top-2 rounded-lg bg-background/95 px-4 py-2 text-sm font-medium shadow-lg border border-border">
+          <div className="ff-toast-in rounded-lg bg-background/95 px-4 py-2 text-sm font-medium shadow-lg border border-border">
             {achievementToast}
           </div>
         </div>

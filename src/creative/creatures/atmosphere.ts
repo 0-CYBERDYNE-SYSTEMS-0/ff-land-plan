@@ -250,7 +250,7 @@ export function buildWindDemo(): THREE.Group {
     plant.position.set(x * DU, 0.14 * DU, 0);
     root.add(plant);
     // amplitude scales with height: taller plants travel further at the tip
-    plants.push({ node: plant, amp: isTomato ? 0.062 : 0.042 });
+    plants.push({ node: plant, amp: isTomato ? 0.095 : 0.065 });
   });
 
   root.userData.sway = plants;
@@ -262,9 +262,11 @@ export function tickWindDemo(pivotObj: THREE.Object3D, t: number): void {
   const root = pivotObj.children[0];
   const plants = root && (root.userData.sway as SwayPlant[] | undefined);
   if (!plants) return;
-  // ripple travels down the row; secondary cross-breeze on a faster clock
-  plants.forEach((p, i) => {
+  // ripple travels down the row; secondary cross-breeze on a faster clock.
+  // Plain indexed loop — no closure allocation per frame.
+  for (let i = 0; i < plants.length; i++) {
+    const p = plants[i];
     p.node.rotation.z = Math.sin(t * 1.5 - i * 0.68) * p.amp;
     p.node.rotation.x = Math.sin(t * 2.3 - i * 0.41) * p.amp * 0.3;
-  });
+  }
 }

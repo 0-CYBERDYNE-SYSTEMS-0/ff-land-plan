@@ -119,7 +119,7 @@ export function makeShed(): THREE.Object3D {
     riserTone: C.roofPlankDark,
     tone: (_step, r) => {
       void _step;
-      return r < 0.18 ? C.roofPlankDark : r > 0.86 ? mixColor(C.roofPlank, PALETTE.plank, 0.35) : C.roofPlank;
+      return r < 0.14 ? C.roofPlankDark : r > 0.93 ? mixColor(C.roofPlank, C.postWoodLight, 0.2) : C.roofPlank;
     },
     edgeTone: C.trimWhite,
     fasciaTone: C.trimWhite,
@@ -151,98 +151,163 @@ export function makeShed(): THREE.Object3D {
 }
 
 // ---------------------------------------------------------------------------
-// Greenhouse — 25×40 voxels (2.5×4 m), glazed gable, ridge along Z
+// Greenhouse — 25×40 voxels (2.5×4 m): arched hoophouse-style house on a
+// brick knee wall. Galvanized hoop ribs + purlins carry translucent glazing
+// that follows the arch; framed gables with glazed door + louvre. Ridge
+// along Z; 40 voxels stays the largest horizontal dimension (footprint
+// contract with the 2.5×4 m designer record).
 // ---------------------------------------------------------------------------
 
 export function makeGreenhouse(): THREE.Object3D {
   const rand = rng(3301);
-  const solid: Voxel[] = []; // frame, benches, door…
-  const glass: Voxel[] = []; // translucent panes
-  const W = 25; // x: 0..24
-  const D = 40; // z: 0..39, ridge along Z
+  const solid: Voxel[] = []; // knee wall, ribs, purlins, frames, door, bench…
+  const glass: Voxel[] = []; // translucent glazing following the arch
+  const W = 25; // x: 0..24 — arch spans X
+  const D = 40; // z: 0..39 — ridge along Z
+  const A = 18; // arch rise above the spring line → crown ≈ 2.2 m
+  const SPRING = 4; // first arch row, landing on the knee-wall cap
 
-  // brick kerb course
-  for (let x = 0; x <= W - 1; x++)
-    for (const z of [0, D - 1])
-      solid.push({ x, y: 0, z, s: 1.08, color: weighted([[PALETTE.terracotta, 0.6], [mixColor(PALETTE.terracotta, PALETTE.black, 0.3), 0.4]], rand()) });
-  for (let z = 1; z < D - 1; z++)
-    for (const x of [0, W - 1])
-      solid.push({ x, y: 0, z, s: 1.08, color: weighted([[PALETTE.terracotta, 0.6], [mixColor(PALETTE.terracotta, PALETTE.black, 0.3), 0.4]], rand()) });
-
-  // white frame posts: corners + every 8 along the length
-  const postXs = [0, W - 1];
-  const postZs = [0, 8, 16, 24, 32, D - 1];
-  for (const x of postXs)
-    for (const z of postZs)
-      for (let y = 1; y <= 15; y++)
-        solid.push({ x, y, z, s: 1.18, color: y % 4 === 0 ? mixColor(C.frameWhite, PALETTE.gravelDark, 0.2) : C.frameWhite });
-  // eaves + transom beams along both long walls
-  for (const x of postXs)
-    for (let z = 0; z <= D - 1; z++) {
-      solid.push({ x, y: 15, z, color: C.frameWhite });
-      solid.push({ x, y: 8, z, s: 1.06, color: C.frameWhite }); // transom
-    }
-
-  // wall glazing between the frames
-  for (const x of postXs)
-    for (let z = 1; z < D - 1; z++)
-      for (let y = 1; y <= 14; y++)
-        if (!(z % 8 === 0))
-          glass.push({ x, y, z, s: 0.96, color: C.glassPane });
-
-  // gable ends: glazed with white rake frames
-  const { idx } = steppedProfile(W + 2, 2, 1, 1); // columns x=-1..25
-  const gableTop = (x: number): number => 16 + idx[x + 1] - 1;
-  for (const gz of [0, D - 1]) {
-    for (let x = 1; x < W - 1; x++) {
-      const top = gableTop(x);
-      for (let y = 1; y <= top; y++)
-        glass.push({ x, y, z: gz, s: 0.96, color: C.glassPane });
-      solid.push({ x, y: top, z: gz, s: 1.05, color: C.frameWhite }); // rake bar
-    }
+  /** Crown height per column: slightly gothic arch — two off-center ellipse
+   * halves meeting at a subtle peak, near-vertical leaving the eaves. */
+  const h: number[] = [];
+  for (let x = 0; x < W; x++) {
+    const dx = x - (W - 1) / 2;
+    const adx = Math.abs(dx);
+    if (adx >= 12) { h.push(SPRING); continue; }
+    const t = (adx + 3) / 15; // half-width 12 + 3 gothic offset
+    h.push(SPRING + Math.round(A * Math.sqrt(1 - t * t)));
   }
+  const ribTone = (): number =>
+    weighted(
+      [
+        [mixColor(PALETTE.metal, PALETTE.metalDark, 0.35), 0.5],
+        [mixColor(PALETTE.metal, PALETTE.metalDark, 0.65), 0.5],
+      ],
+      rand(),
+    );
 
-  // stepped glazed roof: profile rises across X toward the ridge.
-  // Bay x=10..11 on the west slope, z=8..28 is left open for the ridge vent.
-  const inVentBay = (x: number, z: number, y: number): boolean =>
-    x >= 10 && x <= 11 && z >= 8 && z <= 28 && y >= 20;
-  for (let i = 0; i < idx.length; i++) {
-    const x = -1 + i;
-    const topY = 16 + idx[i];
-    const prevTop = i > 0 ? 16 + idx[i - 1] : topY;
-    if (x <= 0 || x >= W - 1) continue; // gables handled above
-    for (let z = -1; z <= D; z++)
-      for (let y = prevTop; y <= topY; y++)
-        if (!inVentBay(x, z, y))
-          glass.push({ x, y, z, s: 0.96, color: C.glassPane });
-  }
-  // white ridge beam + cap bead, hugging the glazed peak
-  const ry = 16 + idx[13];
-  for (let z = -1; z <= D; z++) {
-    solid.push({ x: 11.5, y: ry + 0.62, z, s: 1.3, color: C.frameWhite });
-    solid.push({ x: 12.5, y: ry + 0.62, z, s: 1.3, color: C.frameWhite });
-  }
-  // ridge vent cracked open: flap lifted one voxel off its bay, propped
-  for (let z = 8; z <= 28; z++)
-    glass.push({ x: 10.5, y: ry + 0.1, z, s: 0.94, color: mixColor(C.glassPane, PALETTE.white, 0.35) });
-  for (const pz of [8, 18, 28]) solid.push({ x: 11.5, y: ry - 0.4, z: pz, s: 0.45, color: PALETTE.metal });
-
-  // --- door on the front gable -------------------------------------------------
-  for (let x = 10; x <= 14; x++)
-    for (let y = 1; y <= 13; y++) solid.push({ x, y, z: D - 1, color: C.trimShadow }); // dark reveal
-  for (const x of [9, 15])
-    for (let y = 1; y <= 14; y++) solid.push({ x, y, z: D - 1, s: 1.12, color: C.frameWhite });
-  for (let x = 9; x <= 15; x++) solid.push({ x, y: 14, z: D - 1, s: 1.12, color: C.frameWhite });
-  for (let x = 10; x <= 14; x++)
-    for (let y = 1; y <= 12; y++) {
-      const lowerPanel = y <= 5;
-      const border = x === 10 || x === 14 || y === 12;
-      glass.push({
-        x, y, z: D - 0.5, s: 0.92,
-        color: lowerPanel && !border ? mixColor(C.frameWhite, PALETTE.gravel, 0.25) : C.glassPane,
+  // --- brick knee wall ring: footing, two brick courses, stone cap -----------
+  const brick = (): number =>
+    weighted(
+      [
+        [PALETTE.terracotta, 0.56],
+        [mixColor(PALETTE.terracotta, PALETTE.black, 0.32), 0.36],
+        [mixColor(PALETTE.terracotta, PALETTE.cream, 0.22), 0.08],
+      ],
+      rand(),
+    );
+  const doorXs = new Set([10, 11, 12, 13, 14]);
+  const kneeCell = (x: number, z: number): void => {
+    for (let y = 0; y <= 3; y++)
+      solid.push({
+        x, y, z,
+        s: y === 0 ? 1.14 : y === 3 ? 1.2 : 1.04,
+        color: y === 0
+          ? mixColor(PALETTE.terracotta, PALETTE.black, 0.4)
+          : y === 3
+            ? weighted([[PALETTE.stone, 0.6], [PALETTE.stoneLight, 0.4]], rand())
+            : brick(),
       });
+  };
+  for (let x = 0; x < W; x++)
+    for (const z of [0, D - 1]) {
+      if (z === D - 1 && doorXs.has(x)) continue; // doorway cut to grade
+      kneeCell(x, z);
     }
-  solid.push({ x: 14.6, y: 8, z: D - 0.2, s: 0.55, color: PALETTE.metal }); // handle
+  for (let z = 1; z < D - 1; z++)
+    for (const x of [0, W - 1]) kneeCell(x, z);
+  // aluminum threshold across the doorway
+  for (let x = 10; x <= 14; x++)
+    solid.push({ x, y: 0.12, z: D - 1, s: 0.82, color: PALETTE.metalDark });
+
+  // --- glazing shell: stepped pane bands tiling the arch, per column --------
+  const inRidgeVent = (x: number, z: number): boolean =>
+    x >= 10 && x <= 14 && ((z >= 7 && z <= 12) || (z >= 21 && z <= 26));
+  for (let x = 0; x < W; x++) {
+    const bottom = x === 0 || x === 24 ? SPRING : x < 12 ? h[x - 1] : x > 12 ? h[x + 1] : h[12];
+    for (let z = 1; z < D - 1; z++)
+      for (let y = bottom; y <= h[x]; y++) {
+        if (y === h[x] && inRidgeVent(x, z)) continue; // propped-open slot
+        glass.push({ x, y, z, s: 0.97, color: C.glassPane });
+      }
+  }
+
+  // galvanized hoop ribs crowning the shell every 7 voxels
+  for (const rz of [6, 13, 20, 27, 34])
+    for (let x = 0; x < W; x++)
+      solid.push({ x, y: h[x] + 0.05, z: rz, s: 1.07, color: ribTone() });
+  // two longitudinal purlins + the ridge tube
+  for (const px of [6, 18])
+    for (let z = 1; z < D - 1; z++)
+      solid.push({ x: px, y: h[px] + 0.07, z, s: 0.9, color: mixColor(PALETTE.metal, PALETTE.metalDark, 0.3) });
+  for (let z = 0; z < D; z++)
+    solid.push({ x: 12, y: h[12] + 0.32, z, s: 1.18, color: weighted([[PALETTE.metalDark, 0.6], [PALETTE.metal, 0.4]], rand()) });
+
+  // ridge vent flaps hovering over the open slots, on jack props
+  for (const bz of [7, 21])
+    for (let z = bz; z <= bz + 5; z++)
+      for (let x = 10; x <= 14; x++)
+        glass.push({ x, y: h[x] + 0.72, z, s: 0.94, color: C.glassPane });
+  for (const pz of [8, 11, 22, 25]) {
+    solid.push({ x: 12, y: h[12] + 0.34, z: pz, s: 0.5, color: PALETTE.metal });
+    solid.push({ x: 12, y: h[12] - 0.24, z: pz, s: 0.5, color: PALETTE.metalDark });
+  }
+
+  // --- framed end walls: perimeter arch, glazing bars, transom ---------------
+  const barXs = new Set([4, 8, 16, 20]);
+  for (const gz of [0, D - 1]) {
+    const front = gz === D - 1;
+    for (let x = 0; x < W; x++) {
+      const top = h[x];
+      solid.push({ x, y: top + 0.05, z: gz, s: 1.07, color: ribTone() }); // end arch
+      for (let y = SPRING; y <= top; y++) {
+        if (front && doorXs.has(x) && y <= 18) continue; // door assembled below
+        if (front && (x === 9 || x === 15) && y <= 18) {
+          solid.push({ x, y, z: gz, s: 1.12, color: C.frameWhite }); // door surround
+          continue;
+        }
+        if (barXs.has(x)) {
+          solid.push({ x, y, z: gz, s: 1.06, color: C.frameWhite }); // glazing bar
+          continue;
+        }
+        if (!front && x >= 8 && x <= 16 && y >= 14 && y <= 16) {
+          glass.push({ x, y, z: gz, s: 0.7, color: C.glassPane }); // behind louvre
+          continue;
+        }
+        if (y === 13 && top >= 14) {
+          solid.push({ x, y, z: gz, s: 1.02, color: C.frameWhite }); // transom
+          continue;
+        }
+        glass.push({ x, y, z: gz, s: 0.97, color: C.glassPane });
+      }
+    }
+  }
+
+  // --- door on the front gable: dark reveal, solid panel, glazed upper -------
+  for (let x = 10; x <= 14; x++)
+    for (let y = 1; y <= 17; y++)
+      solid.push({ x, y, z: D - 1, color: C.trimShadow }); // reveal
+  for (let x = 10; x <= 14; x++) {
+    for (let y = 1; y <= 8; y++)
+      solid.push({
+        x, y, z: D - 0.5, s: 0.9,
+        color: plankTone(rand, C.plankWeathered, PALETTE.woodDark, C.postWoodLight),
+      }); // timber lower panel
+    for (const ry of [9, 17])
+      solid.push({ x, y: ry, z: D - 0.5, s: 0.9, color: C.frameWhite }); // rails
+  }
+  for (let x = 11; x <= 13; x++)
+    for (let y = 10; y <= 16; y++)
+      glass.push({ x, y, z: D - 0.5, s: 0.9, color: C.glassPane }); // glazed upper
+  solid.push({ x: 14.55, y: 9.5, z: D - 0.25, s: 0.52, color: PALETTE.metal }); // handle
+
+  // operable louvre vents across the back gable
+  for (let x = 9; x <= 15; x++)
+    for (const ly of [14, 15, 16])
+      solid.push({
+        x, y: ly, z: 0.62, s: 0.5,
+        color: ly === 15 ? mixColor(C.frameWhite, PALETTE.gravelDark, 0.2) : C.frameWhite,
+      });
 
   // --- interior: gravel path, potting bench, pots ------------------------------
   for (let z = 1; z <= D - 2; z++)
@@ -272,7 +337,7 @@ export function makeGreenhouse(): THREE.Object3D {
   for (const tz of [11, 20])
     solid.push({ x: 4.5, y: 4.4, z: tz, s: 1.4, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.35) });
 
-  return group([solidMesh(solid), paneMesh(glass, 0.44, PALETTE.polyFilm)]);
+  return group([solidMesh(solid), paneMesh(glass, 0.42, PALETTE.glass)]);
 }
 
 // ---------------------------------------------------------------------------
@@ -455,11 +520,11 @@ export function makeChickenCoop(): THREE.Object3D {
 
   // pop door on the sunny front (+Z) + perch stub
   for (let x = 4; x <= 6; x++)
-    for (let y = 8; y <= 10; y++) solid.push({ x, y, z: HD - 1, color: C.trimShadow });
-  for (const dx of [3, 7]) for (let y = 7; y <= 11; y++) solid.push({ x: dx, y, z: HD - 1, s: 1.06, color: C.trimWhite });
+    for (let y = 8; y <= 11; y++) solid.push({ x, y, z: HD - 1, color: C.trimShadow });
+  for (const dx of [3, 7]) for (let y = 7; y <= 11; y++) solid.push({ x: dx, y, z: HD - 1, s: 1.06, color: C.frameWhite });
   for (let x = 3; x <= 7; x++) {
-    solid.push({ x, y: 7, z: HD - 1, s: 1.06, color: C.trimWhite });
-    solid.push({ x, y: 11, z: HD - 1, s: 1.06, color: C.trimWhite });
+    solid.push({ x, y: 7, z: HD - 1, s: 1.06, color: C.frameWhite });
+    solid.push({ x, y: 11, z: HD - 1, s: 1.06, color: C.frameWhite });
   }
   solid.push({ x: 5, y: 8, z: HD - 0.3, s: 0.5, color: C.postWoodLight }); // perch stick
   // tiny window + vents
@@ -477,12 +542,18 @@ export function makeChickenCoop(): THREE.Object3D {
       for (let y = prev; y <= ry; y++)
         solid.push({
           x, y, z,
-          color: x === -1 || x === HW ? C.trimWhite : rand() < 0.15 ? mixColor(C.coopRoof, PALETTE.black, 0.25) : C.coopRoof,
+          color: x === -1 || x === HW
+            ? C.trimWhite
+            : y < ry
+              ? mixColor(C.coopRoof, PALETTE.black, 0.25) // riser shadow
+              : x % 3 === 0
+                ? mixColor(C.coopRoof, PALETTE.black, 0.16) // plank seam lines
+                : rand() < 0.1 ? mixColor(C.coopRoof, PALETTE.black, 0.2) : C.coopRoof,
         });
   }
   for (let x = -1; x <= HW; x++) {
-    solid.push({ x, y: 15, z: HD + 2, color: C.trimWhite }); // high front fascia
-    solid.push({ x, y: 13, z: -1, color: C.trimWhite });     // low back fascia
+    solid.push({ x, y: 16, z: HD + 2, color: C.trimWhite }); // high front fascia
+    solid.push({ x, y: 14, z: -2, color: C.trimWhite });     // low back fascia
   }
 
   // nest box protruding on the east face
@@ -506,14 +577,22 @@ export function makeChickenCoop(): THREE.Object3D {
   solid.push({ x: HW, y: 12.6, z: 6, s: 0.8, color: PALETTE.ironDark });
   solid.push({ x: HW + 2.2, y: 13.2, z: 4, s: 0.5, color: PALETTE.metal });
 
-  // ramp with cleats down from the pop door, touching the ground
+  // ramp with cleats down from the pop door, stringers + riser fill so it
+  // reads as a solid little stair, touching the ground
   for (let i = 0; i < 7; i++) {
     const z = HD + i;
     const ry = 7.6 - i * 1.15;
     for (let x = 4; x <= 6; x++) {
-      solid.push({ x, y: ry, z, s: 0.95, color: plankTone(rand, C.plankWeathered, PALETTE.woodDark, PALETTE.plank) });
+      solid.push({ x, y: ry, z, s: 1.02, color: plankTone(rand, C.plankWeathered, PALETTE.woodDark, PALETTE.plank) });
+      if (i < 6) {
+        const ryNext = 7.6 - (i + 1) * 1.15;
+        for (let y = ryNext; y < ry; y++)
+          solid.push({ x, y, z: z + 0.5, s: 0.98, color: mixColor(C.plankWeathered, PALETTE.black, 0.18) });
+      }
       if (i % 2 === 0) solid.push({ x, y: ry + 0.55, z: z + 0.3, s: 0.42, color: C.postWood }); // cleat
     }
+    for (const sx of [3.35, 6.65])
+      solid.push({ x: sx, y: ry + 0.1, z, s: 0.55, color: C.postWood }); // side stringers
   }
   // feed grains scattered at the ramp foot
   for (let i = 0; i < 7; i++)
@@ -556,7 +635,11 @@ export function makeGrowTent(): THREE.Object3D {
 
   const shell = mixColor(PALETTE.charcoal, PALETTE.black, 0.35);
   const shellLight = mixColor(shell, PALETTE.metalDark, 0.3);
-  const wall = (): number => (rand() < 0.1 ? shellLight : shell);
+  // fabric reads as horizontal panel bands with a rare lighter weave fleck
+  const wall = (y: number): number => {
+    const band = Math.floor(y / 3) % 2 === 0 ? shell : shellLight;
+    return rand() < 0.05 ? mixColor(band, PALETTE.metalDark, 0.2) : band;
+  };
 
   // reflective white floor tray
   for (let x = 0; x < W; x++)
@@ -566,13 +649,13 @@ export function makeGrowTent(): THREE.Object3D {
   // black shell: back wall, both side walls, ceiling (front left open)
   for (let z = 0; z < 1; z++)
     for (let x = 0; x < W; x++)
-      for (let y = 1; y <= H - 1; y++) solid.push({ x, y, z, color: wall() });
+      for (let y = 1; y <= H - 1; y++) solid.push({ x, y, z, color: wall(y) });
   for (const x of [0, W - 1])
     for (let z = 1; z < D; z++)
-      for (let y = 1; y <= H - 1; y++) solid.push({ x, y, z, color: wall() });
+      for (let y = 1; y <= H - 1; y++) solid.push({ x, y, z, color: wall(y) });
   for (let x = 0; x < W; x++)
     for (let z = 0; z < D; z++)
-      solid.push({ x, y: H, z, color: wall() });
+      solid.push({ x, y: H, z, color: wall(H) });
 
   // reflective mylar inner lining (bright) on the interior faces
   for (let z = 1; z < D - 1; z++)
@@ -586,16 +669,27 @@ export function makeGrowTent(): THREE.Object3D {
 
   // front opening trim (door frame around the open face)
   for (let y = 1; y <= H - 1; y++)
-    for (const x of [0, W - 1]) solid.push({ x, y, z: D - 1, s: 1.05, color: wall() });
-  for (let x = 0; x < W; x++) solid.push({ x, y: H, z: D - 1, s: 1.05, color: wall() });
+    for (const x of [0, W - 1]) solid.push({ x, y, z: D - 1, s: 1.05, color: wall(y) });
+  for (let x = 0; x < W; x++) solid.push({ x, y: H, z: D - 1, s: 1.05, color: wall(H) });
+  // frame corner connectors at the two front-top corners
+  solid.push({ x: 0, y: H + 0.18, z: D - 1, s: 1.35, color: PALETTE.metalDark });
+  solid.push({ x: W - 1, y: H + 0.18, z: D - 1, s: 1.35, color: PALETTE.metalDark });
 
-  // hanging grow-light bars (two rows) — bright so they read as lit
-  const glow = mixColor(PALETTE.flowerYellow, PALETTE.white, 0.35);
+  // zipper track up the right-front edge, slider at hand height
+  for (let y = 1.2; y <= H - 1.2; y += 0.5)
+    solid.push({ x: W - 0.45, y, z: D - 0.85, s: 0.34, color: rand() < 0.3 ? PALETTE.metalDark : PALETTE.metal });
+  solid.push({ x: W - 0.45, y: 6, z: D - 0.7, s: 0.5, color: PALETTE.ironDark });
+  solid.push({ x: W - 0.4, y: 5.5, z: D - 0.4, s: 0.3, color: PALETTE.metalDark });
+
+  // hanging grow-light bars (two rows), lowered so they read through the mouth
+  const glow = mixColor(PALETTE.flowerYellow, PALETTE.white, 0.55);
   for (const lx of [5, 14])
     for (let lz = 3; lz < D - 3; lz++)
-      solid.push({ x: lx, y: H - 2, z: lz, s: 0.8, color: glow });
+      solid.push({ x: lx, y: H - 5, z: lz, s: 1.05, color: glow });
   for (const lx of [5, 14])
-    for (const lz of [4, D - 4]) solid.push({ x: lx, y: H - 1, z: lz, s: 0.45, color: PALETTE.metal });
+    for (const lz of [4, D - 4])
+      for (let ry = H - 4.6; ry <= H - 1.2; ry += 0.55)
+        solid.push({ x: lx, y: ry, z: lz, s: 0.25, color: PALETTE.metalDark }); // suspension
 
   // seedling trays on the floor
   for (let x = 3; x <= 16; x += 2)

@@ -34,7 +34,7 @@ export interface RenderOptions {
   //     `ghost` hover/brush/asset footprint preview, `spacingViolations`
   //     spacing toggle, `companionHalos` companions toggle, `layers` visibility.
   //   • renderPlanToPng (PNG export, below): passes NONE — exports stay clean.
-  //   • src/three/groundTexture.ts (World3D ground): passes NONE — do not add.
+  //   • the 3D ground-tile path (src/three/ground.ts): passes NONE — do not add.
   /** Ghost footprint preview: per-cell 35% fill + solid 1px union outline. */
   ghost?: { cells: Array<[number, number]>; colorHex: string } | null;
   /** 'x,y' keys drawn as a ~28% red tint BEHIND plant emoji/icons. */

@@ -179,10 +179,15 @@ function renderFrame(timeMs: number): void {
     cell.rig.hemi.intensity = cell.defaultHemi.intensity;
     cell.entry.tune?.(cell.rig);
 
+    // rect is viewport-relative but the canvas sits at the document origin,
+    // so add the scroll offset or every image drifts by the scroll amount
+    // once the page scrolls (labels end up over foreign images).
     const rect = cell.el.getBoundingClientRect();
-    const glY = pageH - (rect.top + rect.height);
-    renderer.setViewport(rect.left, glY, rect.width, rect.height);
-    renderer.setScissor(rect.left, glY, rect.width, rect.height);
+    const left = rect.left + window.scrollX;
+    const top = rect.top + window.scrollY;
+    const glY = pageH - (top + rect.height);
+    renderer.setViewport(left, glY, rect.width, rect.height);
+    renderer.setScissor(left, glY, rect.width, rect.height);
     renderer.render(cell.scene, cell.camera);
   }
 }

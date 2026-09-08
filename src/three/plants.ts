@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { PlanState, Crop, ScenarioType } from '@/types';
 import { parseKey } from '@/lib/plan';
-import { growthProgress, scenarioGrowthMod, stageForScale, type GrowthModCtx } from '@/lib/growth';
+import { growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
 import { makeCropFor } from '@/creative/crops/map';
 
 /**
@@ -333,7 +333,9 @@ export function buildPlants(
     const crop = cropById.get(cropId);
     if (!crop) continue;
 
-    const fullHeight = getPlantHeight(crop);
+    // Both the voxel-instanced and procedural paths derive target heights from
+    // fullHeight, so one multiplier shrinks the whole batch per surface.
+    const fullHeight = getPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
     const mod = scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx) : null;
     const cropStress = mod?.stress ?? 0;
     const group = new THREE.Group();

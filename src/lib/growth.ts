@@ -54,6 +54,18 @@ export const SURFACE_SHELTER: Record<PlanSurface, number> = {
 };
 
 /**
+ * Max plant height multiplier per surface: a 1.5 m tent cannot hold a 2.6 m
+ * tomato, so plants on enclosed surfaces are capped to a size the enclosure
+ * could actually contain.
+ */
+export const SURFACE_PLANT_SCALE: Record<PlanSurface, number> = {
+  outdoor: 1,
+  greenhouse: 0.7,
+  tent: 0.45,
+  indoor: 0.6,
+};
+
+/**
  * How a scenario modulates one crop's growth, from its real temp/water
  * tolerance. Heat/cold stress when the effective temp leaves
  * [minTempC, maxTempC]; water stress when precipitation is cut and the crop

@@ -1,8 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { plantsForArea } from '@/lib/plan';
+import { dateFromMonthDay, isValidMonthDay } from '@/lib/frost';
+import { monthDayLabel } from '@/lib/calendar';
 import type { Crop } from '@/types';
-import { sowWindow } from './usePlanEditor';
+import { fallSowWeeksBeforeFirstFrost, sowWindow } from './usePlanEditor';
 import type { PlanEditor } from './usePlanEditor';
 
 const SUN_LABELS: Record<Crop['sunRequirement'], string> = {
@@ -19,6 +21,21 @@ const NITROGEN_LABELS: Record<Crop['nitrogenNeed'], string> = {
 
 export function SelectionPanel({ editor }: { editor: PlanEditor }) {
   const { selectedInfo } = editor;
+  const crop = selectedInfo?.crop ?? null;
+  const fallWeeks = crop ? fallSowWeeksBeforeFirstFrost(crop) : null;
+  // Bonus: resolve the fall window to calendar dates from the farm's
+  // first-frost date (already loaded via usePlanEditor — no new queries).
+  // Aim at the upcoming first frost; roll to next year once it has passed.
+  let fallSowLabel: string | null = null;
+  const firstFrost = editor.farm?.firstFrost;
+  if (fallWeeks !== null && firstFrost && isValidMonthDay(firstFrost)) {
+    const today = new Date();
+    let frost = dateFromMonthDay(firstFrost, today.getFullYear());
+    if (frost.getTime() < today.getTime()) frost = dateFromMonthDay(firstFrost, today.getFullYear() + 1);
+    const sowBy = new Date(frost);
+    sowBy.setDate(sowBy.getDate() - fallWeeks * 7);
+    fallSowLabel = `around ${monthDayLabel(sowBy)} · first frost ${monthDayLabel(frost)}`;
+  }
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -44,6 +61,7 @@ export function SelectionPanel({ editor }: { editor: PlanEditor }) {
                   </div>
                   <div>~{selectedInfo.crop.growthDays} days to harvest</div>
                   <div>Sow: {sowWindow(selectedInfo.crop)}</div>
+                  {fallSowLabel && <div>Fall: sow {fallSowLabel}</div>}
                 </div>
                 <div className="flex flex-wrap gap-1">
                   <Badge variant="secondary" className="text-[11px]">☀️ {SUN_LABELS[selectedInfo.crop.sunRequirement]}</Badge>

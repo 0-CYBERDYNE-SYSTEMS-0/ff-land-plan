@@ -240,7 +240,7 @@ export function conflictCellSet(pairings: PlanPairing[]): Set<string> {
 //
 // Consumers: BlueprintCanvas spacing toggle passes this Set as
 // RenderOptions.spacingViolations (red tint under plants). PNG export and
-// src/three/groundTexture.ts never pass it — the layer is opt-in only.
+// the 3D ground-tile path never pass it — the layer is opt-in only.
 
 // Deterministic output cap so huge plans stay cheap to render.
 export const MAX_SPACING_VIOLATIONS = 400;

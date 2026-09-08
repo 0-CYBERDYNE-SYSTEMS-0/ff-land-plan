@@ -53,10 +53,16 @@ export function makeRootCarrot(stage: number, pal: CropPalette = CARROT_PAL): Re
     frond(sway, Math.round(dx * (i % 3 === 0 ? 1 : 0)), crownY, Math.round(dz * (i % 4 === 0 ? 1 : 0)), dx || 1, dz, l, i % 2 ? tipC : shade(tipC, pal.dark, 0.18), sideC, 80 + i * 7 + stage);
   }
 
+  // s3 bloom: white umbel on a tall scape — the carrot-family signature
+  if (stage === 3) {
+    vline(sway, 0, crownY, 0, 0, 6, 0, shade(f, pal.stem, 0.5));
+    umbel(sway, 0, 6.6, 0, 1, pal.accent);
+  }
+
   // root telegraphing: colored shoulder pushing at the soil
   if (stage === 4) {
-    blob(stat, 0, 0.45, 0, 1.2, 0.55, 1.2, mixShoulder(pal), shade(mixShoulder(pal), PALETTE.soilDark, 0.35), { seed: 44 });
-    put(stat, 0, 0.95, 0, shade(mixShoulder(pal), 0xffffff, 0.25), 0.5);
+    blob(stat, 0, 0.75, 0, 1.6, 0.7, 1.6, mixShoulder(pal), shade(mixShoulder(pal), PALETTE.soilDark, 0.35), { seed: 44 });
+    put(stat, 0, 1.5, 0, shade(mixShoulder(pal), 0xffffff, 0.25), 0.55);
   }
   if (stage === 5) {
     // harvest-ready: proud shoulder ring, soil cracked away, ferns lush
@@ -67,7 +73,7 @@ export function makeRootCarrot(stage: number, pal: CropPalette = CARROT_PAL): Re
   return finishPlant(stat, sway);
 }
 
-const mixShoulder = (pal: CropPalette): number => shade(pal.unripe, pal.fruit, 0.5);
+const mixShoulder = (pal: CropPalette): number => shade(pal.unripe, pal.fruit, 0.7);
 
 export const RADISH_PAL: Partial<CropPalette> = {
   mature: 0x4a8a3a,
@@ -109,8 +115,8 @@ export function makeAllium(stage: number, pal: CropPalette = ALLIUM_PAL): Return
   const tip = shade(body, pal.dark, 0.45);   // tube openings read darker
 
   if (stage === 1) {
-    tubeLeaf(sway, 0, 0, 0, 2, 0.4, 0, body, tip);
-    tubeLeaf(sway, 0, 0, 0, 2, -0.3, 0.5, body, tip);
+    tubeLeaf(sway, 0, 0, 0, 2, 0.6, 0, body, tip);
+    tubeLeaf(sway, 1, 0, 0, 2, -0.5, 0.5, body, tip);
     return finishPlant(stat, sway);
   }
 
@@ -135,17 +141,19 @@ export function makeAllium(stage: number, pal: CropPalette = ALLIUM_PAL): Return
   }
 
   if (stage === 5) {
-    // bulb swollen and lifted, tops fallen over in smooth connected arcs
-    blob(stat, 0, 0.8, 0, 1.5, 1.05, 1.5, pal.fruit, shade(pal.fruit, pal.dark, 0.3), { seed: 55 });
-    blob(stat, 0, 1.75, 0, 0.9, 0.5, 0.9, shade(pal.fruit, 0xffffff, 0.32), null);
-    put(stat, 0, 2.1, 0, shade(body, pal.dark, 0.2), 0.7); // neck
-    const arcs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]];
+    // bulb swollen and lifted clear of the soil, tops fallen over in arcs that spring from the neck
+    blob(stat, 0, 1.1, 0, 1.9, 1.3, 1.9, pal.fruit, shade(pal.fruit, pal.dark, 0.22), { seed: 55 });
+    blob(stat, 0, 2.3, 0, 0.95, 0.5, 0.95, shade(pal.fruit, 0xffffff, 0.32), null);
+    put(stat, 0, 2.9, 0, shade(body, pal.dark, 0.2), 0.7); // neck
+    // four cardinal arcs keep diagonal sight-lines open onto the golden bulb
+    const arcs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     for (let i = 0; i < arcs.length; i++) {
       const [dx, dz] = arcs[i];
       const c = i % 2 ? body : shade(body, pal.light, 0.2);
-      vline(sway, 0, 2, 0, dx * 2, 3, dz * 2, c);
-      vline(sway, dx * 2, 3, dz * 2, dx * 4, 1, dz * 4, shade(c, pal.dark, 0.18));
-      vline(sway, dx * 4, 1, dz * 4, dx * 5, 0, dz * 5, shade(body, pal.dark, 0.32));
+      // first segment rises from the neck top so the golden bulb stays fully visible
+      vline(sway, 0, 2.9, 0, dx * 1.2, 3.4, dz * 1.2, c);
+      vline(sway, dx * 1.2, 3.4, dz * 1.2, dx * 3.4, 1.4, dz * 3.4, shade(c, pal.dark, 0.18));
+      vline(sway, dx * 3.4, 1.4, dz * 3.4, dx * 4.4, 0.3, dz * 4.4, shade(body, pal.dark, 0.32));
     }
   }
   return finishPlant(stat, sway);
@@ -251,10 +259,15 @@ export function makePotato(stage: number, pal: CropPalette = POTATO_PAL): Return
     }
   }
   if (stage === 5) {
-    // the pick-me: tubers pushed out of the cracked hill
-    put(stat, 2.1, 0.9, 1.1, pal.fruit, 0.95);
-    put(stat, -1.9, 0.8, -1.3, shade(pal.fruit, PALETTE.shadow, 0.15), 0.85);
-    put(stat, 0.6, 1.0, -2.2, shade(pal.fruit, 0xffffff, 0.12), 0.8);
+    // the pick-me: lumpy tubers rolled out of the cracked hill onto open soil
+    const tuber = (x: number, y: number, z: number, c: number): void => {
+      put(stat, x, y, z, c, 0.95);
+      put(stat, x + 0.3, y + 0.5, z + 0.15, shade(c, 0xffffff, 0.14), 0.6);
+      put(stat, x, y - 0.35, z, PALETTE.soilDark, 0.7); // cracked crater shadow
+    };
+    tuber(2.5, 0.7, 1.5, pal.fruit);
+    tuber(-2.3, 0.6, -1.7, shade(pal.fruit, PALETTE.shadow, 0.12));
+    tuber(0.9, 0.7, -2.7, shade(pal.fruit, 0xffffff, 0.1));
   }
   return finishPlant(stat, sway);
 }

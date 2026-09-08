@@ -48,32 +48,45 @@ export function makeHerbClump(stage: number, pal: CropPalette = HERBCLUMP_PAL, o
     return finishPlant(stat, sway);
   }
 
-  const H = [0, 0, 3, 4, 5, 5][stage];
-  const nStems = [0, 0, 4, 5, 6, 7][stage];
+  const H = [0, 0, 2, 3, 4, 4][stage];
+  const nStems = [0, 0, 5, 6, 7, 8][stage];
 
   for (let i = 0; i < nStems; i++) {
     const [dx, dz] = R8[i % 8];
     const sh = Math.max(2, H - (i % 3));
     const sx = dx > 0 ? 1 : dx < 0 ? -1 : 0;
     const sz = dz > 0 ? 1 : dz < 0 ? -1 : 0;
-    vline(stat, sx * 0.4, 0, sz * 0.4, sx, sh, sz, pal.stem);
+    // i === 0 rises through the clump core; the rest lean outward
+    const tx = i === 0 ? 0 : sx, tz = i === 0 ? 0 : sz;
+    vline(stat, tx * 0.4, 0, tz * 0.4, tx, sh, tz, pal.stem);
 
     if (feathery) {
       // dill — umbrella wisps instead of broad leaves
-      frond(sway, sx, sh - 1, sz, sx || 1, sz || -1, 2 + (i % 2), shade(f, pal.light, 0.25), shade(f, pal.dark, 0.2), 190 + i * 9);
+      frond(sway, tx, sh - 1, tz, dx || 1, dz || -1, 2 + (i % 2), shade(f, pal.light, 0.25), shade(f, pal.dark, 0.2), 190 + i * 9);
       continue;
     }
 
-    // opposite leaf pairs climbing the stem — leafy to the base (basil habit)
+    // opposite leaf pairs climbing the stem, offsets alternating per level
+    // so the clump reads knobby-leafy rather than slabby columns (basil habit)
     for (let k = 0; k <= sh; k++) {
+      const y = sh - k + sh * 0.15;
+      const o = k % 2;
       const scale = k === sh ? 1 : 0.78;
-      put(sway, sx + (sz ? 1 : 0), sh - k + sh * 0.15, sz + (sx ? 1 : 0),
+      put(sway, tx + (sz ? o : 0), y, tz + (sx ? o : 0),
         (i + k) % 2 ? f : shade(f, pal.light, 0.16), 0.9 * scale + 0.1);
-      put(sway, sx - (sz ? 1 : 0), sh - k + sh * 0.15, sz - (sx ? 1 : 0), shade(f, pal.dark, 0.14), 0.85 * scale);
+      put(sway, tx - (sz ? o : 0), y + 0.3, tz - (sx ? o : 0), shade(f, pal.dark, 0.14), 0.85 * scale);
     }
     // tip pair
-    put(sway, sx * 1.8, sh + 0.7, sz * 1.8, vein, 0.85);
-    put(sway, sx * 1.2 - (sz || 0), sh + 0.9, sz * 1.2 - (sx || 0), f, 0.75);
+    put(sway, tx * 1.8, sh + 0.7, tz * 1.8, vein, 0.85);
+    put(sway, tx * 1.2 - (sz || 0), sh + 0.9, tz * 1.2 - (sx || 0), f, 0.75);
+  }
+
+  // s3: buds tightening at the tips (the spikes open from s4)
+  if (stage === 3) {
+    for (let i = 0; i < 4; i++) {
+      const [dx, dz] = R8[(i * 2 + 1) % 8];
+      flowerDot(sway, Math.round(dx * 0.8), H + 0.9, Math.round(dz * 0.8), shade(pal.accent, pal.dark, 0.25), 0.42);
+    }
   }
 
   // flower spikes from s4 (pinch them and the leaves keep coming)
@@ -137,6 +150,8 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
     vline(stat, 0, 0, 0, 0, 2, 0, pal.stem);
     put(sway, 0.6, 2.4, 0, f, 0.7);
     put(sway, -0.6, 2.1, 0.3, needle, 0.6);
+    put(sway, 0, 2.8, -0.6, shade(f, pal.light, 0.3), 0.55);
+    put(sway, -0.2, 1.4, 0.6, needle, 0.6);
     return finishPlant(stat, sway);
   }
 
@@ -205,12 +220,17 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
     const stemC = shade(f, wood, 0.3); // green-grey stems, wood reads only at the base
     let x = sx, y = 0, z = sz;
     for (let k = 0; k <= sh; k++) {
-      x = sx + Math.round(dx * 0.3 * k); z = sz + Math.round(dz * 0.3 * k); y = k + (ringR ? 0 : 0);
+      x = sx + Math.round(dx * 0.38 * k); z = sz + Math.round(dz * 0.38 * k); y = k + (ringR ? 0 : 0);
       put(stat, x, y, z, k < 1 && i % 2 === 0 ? wood : stemC);
-      // tight needle ticks hugging the stem
+      // needle whorls alternate sides per level so columns never slab
       const px = -(dz || 1), pz = dx || -1;
-      put(sway, x + px, y, z + pz, k % 2 ? needle : shade(needle, pal.light, 0.2), 0.75);
-      put(sway, x - px, y + 0.35, z - pz, needle, 0.7);
+      if (k % 2 === 0) {
+        put(sway, x + px, y, z + pz, k % 4 === 0 ? shade(needle, pal.light, 0.2) : needle, 0.75);
+        put(sway, x - px, y + 0.35, z - pz, needle, 0.7);
+      } else {
+        put(sway, x, y + 0.2, z + pz, needle, 0.72);
+        put(sway, x + px, y + 0.3, z, shade(needle, pal.light, 0.18), 0.7);
+      }
       if (k >= 2) put(sway, x, y + 0.55, z, shade(needle, pal.light, 0.28), 0.55);
     }
     // bud then bloom whorl at the tips

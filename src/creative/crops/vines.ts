@@ -7,7 +7,7 @@
 import { PALETTE, Voxel, rng } from '@/creative/voxel';
 import {
   CropPalette, foliage, shade, put, vline, soilPad, soilPadEllipse, finishPlant,
-  sproutLoop, blade, tendril, blossomBell, flowerDot, pod, fivePetal, blob,
+  sproutLoop, blade, tendril, flowerDot, pod, fivePetal, blob,
 } from './shared';
 
 const R8: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
@@ -29,19 +29,20 @@ export const CUCURBIT_PAL: CropPalette = {
 
 /** Ground-hugging deterministic vine path — later stages extend the same run. */
 const vineAt = (i: number): [number, number] => [
-  Math.round(i * 1.15),
-  Math.round(Math.sin(i * 0.85) * 1.7),
+  Math.round(i * 0.62),
+  Math.round(Math.sin(i * 0.85) * 1.35),
 ];
 
 function cucurbitLeaf(
   sway: Voxel[], x: number, y: number, z: number,
   dx: number, dz: number,
   base: number, edge: number, vein: number, seed: number,
+  len = 4, wMax = 4,
 ): void {
-  blade(sway, x, y, z, dx, dz, 3, 3, 0.55, 0.07, base, vein, edge, seed);
+  blade(sway, x, y, z, dx, dz, len, wMax, 0.55, 0.07, base, vein, edge, seed);
   // rough texture speck
   const rnd = rng(seed);
-  if (rnd() < 0.8) flowerDot(sway, x + dx * 1.5, y + 1.05, z + dz * 1.5, edge, 0.35);
+  if (rnd() < 0.8) flowerDot(sway, x + dx * (len / 2), y + 1.05, z + dz * (len / 2), edge, 0.35);
 }
 
 /** Pumpkin/zucchini/melon/cucumber: trailing vine with blossoms and a fruit set. */
@@ -49,7 +50,7 @@ export function makeCucurbit(stage: number, pal: CropPalette = CUCURBIT_PAL): Re
   const stat: Voxel[] = [];
   const sway: Voxel[] = [];
   // the earth patch grows with the vine run so the plant never leaves its bed
-  if (stage >= 2) soilPadEllipse(stat, 4.5 + stage * 1.6, 3.5 + stage * 0.7, 111);
+  if (stage >= 2) soilPadEllipse(stat, 4 + stage * 0.7, 3 + stage * 0.35, 111);
   else soilPad(stat, 3.5, 111);
 
   if (stage === 0) {
@@ -91,28 +92,40 @@ export function makeCucurbit(stage: number, pal: CropPalette = CUCURBIT_PAL): Re
     const li = 1 + i * 2;
     const [lx, lz] = vineAt(Math.min(li, runLen));
     const side = i % 2 === 0 ? 1 : -1;
-    cucurbitLeaf(sway, lx, 1.15, lz, side, 0, i % 2 ? f : shade(f, pal.light, 0.18), edge, vein, 130 + i * 9);
+    const leafLen = stage >= 3 ? 4 : 3;
+    cucurbitLeaf(sway, lx, 1.15, lz, side, 0, i % 2 ? f : shade(f, pal.light, 0.18), edge, vein, 130 + i * 9, leafLen, leafLen);
     // a second smaller leaf across the runner keeps the canopy continuous
-    if (stage >= 4) cucurbitLeaf(sway, lx, 0.95, lz, 0, side, shade(f, pal.dark, 0.12), edge, vein, 160 + i * 7);
+    if (stage >= 3) cucurbitLeaf(sway, lx, 0.95, lz, 0, side, shade(f, pal.dark, 0.12), edge, vein, 160 + i * 7, 3, 3);
   }
 
   // blossoms from s3; fruit sets s4; ripe s5
   if (stage >= 3) {
     const [bx, bz] = vineAt(runLen - 2);
+    // bold trumpet blossom — full voxels so it reads at map distance
+    const bell = (x: number, z: number, c: number): void => {
+      put(sway, x, 1.05, z, c, 1);
+      put(sway, x + 0.7, 1.45, z, c, 0.68);
+      put(sway, x - 0.7, 1.45, z, c, 0.68);
+      put(sway, x, 1.45, z + 0.7, c, 0.68);
+      put(sway, x, 1.45, z - 0.7, c, 0.68);
+      put(sway, x, 1.85, z, 0xf6d34a, 0.45); // stamen
+    };
     if (stage === 3) {
-      blossomBell(sway, bx, 1.15, bz, pal.accent, 0xf6d34a);
+      // bells sit beside the runner (z ±2) — leaves sweep along x at z −1..1
+      const [bx4, bz4] = vineAt(4);
+      bell(bx4, bz4 + 2, pal.accent);
       const [bx2, bz2] = vineAt(2);
-      blossomBell(sway, bx2, 1.15, bz2, shade(pal.accent, 0xffffff, 0.12), 0xf6d34a);
+      bell(bx2, bz2 + 2, shade(pal.accent, 0xffffff, 0.12));
     } else if (stage === 4) {
       // small green fruit beside the runner — bright enough to spot
       blob(sway, bx + 1, 1.1, bz + 1, 1.5, 1.2, 1.35, 0xa9c86a, shade(0xa9c86a, pal.dark, 0.3), { seed: 61 });
       flowerDot(sway, bx + 1, 2.35, bz + 1, pal.accent, 0.45); // bloom still attached
     } else {
       // THE fruit — big, ribbed by dither, sitting proud on the soil
-      blob(sway, bx + 1.4, 1.35, bz + 1, 2.3, 1.65, 2.1, pal.fruit, shade(pal.fruit, pal.dark, 0.32), { seed: 62 });
-      blob(sway, bx + 1.4, 2.8, bz + 1, 0.9, 0.45, 0.85, shade(pal.fruit, 0xffffff, 0.22), null); // sheen cap
-      vline(sway, bx + 1.4, 3.2, bz + 1, bx + 1.4, 3.8, bz + 1, shade(pal.stem, pal.dark, 0.25)); // stalk
-      flowerDot(sway, bx + 1.4, 3.9, bz + 1, PALETTE.soilDark, 0.35); // dried blossom
+      blob(sway, bx + 1, 1.35, bz + 1, 2.3, 1.65, 2.1, pal.fruit, shade(pal.fruit, pal.dark, 0.32), { seed: 62 });
+      blob(sway, bx + 1, 2.8, bz + 1, 0.9, 0.45, 0.85, shade(pal.fruit, 0xffffff, 0.22), null); // sheen cap
+      vline(sway, bx + 1, 3.2, bz + 1, bx + 1, 3.8, bz + 1, shade(pal.stem, pal.dark, 0.25)); // stalk
+      flowerDot(sway, bx + 1, 3.9, bz + 1, PALETTE.soilDark, 0.35); // dried blossom
       // second small fruit keeps the vine honest
       const [fx, fz] = vineAt(3);
       blob(sway, fx, 0.95, fz + 1.2, 1.0, 0.85, 0.95, shade(pal.fruit, pal.dark, 0.15), null, { seed: 63 });

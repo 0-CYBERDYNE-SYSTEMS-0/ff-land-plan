@@ -47,6 +47,11 @@ export function makeMushroom(stage: number, pal: CropPalette = MUSHROOM_PAL): Re
       put(sway, sx + Math.round(lean * f), 3 + i, sz, pal.stem, i === h ? 0.8 : 0.68);
     }
     blob(sway, bx, 3 + h, sz, capR, capH, capR, capC, capLight, { seed: (sx * 13 + sz * 7 + 3) | 0 });
+    // bigger caps get a tapered top tier so they dome instead of loaf
+    if (capR >= 1) {
+      blob(sway, bx, 3 + h + capH * 0.7, sz, capR * 0.55, capH * 0.6 + 0.2, capR * 0.55,
+        shade(capC, pal.light, 0.18), capLight, { seed: (sx * 13 + sz * 7 + 4) | 0 });
+    }
     put(sway, bx, 3 + h - 1, sz, pal.accent, capR * 0.85);
   };
 
@@ -82,6 +87,7 @@ export function makeMushroom(stage: number, pal: CropPalette = MUSHROOM_PAL): Re
   shroom(-3, 0, 1, 0.8, 0.5, 0.4);
   if (stage === 5) {
     blob(sway, 0, 6.6, 0, 1.9, 1.2, 1.9, pal.fruit, shade(pal.fruit, pal.light, 0.4), { seed: 5 });
+    blob(sway, 0, 7.4, 0, 1.1, 0.8, 1.1, shade(pal.fruit, pal.light, 0.18), shade(pal.fruit, pal.light, 0.4), { seed: 6 });
     put(sway, 0, 3, 0, pal.stem, 1.0);
     put(sway, -3, 3, -2, pal.stem, 0.45);
   }

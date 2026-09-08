@@ -70,18 +70,19 @@ export function buildHen(): THREE.Group {
   const body = part('body', bodyVox, 0, 3, 0);
   root.add(body);
 
-  // -- head: cube on a short neck, comb + wattle + beak placed with intent
+  // -- head: cube on a short neck, comb + wattle + beak placed with intent.
+  // Skull kept two units tall — a full three-unit cube reads bull-necked.
   const headVox: Voxel[] = [];
   fill(headVox, -1, 4.6, 2, 1, 5.6, 3, white); // neck bridge, overlapping body AND skull
-  fill(headVox, -1, 6, 2, 1, 8, 4, white);
-  put(headVox, 0, 7.1, 4.72, PALETTE.chickenOrange, 0.82); // beak
-  put(headVox, 0, 6.25, 4.55, PALETTE.chickenRed, 0.55); // wattle
+  fill(headVox, -1, 6, 2, 1, 7, 4, white);
+  put(headVox, 0, 6.85, 4.72, PALETTE.chickenOrange, 0.82); // beak
+  put(headVox, 0, 5.9, 4.55, PALETTE.chickenRed, 0.55); // wattle
   // serrated comb: three teeth, middle tallest — rooted in the skull top
-  put(headVox, 0, 8.76, 2.45, PALETTE.chickenRed, 0.66);
-  put(headVox, 0, 9.05, 3.25, PALETTE.chickenRed, 0.86);
-  put(headVox, 0, 8.76, 4.05, PALETTE.chickenRed, 0.6);
+  put(headVox, 0, 7.66, 2.45, PALETTE.chickenRed, 0.66);
+  put(headVox, 0, 7.95, 3.25, PALETTE.chickenRed, 0.86);
+  put(headVox, 0, 7.66, 4.05, PALETTE.chickenRed, 0.6);
   // eyes: black on white, set just above the beak line
-  mirr((s) => put(headVox, s * 1.33, 7.35, 3.35, PALETTE.black, 0.52));
+  mirr((s) => put(headVox, s * 1.33, 6.6, 3.35, PALETTE.black, 0.52));
 
   const head = part('head', headVox, 0, 5.8, 2.4);
   root.add(head);
@@ -417,15 +418,15 @@ export function buildPig(): THREE.Group {
   root.name = 'pig';
   const pink = PALETTE.pigPink;
   const dark = PALETTE.pigDark;
-  const snoutC = mixColor(PALETTE.pigPink, PALETTE.white, 0.22);
+  const snoutC = mixColor(PALETTE.pigPink, PALETTE.white, 0.42);
 
   // -- low, long, chubby body
   const bodyVox: Voxel[] = [];
   fill(bodyVox, -3, 1, -4, 3, 1, 5, pink); // belly sag
-  for (let x = -4; x <= 4; x++) for (let z = -6; z <= 7; z++) put(bodyVox, x, 2, z, pink);
+  for (let x = -4; x <= 4; x++) for (let z = -5; z <= 6; z++) put(bodyVox, x, 2, z, pink);
   for (let y = 3; y <= 6; y++)
     for (let x = -4; x <= 4; x++)
-      for (let z = -7; z <= 8; z++) {
+      for (let z = -6; z <= 7; z++) {
         if (Math.abs(x) === 4 && Math.abs(z) >= 7 && !(y >= 4 && y <= 5)) continue;
         put(bodyVox, x, y, z, pink);
       }
@@ -443,7 +444,7 @@ export function buildPig(): THREE.Group {
   fill(headVox, -1.5, 4.1, 12.6, 1.5, 6.3, 14.3, snoutC); // snout disc, proud
   put(headVox, 0, 3.5, 12.9, mixColor(snoutC, dark, 0.3), 1.6); // jaw hint under the snout
   mirr((s) => {
-    put(headVox, s * 0.72, 5.2, 14.45, dark, 0.5); // nostrils
+    put(headVox, s * 0.72, 5.2, 14.45, dark, 0.66); // nostrils
     put(headVox, s * 2.15, 6.7, 11.4, PALETTE.black, 0.56); // eyes wide-set above snout
   });
   const head = part('head', headVox, 0, 6, 8.5);
@@ -452,8 +453,8 @@ export function buildPig(): THREE.Group {
   // -- upright ears w/ dark tips (head-local coords)
   const earMake = (s: number, nm: string): THREE.Group => {
     const v: Voxel[] = [];
-    put(v, s * 2.1, 2.6, 0.9, pink, 1.3);
-    put(v, s * 2.1, 3.7, 1.25, dark, 0.85);
+    put(v, s * 2.1, 2.6, 0.9, pink, 1.45);
+    put(v, s * 2.1, 3.9, 1.25, dark, 1.0);
     return part(nm, v, s * 2.1, 1.5, 0.9);
   };
   const earL = earMake(1, 'earL');
@@ -879,8 +880,9 @@ export function tickButterfly(pivotObj: THREE.Object3D, t: number): void {
   const r = rigOf(pivotObj);
   const body = r.body;
   if (!body) return;
-  // slow majestic folds with glide phases + gentle hover drift
-  const f = 0.18 + 0.62 * (0.5 + 0.5 * Math.sin(t * 2.25)) * (0.55 + 0.45 * Math.abs(Math.sin(t * 0.9)));
+  // gentle fold oscillation that never closes past ~25° — mid-flap frames
+  // must still read as an open-winged butterfly, not a folded origami tangle
+  const f = 0.12 + 0.34 * (0.5 + 0.5 * Math.sin(t * 1.9)) * (0.6 + 0.4 * Math.abs(Math.sin(t * 0.7)));
   if (r.wingL) r.wingL.rotation.z = pose(r.wingL).rz - f;
   if (r.wingR) r.wingR.rotation.z = pose(r.wingR).rz + f;
   body.position.y = pose(body).py + Math.sin(t * 1.8) * 0.018;

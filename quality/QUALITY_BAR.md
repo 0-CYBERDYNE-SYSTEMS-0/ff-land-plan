@@ -81,9 +81,12 @@ no floating blocks, no flat texture walls.
   big X-brace doors, hay loft door up top, gabled roof with stepped eaves and ridge,
   stone foundation course, weathered tone variation per plank run. This is the icon —
   spend detail here.
-- `greenhouse`: glazed gable with visible frame members every few voxels, operable
-  ridge vent cracked open, door with handle, interior bench + pots silhouetted through
-  glass, glass slightly translucent with bright specular-cap edges.
+- `greenhouse`: arched hoophouse-style glasshouse — brick knee wall base, slightly
+  gothic arch (near-vertical eaves, subtle crown peak) of translucent panes,
+  galvanized hoop ribs + purlins reading through the glass, framed end walls with
+  glazed door and louvre, ridge vent flaps propped open, interior bench + pots
+  silhouetted through glass. Must stay visually distinct from `polytunnel`
+  (glass panels on steel over a knee wall, not a sheet of film on timber rails).
 - `polytunnel`: rounded hoop ribs visible through translucent film, film sagging
   subtly between ribs, tied-down ends with vent flaps.
 - `chicken-coop`: raised on legs, ramp with cleats, nest box protruding, roof

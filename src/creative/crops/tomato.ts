@@ -135,7 +135,8 @@ export function makeTomato(stage: number, pal: CropPalette = TOMATO_PAL): Return
   const leafDirs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   const nLeaves = [0, 0, 5, 6, 7, 8][stage];
   for (let i = 0; i < nLeaves; i++) {
-    const y = 1 + Math.round((i * (H - 3)) / Math.max(1, nLeaves - 1));
+    // spread over the whole cordon (H-1) so young plants never bunch into a block
+    const y = 1 + Math.round((i * (H - 1)) / Math.max(1, nLeaves - 1));
     const [dx, dz] = leafDirs[i % 4];
     const f = foliage(pal, stage);
     // lower leaves run longer and droop harder — classic cordon profile
