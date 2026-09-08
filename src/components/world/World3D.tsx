@@ -4,7 +4,9 @@ import * as THREE from 'three';
 import type { PlanEditor } from '@/components/designer/usePlanEditor';
 import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
-import { growthProgress, scenarioGrowthMod, stageForScale } from '@/lib/growth';
+import { fetchClimateNormals } from '@/lib/climate';
+import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, type GrowthModCtx } from '@/lib/growth';
+import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
 import type { ScenarioType, Weather, WeatherCurrent } from '@/types';
 import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '@/three/animals';
 import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
@@ -13,7 +15,7 @@ import { createClouds, type Clouds } from '@/three/clouds';
 import { createEngine, setEngineOrbitEnabled, type Engine } from '@/three/engine';
 import { createFlightCamera, type FlightCamera } from '@/three/flight';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
-import { buildPlants, disposePlants, type PlantBatch, swayPlants, updatePlants } from '@/three/plants';
+import { advancePlantGrowth, buildPlants, disposePlants, type PlantBatch, type PlantUpdateOptions, swayPlants, updatePlants } from '@/three/plants';
 import { buildGround, disposeGround, updateGround, type GroundBatch } from '@/three/ground';
 import { buildShell, disposeShell, type ShellGroup } from '@/three/shell';
 import { createSky, type Sky } from '@/three/sky';
@@ -24,7 +26,14 @@ import { buildWaterPlanes, disposeWaterPlanes, updateWaterPlanes, type WaterPlan
 import { createGrowthFX, type GrowthFX } from '@/three/growth-fx';
 import { createPerfHUD, type PerfHUD } from '@/three/perf';
 import { createWeatherFX, type WeatherFX } from '@/three/weather-fx';
-import { SimDrawer } from './SimDrawer';
+import { SimDrawer, type CropProgressRow, type ClimateBaselineInfo } from './SimDrawer';
+
+/** Provenance tag for the growth model's baseline temperature (spec §3.3:
+ * every number traces to its source). */
+const DEFAULT_CLIMATE_BASELINE: ClimateBaselineInfo = {
+  tempC: DEFAULT_BASELINE_TEMP_C,
+  source: 'default-20c',
+};
 
 /** Home camera framing — the load-in view and the dock's Reset target share
  * one source of truth so "Reset view" restores exactly the initial shot. */
@@ -113,9 +122,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
 
   // Live weather consumed by the rAF loop each frame (state below is only for the chip).
   const weatherRef = useRef<WeatherCurrent | null>(null);
-  // Growth-model climate context fed to buildPlants/updatePlants/HUD; empty
-  // (legacy 20 °C baseline) until live weather arrives.
-  const growthCtxRef = useRef<{ ambientTempC?: number }>({});
+  // Growth-model climate context fed to buildPlants/updatePlants/HUD. Starts
+  // empty (legacy 20 °C baseline) and gains live ambientTempC + farm
+  // baselineTempC (ERA5 normals) as their fetches land.
+  const growthCtxRef = useRef<{ ambientTempC?: number; baselineTempC?: number }>({});
 
   // Launch params (test hooks): fftime = initial timeOfDay, ffdebug = open Perf HUD.
   const [scrubDate, setScrubDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -130,11 +140,19 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   const [playing, setPlaying] = useState(false);
   const [simSpeed, setSimSpeed] = useState<1 | 7 | 30>(1);
   const [scenario, setScenario] = useState<ScenarioType>('baseline');
-  // Season-end auto-pause: scrub date (ISO) when EVERY planted crop first read
-  // fully mature during the current playback; null = not reached yet.
+  // Season-end auto-pause: scrub date (ISO) when EVERY dated planted crop first
+  // read fully mature during the current playback; null = not reached yet.
   const matureSinceRef = useRef<string | null>(null);
   const [seasonComplete, setSeasonComplete] = useState(false);
   const seasonDrawerShownRef = useRef(false);
+  // Monotonic playback clamp (legacy-path stopgap until the stateful sim
+  // engine): while playing, per-cell max progress so a scenario/ambient change
+  // mid-playback re-rating the elapsed period can never make crops shrink.
+  const monotonicProgressRef = useRef<Map<string, number> | null>(null);
+  // rAF-dt sim clock: fractional sim-days accumulated since the last committed
+  // integer day (replaces the old setInterval, which kept firing in hidden
+  // tabs while rAF — and the whole world — was paused).
+  const simDayAccumRef = useRef(0);
   const timeRef = useRef(timeOfDay);
   const autoTimeRef = useRef(false);
   const audioOnRef = useRef(false);
@@ -150,6 +168,9 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   // State mirror of weatherRef.tempC so memoized growth rows recompute when
   // the live reading lands (refs alone don't trigger renders).
   const [ambientTempC, setAmbientTempC] = useState<number | null>(null);
+  // Climate baseline provenance for the drawer chip: the growth model runs on
+  // farm-specific ERA5 normals once fetched, until then the honest default.
+  const [climateBaseline, setClimateBaseline] = useState<ClimateBaselineInfo>(DEFAULT_CLIMATE_BASELINE);
   const [showDebug, setShowDebug] = useState(() => readLaunchParams().get('ffdebug') === '1');
   const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
   const [audioOn, setAudioOn] = useState(false);
@@ -163,6 +184,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   scrubDateRef.current = scrubDate;
   const scenarioRef = useRef<ScenarioType>(scenario);
   scenarioRef.current = scenario;
+  // rAF-loop mirrors: the sim clock in the update closure reads these refs.
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
+  const simSpeedRef = useRef<1 | 7 | 30>(simSpeed);
+  simSpeedRef.current = simSpeed;
   showDebugRef.current = showDebug;
 
   const achievements = useRef(createAchievementSystem());
@@ -203,6 +229,23 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
       .catch((err: unknown) => {
         console.warn('weather unavailable, using defaults', err);
       });
+    return () => { cancelled = true; };
+  }, [editor.farm]);
+
+  // Climate baseline (ERA5 normals) — kills the invisible 20 °C default by
+  // feeding the growth model this farm's real growing-season mean. Direct
+  // call, NOT useQuery: fetchClimateNormals caches forever, dedupes inflight
+  // and never throws, and the global QueryClient's staleTime: Infinity +
+  // hostile default queryFn make new casual queries a trap (HANDOFF trap 2).
+  useEffect(() => {
+    const farm = editor.farm;
+    if (!farm) return;
+    let cancelled = false;
+    void fetchClimateNormals(farm.lat, farm.lng).then((normals) => {
+      if (cancelled || !normals) return;
+      growthCtxRef.current.baselineTempC = normals.baselineTempC; // growth model reads the ref
+      setClimateBaseline({ tempC: normals.baselineTempC, source: 'era5-normals' });
+    });
     return () => { cancelled = true; };
   }, [editor.farm]);
 
@@ -320,6 +363,27 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
     const update = (dt: number) => {
       const t = performance.now() * 0.001;
 
+      // Sim clock — rAF-dt accumulation. rAF pauses in hidden tabs, so the
+      // clock pauses with the world (the old setInterval kept ticking and
+      // desynced). dt is clamped so a resume burst after a hidden tab doesn't
+      // fast-forward the season. State commits only on whole sim-days.
+      if (playingRef.current) {
+        simDayAccumRef.current += Math.min(dt, 0.25) * simSpeedRef.current;
+        if (simDayAccumRef.current >= 1) {
+          const whole = Math.floor(simDayAccumRef.current);
+          simDayAccumRef.current -= whole;
+          // UTC day-number math (not setDate) so DST-transition nights in
+          // small-positive-offset zones can't stall the clock
+          const iso = isoFromDayNumber(isoDayNumber(scrubDateRef.current) + whole);
+          if (iso !== scrubDateRef.current) {
+            scrubDateRef.current = iso; // coherent for the next tick even pre-render
+            setScrubDate(iso);          // ~≤30 commits/sec at 1×/month speed
+          }
+        }
+      } else {
+        simDayAccumRef.current = 0;
+      }
+
       // Auto time cycle
       if (autoTimeRef.current) {
         timeRef.current = (timeRef.current + dt * 0.02) % 1;
@@ -356,6 +420,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
       // Plant sway
       const windStr = w.windSpeedKmh / 20;
       swayPlants(plantBatchesRef.current, cropByIdRef.current, t, windStr);
+
+      // Smooth growth — ease each planted cell's visual progress toward the
+      // target captured by the last reconcile (allocation-free, ref-reads
+      // only, no scene rebuilds).
+      advancePlantGrowth(plantBatchesRef.current, dt);
 
       // Growth FX
       growthFXRef.current?.update(dt);
@@ -558,13 +627,43 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
     }
   }, [editor.planVersion, editor.cropById, showHistory]);
 
-  // Growth-only update: advancing the sim date (or switching scenario, or the
-  // live ambient temp landing) must NOT rebuild ground/structures/animals —
-  // only the plant stages change.
+  // Growth-only update: advancing the sim date (or switching scenario, the
+  // climate baseline landing, or the live ambient temp arriving) must NOT
+  // rebuild ground/structures/animals — only the plant stages change, and
+  // updatePlants now RECONCILES (diffs per-cell assignments) instead of
+  // disposing + rebuilding geometry.
   useEffect(() => {
     const engine = engineRef.current;
     const plan = editor.planRef.current;
     if (!engine || !plan) return;
+    const ctx: GrowthModCtx = {
+      ambientTempC: ambientTempC ?? undefined,
+      baselineTempC: climateBaseline.source === 'era5-normals' ? climateBaseline.tempC : undefined,
+    };
+
+    // Monotonic playback clamp (legacy-path stopgap until the stateful sim
+    // engine): while playing, each cell's progress is the max ever computed
+    // for it, so a scenario/ambient change mid-playback re-rating the elapsed
+    // period can't make crops shrink. Paused/manual scrubs stay a pure
+    // projection of the date (clamping there would break scrubbing back).
+    let opts: PlantUpdateOptions | undefined;
+    if (playingRef.current) {
+      const clamp = monotonicProgressRef.current ?? new Map<string, number>();
+      const date = new Date(scrubDate);
+      for (const [key, cropId] of Object.entries(plan.planting)) {
+        const crop = editor.cropById.get(cropId);
+        if (!crop) continue;
+        const mod = scenarioGrowthMod(crop, scenarioRef.current, plan.surface ?? 'outdoor', ctx);
+        const p = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
+        const prev = clamp.get(key);
+        if (prev === undefined || p > prev) clamp.set(key, p);
+      }
+      monotonicProgressRef.current = clamp;
+      opts = { progressByCell: clamp };
+    } else {
+      monotonicProgressRef.current = null;
+    }
+
     plantBatchesRef.current = updatePlants(
       plantBatchesRef.current,
       plan,
@@ -572,9 +671,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
       engine.scene,
       new Date(scrubDate),
       scenario,
-      { ambientTempC: ambientTempC ?? undefined },
+      ctx,
+      opts,
     );
-  }, [scrubDate, scenario, ambientTempC, editor.cropById]);
+  }, [scrubDate, scenario, ambientTempC, climateBaseline, editor.cropById]);
 
   // Check rain/snow achievement
   useEffect(() => {
@@ -601,24 +701,16 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
   useEffect(() => { autoTimeRef.current = autoTime; }, [autoTime]);
   useEffect(() => { audioOnRef.current = audioOn; }, [audioOn]);
 
-  // Simulate playback: one tick per real second advancing exactly `simSpeed`
-  // sim days, so the speed labels mean what they say (1 day / 1 week /
-  // 1 month per real second).
-  useEffect(() => {
-    if (!playing) return;
-    const id = window.setInterval(() => {
-      setScrubDate((prev) => {
-        const next = new Date(prev);
-        next.setDate(next.getDate() + simSpeed);
-        return next.toISOString().slice(0, 10);
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [playing, simSpeed]);
+  // Simulate playback: the sim clock lives in the rAF update closure above —
+  // dt accumulation at `simSpeed` sim-days per real second (1 day / 1 week /
+  // 1 month — labels stay honest), committed to scrubDate state only when the
+  // integer sim-day changes. No setInterval: hidden tabs pause rAF and now
+  // pause the clock with it.
 
   // Reset the maturity anchor + completion hint when playback (re)starts...
   useEffect(() => {
     if (!playing) return;
+    monotonicProgressRef.current = null; // fresh clamp window per playback run
     matureSinceRef.current = null;
     setSeasonComplete(false);
     seasonDrawerShownRef.current = false;
@@ -640,10 +732,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
     setDrawerOpen(true);
   }, [seasonComplete]);
 
-  // While playing, once EVERY planted crop is fully mature, let the season run
-  // at most 14 more sim days, then auto-pause with a completion hint. Same
-  // progress math as the cropProgress HUD rows; no planted cells never pauses;
-  // cells without plantedAt read mature (growthProgress returns 1).
+  // While playing, once EVERY dated planted crop is fully mature, let the
+  // season run at most 14 more sim days, then auto-pause with a completion
+  // hint. Same progress math as the cropProgress HUD rows. Cells WITHOUT a
+  // plantedAt date are not countable as mature (a date-less plan must never
+  // auto-pause) — growthProgress() returns 1 for them, so they are excluded
+  // before the all-mature check.
   useEffect(() => {
     if (!playing) return;
     const plan = editor.planRef.current;
@@ -659,15 +753,20 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
     }
     const date = new Date(scrubDate);
     let allMature = true;
+    let datedCells = 0;
     for (const [key, cropId] of Object.entries(plan.planting)) {
+      const plantedAt = plan.plantedAt?.[key];
+      if (!plantedAt) continue; // no sowing date → not mature, just unknown
+      datedCells++;
       const crop = cropByIdRef.current.get(cropId);
       if (!crop) continue;
       const mod = scenarioGrowthMod(crop, scenarioRef.current, plan.surface ?? 'outdoor', growthCtxRef.current);
-      if (growthProgress(crop, plan.plantedAt?.[key], date, mod.rate) < 1) {
+      if (growthProgress(crop, plantedAt, date, mod.rate) < 1) {
         allMature = false;
         break;
       }
     }
+    if (datedCells === 0) return; // no sowing dates anywhere → never auto-pause
     if (allMature) matureSinceRef.current = scrubDate;
   }, [playing, scrubDate, scenario, editor.planVersion]);
 
@@ -687,30 +786,54 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
     return Math.max(0, Math.floor((new Date(scrubDate).getTime() - earliestPlantedAt.getTime()) / 86_400_000));
   }, [earliestPlantedAt, scrubDate]);
 
-  // Per-crop growth stage/progress for the HUD.
+  // Per-crop growth stage/progress for the HUD. Rows are keyed by
+  // (cropId, plantedAt) — the same crop planted on two dates is TWO crops in
+  // reality (different progress); deduping by cropId alone hid the second
+  // sowing. Optionally labelled "Name · Mar 2" to disambiguate the rows.
   const cropProgress = useMemo(() => {
     const plan = editor.planRef.current;
     if (!plan) return [];
     const date = new Date(scrubDate);
-    const rows: { id: number; name: string; stage: number; pct: number; stress: number }[] = [];
-    const seen = new Set<number>();
+    const ctx: GrowthModCtx = {
+      ambientTempC: ambientTempC ?? undefined,
+      baselineTempC: climateBaseline.source === 'era5-normals' ? climateBaseline.tempC : undefined,
+    };
+    const rows: CropProgressRow[] = [];
+    const seen = new Set<string>();
     for (const [key, cropId] of Object.entries(plan.planting)) {
-      if (seen.has(cropId)) continue;
-      seen.add(cropId);
+      const plantedAt = plan.plantedAt?.[key] ?? '';
+      const dedupeKey = `${cropId}|${plantedAt}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
       const crop = editor.cropById.get(cropId);
       if (!crop) continue;
-      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', { ambientTempC: ambientTempC ?? undefined });
+      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', ctx);
       const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
+      // plantedAt may be date-only ("YYYY-MM-DD", scrub input) or full ISO
+      // (seed data stores toISOString()) — parse each correctly so labels
+      // never read "Invalid Date".
+      let planted: Date | null = null;
+      if (plantedAt) {
+        planted = /^\d{4}-\d{2}-\d{2}$/.test(plantedAt)
+          ? new Date(`${plantedAt}T00:00:00`)
+          : new Date(plantedAt);
+      }
       rows.push({
         id: cropId,
         name: crop.name,
+        label: planted && !Number.isNaN(planted.getTime())
+          ? `${crop.name} · ${planted.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+          : undefined,
+        plantedAt,
         stage: stageForScale(prog),
         pct: Math.round(prog * 100),
         stress: mod.stress,
       });
     }
-    return rows.sort((a, b) => a.name.localeCompare(b.name));
-  }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC]);
+    return rows.sort(
+      (a, b) => a.name.localeCompare(b.name) || (a.label ?? '').localeCompare(b.label ?? ''),
+    );
+  }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC, climateBaseline]);
 
   // Update weather FX + audio params in the rAF loop already handles audio
   const lastAchievement = achievements.current.unlocked[achievements.current.unlocked.length - 1];
@@ -925,6 +1048,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema }: Worl
         onScenario={setScenario}
         weather={weather}
         weatherCached={weatherCached}
+        climateBaseline={climateBaseline}
         cropProgress={cropProgress}
       />
 

@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { PlanState, Crop, ScenarioType } from '@/types';
 import { parseKey } from '@/lib/plan';
 import { growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
-import { makeCropFor } from '@/creative/crops/map';
+import { cropAssetMap, makeCropFor } from '@/creative/crops/map';
 
 /**
  * Plant rendering — one THREE.InstancedMesh per (crop, stage) template.
@@ -14,34 +14,123 @@ import { makeCropFor } from '@/creative/crops/map';
  * a single instance. A 200-cell wheat field at one stage costs 1 draw call
  * instead of hundreds.
  *
+ * Templates are cached at MODULE level (the structures.ts treatment): merged
+ * geometry + material survive every rebuild and unmount, so the per-tick
+ * update path is a RECONCILE — diff per-cell (crop, stage, placement)
+ * assignments and rewrite only changed instance matrices. Disposal on plan
+ * edits only frees the InstancedMesh instance buffers; the cached template is
+ * never disposed during the session (engine context loss frees GPU copies).
+ *
+ * MEMORY BOUND: the cache holds at most (crops ≈ 50) × (stages 6) × distinct
+ * normalized template heights — a few hundred small merged geometries worst
+ * case, typically ≈ crops × 6. Templates persist for the session lifetime BY
+ * DESIGN; this is the price of tick-rebuild-free sim playback (a multi-tick
+ * sim would otherwise re-merge voxel geometry every tick and fall off the
+ * 4,000-cell = 8 FPS perf cliff, see HANDOFF.md perf ceiling).
+ *
  * Trade-off: the old per-cell 'sway' child-group wind animation does not
  * survive instancing (instances share one geometry; per-cell group transforms
  * are gone). Per-cell sway is DROPPED for beta; swayPlants keeps its signature
  * and applies a gentle whole-batch tilt to the batch group instead so wind
  * still reads at a glance.
  *
+ * Smooth growth: template geometry is base-anchored at y=0 and normalized to
+ * its stage's canonical height, so per-instance Y scale grows a plant from the
+ * ground with zero rebuilds. advancePlantGrowth (called per frame from
+ * World3D's rAF closure) eases each cell's visual progress toward its target
+ * and rewrites the instance matrix — no scene rebuilds, no allocations.
+ *
  * The procedural fallback path (no voxel asset for a crop name) keeps the old
- * clone-per-cell approach unchanged.
+ * clone-per-cell approach; its per-stage resources are batch-owned (not
+ * module-cached) and rebuild per update — unmapped crops are rare and small.
  */
 
-/** Owns the GPU resources for one (crop, stage) or fallback plant. */
-interface PlantTemplate {
-  /** Instanced mesh for the voxel path (one per template). */
-  instancedMesh?: THREE.InstancedMesh;
-  /** Merged template geometry (voxel path) — disposed once per template. */
-  geometry?: THREE.BufferGeometry;
-  /** Non-shared fallback resources (procedural path). */
-  root?: THREE.Object3D;
-  material?: THREE.Material;
+// ---------------------------------------------------------------------------
+// Module-level template cache (persistent for the session — see header note)
+// ---------------------------------------------------------------------------
+
+interface VoxelTemplate {
+  /** Merged, base-anchored geometry normalized to the template height. */
+  geometry: THREE.BufferGeometry;
+  /** Per-template material; stress tint is applied in place per update. */
+  material: THREE.MeshLambertMaterial;
+}
+
+// Key: `${cropName}|${stage}|${templateHeight.toFixed(3)}`. Height (not
+// surface) is part of the key so a surface switch or crop-definition edit
+// naturally resolves to different templates. Same-name crops share templates —
+// builders key off the name, so their geometry is identical anyway; a shared
+// material means the last-updated crop's stress tint wins (documented,
+// cosmetic, and only reachable via custom crops duplicating a catalog name).
+const voxelTemplateCache = new Map<string, VoxelTemplate>();
+
+/** Owns the GPU instance buffers for one (crop, stage) of one batch. */
+interface StageMesh {
+  mesh: THREE.InstancedMesh;
+  capacity: number;
+  /** Instances actually used (mesh.count is synced after reconcile). */
+  count: number;
+  /** Reverse index slot → cellKey, for swap-with-last removal. */
+  slotKeys: (string | undefined)[];
+  /** True when the geometry is batch-owned (procedural fallback instances)
+   * and must be freed with the batch rather than living in the cache. */
+  ownsGeometry?: boolean;
+}
+
+/** Per-cell reconcile record (assigned slot + placement + growth progress). */
+interface CellSlot {
+  stage: number;
+  /** Instance index inside the stage's InstancedMesh. */
+  slot: number;
+  x: number;
+  y: number;
+  z: number;
+  rotY: number;
+  /** Deterministic per-cell jitter scale (multiplies the growth scale). */
+  baseScale: number;
+  /** Progress 0..1 the cell should display (already clamp-applied). */
+  targetProgress: number;
+  /** Progress 0..1 currently displayed (eased per frame; starts at target). */
+  visualProgress: number;
+}
+
+/** Fallback (procedural clone) resources — owned by the batch, never cached. */
+interface FallbackStage {
+  root: THREE.Object3D;
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+}
+
+interface FallbackBatch {
+  stages: Map<number, FallbackStage>;
+  /** cellKey → live clone + its stage. */
+  instances: Map<string, { stage: number; obj: THREE.Object3D }>;
 }
 
 export interface PlantBatch {
   group: THREE.Group;
   count: number;
   cropId: number;
-  templates: PlantTemplate[];
   /** Sway amplitude multiplier by crop category (cached for the frame loop). */
   swayAmount: number;
+  /** fullHeight this batch was built for (surface × crop table). */
+  fullHeight: number;
+  /** Voxel-instanced path: stage → instanced mesh bookkeeping. */
+  stages: Map<number, StageMesh>;
+  /** Voxel-instanced path: cellKey → placement/progress record. */
+  cells: Map<string, CellSlot>;
+  /** Set when the crop has no voxel asset (procedural clone path). */
+  fallback?: FallbackBatch;
+}
+
+export interface PlantUpdateOptions {
+  /**
+   * Per-cell growth-progress override ("x,y" → 0..1). When present for a cell
+   * it is clamped against the computed progress (max of both) — World3D uses
+   * this to keep playback monotonic when a scenario/ambient change re-rates
+   * the elapsed period (legacy-path stopgap until the stateful sim engine).
+   */
+  progressByCell?: Map<string, number>;
 }
 
 // Height ranges (meters) by crop category: [min, max] — scaled for world visibility
@@ -56,6 +145,15 @@ const HEIGHT_RANGE: Record<string, [number, number]> = {
 };
 
 const DEFAULT_HEIGHT_RANGE: [number, number] = [0.7, 1.4];
+
+/**
+ * Canonical height fraction per growth stage: stage k's template is normalized
+ * to `fullHeight * templateScaleT(k)`. Growth interpolation assumes this exact
+ * curve (see advancePlantGrowth).
+ */
+function templateScaleT(stage: number): number {
+  return 0.15 + 0.85 * (stage / 5);
+}
 
 /**
  * Vertical-growing ground slugs lift planted crops onto shelf decks (y in
@@ -288,23 +386,393 @@ function mergeTemplateGeometry(root: THREE.Object3D): THREE.BufferGeometry | nul
   return merged;
 }
 
-/** Shared vertex-colored material for unstressed instanced plant batches. */
-let sharedPlantMaterial: THREE.MeshLambertMaterial | null = null;
+/**
+ * Module-cached template for a (crop, stage, templateHeight): merged geometry
+ * + vertex-colored material, built once and reused across every rebuild for
+ * the session (never disposed with batches — see header memory-bound note).
+ */
+function getVoxelTemplate(crop: Crop, stage: number, templateHeight: number): VoxelTemplate | null {
+  const key = `${crop.name}|${stage}|${templateHeight.toFixed(3)}`;
+  const cached = voxelTemplateCache.get(key);
+  if (cached) return cached;
 
-/** Vertex-colored material; stressed crops get their own tinted clone. */
-function getPlantMaterial(stress: number): THREE.MeshLambertMaterial {
-  if (stress <= 0.2) {
-    if (!sharedPlantMaterial) {
-      sharedPlantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
-    }
-    return sharedPlantMaterial;
-  }
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
-  m.color.setRGB(1, 1 - stress * 0.35, 1 - stress * 0.55);
-  return m;
+  const voxelRoot = buildNormalizedVoxelRoot(crop, stage, templateHeight);
+  if (!voxelRoot) return null;
+  const geometry = mergeTemplateGeometry(voxelRoot);
+  if (!geometry) return null; // asset existed but had no mergeable static geometry
+
+  const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const tpl: VoxelTemplate = { geometry, material };
+  voxelTemplateCache.set(key, tpl);
+  return tpl;
 }
 
-/** Build InstancedMesh batches: one draw call per (crop, stage) template. */
+/** Apply the stress tint to a batch's cached template materials IN PLACE —
+ * persistent materials must never be recreated per update. ≤0.2 = untinted.
+ * Batch-owned procedural geometry keeps its plain crop color (as before). */
+function applyStressTint(batch: PlantBatch, stress: number): void {
+  if (batch.fallback) return;
+  const r = 1;
+  const g = 1 - stress * 0.35;
+  const b = 1 - stress * 0.55;
+  for (const stageMesh of batch.stages.values()) {
+    if (stageMesh.ownsGeometry) continue;
+    const mat = stageMesh.mesh.material as THREE.MeshLambertMaterial;
+    mat.color.setRGB(r, g, b);
+  }
+}
+
+// --- Scratch objects (module-level: the per-frame path must not allocate) ---
+
+const scratchObj = new THREE.Object3D();
+const scratchMatrix = new THREE.Matrix4();
+
+/**
+ * Compose one cell's instance matrix. Growth interpolation: the template is
+ * normalized to `fullHeight × templateScaleT(stage)` at unit scale, so
+ * displaying progress p inside stage k means scaling by
+ * `templateScaleT-of-p / templateScaleT(k)` — continuous across stage swaps
+ * (both sides resolve to the same world height at the boundary) and exactly
+ * the pre-interpolation look when p sits on the stage center (scale 1).
+ */
+function writeCellMatrix(stageMesh: StageMesh, cell: CellSlot): void {
+  const growthScale = (0.15 + 0.85 * cell.visualProgress) / templateScaleT(cell.stage);
+  scratchObj.position.set(cell.x, cell.y, cell.z);
+  scratchObj.rotation.set(0, cell.rotY, 0);
+  scratchObj.scale.setScalar(growthScale * cell.baseScale);
+  scratchObj.updateMatrix();
+  stageMesh.mesh.setMatrixAt(cell.slot, scratchObj.matrix);
+}
+
+// ---------------------------------------------------------------------------
+// Batch lifecycle + reconcile
+// ---------------------------------------------------------------------------
+
+function swayAmountFor(crop: Crop): number {
+  switch (crop.category) {
+    case 'grain':
+    case 'flower':
+      return 0.04;
+    case 'vegetable':
+    case 'fruit':
+      return 0.015;
+    default:
+      return 0.005;
+  }
+}
+
+/** Create an empty batch (voxel or fallback) for a crop and add it to the scene. */
+function createBatch(
+  cropId: number,
+  crop: Crop,
+  _plan: PlanState,
+  fullHeight: number,
+  scene: THREE.Scene,
+): PlantBatch {
+  const group = new THREE.Group();
+  group.name = `plants:${crop.name}`;
+  group.castShadow = false;
+  group.receiveShadow = false;
+  scene.add(group);
+
+  const batch: PlantBatch = {
+    group,
+    count: 0,
+    cropId,
+    swayAmount: swayAmountFor(crop),
+    fullHeight,
+    stages: new Map<number, StageMesh>(),
+    cells: new Map<string, CellSlot>(),
+  };
+
+  // Fallback probe: the creative library is keyed by NAME (cropAssetMap),
+  // so novel custom-crop names get the procedural clone path.
+  if (!(crop.name in cropAssetMap)) {
+    batch.fallback = { stages: new Map<number, FallbackStage>(), instances: new Map() };
+  }
+  return batch;
+}
+
+/** Allocate (or grow) the InstancedMesh for a stage, instancing a cached template. */
+function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: number): StageMesh {
+  let sm = batch.stages.get(stage);
+  const capacity = Math.max(needed, 8);
+
+  if (!sm) {
+    const templateHeight = batch.fullHeight * templateScaleT(stage);
+    const tpl = getVoxelTemplate(crop, stage, templateHeight);
+    let geometry: THREE.BufferGeometry;
+    let material: THREE.Material;
+    let ownsGeometry = false;
+    if (tpl) {
+      geometry = tpl.geometry;
+      material = tpl.material;
+    } else {
+      // Rare: the asset exists but produced no mergeable static geometry for
+      // this stage (merge failed) — instance the procedural geometry instead
+      // of dropping the plants. Batch-owned resources, freed with the batch.
+      geometry = buildPlantGeometry(crop, templateHeight);
+      material = new THREE.MeshBasicMaterial({ color: crop.colorHex });
+      ownsGeometry = true;
+    }
+    const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+    mesh.name = `plants-inst:${crop.name}:s${stage}`;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.count = 0;
+    mesh.frustumCulled = false; // instances span the whole plan
+    batch.group.add(mesh);
+    sm = { mesh, capacity, count: 0, slotKeys: new Array<string | undefined>(capacity), ...(ownsGeometry ? { ownsGeometry } : {}) };
+    batch.stages.set(stage, sm);
+    return sm;
+  }
+
+  if (sm.capacity < needed) {
+    // Grow: new InstancedMesh sharing the SAME cached geometry/material, copy
+    // live instances, free only the old instance buffers.
+    const newCap = Math.max(needed, Math.ceil(sm.capacity * 1.5));
+    const mesh = new THREE.InstancedMesh(sm.mesh.geometry, sm.mesh.material, newCap);
+    mesh.name = sm.mesh.name;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.count = sm.count;
+    mesh.frustumCulled = false;
+    (mesh.instanceMatrix.array as Float32Array).set(
+      (sm.mesh.instanceMatrix.array as Float32Array).subarray(0, sm.count * 16),
+    );
+    mesh.instanceMatrix.needsUpdate = true;
+    sm.mesh.removeFromParent();
+    sm.mesh.dispose(); // instance buffers only — geometry/material are cached
+    batch.group.add(mesh);
+    const slotKeys = sm.slotKeys.slice();
+    slotKeys.length = newCap;
+    sm.mesh = mesh;
+    sm.capacity = newCap;
+    sm.slotKeys = slotKeys;
+  }
+  return sm;
+}
+
+/**
+ * Remove one cell's instance from its stage mesh (swap-with-last so no
+ * compaction is needed). Updates the moved occupant's slot in `batch.cells`.
+ */
+function removeInstance(batch: PlantBatch, cell: CellSlot): void {
+  const sm = batch.stages.get(cell.stage);
+  if (!sm) return;
+  const last = sm.count - 1;
+  if (cell.slot < 0 || cell.slot > last) return;
+  if (cell.slot !== last) {
+    sm.mesh.getMatrixAt(last, scratchMatrix);
+    sm.mesh.setMatrixAt(cell.slot, scratchMatrix);
+    const movedKey = sm.slotKeys[last];
+    sm.slotKeys[cell.slot] = movedKey;
+    if (movedKey !== undefined) {
+      const moved = batch.cells.get(movedKey);
+      if (moved && moved.stage === cell.stage) moved.slot = cell.slot;
+    }
+  }
+  sm.slotKeys[last] = undefined;
+  sm.count--;
+}
+
+/** Build the per-stage clone prototype for the procedural fallback path. */
+function ensureFallbackStage(batch: PlantBatch, crop: Crop, stage: number, fullHeight: number): FallbackStage {
+  const existing = batch.fallback?.stages.get(stage);
+  if (existing) return existing;
+  const fb = batch.fallback!;
+  const targetHeight = fullHeight * templateScaleT(stage);
+  const geometry = buildPlantGeometry(crop, targetHeight);
+  const material = new THREE.MeshBasicMaterial({ color: crop.colorHex });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  const holder = new THREE.Group();
+  holder.add(mesh);
+  const stageTpl: FallbackStage = { root: holder, geometry, material };
+  fb.stages.set(stage, stageTpl);
+  return stageTpl;
+}
+
+/** Rebuild a fallback batch's clones from the given cell keys. */
+function reconcileFallbackBatch(
+  batch: PlantBatch,
+  crop: Crop,
+  plan: PlanState,
+  keys: string[],
+  currentDate: Date | undefined,
+  scenario: ScenarioType | undefined,
+  growthCtx: GrowthModCtx | undefined,
+  opts: PlantUpdateOptions | undefined,
+): void {
+  const fb = batch.fallback!;
+  const offsetX = -(plan.widthM / 2);
+  const offsetZ = -(plan.heightM / 2);
+  const now = currentDate ?? new Date();
+  const plantedAtMap = plan.plantedAt ?? {};
+  const mod = scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx) : null;
+
+  const wanted = new Map<string, number>(); // key → stage
+  for (const key of keys) {
+    const computed = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
+    const override = opts?.progressByCell?.get(key);
+    const progress = override !== undefined ? Math.max(computed, override) : computed;
+    wanted.set(key, stageForScale(progress));
+  }
+
+  // Remove clones that vanished or changed stage (clone = per-stage geometry).
+  for (const [key, inst] of fb.instances) {
+    const stage = wanted.get(key);
+    if (stage !== inst.stage) {
+      inst.obj.removeFromParent();
+      fb.instances.delete(key);
+    }
+  }
+
+  // Add missing clones.
+  for (const [key, stage] of wanted) {
+    if (fb.instances.has(key)) continue;
+    const stageTpl = ensureFallbackStage(batch, crop, stage, batch.fullHeight);
+    const [cellX, cellY] = parseKey(key);
+    const jitter = jitterForCell(cellX, cellY, plan.cellM);
+    const liftSlugs = SHELF_LIFTS[plan.ground[key] ?? ''];
+    const lift = liftSlugs ? liftSlugs[shelfForCell(cellX, cellY)]! : 0;
+    const inst = stageTpl.root.clone(true);
+    inst.name = `plant:${crop.name}:${key}`;
+    inst.rotation.y = jitter.rotY;
+    inst.scale.setScalar(jitter.scaleY);
+    inst.position.set(
+      cellX * plan.cellM + plan.cellM / 2 + offsetX + jitter.offsetX,
+      0.01 + lift,
+      cellY * plan.cellM + plan.cellM / 2 + offsetZ + jitter.offsetZ,
+    );
+    batch.group.add(inst);
+    fb.instances.set(key, { stage, obj: inst });
+  }
+
+  batch.count = keys.length;
+}
+
+/**
+ * Diff-and-patch one voxel-instanced batch against the desired per-cell
+ * assignment. Only changed cells touch GPU buffers; templates never rebuild.
+ */
+function reconcileVoxelBatch(
+  batch: PlantBatch,
+  crop: Crop,
+  plan: PlanState,
+  keys: string[],
+  currentDate: Date | undefined,
+  scenario: ScenarioType | undefined,
+  growthCtx: GrowthModCtx | undefined,
+  opts: PlantUpdateOptions | undefined,
+): void {
+  const offsetX = -(plan.widthM / 2);
+  const offsetZ = -(plan.heightM / 2);
+  const now = currentDate ?? new Date();
+  const plantedAtMap = plan.plantedAt ?? {};
+  const mod = scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx) : null;
+
+  // Pass 1 — desired assignment per cell (plain records; update-time
+  // allocation is fine, only the per-frame path must be allocation-free).
+  interface Desired {
+    stage: number;
+    progress: number;
+    x: number;
+    y: number;
+    z: number;
+    rotY: number;
+    baseScale: number;
+  }
+  const desired = new Map<string, Desired>();
+  for (const key of keys) {
+    const [cellX, cellY] = parseKey(key);
+    const computed = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
+    const override = opts?.progressByCell?.get(key);
+    const progress = override !== undefined ? Math.max(computed, override) : computed;
+    const jitter = jitterForCell(cellX, cellY, plan.cellM);
+    const liftSlugs = SHELF_LIFTS[plan.ground[key] ?? ''];
+    const lift = liftSlugs ? liftSlugs[shelfForCell(cellX, cellY)]! : 0;
+    desired.set(key, {
+      stage: stageForScale(progress),
+      progress,
+      x: cellX * plan.cellM + plan.cellM / 2 + offsetX + jitter.offsetX,
+      y: 0.01 + lift,
+      z: cellY * plan.cellM + plan.cellM / 2 + offsetZ + jitter.offsetZ,
+      rotY: jitter.rotY,
+      baseScale: jitter.scaleY,
+    });
+  }
+
+  // Pass 2 — remove instances for cells that vanished or changed stage.
+  // visualProgress of stage-changing cells is carried over so the eased size
+  // is continuous across the template move (no pop at stage swaps).
+  const carriedVisual = new Map<string, number>();
+  for (const [key, cell] of batch.cells) {
+    const want = desired.get(key);
+    if (!want || want.stage !== cell.stage) {
+      carriedVisual.set(key, cell.visualProgress);
+      removeInstance(batch, cell);
+      batch.cells.delete(key);
+    }
+  }
+
+  // Pass 3 — patch survivors in place and add new cells.
+  for (const [key, want] of desired) {
+    const prev = batch.cells.get(key);
+    if (prev) {
+      const sm = batch.stages.get(prev.stage)!;
+      prev.targetProgress = want.progress;
+      if (
+        prev.x !== want.x || prev.y !== want.y || prev.z !== want.z ||
+        prev.rotY !== want.rotY || prev.baseScale !== want.baseScale
+      ) {
+        prev.x = want.x;
+        prev.y = want.y;
+        prev.z = want.z;
+        prev.rotY = want.rotY;
+        prev.baseScale = want.baseScale;
+        writeCellMatrix(sm, prev);
+        sm.mesh.instanceMatrix.needsUpdate = true;
+      }
+      continue;
+    }
+    const sm = ensureStageMesh(batch, crop, want.stage, (batch.stages.get(want.stage)?.count ?? 0) + 1);
+    const carried = carriedVisual.get(key);
+    const cell: CellSlot = {
+      stage: want.stage,
+      slot: sm.count,
+      x: want.x,
+      y: want.y,
+      z: want.z,
+      rotY: want.rotY,
+      baseScale: want.baseScale,
+      targetProgress: want.progress,
+      // Brand-new plants start AT their target (no grow-in); stage-changing
+      // plants continue from their eased visual size.
+      visualProgress: carried ?? want.progress,
+    };
+    writeCellMatrix(sm, cell);
+    sm.slotKeys[sm.count] = key;
+    sm.count++;
+    sm.mesh.instanceMatrix.needsUpdate = true;
+    batch.cells.set(key, cell);
+  }
+
+  // Pass 4 — sync draw counts. needsUpdate unconditionally: removals swap
+  // matrices (removeInstance) without touching flags themselves.
+  for (const sm of batch.stages.values()) {
+    sm.mesh.count = sm.count;
+    sm.mesh.instanceMatrix.needsUpdate = true;
+  }
+  batch.count = keys.length;
+}
+
+/**
+ * Build InstancedMesh batches: one draw call per (crop, stage) template.
+ * Templates come from the module-level persistent cache; this is only
+ * expensive the first time each (crop, stage) is seen.
+ */
 export function buildPlants(
   plan: PlanState,
   cropById: Map<number, Crop>,
@@ -312,179 +780,42 @@ export function buildPlants(
   currentDate?: Date,
   scenario?: ScenarioType,
   growthCtx?: GrowthModCtx,
+  opts?: PlantUpdateOptions,
 ): PlantBatch[] {
-  // Group cells by crop id.
+  const batches: PlantBatch[] = [];
   const cellsByCropId = new Map<number, string[]>();
   for (const key of Object.keys(plan.planting)) {
-    const cropId = plan.planting[key];
+    const cropId = plan.planting[key]!;
     const arr = cellsByCropId.get(cropId);
     if (arr) arr.push(key);
     else cellsByCropId.set(cropId, [key]);
   }
 
-  const offsetX = -(plan.widthM / 2);
-  const offsetZ = -(plan.heightM / 2);
-  const now = currentDate ?? new Date();
-  const plantedAtMap = plan.plantedAt ?? {};
-
-  const batches: PlantBatch[] = [];
-
   for (const [cropId, keys] of cellsByCropId) {
     const crop = cropById.get(cropId);
     if (!crop) continue;
-
-    // Both the voxel-instanced and procedural paths derive target heights from
-    // fullHeight, so one multiplier shrinks the whole batch per surface.
     const fullHeight = getPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
-    const mod = scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx) : null;
-    const cropStress = mod?.stress ?? 0;
-    const group = new THREE.Group();
-    group.name = `plants:${crop.name}`;
-
-    const templates = new Map<number, PlantTemplate>();
-
-    // Sway amount cached per batch (mirrors the old category table).
-    let swayAmount = 0;
-    switch (crop.category) {
-      case 'grain':
-      case 'flower':
-        swayAmount = 0.04;
-        break;
-      case 'vegetable':
-      case 'fruit':
-        swayAmount = 0.015;
-        break;
-      default:
-        swayAmount = 0.005;
+    const batch = createBatch(cropId, crop, plan, fullHeight, scene);
+    if (batch.fallback) {
+      reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
+    } else {
+      reconcileVoxelBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
+      applyStressTint(batch, scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx).stress : 0);
     }
-
-    const getTemplate = (stage: number): PlantTemplate | null => {
-      const existing = templates.get(stage);
-      if (existing) return existing;
-
-      const growthT = stage / 5;
-      const targetHeight = fullHeight * (0.15 + 0.85 * growthT);
-
-      // Preferred path: creative voxel asset merged into one instanced mesh.
-      const voxelRoot = buildNormalizedVoxelRoot(crop, stage, targetHeight);
-      if (voxelRoot) {
-        const geometry = mergeTemplateGeometry(voxelRoot);
-        if (geometry) {
-          const material = getPlantMaterial(cropStress);
-          const mesh = new THREE.InstancedMesh(geometry, material, Math.max(keys.length, 1));
-          mesh.name = `plants-inst:${crop.name}:s${stage}`;
-          mesh.castShadow = false;
-          mesh.receiveShadow = false;
-          mesh.count = 0; // filled in below; shrink to actual usage at the end
-          mesh.frustumCulled = false; // instances span the whole plan
-          group.add(mesh);
-          const tpl: PlantTemplate = {
-            instancedMesh: mesh,
-            geometry,
-            ...(cropStress > 0.2 ? { material } : {}),
-          };
-          templates.set(stage, tpl);
-          return tpl;
-        }
-        // Asset existed but produced no mergeable static geometry — fall through.
-      }
-
-      // Fallback: procedural merged geometry (one shared geometry + material),
-      // cloned per cell as before.
-      const geometry = buildPlantGeometry(crop, targetHeight);
-      const material = new THREE.MeshBasicMaterial({ color: crop.colorHex });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      const holder = new THREE.Group();
-      holder.add(mesh);
-      const tpl: PlantTemplate = { root: holder, geometry, material };
-      templates.set(stage, tpl);
-      return tpl;
-    };
-
-    // Track per-template instance write index.
-    const writeIndex = new Map<PlantTemplate, number>();
-    let anyPlaced = false;
-
-    for (const key of keys) {
-      const [cellX, cellY] = parseKey(key);
-      const x = cellX * plan.cellM + plan.cellM / 2 + offsetX;
-      const z = cellY * plan.cellM + plan.cellM / 2 + offsetZ;
-      const y = 0.01; // sit on ground plane
-
-      const growthScale = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
-      const stage = stageForScale(growthScale);
-
-      const tpl = getTemplate(stage);
-      if (!tpl) continue;
-
-      const jitter = jitterForCell(cellX, cellY, plan.cellM);
-      const liftSlugs = SHELF_LIFTS[plan.ground[key] ?? ''];
-      const lift = liftSlugs ? liftSlugs[shelfForCell(cellX, cellY)]! : 0;
-
-      if (tpl.instancedMesh) {
-        const dummy = new THREE.Object3D();
-        dummy.rotation.y = jitter.rotY;
-        // Template geometry is sized so its bbox height == target height at
-        // unit scale, base baked at local y=0. Per-cell vertical jitter scales
-        // uniformly around the base.
-        dummy.scale.setScalar(jitter.scaleY);
-        dummy.position.set(x + jitter.offsetX, y + lift, z + jitter.offsetZ);
-        dummy.updateMatrix();
-
-        const idx = writeIndex.get(tpl) ?? 0;
-        tpl.instancedMesh.setMatrixAt(idx, dummy.matrix);
-        writeIndex.set(tpl, idx + 1);
-        anyPlaced = true;
-        continue;
-      }
-
-      // Procedural fallback path: clone shares geometry/materials.
-      if (!tpl.root) continue;
-      const inst = tpl.root.clone(true);
-      inst.name = `plant:${crop.name}:${key}`;
-      inst.rotation.y = jitter.rotY;
-      inst.scale.setScalar(jitter.scaleY);
-      inst.position.set(x + jitter.offsetX, y + lift, z + jitter.offsetZ);
-      group.add(inst);
-      anyPlaced = true;
-    }
-
-    if (!anyPlaced) continue;
-
-    // Trim each instanced mesh down to the instances actually written.
-    for (const tpl of templates.values()) {
-      const mesh = tpl.instancedMesh;
-      if (!mesh) continue;
-      const written = writeIndex.get(tpl) ?? 0;
-      if (written === 0) {
-        mesh.removeFromParent();
-        mesh.dispose();
-        tpl.geometry?.dispose();
-        continue;
-      }
-      mesh.count = written;
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
-    }
-
-    group.castShadow = false;
-    group.receiveShadow = false;
-    scene.add(group);
-    batches.push({
-      group,
-      count: keys.length,
-      cropId,
-      templates: Array.from(templates.values()),
-      swayAmount,
-    });
+    batches.push(batch);
   }
 
   return batches;
 }
 
-/** Rebuild plant batches from scratch when the plan or crop data changes. */
+/**
+ * Reconcile plant batches with the plan: keep per-cell→template assignments,
+ * diff them, and rewrite only what changed (moved stages, moved cells, new /
+ * removed plants, stress tint). Geometry is NEVER re-merged on this path —
+ * batches whose template height changed (surface switch, crop edit) are
+ * re-instanced from the persistent template cache; a crop leaving the plan
+ * disposes its batch (instance buffers) but NOT the cached templates.
+ */
 export function updatePlants(
   batches: PlantBatch[],
   plan: PlanState,
@@ -493,9 +824,85 @@ export function updatePlants(
   currentDate?: Date,
   scenario?: ScenarioType,
   growthCtx?: GrowthModCtx,
+  opts?: PlantUpdateOptions,
 ): PlantBatch[] {
-  disposePlants(batches);
-  return buildPlants(plan, cropById, scene, currentDate, scenario, growthCtx);
+  const cellsByCropId = new Map<number, string[]>();
+  for (const key of Object.keys(plan.planting)) {
+    const cropId = plan.planting[key]!;
+    const arr = cellsByCropId.get(cropId);
+    if (arr) arr.push(key);
+    else cellsByCropId.set(cropId, [key]);
+  }
+
+  const reusable = new Map<number, PlantBatch>();
+  for (const batch of batches) reusable.set(batch.cropId, batch);
+
+  const next: PlantBatch[] = [];
+  for (const [cropId, keys] of cellsByCropId) {
+    const crop = cropById.get(cropId);
+    if (!crop) continue;
+
+    const fullHeight = getPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
+    let batch = reusable.get(cropId);
+    reusable.delete(cropId);
+
+    if (batch && (batch.fullHeight !== fullHeight || batch.fallback)) {
+      // Template height changed (surface / crop-definition edit) — or the
+      // fallback clone path, which rebuilds per update. Re-instance from the
+      // persistent template cache (cheap; no geometry re-merge for voxels).
+      disposeBatch(batch);
+      batch = undefined;
+    }
+
+    if (!batch) {
+      batch = createBatch(cropId, crop, plan, fullHeight, scene);
+    }
+
+    if (batch.fallback) {
+      reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
+    } else {
+      reconcileVoxelBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
+      applyStressTint(batch, scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx).stress : 0);
+    }
+    next.push(batch);
+  }
+
+  // Crops that left the plan entirely: free their instance buffers. The
+  // module-level template cache survives by design.
+  for (const batch of reusable.values()) disposeBatch(batch);
+
+  batches.length = 0;
+  batches.push(...next);
+  return batches;
+}
+
+/**
+ * Per-frame growth interpolation. Eases every planted cell's visual progress
+ * toward the target captured by the last updatePlants call, rewriting only
+ * instance matrices of still-moving cells. Zero allocations (module scratch
+ * objects), no scene rebuilds, reads only what the batches already hold —
+ * safe to call from the rAF update closure every frame.
+ */
+export function advancePlantGrowth(batches: PlantBatch[], dt: number, easeRate = 4): void {
+  const step = Math.min(1, dt * easeRate);
+  if (step <= 0) return;
+  for (let b = 0; b < batches.length; b++) {
+    const batch = batches[b]!;
+    if (batch.fallback || batch.cells.size === 0) continue;
+    for (const cell of batch.cells.values()) {
+      const diff = cell.targetProgress - cell.visualProgress;
+      if (diff > 1e-4 || diff < -1e-4) {
+        cell.visualProgress += diff * step;
+        if (Math.abs(cell.targetProgress - cell.visualProgress) < 1e-4) {
+          cell.visualProgress = cell.targetProgress;
+        }
+        const sm = batch.stages.get(cell.stage);
+        if (!sm) continue;
+        writeCellMatrix(sm, cell);
+        sm.mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+  }
 }
 
 /**
@@ -505,7 +912,7 @@ export function updatePlants(
  */
 export function swayPlants(batches: PlantBatch[], _crops: Map<number, Crop>, time: number, windStrength: number): void {
   for (let b = 0; b < batches.length; b++) {
-    const batch = batches[b];
+    const batch = batches[b]!;
     const amp = batch.swayAmount * windStrength;
     if (amp <= 0) continue;
 
@@ -515,33 +922,42 @@ export function swayPlants(batches: PlantBatch[], _crops: Map<number, Crop>, tim
   }
 }
 
-/** Dispose all geometry and materials held by plant batches (once per template). */
-export function disposePlants(batches: PlantBatch[]): void {
-  for (const batch of batches) {
-    batch.group.removeFromParent();
+/** Free one batch's GPU instance buffers / batch-owned resources. The
+ * module-level template cache is NEVER touched here (session-lifetime). */
+function disposeBatch(batch: PlantBatch): void {
+  batch.group.removeFromParent();
 
-    // Dispose shared GPU resources exactly once, per template.
-    for (const tpl of batch.templates) {
-      if (tpl.geometry) tpl.geometry.dispose();
-      if (tpl.material) tpl.material.dispose();
-      if (tpl.instancedMesh) {
-        // Disposes instance buffers; the shared geometry/material are handled
-        // above (material is module-shared and disposed below).
-        tpl.instancedMesh.dispose();
-      }
-      if (tpl.root) {
-        tpl.root.traverse((obj) => {
-          const mesh = obj as THREE.Mesh;
-          if (mesh.geometry) mesh.geometry.dispose();
-          const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
-          if (Array.isArray(mat)) {
-            for (const m of mat) m.dispose();
-          } else if (mat) {
-            mat.dispose();
-          }
-        });
-      }
+  for (const sm of batch.stages.values()) {
+    // Frees the instanceMatrix/instanceColor buffers only; shared geometry +
+    // material live in voxelTemplateCache and persist. Batch-owned procedural
+    // geometry (ownsGeometry) is freed here too.
+    sm.mesh.dispose();
+    if (sm.ownsGeometry) {
+      sm.mesh.geometry.dispose();
+      (sm.mesh.material as THREE.Material).dispose();
     }
   }
+  batch.stages.clear();
+  batch.cells.clear();
+
+  const fb = batch.fallback;
+  if (fb) {
+    for (const stage of fb.stages.values()) {
+      stage.geometry.dispose();
+      stage.material.dispose();
+    }
+    fb.stages.clear();
+    fb.instances.clear();
+    batch.fallback = undefined;
+  }
+}
+
+/**
+ * Dispose plant batches (on scene teardown or when a crop leaves the plan).
+ * Only instance buffers and fallback resources are freed — cached template
+ * geometry/materials persist for the session (structures.ts treatment).
+ */
+export function disposePlants(batches: PlantBatch[]): void {
+  for (const batch of batches) disposeBatch(batch);
   batches.length = 0;
 }

@@ -13,6 +13,7 @@ import type {
   SensorReading,
   Simulation,
 } from '@/types';
+import type { RunRecord } from '@/lib/sim/types';
 import {
   seedCells,
   seedFarms,
@@ -36,6 +37,10 @@ export interface AppState {
   ndvi: Record<number, NdviEstimate>;
   plans: Record<number, PlanState>;
   alertReads: Record<number, true>;
+  /** Deterministic sim engine runs (SPEC-SIM-ECOSYSTEM). Each RunRecord holds
+   * config + frozen envSeries + summary only — state is rebuilt by replay,
+   * never stored per-tick. Not seeded, not re-seeded with demo content. */
+  simRuns: RunRecord[];
   counters: { farm: number; crop: number; sensor: number; reading: number; sim: number };
 }
 
@@ -55,6 +60,7 @@ function seedState(): AppState {
     ndvi: { ...seedNdvi },
     plans: { ...seedPlans },
     alertReads: {},
+    simRuns: [],
     counters: {
       farm: farms.length + 1,
       crop: 1000, // custom crops start above the static library range
@@ -86,6 +92,10 @@ function load(): AppState {
     for (const key of Object.keys(fresh.plans)) {
       merged.plans[Number(key)] = fresh.plans[Number(key)]!;
     }
+
+    // Sim runs are additive user data (never seeded): keep the stored list
+    // as-is; missing/corrupt key degrades to empty.
+    merged.simRuns = parsed.simRuns ?? [];
 
     // Keep the farm-id counter ahead of every present farm so it can never
     // collide with the seed range or itself.

@@ -77,6 +77,9 @@ The API seam mirrors these logical endpoints:
 - `GET    /api/farms/:id/simulations`
 - `POST   /api/farms/:id/simulations`
 - `DELETE /api/simulations/:id`
+- `GET    /api/farms/:id/sim-runs`
+- `POST   /api/farms/:id/sim-runs`
+- `DELETE /api/sim-runs/:id`
 - `GET    /api/crops`
 - `POST   /api/crops`
 
@@ -87,9 +90,14 @@ contract above — including its prefix, e.g. `http://localhost:8787/api` — an
 `src/lib/api.ts` swaps `apiFetch` to `createRestApi(base)` from
 `src/lib/restApi.ts`: a dependency-free `fetch` client covering every seam
 method (farms CRUD, weather/forecast/history, alerts, sensors + readings,
-legacy cells + NDVI, plans, simulations, crops). One mapping assumption:
-assigning a cell's crop posts to `/api/farms/:id/cells` with `{ id, cropId }`,
-since the table defines only GET/POST on that collection. Local-first remains
+legacy cells + NDVI, plans, simulations, sim runs, crops). One mapping
+assumption: assigning a cell's crop posts to `/api/farms/:id/cells` with
+`{ id, cropId }`, since the table defines only GET/POST on that collection.
+Sim runs (`src/lib/sim/`) are deterministic engine runs over a forked plan:
+`POST /sim-runs` takes a `CreateSimRunInput` (farm, dates, scenario,
+interventions — never a full plan) and the server composes + replays the run,
+returning a `RunRecord` (config + frozen daily env series + summary; per-tick
+state is never stored — replay rebuilds it). Local-first remains
 the default — with the variable unset or empty, the local store plus live
 Open-Meteo weather (`src/lib/localApi.ts`) stays exactly as before.
 

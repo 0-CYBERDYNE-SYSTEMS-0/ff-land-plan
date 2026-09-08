@@ -8,9 +8,19 @@ import { Slider } from '@/components/ui/slider';
 export interface CropProgressRow {
   id: number;
   name: string;
+  /** Optional display label disambiguating sow dates, e.g. "Tomato · Mar 2". */
+  label?: string;
+  /** Raw sow date ("" when undated); part of the React key so same-name rows stay unique. */
+  plantedAt?: string;
   stage: number;
   pct: number;
   stress: number;
+}
+
+/** Provenance for the growth model's seasonal baseline temperature. */
+export interface ClimateBaselineInfo {
+  tempC: number;
+  source: 'era5-normals' | 'default-20c';
 }
 
 export interface SimDrawerProps {
@@ -34,6 +44,8 @@ export interface SimDrawerProps {
   onScenario: (s: ScenarioType) => void;
   weather: WeatherCurrent | null;
   weatherCached: boolean;
+  /** Optional provenance chip: seasonal baseline temp the growth model uses. */
+  climateBaseline?: ClimateBaselineInfo;
   cropProgress: CropProgressRow[];
 }
 
@@ -62,6 +74,7 @@ export function SimDrawer({
   onScenario,
   weather,
   weatherCached,
+  climateBaseline,
   cropProgress,
 }: SimDrawerProps) {
   const handleTimeOfDay = ([v]: number[]) => {
@@ -222,15 +235,26 @@ export function SimDrawer({
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col">
-            <span className="shrink-0 text-xs text-muted-foreground">Crop growth</span>
+            <div className="flex shrink-0 items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Crop growth</span>
+              {climateBaseline && (
+                <span
+                  title="Seasonal baseline temperature the growth model uses for this farm"
+                  className="rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground"
+                >
+                  baseline {climateBaseline.tempC.toFixed(climateBaseline.source === 'era5-normals' ? 1 : 0)} °C ·{' '}
+                  {climateBaseline.source === 'era5-normals' ? 'ERA5' : 'default'}
+                </span>
+              )}
+            </div>
             <div className="mt-1 min-h-0 flex-1 overflow-y-auto rounded-md border border-border p-2">
               {cropProgress.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nothing planted yet.</p>
               ) : (
                 <div className="flex flex-col gap-1">
                   {cropProgress.map((row) => (
-                    <div key={row.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="min-w-0 flex-1 truncate">{row.name}</span>
+                    <div key={`${row.id}|${row.plantedAt ?? ''}|${row.label ?? ''}`} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="min-w-0 flex-1 truncate">{row.label ?? row.name}</span>
                       <span className="tracking-tighter text-foreground">
                         {'●'.repeat(row.stage)}{'○'.repeat(5 - row.stage)}
                       </span>
