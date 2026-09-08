@@ -258,7 +258,9 @@ function synthFromNormals(
     tMinC,
     tMaxC,
     precipMm: m.precipMm > 0 ? amount : 0,
-    etoMm: m.et0Mm > 0 ? m.et0Mm : null, // null → proxy (some normals lack ET0)
+    // climate.ts normals store et0 as the mean of MONTHLY TOTALS (mm/month);
+    // the bucket model consumes daily mm/day, so convert like rain above.
+    etoMm: m.et0Mm > 0 ? Math.round((m.et0Mm / daysInMonth(year, month1)) * 100) / 100 : null, // null → proxy (some normals lack ET0)
     source: 'era5-normals',
   };
 }

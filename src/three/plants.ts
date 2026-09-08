@@ -131,6 +131,18 @@ export interface PlantUpdateOptions {
    * the elapsed period (legacy-path stopgap until the stateful sim engine).
    */
   progressByCell?: Map<string, number>;
+  /**
+   * Run-mode per-cell tint stress ("x,y" → effective stress 0..1). World3D
+   * computes each cell as `max(water, heat, cold, nitrogen)` — the same
+   * max-of-terms aggregation the RunInspector rows use — with pest pressure
+   * folded in at a documented 0.8 weight. When present, the batch tint is the
+   * MAX effective stress across the batch's live cells (one material per
+   * (crop,stage) template is shared by every instance, so per-instance tint
+   * would need instanceColor buffers per batch — too costly for the draw
+   * budget). When absent, the legacy scenarioGrowthMod().stress tint path
+   * applies unchanged.
+   */
+  stressByCell?: Map<string, number>;
 }
 
 // Height ranges (meters) by crop category: [min, max] — scaled for world visibility
@@ -420,6 +432,34 @@ function applyStressTint(batch: PlantBatch, stress: number): void {
     const mat = stageMesh.mesh.material as THREE.MeshLambertMaterial;
     mat.color.setRGB(r, g, b);
   }
+}
+
+/**
+ * Batch tint stress: run mode (opts.stressByCell present) → MAX per-cell
+ * effective stress across the batch's live cells, so a suffering crop LOOKS
+ * suffering (max matches the RunInspector row aggregation — one stressed
+ * sowing yellows the crop's field); legacy mode → scenarioGrowthMod().stress,
+ * byte-identical to the pre-run behavior. Run mode passes scenario undefined,
+ * so the two sources never fight over the same material.
+ */
+function batchTintStress(
+  batch: PlantBatch,
+  crop: Crop,
+  plan: PlanState,
+  scenario: ScenarioType | undefined,
+  growthCtx: GrowthModCtx | undefined,
+  opts: PlantUpdateOptions | undefined,
+): number {
+  const byCell = opts?.stressByCell;
+  if (byCell) {
+    let max = 0;
+    for (const key of batch.cells.keys()) {
+      const s = byCell.get(key);
+      if (s !== undefined && s > max) max = s;
+    }
+    return max;
+  }
+  return scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx).stress : 0;
 }
 
 // --- Scratch objects (module-level: the per-frame path must not allocate) ---
@@ -800,7 +840,7 @@ export function buildPlants(
       reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
     } else {
       reconcileVoxelBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
-      applyStressTint(batch, scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx).stress : 0);
+      applyStressTint(batch, batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
     }
     batches.push(batch);
   }
@@ -862,7 +902,7 @@ export function updatePlants(
       reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
     } else {
       reconcileVoxelBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
-      applyStressTint(batch, scenario ? scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', growthCtx).stress : 0);
+      applyStressTint(batch, batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
     }
     next.push(batch);
   }

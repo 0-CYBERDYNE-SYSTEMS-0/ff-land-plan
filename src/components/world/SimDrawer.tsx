@@ -1,8 +1,8 @@
 import { X } from 'lucide-react';
 import { SCENARIOS } from '@/lib/growth';
 import type { ScenarioType, WeatherCurrent } from '@/types';
-import type { DailyEnvironment, EnvSourceTag } from '@/lib/sim';
-import type { CellDiagnosticRow, SimRunTimeline } from '@/hooks/useSimRun';
+import type { DailyEnvironment, EnvSourceTag, Intervention } from '@/lib/sim';
+import type { ApplyInterventionResult, CellDiagnosticRow, SimRunTimeline } from '@/hooks/useSimRun';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
@@ -66,6 +66,48 @@ function SourceTag({ tag }: { tag: EnvSourceTag }) {
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
+// --- In-world intervention authoring (spec §3.2/§3.3, presentational) ------
+// All form state is UNCONTROLLED DOM state (FormData at submit time); the
+// date input re-defaults to the current sim day via a keyed remount. The
+// transient status flash writes textContent imperatively — no hooks here.
+
+const MS_DAY = 86_400_000;
+
+function dayNumberOf(iso: string): number {
+  const t = new Date(`${iso}T00:00:00Z`).getTime();
+  return Number.isFinite(t) ? Math.floor(t / MS_DAY) : NaN;
+}
+
+function isoOfDayNumber(n: number): string {
+  return new Date(n * MS_DAY).toISOString().slice(0, 10);
+}
+
+/** Documented authoring ranges shown as the form hint (ecosystem.ts: nKgHa
+ * 60–150 lands visibly; irrigation 1–50 mm moves the bucket). */
+const IRRIGATE_MM_RANGE = { min: 1, max: 50, fallback: 20 } as const;
+const FERTILIZE_NKGHA_RANGE = { min: 10, max: 200, sweet: '60–150', fallback: 100 } as const;
+
+function interventionLabel(m: { kind: string; mm?: number; nKgHa?: number }): string {
+  switch (m.kind) {
+    case 'irrigate':
+      return `irrigate · ${m.mm} mm`;
+    case 'fertilize':
+      return `fertilize · ${m.nKgHa} kg/ha N`;
+    case 'plant':
+      return 'plant';
+    case 'harvest':
+      return 'harvest';
+    case 'surface':
+      return 'surface change';
+    case 'weather':
+      return 'weather shift';
+    default:
+      return m.kind;
+  }
+}
+
+let ivStatusTimer: ReturnType<typeof setTimeout> | undefined;
+
 export interface SimDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -113,6 +155,13 @@ export interface SimDrawerProps {
   /** Moisture-band overlay toggle (run mode, ≤4 extra draw calls). */
   showMoisture?: boolean;
   onToggleMoisture?: (v: boolean) => void;
+  /** True when the in-session amended config diverges from the stored
+   * RunRecord (authoring is session-only; save-as-new is a follow-up seam). */
+  runUnsaved?: boolean;
+  /** Author an intervention on the active run — present only in run mode;
+   * the whole Interventions section renders only when set. Returns the
+   * controller's verdict so the form can flash a confirmation or reason. */
+  onAddIntervention?: (iv: Intervention) => ApplyInterventionResult;
 }
 
 function formatTimeOfDay(t: number): string {
@@ -205,6 +254,8 @@ export function SimDrawer({
   onSelectRow,
   showMoisture,
   onToggleMoisture,
+  runUnsaved,
+  onAddIntervention,
 }: SimDrawerProps) {
   const handleTimeOfDay = ([v]: number[]) => {
     onTimeOfDay(v);
@@ -215,6 +266,21 @@ export function SimDrawer({
   const eventDots = (runTimeline?.events ?? []).filter(
     (e) => e.kind === 'stress-onset' || e.kind === 'harvest-ready',
   );
+
+  // Intervention form season bounds: in run mode `scrubDate` IS the current
+  // sim date (World3D passes runDateISO), so the season starts dayIndex days
+  // earlier and spans runTimeline.days. The form date defaults to the current
+  // sim day, clamped into the season (an ended run's scrubDate sits one past
+  // the end — hence the clamp rather than a raw pass-through).
+  const ivSeasonStartDay = runTimeline ? dayNumberOf(scrubDate) - runTimeline.dayIndex : 0;
+  const ivSeasonEndDay = ivSeasonStartDay + days - 1;
+  const ivStartISO = isoOfDayNumber(ivSeasonStartDay);
+  const ivEndISO = isoOfDayNumber(ivSeasonEndDay);
+  const ivDefaultDate = (() => {
+    const cur = dayNumberOf(scrubDate);
+    if (!Number.isFinite(cur)) return ivStartISO;
+    return isoOfDayNumber(Math.min(ivSeasonEndDay, Math.max(ivSeasonStartDay, cur)));
+  })();
 
   return (
     <>
@@ -402,6 +468,129 @@ export function SimDrawer({
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+              {onAddIntervention && (
+                <div className="mt-3 border-t border-primary/20 pt-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-foreground/80">Interventions</span>
+                    {runUnsaved && (
+                      <span
+                        title="Session-only what-if: the stored run record is untouched (save-as-new run is a follow-up)"
+                        className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-600"
+                      >
+                        unsaved
+                      </span>
+                    )}
+                  </div>
+                  {(runTimeline?.interventions.length ?? 0) > 0 ? (
+                    <ul className="mt-1 max-h-24 space-y-0.5 overflow-y-auto pr-1 text-[11px] text-muted-foreground">
+                      {runTimeline?.interventions.map((m, i) => (
+                        <li key={`${m.day}-${m.kind}-${i}`} className="flex items-center gap-1.5">
+                          <span className="shrink-0 tabular-nums text-foreground/70">D{m.day}</span>
+                          <span className="min-w-0 flex-1 truncate">{interventionLabel(m)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-muted-foreground">None yet — add water or fertilizer.</p>
+                  )}
+                  <form
+                    className="mt-2 space-y-1.5"
+                    onSubmit={(e) => {
+                      const form = e.currentTarget;
+                      e.preventDefault();
+                      const data = new FormData(form);
+                      const kind = String(data.get('ff-iv-kind') ?? 'irrigate');
+                      const picked = dayNumberOf(String(data.get('ff-iv-date') ?? ''));
+                      const day = Math.min(
+                        ivSeasonEndDay,
+                        Math.max(ivSeasonStartDay, Number.isFinite(picked) ? picked : ivSeasonStartDay + runTimeline.dayIndex),
+                      );
+                      const raw = Number(data.get('ff-iv-amount'));
+                      const base = Number.isFinite(raw)
+                        ? raw
+                        : kind === 'fertilize'
+                          ? FERTILIZE_NKGHA_RANGE.fallback
+                          : IRRIGATE_MM_RANGE.fallback;
+                      const amount =
+                        kind === 'fertilize'
+                          ? Math.min(FERTILIZE_NKGHA_RANGE.max, Math.max(FERTILIZE_NKGHA_RANGE.min, base))
+                          : Math.min(IRRIGATE_MM_RANGE.max, Math.max(IRRIGATE_MM_RANGE.min, base));
+                      const iv: Intervention =
+                        kind === 'fertilize'
+                          ? { kind: 'fertilize', date: isoOfDayNumber(day), nKgHa: amount }
+                          : { kind: 'irrigate', date: isoOfDayNumber(day), mm: amount };
+                      const res = onAddIntervention(iv);
+                      const el = form.querySelector<HTMLParagraphElement>('[data-ff-iv-status]');
+                      if (el) {
+                        if (res.ok) {
+                          el.textContent =
+                            runTimeline.dayIndex >= runTimeline.days
+                              ? `Added at day ${res.day} — the run has ended; seek back to watch it apply.`
+                              : res.affectsPastDays
+                                ? `Added at day ${res.day} — history re-folded; that's the point of a twin.`
+                                : `Added at day ${res.day} — applies when the run reaches it.`;
+                          el.className = 'text-[10px] leading-snug text-primary';
+                        } else {
+                          el.textContent = res.error ?? 'Could not add the intervention.';
+                          el.className = 'text-[10px] leading-snug text-destructive';
+                        }
+                        if (ivStatusTimer !== undefined) clearTimeout(ivStatusTimer);
+                        ivStatusTimer = setTimeout(() => {
+                          el.textContent = '';
+                        }, 6000);
+                      }
+                      // Keep kind/amount/date for repeat entries — resetting
+                      // made back-to-back fertilizing re-type everything. The
+                      // date re-defaults on day change via the key remount.
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        name="ff-iv-kind"
+                        defaultValue="irrigate"
+                        aria-label="Intervention kind"
+                        className="h-7 min-w-0 shrink-0 rounded-md border border-input bg-background px-1 text-xs"
+                      >
+                        <option value="irrigate">Irrigate</option>
+                        <option value="fertilize">Fertilize</option>
+                      </select>
+                      <input
+                        name="ff-iv-amount"
+                        type="number"
+                        defaultValue={IRRIGATE_MM_RANGE.fallback}
+                        min="1"
+                        step="any"
+                        aria-label="Amount (mm water or kg/ha N)"
+                        className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs tabular-nums"
+                      />
+                      <input
+                        key={runTimeline.dayIndex}
+                        name="ff-iv-date"
+                        type="date"
+                        defaultValue={ivDefaultDate}
+                        min={ivStartISO}
+                        max={ivEndISO}
+                        aria-label="Intervention date"
+                        className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-1 text-xs"
+                      />
+                      <button
+                        type="submit"
+                        title="Amend this run's interventions and replay to the current day"
+                        className="h-7 shrink-0 rounded bg-primary px-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <p className="text-[10px] leading-snug text-muted-foreground">
+                      Water {IRRIGATE_MM_RANGE.min}–{IRRIGATE_MM_RANGE.max} mm · fertilizer{' '}
+                      {FERTILIZE_NKGHA_RANGE.min}–{FERTILIZE_NKGHA_RANGE.max} kg/ha N (sweet spot{' '}
+                      {FERTILIZE_NKGHA_RANGE.sweet}). Dates clamp into the season; past dates rewrite history —
+                      that's the point of a twin.
+                    </p>
+                    <p data-ff-iv-status aria-live="polite" className="text-[10px] leading-snug" />
+                  </form>
                 </div>
               )}
             </div>

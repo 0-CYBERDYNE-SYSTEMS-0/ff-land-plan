@@ -33,6 +33,7 @@ import {
 import type {
   DailyEnvironment,
   EnvSourceTag,
+  Intervention,
   RunRecord,
   SimEvent,
   SimRunCtx,
@@ -44,12 +45,35 @@ import type {
 // ---------------------------------------------------------------------------
 
 /** Timeline for the RunInspector seek slider: intervention ticks + event dots
- * keyed by run day index. Derived ONCE per run by a deterministic full fold. */
+ * keyed by run day index. Derived ONCE per run by a deterministic full fold
+ * (and re-derived after each in-session intervention amendment). */
 export interface SimRunTimeline {
   days: number;
   dayIndex: number;
-  interventions: { day: number; kind: string }[];
+  interventions: {
+    day: number;
+    kind: string;
+    /** ISO date the intervention lands on (fromDate for 'weather'). */
+    date?: string;
+    /** irrigate amount, mm. */
+    mm?: number;
+    /** fertilize amount, kg/ha N. */
+    nKgHa?: number;
+  }[];
   events: { day: number; kind: string }[];
+}
+
+/** Result of authoring one intervention on the ACTIVE run. The RunInspector
+ * flashes this back (confirmation / reason + the past-days hint). */
+export interface ApplyInterventionResult {
+  ok: boolean;
+  /** Set when ok is false — human-readable rejection reason. */
+  error?: string;
+  /** Run day index (0-based) the intervention landed on. */
+  day?: number;
+  /** True when the intervention date falls on an already-stepped day: the
+   * refold rewrote history — EXPECTED for a digital twin (the UI says so). */
+  affectsPastDays?: boolean;
 }
 
 /** One "crop · sow date" row for the drawer, aggregated from live SimState
@@ -115,6 +139,16 @@ export interface SimRunController {
   setSpeed: (daysPerSec: number) => void;
   seekDay: (day: number) => void;
   stopRun: () => void;
+  /** Author an intervention on the ACTIVE run (spec §3.2/§3.3 in-world
+   * authoring): amends config.interventions IN MEMORY (sorted by date — the
+   * config stays the single determinism source) and refolds deterministically
+   * to the CURRENT dayIndex via replayTo. Weather interventions are baked
+   * into envSeries at compose time and are rejected; everything else
+   * synchronously recomputes history (that is the point of a twin). */
+  applyIntervention: (iv: Intervention) => ApplyInterventionResult;
+  /** True once config.interventions diverge from the stored RunRecord
+   * (session-only: nothing is persisted over the record). */
+  unsavedChanges: boolean;
 }
 
 const COMMIT_INTERVAL_MS = 200; // ~5 React commits/s; refs carry the rest
@@ -128,6 +162,11 @@ const MIN_SPEED_DAYS_PER_SEC = 0.25;
 /** ISO date of the run's current day (dayIndex 0 = config.startDate). */
 export function runDateISO(record: RunRecord, dayIndex: number): string {
   return isoFromDayNumber(isoDayNumber(record.config.startDate) + dayIndex);
+}
+
+/** The date an intervention keys on (weather overrides use fromDate). */
+function ivDateOf(iv: Intervention): string {
+  return iv.kind === 'weather' ? iv.fromDate : iv.date;
 }
 
 /** The environment driving the CURRENT state: the last completed day's entry
@@ -299,6 +338,9 @@ export function useSimRun(opts: {
   const [tickVersion, setTickVersion] = useState(0);
   const [ctx, setCtx] = useState<SimRunCtx | null>(null);
   const [timeline, setTimeline] = useState<SimRunTimeline | null>(null);
+  // Session-only divergence marker: the amended config lives in memory, the
+  // stored RunRecord is never rewritten by authoring (see applyIntervention).
+  const [unsavedChanges, setUnsavedChanges] = useState(false);
 
   // Refs — the render path and the rAF loop read THESE.
   const simStateRef = useRef<SimState | null>(null);
@@ -407,6 +449,7 @@ export function useSimRun(opts: {
       recordRef.current = rec;
       setRecord(rec);
       setEnded(false);
+      setUnsavedChanges(false);
       simStateRef.current = null;
       dayIndexRef.current = 0;
       pendingSeekRef.current = null;
@@ -472,6 +515,79 @@ export function useSimRun(opts: {
     [replayTo],
   );
 
+  // Persistence note (intervention authoring): there is deliberately NO save
+  // path here. apiFetch.createSimRun re-forks the CURRENT live plan and
+  // recomposes envSeries, which would break the frozen-provenance contract
+  // this run replay relies on; a dedicated `saveSimRun(amendedRecord)` seam
+  // in the Api implementations is the follow-up. Until then amendments are
+  // session-only, surfaced by `unsavedChanges`.
+
+  /** Amend the ACTIVE run's interventions and deterministically refold to the
+   * CURRENT day (dayIndex never visually resets; the moisture overlay and
+   * why-panel update via the tickVersion commit replayTo forces). Env series
+   * is untouched: 'weather' interventions were baked in at compose time and
+   * are rejected here. replayTo fires no onEvents, so refolded history never
+   * triggers celebrations — those stay live-step-only. */
+  const applyIntervention = useCallback((iv: Intervention): ApplyInterventionResult => {
+    const rec = recordRef.current;
+    if (!rec) return { ok: false, error: 'No active run.' };
+    if (iv.kind === 'weather') {
+      return {
+        ok: false,
+        error: 'Weather overrides are baked into this run’s environment series and cannot be authored here.',
+      };
+    }
+    if (iv.kind !== 'irrigate' && iv.kind !== 'fertilize') {
+      return { ok: false, error: 'Only irrigate and fertilize interventions can be authored here.' };
+    }
+    const amount = iv.kind === 'irrigate' ? iv.mm : iv.nKgHa;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return {
+        ok: false,
+        error: iv.kind === 'irrigate'
+          ? 'Irrigation needs a positive mm amount.'
+          : 'Fertilizing needs a positive kg/ha N amount.',
+      };
+    }
+    const runCtx = ctxRef.current;
+    if (!runCtx) return { ok: false, error: 'Run context still loading — try again in a moment.' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iv.date)) {
+      return { ok: false, error: 'Pick a date inside the run season.' };
+    }
+    const start = isoDayNumber(rec.config.startDate);
+    const dayNum = isoDayNumber(iv.date);
+    const end = start + rec.envSeries.length - 1;
+    if (dayNum < start) {
+      return { ok: false, error: `${iv.date} is before this run starts (${rec.config.startDate}).` };
+    }
+    if (dayNum > end) {
+      return { ok: false, error: `${iv.date} is after this run ends (${isoFromDayNumber(end)}).` };
+    }
+
+    // Amend IN MEMORY and re-fold to the SAME day: identical configs replay
+    // byte-identically (stable sort keeps same-day insertion order fixed).
+    const amended: RunRecord = {
+      ...rec,
+      config: {
+        ...rec.config,
+        interventions: [...rec.config.interventions, iv].sort(
+          (a, b) => isoDayNumber(ivDateOf(a)) - isoDayNumber(ivDateOf(b)),
+        ),
+      },
+    };
+    const targetDay = dayIndexRef.current;
+    recordRef.current = amended;
+    setRecord(amended);
+    setUnsavedChanges(true);
+    replayTo(targetDay);
+    setTimeline(buildTimeline(amended, runCtx));
+    return {
+      ok: true,
+      day: dayNum - start,
+      affectsPastDays: dayNum - start < targetDay,
+    };
+  }, [replayTo]);
+
   const stopRun = useCallback(() => {
     loadIdRef.current += 1;
     stopTicking();
@@ -484,6 +600,7 @@ export function useSimRun(opts: {
     setCtx(null);
     setTimeline(null);
     setEnded(false);
+    setUnsavedChanges(false);
     setDayIndex(0);
     maybeCommit(true);
   }, [maybeCommit, stopTicking]);
@@ -515,8 +632,10 @@ export function useSimRun(opts: {
       setSpeed,
       seekDay,
       stopRun,
+      applyIntervention,
+      unsavedChanges,
     }),
-    [record, dayIndex, playing, speed, ended, tickVersion, ctx, timeline, startRun, play, pause, setSpeed, seekDay, stopRun],
+    [record, dayIndex, playing, speed, ended, tickVersion, ctx, timeline, startRun, play, pause, setSpeed, seekDay, stopRun, applyIntervention, unsavedChanges],
   );
 }
 
@@ -525,11 +644,17 @@ export function useSimRun(opts: {
 function buildTimeline(rec: RunRecord, ctx: SimRunCtx): SimRunTimeline {
   const start = isoDayNumber(rec.config.startDate);
   const days = rec.envSeries.length;
-  const interventions: { day: number; kind: string }[] = [];
+  const interventions: SimRunTimeline['interventions'] = [];
   for (const iv of rec.config.interventions) {
-    const iso = iv.kind === 'weather' ? iv.fromDate : iv.date;
+    const iso = ivDateOf(iv);
     const day = isoDayNumber(iso) - start;
-    interventions.push({ day: Math.min(days, Math.max(0, day)), kind: iv.kind });
+    interventions.push({
+      day: Math.min(days, Math.max(0, day)),
+      kind: iv.kind,
+      date: iso,
+      ...(iv.kind === 'irrigate' ? { mm: iv.mm } : {}),
+      ...(iv.kind === 'fertilize' ? { nKgHa: iv.nKgHa } : {}),
+    });
   }
   interventions.sort((a, b) => a.day - b.day);
 

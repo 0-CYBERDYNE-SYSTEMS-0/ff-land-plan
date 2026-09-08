@@ -729,3 +729,59 @@ updated with measured numbers); run-mode stress tint not applied to plant
 materials (drawer/overlay carry it); creatures counts not yet wired into
 animals.ts; interventions authoring UI, multi-run ghost A/B, rest-world runs
 = spec Phases 3-UI/4, not started.
+
+## 2026-09-08 — Sim Core wave 3 (Agent G): run stress tint + creature populations in the 3D world
+
+Closed the two wave-2 "known gaps" that kept the living ecosystem invisible in
+World3D (`quality/SPEC-SIM-ECOSYSTEM.md` §3.4). All changes ADDITIVE to the
+three owned files; `updatePlants`/`buildPlants`/`advancePlantGrowth` signatures
+unchanged (optional opts field only), init-effect deps untouched.
+
+**Run stress tint.** `PlantUpdateOptions` gains `stressByCell?: Map<string,
+number>` ("x,y" → effective stress 0..1). `plants.ts` centralizes the batch
+tint in `batchTintStress()`: when the map is present (run mode) the batch tint
+is the MAX per-cell effective stress across the batch's live cells (one
+material per (crop,stage) template — per-instance tint would need
+instanceColor buffers per batch); when absent, the legacy
+`scenarioGrowthMod().stress` path applies byte-identically (run mode passes
+`scenario: undefined`, so the two never fight over a shared material).
+World3D's `applyRunGrowth` builds `stressByCell` alongside `progressByCell`:
+per cell `max(water, heat, cold, nitrogen)` — the SAME max-of-terms
+aggregation the RunInspector rows use (`useSimRun.aggregateCells`) — with
+`pestPressure × 0.8` folded in (documented visual-only weight; outbreak days
+read on the crop without pest creature models). Existing tint curve reused
+(`applyStressTint`: (1, 1−0.35s, 1−0.55s)).
+
+**Creature populations.** `animals.ts` gains `setFaunaPresence(system,
+{bees01, butterflies01})`: of each pollinator flock's spawned members (stable
+spawn order), the first `round(fraction × count)` stay `obj.visible`, the rest
+hidden — renderer skips them (hiding REDUCES draws), zero allocations, no
+geometry changes, hidden members keep ticking (≤16 total). Fractions: World3D
+computes `creatures.bees ÷ (Σ floweringFrac of insect-pollinated cells × 8)`
+and `creatures.butterflies ÷ (Σ floweringFrac × 3)` — the same denominators
+`ecosystem.creaturesFromCells` uses, so ≤1 by construction (clamped anyway);
+practically bees/butterflies read as present-during-flowering on the tiny
+world flocks. Day-keyed effect (`[runActive, runDayIndex, sceneReady,
+editor.planVersion]` — NOT tickVersion, moisture-overlay lesson), placed after
+the planVersion effect so it reapplies after animal rebuilds; run-off and the
+run-loading window reset to full presence. Legacy mode untouched (flocks fully
+visible; scenario tint path intact).
+
+Verified: typecheck + build clean (three.js still its own lazy chunk);
+appshot GATE/EXPECT on world farm 1. CDP-driven end-to-end on a purpose-built
+QA farm (temperate June, tomato beds + 2×2 beehive, own dev port, headless
+Chrome + raw-WebSocket CDP, no new deps): irrigated vs drought runs at day 50
+— drought tomato visibly olive/yellow-brown vs vibrant green watered control,
+RunInspector row "stress" chip matching (watered 62% no chip, drought 40%
+chip; sim summaries 26k vs ~0 tomato water-stress cell-days); bees ABSENT at
+day 10 (pre-flowering, creatures.bees=0) and clearly orbiting the hive at
+day 62 (flowering window) in 3× zoom shots; butterflies likewise flowering-
+gated. QA lesson recorded: on this sim, an unirrigated "baseline" in a dry
+summer IS drought-stressed — tint comparisons need an irrigated control.
+Known gaps (report-only): pest tint term (×0.8) is a visual superset the
+drawer's four-term row does not display (why-panel is Agent F's surface);
+seeded farms' per-cell coop flocks eat the 16-creature budget before bees
+(pre-existing `buildAnimals` cap behavior — bees only spawn on coop-free
+plans), so run presence modulation is most visible on coop-free/painted
+plans; batch tint is crop-wide max (per-(crop,plantedAt) tinting would need
+per-group materials).

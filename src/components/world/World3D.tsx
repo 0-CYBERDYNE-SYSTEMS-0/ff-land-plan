@@ -8,6 +8,7 @@ import { fetchClimateNormals } from '@/lib/climate';
 import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, type GrowthModCtx } from '@/lib/growth';
 import { parseKey } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
+import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
 import type { PlanState, ScenarioType, Weather, WeatherCurrent } from '@/types';
 import type { SimEvent, SimState } from '@/lib/sim';
 import {
@@ -19,7 +20,7 @@ import {
   type RunProgressRow,
   type SimRunController,
 } from '@/hooks/useSimRun';
-import { buildAnimals, disposeAnimals, updateAnimals, type AnimalSystem } from '@/three/animals';
+import { buildAnimals, disposeAnimals, setFaunaPresence, updateAnimals, type AnimalSystem, type FaunaPresence } from '@/three/animals';
 import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
 import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
 import { createClouds, type Clouds } from '@/three/clouds';
@@ -248,9 +249,17 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     for (const key of Object.keys(plan.planting)) plantedAtShim[key] = FAR_FUTURE_ISO;
     const shimPlan: PlanState = { ...plan, plantedAt: plantedAtShim };
     const progressByCell = new Map<string, number>();
+    const stressByCell = new Map<string, number>();
     for (const [key, cell] of Object.entries(st.cells)) {
       if (plan.planting[key] === undefined) continue; // cell no longer in the live plan
       progressByCell.set(key, cell.biomassFrac);
+      // Tint stress: MAX of the four stress terms — the same max-of-terms
+      // aggregation the RunInspector rows use (useSimRun.aggregateCells) —
+      // with pest pressure folded in at a documented 0.8 weight so outbreak
+      // days read on the crop (spec deliverable: pests tint, no pest models).
+      const terms = cell.stress;
+      const worst = Math.max(terms.water, terms.heat, terms.cold, terms.nitrogen);
+      stressByCell.set(key, Math.min(1, Math.max(worst, cell.pestPressure * 0.8)));
     }
     const runDate = new Date(`${runDateISO(record, st.dayIndex)}T00:00:00`);
     plantBatchesRef.current = updatePlants(
@@ -261,7 +270,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       runDate,
       undefined,
       growthCtxRef.current,
-      { progressByCell },
+      { progressByCell, stressByCell },
     );
   };
 
@@ -864,6 +873,44 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     // rebuilding on every throttled commit (~5/s) would just churn GPU buffers.
   }, [runActive, showMoisture, runDayIndex, sceneReady, editor.planVersion]);
 
+  // Run-mode fauna presence (spec §3.4 "live ecosystem dressing"): pollinator
+  // flock fractions come from SimState.creatures ÷ this day's flowering
+  // capacity — the SAME denominators ecosystem.creaturesFromCells uses (bees:
+  // Σ floweringFrac of insect-pollinated cells × BEES_PER_FLOWERING_CELL 8;
+  // butterflies: Σ floweringFrac × 3), so the fraction is ≤1 by construction
+  // and clamped anyway. setFaunaPresence only flips visibility flags (zero
+  // allocations, no rebuilds). Keyed on the sim DAY like the moisture
+  // overlay, NOT tickVersion. Deps include sceneReady (world may init after
+  // the run starts) and editor.planVersion (the plan-change effect rebuilds
+  // animals ABOVE this effect in the same commit — this reapplies the
+  // fractions). Run-off and the run-loading window reset to full presence.
+  useEffect(() => {
+    const animals = animalsRef.current;
+    if (!animals) return;
+    const full: FaunaPresence = { bees01: 1, butterflies01: 1 };
+    const st = runActive ? simRunRef.current?.simStateRef.current ?? null : null;
+    if (!st) {
+      setFaunaPresence(animals, full); // legacy mode, or run state not replayed yet
+      return;
+    }
+    let beeCap = 0;
+    let butterflyCap = 0;
+    for (const cell of Object.values(st.cells)) {
+      const f = cell.floweringFrac;
+      if (f <= 0) continue;
+      butterflyCap += f;
+      if (isInsectPollinated(cropByIdRef.current.get(cell.cropId))) beeCap += f;
+    }
+    const creatures = st.creatures;
+    setFaunaPresence(animals, {
+      bees01: beeCap > 0 ? Math.min(1, (creatures.bees ?? 0) / (beeCap * BEES_PER_FLOWERING_CELL)) : 0,
+      butterflies01:
+        butterflyCap > 0
+          ? Math.min(1, (creatures.butterflies ?? 0) / (butterflyCap * BUTTERFLIES_PER_FLOWERING_CELL))
+          : 0,
+    });
+  }, [runActive, runDayIndex, sceneReady, editor.planVersion]);
+
   // A run activating (e.g. opened from the Simulations page) surfaces the
   // RunInspector transport so the run is visibly controllable.
   useEffect(() => {
@@ -1313,6 +1360,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         onSelectRow={setSelectedRowKey}
         showMoisture={showMoisture}
         onToggleMoisture={runActive ? setShowMoisture : undefined}
+        runUnsaved={simRun?.unsavedChanges ?? false}
+        onAddIntervention={
+          runActive
+            ? (iv) => simRunRef.current?.applyIntervention(iv) ?? { ok: false, error: 'No active run.' }
+            : undefined
+        }
       />
 
       {/* Tour progress bar */}
