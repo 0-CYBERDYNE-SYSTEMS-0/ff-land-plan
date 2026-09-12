@@ -7,7 +7,8 @@
  */
 import * as THREE from 'three';
 import { PALETTE } from '@/creative/voxel';
-import type { CropPalette } from './shared';
+import type { CropPalette, PlantStateVisual } from './shared';
+import { STATE_BUILDERS } from './states';
 import { makeTomato, TOMATO_PAL } from './tomato';
 import {
   makeLeafyHead, makeBrassica, makeGreensOpen,
@@ -161,12 +162,26 @@ export const cropAssetMap: Record<string, CropAssetMapping> = {
   'Shiitake': { archetype: 'mushroom', palette: { fruit: 0x8a5a33, unripe: 0x9c6b44, mature: 0x7a4f2c, dark: 0x543620, light: 0xb07a4a } },
 };
 
-/** Build the plant for a catalog crop name at a growth stage (null if unmapped). */
-export function makeCropFor(name: string, stage: number): THREE.Object3D | null {
+/**
+ * Build the plant for a catalog crop name at a growth stage (null if
+ * unmapped). With `state`, build the archetype's dedicated lifecycle-state
+ * geometry instead (SPEC-GROWTH-VISUAL §2.2 — single pose, stage ignored;
+ * null when the archetype has no builder for that state, so callers fall
+ * back to the Tier-1 tint + pose channels).
+ */
+export function makeCropFor(name: string, stage: number, state?: PlantStateVisual): THREE.Object3D | null {
   const m = cropAssetMap[name];
-  if (!m || stage < 0 || stage > 5) return null;
+  if (!m) return null;
   const pal: CropPalette = { ...ARCHETYPE_DEFAULTS[m.archetype], ...m.palette };
-  const obj = BUILDERS[m.archetype](stage, pal, m.variant ? { variant: m.variant } : undefined);
+  let obj: THREE.Object3D;
+  if (state) {
+    const buildState = STATE_BUILDERS[m.archetype]?.[state];
+    if (!buildState) return null;
+    obj = buildState(pal);
+  } else {
+    if (stage < 0 || stage > 5) return null;
+    obj = BUILDERS[m.archetype](stage, pal, m.variant ? { variant: m.variant } : undefined);
+  }
   if (m.scale !== undefined && m.scale !== 1) obj.scale.setScalar(m.scale);
   return obj;
 }

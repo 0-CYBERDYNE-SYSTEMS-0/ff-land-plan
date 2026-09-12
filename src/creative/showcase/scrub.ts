@@ -19,6 +19,9 @@
 import * as THREE from 'three';
 import type { AssetEntry } from '@/creative/registry-types';
 import { ARCHETYPES } from '@/creative/crops/registry';
+import { ARCHETYPE_DEFAULTS } from '@/creative/crops/map';
+import { STATE_BUILDERS } from '@/creative/crops/states';
+import { STATE_HEIGHT_FACTOR, type CropPalette, type PlantStateVisual } from '@/creative/crops/shared';
 import { growthToStage, stressTintMultiplier } from '@/lib/sim/view';
 
 export const GROWTH_SAMPLES = 12;
@@ -53,6 +56,9 @@ interface ViewState {
 interface LifecycleState extends ViewState {
   id: string;
   label: string;
+  /** When set, use the archetype's real Tier-2 state geometry if authored
+   * (falling back to the Tier-1 tint + pose preview below). */
+  geom?: PlantStateVisual;
 }
 
 const NEUTRAL: ViewState = { tint: null, droopRad: 0, squashY: 1, uniformScale: 1 };
@@ -61,9 +67,9 @@ const LIFECYCLE_STATES: LifecycleState[] = [
   { id: 'healthy', label: 'healthy', ...NEUTRAL },
   { id: 'stressed', label: 'stress tint 0.55', tint: tintTuple(0.55), droopRad: 0.04, squashY: 0.97, uniformScale: 1 },
   { id: 'wilting', label: 'wilting · water 0.8', tint: tintTuple(0.8), droopRad: 0.22, squashY: 0.88, uniformScale: 1 },
-  { id: 'dead', label: 'dead · desiccated (T2 pending)', tint: [0.62, 0.52, 0.38], droopRad: 0.34, squashY: 0.78, uniformScale: 0.92 },
-  { id: 'harvested', label: 'harvested · stubble (T2 pending)', tint: [0.86, 0.79, 0.62], droopRad: 0.02, squashY: 0.5, uniformScale: 0.72 },
-  { id: 'overripe', label: 'overripe · past grace', tint: [0.9, 0.76, 0.5], droopRad: 0.15, squashY: 0.93, uniformScale: 1 },
+  { id: 'dead', label: 'dead · desiccated', geom: 'dead', tint: [0.62, 0.52, 0.38], droopRad: 0.34, squashY: 0.78, uniformScale: 0.92 },
+  { id: 'harvested', label: 'harvested · stubble', geom: 'harvested', tint: [0.86, 0.79, 0.62], droopRad: 0.02, squashY: 0.5, uniformScale: 0.72 },
+  { id: 'overripe', label: 'overripe · past grace', geom: 'overripe', tint: [0.9, 0.76, 0.5], droopRad: 0.15, squashY: 0.93, uniformScale: 1 },
 ];
 
 const HELPER_MATERIAL = new THREE.MeshBasicMaterial({ visible: false });
@@ -133,7 +139,26 @@ function tintMaterials(root: THREE.Object3D, tint: [number, number, number]): vo
  * (final height ∝ templateScaleT(progress)), with the state channel's tint,
  * base-anchored droop/lean and Y squash applied on top.
  */
-function makeScrubObject(archId: string, progress: number, state: ViewState, frameBox: THREE.Box3): THREE.Group {
+function makeScrubObject(archId: string, progress: number, state: ViewState & { geom?: PlantStateVisual }, frameBox: THREE.Box3): THREE.Group {
+  const root = new THREE.Group();
+
+  // Real Tier-2 state geometry when the archetype authored it, normalized to
+  // the same height factor the renderer uses (plants.ts STATE_HEIGHT_FACTOR).
+  if (state.geom) {
+    const builder = STATE_BUILDERS[archId]?.[state.geom];
+    if (builder) {
+      const plant = builder((ARCHETYPE_DEFAULTS as Record<string, CropPalette>)[archId]);
+      const box = new THREE.Box3().setFromObject(plant);
+      const rawH = Math.max(0.01, box.max.y - box.min.y);
+      const factor =
+        (plant.userData as { heightFactor?: number } | undefined)?.heightFactor ?? STATE_HEIGHT_FACTOR[state.geom];
+      plant.scale.setScalar(factor / rawH);
+      root.add(plant, makeFrameHelper(frameBox));
+      return root;
+    }
+  }
+
+  // Tier-1 preview: stage geometry + tint/droop/squash channels.
   const stage = growthToStage(progress, stageCountFor(archId));
   const plant = builderFor(archId).build(stage);
   const rawH = rawStageHeight(archId, stage);
@@ -142,7 +167,6 @@ function makeScrubObject(archId: string, progress: number, state: ViewState, fra
   plant.rotation.z = state.droopRad;
   plant.rotation.x = state.droopRad * 0.35;
   if (state.tint) tintMaterials(plant, state.tint);
-  const root = new THREE.Group();
   root.add(plant, makeFrameHelper(frameBox));
   return root;
 }

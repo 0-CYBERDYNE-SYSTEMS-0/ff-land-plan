@@ -45,6 +45,8 @@ const laneFilter = params.get('lane');
 const onlyList = params.get('only')?.split(',').map((s) => s.trim()) ?? null;
 const mode = params.get('mode') ?? 'sheet';
 const spinEnabled = params.get('spin') !== '0';
+/** plan: top-down camera (the QUALITY_BAR plan-view clause needs evidence). */
+const planView = params.get('view') === 'plan';
 
 let visible = allEntries;
 if (mode === 'scrub') {
@@ -147,8 +149,8 @@ function makeCell(entry: TaggedEntry, index: number): Cell {
   const vRadius = box.getBoundingSphere(new THREE.Sphere()).radius || 0.6;
   const dist = (vRadius / Math.sin((fov * Math.PI) / 360)) * 1.12;
   const camera = new THREE.PerspectiveCamera(fov, LAYOUT.cellW / LAYOUT.cellH, 0.01, Math.max(100, dist * 4));
-  const elev = (28 * Math.PI) / 180;
-  const azim = (33 * Math.PI) / 180;
+  const elev = planView ? (89 * Math.PI) / 180 : (28 * Math.PI) / 180;
+  const azim = planView ? 0 : (33 * Math.PI) / 180;
   camera.position.set(
     dist * Math.cos(elev) * Math.sin(azim),
     dist * Math.sin(elev) + vRadius * 0.15,

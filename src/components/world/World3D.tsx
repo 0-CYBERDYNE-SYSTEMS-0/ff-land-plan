@@ -519,11 +519,14 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const runActiveRef = useRef(runActive);
   runActiveRef.current = runActive;
 
-  // DEV-only Tier-1 proof hook (SPEC-GROWTH-VISUAL §4, wave 1): ?ffvis=stress
-  // paints a deterministic synthetic water-stress gradient over the live plan
+  // DEV-only Tier-1/2 proof hooks (SPEC-GROWTH-VISUAL §4): ?ffvis=stress
+  // paints a deterministic synthetic water-stress gradient; ?ffvis=lifecycle
+  // additionally drives the dead/harvested/overripe state geometry — both
   // through the REAL projectPlant → viewByCell path (no sim run required).
   // Same launch-param family as ffdebug.
-  const visStressDemo = import.meta.env.DEV && readLaunchParams().get('ffvis') === 'stress';
+  const visDemo = import.meta.env.DEV ? readLaunchParams().get('ffvis') : null;
+  const visStressDemo = visDemo === 'stress';
+  const visLifecycleDemo = visDemo === 'lifecycle';
 
   /**
    * Run-mode plant reconcile: SimState biomass is the growth authority.
@@ -1106,11 +1109,13 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     applyRunGrowth();
   }, [runActive, runTickVersion, sceneReady, editor.cropById, editor.planVersion]);
 
-  // DEV-only (ffvis=stress): deterministic synthetic water-stress gradient over
+  // DEV-only (ffvis=stress|lifecycle): deterministic synthetic cell states over
   // the live plan → REAL projectPlant → viewByCell (SPEC-GROWTH-VISUAL §4
-  // wave-1 acceptance evidence). Suppressed whenever a real run is active.
+  // acceptance evidence). lifecycle mode drives the Tier-2 state geometry
+  // (dead / harvested / overripe zones toward the far corner). Suppressed
+  // whenever a real run is active.
   useEffect(() => {
-    if (!visStressDemo || runActive) return;
+    if ((!visStressDemo && !visLifecycleDemo) || runActive) return;
     const engine = engineRef.current;
     const plan = editor.planRef.current;
     if (!engine || !plan) return;
@@ -1118,28 +1123,47 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     if (keys.length === 0) return;
     let span = 1;
     for (const key of keys) {
-      const [cx, cy] = parseKey(key);
-      span = Math.max(span, cx + cy);
+      const [, cy] = parseKey(key);
+      span = Math.max(span, cy);
     }
     const plantedAtShim: Record<string, string> = {};
     const viewByCell = new Map<string, PlantViewParams>();
     for (const key of keys) {
       plantedAtShim[key] = FAR_FUTURE_ISO;
-      const [cx, cy] = parseKey(key);
-      const stress01 = Math.min(1, (cx + cy) / span);
+      // Depth bands (cell row only, not the diagonal): the default camera
+      // looks across the field, so near→far rows read as the life story
+      // healthy → stressed → dead → overripe → harvested.
+      const [, cy] = parseKey(key);
+      const v = Math.min(1, cy / span);
       const crop = editor.cropById.get(plan.planting[key]!);
       if (!crop) continue;
+      let water = visStressDemo ? v : v * 0.75;
+      const extra: Partial<CellState> = {};
+      if (visLifecycleDemo) {
+        if (v > 0.92) {
+          extra.harvested = true;
+          extra.readyAtDay = 45;
+          water = 0.2;
+        } else if (v > 0.84) {
+          extra.readyAtDay = 30; // day 60 > 30 + grace ⇒ overripe
+          water = 0.35;
+        } else if (v > 0.76) {
+          extra.stressDaysCount = 30;
+          water = 0.9;
+        }
+      }
       const cell: CellState = {
         cropId: crop.id,
         plantedAtDay: 0,
-        moistureFrac: 1 - stress01 * 0.8,
+        moistureFrac: 1 - water * 0.8,
         nitrogenKgHa: 120,
-        gddAccumC: 900,
-        biomassFrac: 0.85,
-        stage: 4,
+        gddAccumC: 950,
+        biomassFrac: visLifecycleDemo ? 0.95 : 0.85,
+        stage: visLifecycleDemo ? 5 : 4,
         floweringFrac: 0.2,
         pestPressure: 0,
-        stress: { water: stress01, heat: 0, cold: 0, nitrogen: 0 },
+        stress: { water, heat: 0, cold: 0, nitrogen: 0 },
+        ...extra,
       };
       viewByCell.set(key, projectPlant({ cell, crop, env: null, dayIndex: 60, cellKey: key }));
     }
@@ -1153,7 +1177,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       growthCtxRef.current,
       { viewByCell },
     );
-  }, [visStressDemo, runActive, sceneReady, editor.planVersion, editor.cropById, scrubDate]);
+  }, [visStressDemo, visLifecycleDemo, runActive, sceneReady, editor.planVersion, editor.cropById, scrubDate]);
 
   // Ghost-run reconcile (spec §3.5 Phase 4): reconciles the semi-transparent
   // second-run plants beside the solid primary. Day-keyed like the moisture

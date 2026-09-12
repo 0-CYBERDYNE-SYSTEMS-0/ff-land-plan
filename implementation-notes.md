@@ -959,3 +959,56 @@ PASS; determinism probe: two independent scrub renders byte-identical
 both write color state (batch=white in run mode — compounding documented);
 ghost overlay does not yet consume view params (wave 2/4); Tris HUD 10×
 discrepancy still queued for a real-GPU re-measure.
+
+## 2026-09-11 — Growth Visual Evolution wave 2: Tier-2 lifecycle geometry states
+
+Full story now legible in-world: every archetype has dedicated dead /
+harvested / overripe geometry (54 new deterministic voxel builds), projected
+purely from CellState through view.ts (lifecycle precedence
+harvested > dead > overripe > alive; dead = cold ≥0.95 OR stressDaysCount ≥21
+∧ stress ≥0.85; overripe = readyAtDay + category grace). Engine untouched.
+
+- **CropPalette** gains optional stress/dead/stubble slots + STATE_TONES
+  fallbacks; STATE_HEIGHT_FACTOR defaults (dead 0.55 / harvested 0.30 /
+  overripe 0.95) with per-builder userData.heightFactor override (apple keeps
+  its canopy in every state; tomato dead keeps the stake; trellis never
+  shrinks) — contract in shared.ts.
+- **NEW src/creative/crops/states/**: 18 per-archetype modules + index.ts
+  (STATE_BUILDERS + hasStateBuilder probe). Authored by 7 parallel builder
+  subs (families: tomato; leafy/brassica/greens; wheat/corn; root/allium/
+  potato; cucurbit/legume/bush-bean/strawberry; herbs/mushroom; berry/apple),
+  each self-verifying (typecheck + scrub shots + PNG self-review + own critic
+  loop). Highlights: wheat harvested = cut stubble + missed head; root
+  harvested = pulled-hollow with carrots on soil; apple harvested = picked-
+  clean canopy with scars/fallen fruit; strawberry overripe = blackened
+  berries; corn dead = lodged wreckage.
+- **Integration (leader)**: makeCropFor(name, stage, state?) dispatches state
+  builders (null → Tier-1 fallback); plants.ts template key gains the state
+  axis (`${crop}|${stage}|${state}|${h}`), stages Map keyed by stageKey
+  composite, reconcile pass-2 moves cells on state change (rides the existing
+  diff — day-keyed semantics preserved), state cells pin progress to the
+  stage ramp point (instance scale exactly 1) and suppress Tier-1 tint/wilt
+  (pose + baked palette carry the state). Scrub tool renders REAL state
+  geometry when authored (labels dropped "T2 pending"). Showcase gains
+  `#view=plan` (top-down camera) for the bar's plan-view clause.
+  ffvis=lifecycle demo now paints DEPTH BANDS (was diagonal) so near→far
+  reads as the life story from the default camera.
+- **Critic round 1: ITERATE** (dead/overripe corn confusable; apple harvested
+  too close to healthy; demo staging unreadable) → two fix subs (corn dead
+  rebuilt as collapsed/lodged with heightFactor 0.4 vs standing overripe;
+  apple harvested re-canopied 0.92 shell + gaps + scars + yellow-edge leaves +
+  ground fruit) + demo restage + plan-view tooling. Post-fix analyzer reads:
+  corn three-way silhouette split clear (standing-green / folded-brown /
+  standing-tan); apple harvested distinct-and-alive; demo bands legible
+  green → yellow-brown → collapsed → dark full-size → stubble.
+
+Verified: typecheck + build green; Math.random audit = comments only (law
+holds); plain-world Draws machine-asserted 273 (common case unchanged);
+lifecycle demo Draws 301 (+28 = bounded state batches for zones' crops —
+plant-layer ≤80 budget respected); determinism probe byte-identical on the
+72-cell 4-archetype sheet (two renders); blueprint GATE/EXPECT pass; lane-B
+growth rows regression-free per critic sweep. Known follow-ups: overripe-vs-
+healthy margin still hue/droop-led for tomato/wheat (critic caveat, wave-3
+polish list); ghost overlay does not yet consume states (wave 4); stress
+0.55 scrub cell still subtle (tint-strength tuning backlog); Tris HUD 10×
+read discrepancy still queued.

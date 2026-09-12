@@ -5,6 +5,8 @@ import { parseKey } from '@/lib/plan';
 import { growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
 import { cropAssetMap, makeCropFor } from '@/creative/crops/map';
 import { variationForCell, type PlantViewParams } from '@/lib/sim/view';
+import { STATE_HEIGHT_FACTOR, type PlantStateVisual } from '@/creative/crops/shared';
+import { hasStateBuilder } from '@/creative/crops/states';
 
 /**
  * Plant rendering — one THREE.InstancedMesh per (crop, stage) template.
@@ -81,6 +83,8 @@ interface StageMesh {
 /** Per-cell reconcile record (assigned slot + placement + growth progress). */
 interface CellSlot {
   stage: number;
+  /** Lifecycle state template axis (undefined = alive stage geometry). */
+  state?: PlantStateVisual;
   /** Instance index inside the stage's InstancedMesh. */
   slot: number;
   x: number;
@@ -122,8 +126,8 @@ export interface PlantBatch {
   swayAmount: number;
   /** fullHeight this batch was built for (surface × crop table). */
   fullHeight: number;
-  /** Voxel-instanced path: stage → instanced mesh bookkeeping. */
-  stages: Map<number, StageMesh>;
+  /** Voxel-instanced path: stageKey → instanced mesh bookkeeping. */
+  stages: Map<string, StageMesh>;
   /** Voxel-instanced path: cellKey → placement/progress record. */
   cells: Map<string, CellSlot>;
   /** Set when the crop has no voxel asset (procedural clone path). */
@@ -182,6 +186,11 @@ const DEFAULT_HEIGHT_RANGE: [number, number] = [0.7, 1.4];
 function templateScaleT(stage: number): number {
   return 0.15 + 0.85 * (stage / 5);
 }
+
+/** Stage-mesh key: stage number + lifecycle-state axis (SPEC-GROWTH-VISUAL
+ * §2.2 — state variants are separate templates, drawn only where present). */
+const stageKey = (stage: number, state?: PlantStateVisual): string =>
+  state ? `${stage}|${state}` : `${stage}`;
 
 /**
  * Vertical-growing ground slugs lift planted crops onto shelf decks (y in
@@ -362,9 +371,21 @@ function buildPlantGeometry(crop: Crop, height: number): THREE.BufferGeometry {
  * metres with its base resting at local y=0. Returns null when the crop has
  * no creative asset.
  */
-function buildNormalizedVoxelRoot(crop: Crop, stage: number, targetWorldHeight: number): THREE.Object3D | null {
-  const asset = makeCropFor(crop.name, stage);
+function buildNormalizedVoxelRoot(
+  crop: Crop,
+  stage: number,
+  targetWorldHeightParam: number,
+  state?: PlantStateVisual,
+): THREE.Object3D | null {
+  const asset = makeCropFor(crop.name, stage, state);
   if (!asset) return null;
+
+  // State templates scale by a per-state height factor (builder override via
+  // userData.heightFactor); alive stages use the passed ramp height directly.
+  const targetWorldHeight = state
+    ? targetWorldHeightParam *
+      ((asset.userData as { heightFactor?: number } | undefined)?.heightFactor ?? STATE_HEIGHT_FACTOR[state])
+    : targetWorldHeightParam;
 
   const bbox = new THREE.Box3().setFromObject(asset);
   const size = new THREE.Vector3();
@@ -376,7 +397,7 @@ function buildNormalizedVoxelRoot(crop: Crop, stage: number, targetWorldHeight: 
   }
 
   const holder = new THREE.Group();
-  holder.name = `voxel:${crop.name}:s${stage}`;
+  holder.name = state ? `voxel:${crop.name}:${state}` : `voxel:${crop.name}:s${stage}`;
   holder.add(asset);
   asset.scale.multiplyScalar(scaleFactor);
   // Shift so the (scaled) base of the plant rests at local y = 0.
@@ -419,12 +440,17 @@ function mergeTemplateGeometry(root: THREE.Object3D): THREE.BufferGeometry | nul
  * + vertex-colored material, built once and reused across every rebuild for
  * the session (never disposed with batches — see header memory-bound note).
  */
-function getVoxelTemplate(crop: Crop, stage: number, templateHeight: number): VoxelTemplate | null {
-  const key = `${crop.name}|${stage}|${templateHeight.toFixed(3)}`;
+function getVoxelTemplate(
+  crop: Crop,
+  stage: number,
+  templateHeight: number,
+  state?: PlantStateVisual,
+): VoxelTemplate | null {
+  const key = `${crop.name}|${stage}|${state ?? 'alive'}|${templateHeight.toFixed(3)}`;
   const cached = voxelTemplateCache.get(key);
   if (cached) return cached;
 
-  const voxelRoot = buildNormalizedVoxelRoot(crop, stage, templateHeight);
+  const voxelRoot = buildNormalizedVoxelRoot(crop, stage, templateHeight, state);
   if (!voxelRoot) return null;
   const geometry = mergeTemplateGeometry(voxelRoot);
   if (!geometry) return null; // asset existed but had no mergeable static geometry
@@ -566,7 +592,7 @@ function createBatch(
     cropId,
     swayAmount: swayAmountFor(crop),
     fullHeight,
-    stages: new Map<number, StageMesh>(),
+    stages: new Map<string, StageMesh>(),
     cells: new Map<string, CellSlot>(),
   };
 
@@ -579,13 +605,21 @@ function createBatch(
 }
 
 /** Allocate (or grow) the InstancedMesh for a stage, instancing a cached template. */
-function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: number): StageMesh {
-  let sm = batch.stages.get(stage);
+function ensureStageMesh(
+  batch: PlantBatch,
+  crop: Crop,
+  stage: number,
+  needed: number,
+  state?: PlantStateVisual,
+): StageMesh {
+  let sm = batch.stages.get(stageKey(stage, state));
   const capacity = Math.max(needed, 8);
 
   if (!sm) {
-    const templateHeight = batch.fullHeight * templateScaleT(stage);
-    const tpl = getVoxelTemplate(crop, stage, templateHeight);
+    // State templates pass the FULL batch height as the base; the per-state
+    // factor (builder override aware) is applied inside buildNormalizedVoxelRoot.
+    const templateHeight = state ? batch.fullHeight : batch.fullHeight * templateScaleT(stage);
+    const tpl = getVoxelTemplate(crop, stage, templateHeight, state);
     let geometry: THREE.BufferGeometry;
     let material: THREE.Material;
     let ownsGeometry = false;
@@ -608,7 +642,7 @@ function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: n
     mesh.frustumCulled = false; // instances span the whole plan
     batch.group.add(mesh);
     sm = { mesh, capacity, count: 0, slotKeys: new Array<string | undefined>(capacity), ...(ownsGeometry ? { ownsGeometry } : {}) };
-    batch.stages.set(stage, sm);
+    batch.stages.set(stageKey(stage, state), sm);
     return sm;
   }
 
@@ -650,7 +684,7 @@ function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: n
  * compaction is needed). Updates the moved occupant's slot in `batch.cells`.
  */
 function removeInstance(batch: PlantBatch, cell: CellSlot): void {
-  const sm = batch.stages.get(cell.stage);
+  const sm = batch.stages.get(stageKey(cell.stage, cell.state));
   if (!sm) return;
   const last = sm.count - 1;
   if (cell.slot < 0 || cell.slot > last) return;
@@ -778,6 +812,7 @@ function reconcileVoxelBatch(
   // allocation is fine, only the per-frame path must be allocation-free).
   interface Desired {
     stage: number;
+    state?: PlantStateVisual;
     progress: number;
     x: number;
     y: number;
@@ -790,26 +825,41 @@ function reconcileVoxelBatch(
     tintB: number;
   }
   const viewByCell = opts?.viewByCell;
+  const archOfCrop = cropAssetMap[crop.name]?.archetype;
   const desired = new Map<string, Desired>();
   for (const key of keys) {
     const [cellX, cellY] = parseKey(key);
     const view = viewByCell?.get(key);
+    // Lifecycle state: dedicated geometry when the archetype authored it
+    // (SPEC §2.2 Tier 2); otherwise the Tier-1 tint+wilt channels carry it.
+    const lifecycle = view?.lifecycle;
+    const state =
+      lifecycle !== undefined && lifecycle !== 'alive' && hasStateBuilder(archOfCrop, lifecycle)
+        ? lifecycle
+        : undefined;
     const computed = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
     const override = view?.growth ?? opts?.progressByCell?.get(key);
     const progress = override !== undefined ? Math.max(computed, override) : computed;
+    const stage = view ? view.stage : stageForScale(progress);
+    // State geometry is a single authored pose: pin progress to the stage's
+    // ramp point so the instance scale resolves to exactly 1 (authored
+    // height), and suppress the Tier-1 tint/wilt channels — the pose and
+    // baked state palette carry the read.
+    const shownProgress = state ? stage / 5 : progress;
     const jitter = jitterForCell(cellX, cellY, plan.cellM);
     const liftSlugs = SHELF_LIFTS[plan.ground[key] ?? ''];
     const lift = liftSlugs ? liftSlugs[shelfForCell(cellX, cellY)]! : 0;
-    const tint = cellInstanceColor(key, view);
+    const tint = cellInstanceColor(key, state ? undefined : view);
     desired.set(key, {
-      stage: view ? view.stage : stageForScale(progress),
-      progress,
+      stage,
+      state,
+      progress: shownProgress,
       x: cellX * plan.cellM + plan.cellM / 2 + offsetX + jitter.offsetX,
       y: 0.01 + lift,
       z: cellY * plan.cellM + plan.cellM / 2 + offsetZ + jitter.offsetZ,
       rotY: jitter.rotY,
       baseScale: jitter.scaleY,
-      wilt01: view ? view.wilt : 0,
+      wilt01: state ? 0 : (view?.wilt ?? 0),
       tintR: tint.r,
       tintG: tint.g,
       tintB: tint.b,
@@ -822,7 +872,7 @@ function reconcileVoxelBatch(
   const carriedVisual = new Map<string, number>();
   for (const [key, cell] of batch.cells) {
     const want = desired.get(key);
-    if (!want || want.stage !== cell.stage) {
+    if (!want || want.stage !== cell.stage || want.state !== cell.state) {
       carriedVisual.set(key, cell.visualProgress);
       removeInstance(batch, cell);
       batch.cells.delete(key);
@@ -833,7 +883,7 @@ function reconcileVoxelBatch(
   for (const [key, want] of desired) {
     const prev = batch.cells.get(key);
     if (prev) {
-      const sm = batch.stages.get(prev.stage)!;
+      const sm = batch.stages.get(stageKey(prev.stage, prev.state))!;
       prev.targetProgress = want.progress;
       if (
         prev.x !== want.x || prev.y !== want.y || prev.z !== want.z ||
@@ -857,10 +907,11 @@ function reconcileVoxelBatch(
       }
       continue;
     }
-    const sm = ensureStageMesh(batch, crop, want.stage, (batch.stages.get(want.stage)?.count ?? 0) + 1);
+    const sm = ensureStageMesh(batch, crop, want.stage, (batch.stages.get(stageKey(want.stage, want.state))?.count ?? 0) + 1, want.state);
     const carried = carriedVisual.get(key);
     const cell: CellSlot = {
       stage: want.stage,
+      state: want.state,
       slot: sm.count,
       x: want.x,
       y: want.y,
@@ -1027,7 +1078,7 @@ export function advancePlantGrowth(batches: PlantBatch[], dt: number, easeRate =
         if (Math.abs(cell.targetProgress - cell.visualProgress) < 1e-4) {
           cell.visualProgress = cell.targetProgress;
         }
-        const sm = batch.stages.get(cell.stage);
+        const sm = batch.stages.get(stageKey(cell.stage, cell.state));
         if (!sm) continue;
         writeCellMatrix(sm, cell);
         sm.mesh.instanceMatrix.needsUpdate = true;

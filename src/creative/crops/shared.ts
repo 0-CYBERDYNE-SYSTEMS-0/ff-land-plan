@@ -31,7 +31,62 @@ export interface CropPalette {
   fruit: number;
   /** unripe fruit / early head color */
   unripe: number;
+  /** OPTIONAL severe-stress foliage tone (STATE_TONES.stress fallback) */
+  stress?: number;
+  /** OPTIONAL desiccated/dead foliage tone (STATE_TONES.dead fallback) */
+  dead?: number;
+  /** OPTIONAL harvest stubble tone (STATE_TONES.stubble fallback) */
+  stubble?: number;
 }
+
+/* ------------------------------------------------------------------ */
+/* lifecycle state geometry (SPEC-GROWTH-VISUAL §2.2 Tier 2)            */
+/* ------------------------------------------------------------------ */
+
+/** Lifecycle states that may get dedicated geometry (single pose each). */
+export type PlantStateVisual = 'dead' | 'harvested' | 'overripe';
+
+/**
+ * State builder contract: one pose per state (no stage axis — a dead plant
+ * reads "finished" regardless of the stage it reached). Same rules as stage
+ * builders: deterministic (seeded rng only), soil pad optional, foliage in a
+ * 'sway' child, plan-view readable.
+ *
+ * Height: the renderer normalizes state geometry to
+ * `fullHeight × (group.userData.heightFactor ?? STATE_HEIGHT_FACTOR[state])` —
+ * set `userData.heightFactor` (0..1) on the returned group when the default
+ * factor is wrong for the crop (e.g. a fruit tree's "harvested" keeps the
+ * full canopy: heightFactor 1).
+ */
+export type StateBuilder = (pal: CropPalette) => THREE.Group;
+
+/** Per-archetype optional state builders (empty object = not authored yet). */
+export interface ArchetypeStates {
+  dead?: StateBuilder;
+  harvested?: StateBuilder;
+  overripe?: StateBuilder;
+}
+
+/**
+ * Canonical height factors for state templates — the renderer normalizes
+ * state geometry to `fullHeight × factor` so every crop's states read at
+ * consistent relative sizes (dead collapses, harvested is ground-hugging).
+ */
+export const STATE_HEIGHT_FACTOR: Record<PlantStateVisual, number> = {
+  dead: 0.55,
+  harvested: 0.3,
+  overripe: 0.95,
+};
+
+/** Fallback lifecycle tones for palettes without explicit slots. */
+export const STATE_TONES = {
+  /** severe-stress foliage: dry yellow-brown */
+  stress: 0xb39b4a,
+  /** desiccated dead foliage: grey-brown */
+  dead: 0x8d7a58,
+  /** cut stubble / harvest residue: straw tan */
+  stubble: 0xc4a86a,
+} as const;
 
 export const stageT = (s: number): number => Math.min(1, Math.max(0, s / 5));
 
