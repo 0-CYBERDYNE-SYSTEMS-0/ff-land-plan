@@ -35,29 +35,32 @@ above (plan view) AND attractive in 3D orbit view.
 
 Six stages each: `s0` sprout → `s1` seedling → `s2` vegetative → `s3` flowering/bud →
 `s4` fruiting/heading → `s5` harvest-ready (visibly "pick me"). Stage entries generated
-per archetype as `<archetype>-s0..s5`. All 40 catalog crops map onto these archetypes
-with palette variants in `crops/map.ts`.
+per archetype as `<archetype>-s0..s5` — 18 archetypes × 6 stages = 108 stage entries,
+plus the `growth-demo` row (109 lane B entries). All 50 catalog crops (`src/data/crops.ts`)
+map 1:1 onto these archetypes with palette/scale/variant overrides in `crops/map.ts`.
+Growth + lifecycle-state preview tooling: `showcase.html#mode=scrub&only=<archetype>&spin=0`
+(see `quality/SPEC-GROWTH-VISUAL.md`).
 
 | archetype | covers catalog crops |
 |---|---|
-| `tomato` | Tomato (stake + twine, fruit clusters green→red) |
+| `tomato` | Tomato, Pepper, Eggplant (stake + twine, fruit clusters green→red) |
 | `leafy-head` | Lettuce, Cabbage, Cauliflower (rosette→tight head) |
-| `wheat` | Wheat (tillers→golden ears) |
-| `corn` | Sweet Corn (stalk, tassel, ear w/ silk) |
+| `wheat` | Wheat, Winter Rye (tillers→golden ears) |
+| `corn` | Sweet Corn, Sunflower (stalk, tassel, ear w/ silk) |
 | `root-carrot` | Carrot, Radish, Beet (ferny tops, colored shoulders at harvest) |
 | `allium` | Onion, Garlic, Leek (tube leaves, bulb swell, seed heads) |
 | `potato` | Potato (bushy mound, flowers, hilled soil) |
 | `brassica` | Broccoli, Kale (open leaves→curd/florets) |
-| `greens-open` | Spinach, Arugula, Swiss Chard (open leaf cluster, chard stems) |
-| `cucurbit-vine` | Pumpkin, Zucchini, Melon, Cucumber (sprawl, big blossom, fruit) |
+| `greens-open` | Spinach, Arugula, Swiss Chard, Borage, Crimson Clover (open leaf cluster, chard stems) |
+| `cucurbit-vine` | Pumpkin, Zucchini, Melon, Cucumber, Nasturtium (sprawl, big blossom, fruit) |
 | `legume-trellis` | Pole Bean, Pea (climb trellis, hanging pods) |
 | `bush-bean` | Bush Bean (low mound, hanging pods) |
 | `strawberry` | Strawberry (crown, runners, white flower→red berries) |
-| `herb-clump` | Basil, Parsley, Cilantro, Dill (soft leaf clump; dill feathery) |
+| `herb-clump` | Basil, Parsley, Cilantro, Dill, Mint, Marigold (soft leaf clump; dill feathery) |
 | `herb-shrub` | Rosemary, Thyme, Sage, Oregano, Chives (woody shrub / chive spears) |
 | `berry-bush` | Raspberry, Blueberry (canes/bush, berry clusters) |
 | `apple-tree` | Fruit Tree / Apple (trunk, scaffold limbs, canopy, fruit) — also the `fruit-tree` placeable |
-| `mushroom` | Mushroom (domed caps on stems, cluster habits; feeds the Mushroom Warehouse farm theme) |
+| `mushroom` | Oyster, Button, Shiitake Mushroom (domed caps on stems; feeds the Mushroom Warehouse farm theme) |
 
 Also in lane B: `growth-demo` — one row showing all six stages of tomato side by side
 (the canonical "how growth reads" exhibit).

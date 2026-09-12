@@ -856,3 +856,50 @@ a differently-shaped fork draws the old footprint with no visual hint;
 batch-level tint granularity (one stressed sowing yellows its crop's whole
 batch); creatures counts animate existing flocks only on coop-free seeded
 plans (16-creature budget); named experiment sets (grouping runs) deferred.
+
+## 2026-09-11 — Growth Visual Evolution wave 0: baseline, scrub tooling, spec
+
+Mission: make plant growth + sim condition readable from the world alone
+(quality/SPEC-GROWTH-VISUAL.md, now binding). Branch `growth-visual-evolution`
+cut from pro-upgrade@6e23a98 into a separate worktree (../ff-land-plan-gve) —
+pro-upgrade's uncommitted working tree untouched.
+
+- Baseline verified: typecheck + build green (three.js still its own lazy
+  chunk); appshot GATE/EXPECT on #/farms/1/map and ?ffview=world&ffdebug=1.
+  Perf HUD: Draws 273 — exactly the HANDOFF farm-1 baseline. Tris HUD read
+  23,723,912 vs HANDOFF's recorded 2.3 M (unexplained 10×; Draws treated as
+  authoritative; real-GPU re-measure queued for wave 1; headless FPS under
+  virtual time not meaningful, as documented).
+- New showcase tooling: `#mode=scrub&only=<archetypes>&spin=0` renders, per
+  archetype, a 12-cell continuous growth ramp (discrete stage swap + the
+  plants.ts linear height ramp, mirrored with file:line notes) plus 6
+  lifecycle state cells (healthy / stress tint / wilting / dead / harvested /
+  overripe as Tier-1 previews). All cells of an archetype share camera framing
+  via an invisible Box3 sizing helper (Box3.setFromObject ignores .visible).
+  New module src/creative/showcase/scrub.ts (pure, deterministic, no rng);
+  showcase/main.ts gains a scrub branch + header docs (surgical, ~10 lines).
+  Asserted via --expect "showcase-ready 18".
+- quality/ASSETS.md corrected: 50 (not 40) catalog crops mapped 1:1; real
+  per-archetype coverage recorded (pepper/eggplant→tomato, sunflower→corn,
+  nasturtium→cucurbit-vine, borage/crimson clover→greens-open,
+  mint/marigold→herb-clump, winter rye→wheat, 3 mushroom cultivars); 108
+  stage entries + growth-demo = 109 lane-B entries; scrub-tool pointer.
+- SPEC-GROWTH-VISUAL.md written: PlantViewParams contract (pure
+  src/lib/sim/view.ts, framework-free, FNV(cellKey)-seeded variation), Tier
+  1/2/3 cost model, derived state definitions (dead = hard frost OR chronic
+  stress floor; overripe = readyAtDay + grace; precedence
+  harvested>dead>overripe>alive), per-archetype keyframe targets (144 stages
+  vs 108 today), per-wave acceptance criteria, perf contract (plant-layer
+  draws ≤ 80 worst case; farm-1 total ≤ ~287).
+- Two critic rounds (scrub-tomato/corn + full lane-B sheet): tooling PASS —
+  framing consistent, zero artifacts, lane B regression clean (109/109 cells,
+  growth-demo continuous). Content REVISEs are precisely this mission's later
+  waves and are recorded as the binding backlog in SPEC §5: s5 "pick me" gaps
+  on ~9 archetypes, 6-step staircase growth (needs sub-stage morphs),
+  stress-0.55 and overripe legibility vs healthy, mature-silhouette confusion
+  groups (leafy-head/brassica; bush-bean/herb-clump/greens-open). Dead and
+  overripe placeholder previews strengthened after round 1 (browner dead,
+  unmistakable overripe lean+dulling) and re-verified on re-shot sheets.
+- Wave-0 verification evidence: GATE+EXPECT passes listed above; PNGs in
+  $TMPDIR/gve-wave0/ (farm1-blueprint, farm1-world, laneb-sheet,
+  scrub-tomato{,-r2}, scrub-corn{,-r2}); worktree dev server on :5199.

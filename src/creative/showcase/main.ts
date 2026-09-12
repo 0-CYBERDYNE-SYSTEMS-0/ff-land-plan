@@ -3,8 +3,11 @@
  *
  * URL options (hash params):
  *   #lane=a|b|c|d        only show one lane's registry
- *   #only=id1,id2        only show these entry ids
- *   #mode=sheet|big      sheet: 4-col contact grid; big: 2-col close-ups
+ *   #only=id1,id2        only show these entry ids (scrub mode: crop archetype ids)
+ *   #mode=sheet|big|scrub  sheet: 4-col contact grid; big: 2-col close-ups;
+ *                         scrub: per-archetype growth ramp (12 cells) + lifecycle
+ *                         state channels (see ./scrub.ts; sheet geometry applies,
+ *                         18 cells per archetype)
  *   #spin=0              freeze turntable (for perfectly deterministic shots)
  *
  * Screenshot geometry (must match --window-size):
@@ -17,6 +20,7 @@ import { entries as terrainEntries } from '@/creative/terrain/registry';
 import { entries as cropsEntries } from '@/creative/crops/registry';
 import { entries as structuresEntries } from '@/creative/structures/registry';
 import { entries as creaturesEntries } from '@/creative/creatures/registry';
+import { makeScrubEntries } from './scrub';
 
 const LANE_LABELS: Record<string, string> = {
   a: 'Terrain & Soil',
@@ -43,8 +47,12 @@ const mode = params.get('mode') ?? 'sheet';
 const spinEnabled = params.get('spin') !== '0';
 
 let visible = allEntries;
-if (laneFilter) visible = visible.filter((e) => e.lane === laneFilter);
-if (onlyList) visible = onlyList.map((id) => visible.find((e) => e.id === id)).filter((e): e is TaggedEntry => !!e);
+if (mode === 'scrub') {
+  visible = makeScrubEntries(onlyList ?? ['tomato']).map((e) => ({ ...e, lane: 'b' }));
+} else {
+  if (laneFilter) visible = visible.filter((e) => e.lane === laneFilter);
+  if (onlyList) visible = onlyList.map((id) => visible.find((e) => e.id === id)).filter((e): e is TaggedEntry => !!e);
+}
 
 // --- layout constants -------------------------------------------------------
 const SHEET = { cols: 4, cellW: 380, cellH: 300, gap: 16, pad: 8 };
