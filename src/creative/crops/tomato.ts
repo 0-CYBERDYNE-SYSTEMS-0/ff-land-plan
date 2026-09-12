@@ -1,8 +1,10 @@
 /**
  * Archetype: tomato — indeterminate staked vine. HERO asset.
  * Anatomy: stake + straw twine figure-8 ties, twisting main stem with side
- * shoots, flat pinnate compound leaves, hanging trusses (flower → green → red).
- * Heights: 2 → 4 → 7 → 10 → 13 → 14.
+ * shoots, flat pinnate compound leaves, hanging trusses (flower → green w/
+ * first blush → heavy glossy red). Heights: 2 → 4 → 7 → 10 → 13 → 14.
+ * s5 is the harvest hero: canopy deepens a step past mature so the enlarged
+ * specular-highlighted ripe fruit is the loudest thing on the plant.
  */
 import { PALETTE, Voxel, rng } from '@/creative/voxel';
 import {
@@ -74,15 +76,27 @@ function truss(
   }
   const n = kind === 'ripe' ? 6 : 4;
   const cMain = kind === 'green' ? pal.unripe : pal.fruit;
+  const spread = kind === 'ripe' ? 0.88 : 0.75;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + seed * 0.13;
-    const fx = ex + Math.cos(a) * 0.75;
-    const fz = ez + Math.sin(a) * 0.75;
+    const fx = ex + Math.cos(a) * spread;
+    const fz = ez + Math.sin(a) * spread;
     const fy = y - 2.6 - (i % 2) * 0.75;
-    let c = cMain;
-    if (kind === 'ripe' && rnd() < 0.2) c = shade(pal.unripe, pal.fruit, 0.4); // a few still turning
-    put(sway, fx, fy, fz, c, 1.0);
-    put(sway, fx, fy + 0.66, fz, shade(c, 0xffffff, 0.38), 0.26); // gloss speck
+    if (kind === 'ripe') {
+      // heavy glossy ripe fruit: enlarged, one or two at breaker orange, bright
+      // specular on each fruit's top-left (screen-left = -X/+Z at showcase azim)
+      let c = pal.fruit;
+      if (rnd() < 0.3) c = shade(pal.fruit, pal.unripe, 0.35);
+      put(sway, fx, fy, fz, c, 1.18);
+      put(sway, fx - 0.32, fy + 0.62, fz + 0.3, shade(c, PALETTE.white, 0.72), 0.34);
+      if (i % 2 === 0) put(sway, fx + 0.06, fy + 0.8, fz, shade(c, PALETTE.white, 0.5), 0.16);
+      put(sway, fx + 0.12, fy - 0.64, fz - 0.08, shade(c, PALETTE.shadow, 0.24), 0.34);
+    } else {
+      let c = cMain;
+      if (rnd() < 0.35) c = shade(pal.unripe, pal.fruit, 0.2); // first blush — ramp into s5
+      put(sway, fx, fy, fz, c, 1.0);
+      put(sway, fx, fy + 0.66, fz, shade(c, 0xffffff, 0.38), 0.26); // gloss speck
+    }
   }
 }
 
@@ -134,14 +148,15 @@ export function makeTomato(stage: number, pal: CropPalette = TOMATO_PAL): Return
   // pinnate foliage distributed along the whole cordon
   const leafDirs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   const nLeaves = [0, 0, 5, 6, 7, 8][stage];
+  // s5 canopy deepens one step past mature so the ripe red carries
+  const leafBase = stage === 5 ? shade(foliage(pal, 5), pal.dark, 0.35) : foliage(pal, stage);
   for (let i = 0; i < nLeaves; i++) {
     // spread over the whole cordon (H-1) so young plants never bunch into a block
     const y = 1 + Math.round((i * (H - 1)) / Math.max(1, nLeaves - 1));
     const [dx, dz] = leafDirs[i % 4];
-    const f = foliage(pal, stage);
     // lower leaves run longer and droop harder — classic cordon profile
     const droop = 0.02 + 0.006 * (nLeaves - i);
-    tomatoLeaf(sway, 0, y, 0, dx, dz, stage >= 4 ? 4 : 3, f, shade(f, pal.dark, 0.38), shade(f, pal.light, 0.42), 40 + i * 7, droop);
+    tomatoLeaf(sway, 0, y, 0, dx, dz, stage >= 4 ? 4 : 3, leafBase, shade(leafBase, pal.dark, 0.38), shade(leafBase, pal.light, 0.42), 40 + i * 7, droop);
   }
 
   // twine ties once the plant is established
@@ -150,22 +165,24 @@ export function makeTomato(stage: number, pal: CropPalette = TOMATO_PAL): Return
     for (const ty of ties) twine(stat, ty);
   }
 
-  // trusses — strictly s3 flowers, s4 green, s5 ripe; hung on the camera side
+  // trusses — strictly s3 flowers, s4 green w/ blush, s5 heavy glossy ripe;
+  // hung on the camera side (s5 gains a fourth truss under the harvest load)
   if (stage >= 3) {
     const kind = stage === 3 ? 'flower' : stage === 4 ? 'green' : 'ripe';
-    const dirs: Array<[number, number]> = stage === 3 ? [[1, 0], [0, 1]] : [[1, 0], [0, 1], [1, 0]];
-    const ys = stage === 3 ? [6, 8] : stage === 4 ? [5, 8, 10] : [5, 8, 11];
+    const dirs: Array<[number, number]> =
+      stage === 3 ? [[1, 0], [0, 1]] : stage === 4 ? [[1, 0], [0, 1], [1, 0]] : [[1, 0], [0, 1], [1, 0], [0, 1]];
+    const ys = stage === 3 ? [6, 8] : stage === 4 ? [5, 8, 10] : [4, 7, 10, 12];
     ys.forEach((ty, i) => {
       const [dx, dz] = dirs[i % dirs.length];
       truss(sway, 0, ty, 0, dx, dz, kind as 'flower' | 'green' | 'ripe', pal, 90 + i * 13 + stage);
     });
   }
 
-  // s5 harvest signal: one side shoot flopping with the load
+  // s5 harvest signal: one side shoot flopping with the load (canopy-deep tone)
   if (stage === 5) {
     vline(sway, 0, 9, 0, -2, 8, 1, pal.stem);
     const f5 = foliage(pal, 5);
-    tomatoLeaf(sway, -2, 8, 1, 0, 1, 3, shade(f5, pal.dark, 0.15), shade(f5, pal.dark, 0.45), shade(f5, pal.light, 0.3), 66);
+    tomatoLeaf(sway, -2, 8, 1, 0, 1, 3, shade(f5, pal.dark, 0.35), shade(f5, pal.dark, 0.55), shade(f5, pal.light, 0.3), 66);
   }
   return finishPlant(stat, sway);
 }

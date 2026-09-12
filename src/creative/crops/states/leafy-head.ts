@@ -4,18 +4,19 @@
  *
  * Single pose per state, same kit as makeLeafyHead (heads.ts): spoon blades
  * radiating from a crown, heads as stepped blobs. Default height factors
- * (dead 0.55 / harvested 0.3 / overripe 0.95) fit — no overrides.
+ * (dead 0.55 / harvested 0.3) fit; overripe overrides heightFactor = 1.
  *  - dead: collapsed rosette of desiccated grey-brown leaves slumped flat on
  *    the pad, crispy flakes blown past the rim.
  *  - harvested: head CUT — short fat stump with a flat pale cut face, sheared
  *    wrapper butts and stale head-colored leaf scraps (cut cabbage stump).
- *  - overripe: overgrown head split into two parting lobes over a dark
- *    crevice, yellowed splayed wrappers (bolt stalks are a later wave).
+ *  - overripe: BOLTED — the head's center eloped into a tall thick flower
+ *    stalk dotted with small yellow blooms, wrapper leaves splayed flat and
+ *    yellowed around its base (pal.stress ?? STATE_TONES.stress).
  */
 import { Voxel, rng } from '@/creative/voxel';
 import {
   ArchetypeStates, STATE_TONES, foliage, shade,
-  put, vline, blade, blob, soilPad, finishPlant,
+  put, vline, blade, blob, soilPad, finishPlant, flowerDot,
 } from '../shared';
 
 const DIRS8: Array<[number, number]> = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
@@ -84,22 +85,34 @@ export const leafyHeadStates: ArchetypeStates = {
     const yellow = shade(f, stressC, 0.55);
     const edge = shade(yellow, pal.dark, 0.45);
     const vein = shade(yellow, pal.light, 0.35);
-    // wrappers splay looser than harvest-ready: half flat, half lifting
+    // wrappers splayed FLAT and yellowed around the bolt's base — spent
     DIRS8.forEach(([dx, dz], i) => {
-      const lift = i % 2 === 0;
-      blade(sway, 0, 0.7, 0, dx, dz, 3, 3, lift ? 0.55 : 0.3, 0.05,
+      blade(sway, 0, 0.55, 0, dx, dz, 3, 3, 0.16, 0.02,
         i % 3 === 0 ? shade(yellow, f, 0.4) : yellow, vein, edge, 250 + i * 5);
     });
-    vline(sway, 0, 0.6, 0, 0, 1.7, 0, vein);
-    // overgrown head split into two lobes parting over a dark crevice
-    const headC = shade(pal.fruit, stressC, 0.3);
-    blob(sway, -1.35, 2.45, 0.15, 1.2, 1.0, 1.2, headC, shade(headC, pal.light, 0.25), { seed: 31 });
-    blob(sway, 1.35, 2.3, -0.1, 1.15, 0.95, 1.15, shade(headC, pal.dark, 0.15), shade(headC, pal.light, 0.35), { seed: 32 });
-    const crevice = shade(pal.dark, STATE_TONES.dead, 0.35);
-    put(sway, 0, 3.2, 0, crevice, 0.85);
-    put(sway, 0, 2.5, 0, crevice, 0.8);
-    // one yellowed flap pulling loose from the split
-    blade(sway, 0, 2.1, 0.6, 0, 1, 2, 2, 0.4, 0.18, yellow, vein, edge, 254);
-    return finishPlant(stat, sway);
+    // the head's core rising into the stalk — a spent, opening pedestal
+    const headC = shade(pal.fruit, stressC, 0.35);
+    blob(sway, 0, 1.4, 0, 1.15, 0.75, 1.15, headC, shade(headC, pal.light, 0.25), { seed: 31 });
+    // THE BOLT: tall thick flower stalk eloping from the head's center
+    const stalkC = shade(pal.stem, stressC, 0.6);
+    const H = 10; // ~9-11 voxel stalk
+    vline(sway, 0, 1.8, 0, 0, H - 2, 0, stalkC);                         // main column
+    vline(sway, 1, 1.8, 0, 1, H - 3, 0, shade(stalkC, pal.dark, 0.22));  // thickness flank
+    vline(sway, 0, 1.8, 1, 0, H - 4, 1, shade(stalkC, pal.dark, 0.3));   // 2-3 wide at the base
+    vline(sway, 0, H - 2, 0, 0, H, 0, shade(stalkC, pal.light, 0.2));    // thinner tip
+    vline(sway, 0, H - 3, 0, 1.5, H - 1, 0.8, stalkC);                   // branches near the top
+    vline(sway, 0, H - 4, 0, -1.4, H - 1.6, -0.7, shade(stalkC, pal.dark, 0.15));
+    // small yellow flower dots clustering the top third
+    const rnd = rng(33);
+    for (let i = 0; i < 15; i++) {
+      const yy = H - 3 + rnd() * 3;
+      const ang = rnd() * Math.PI * 2;
+      const rr = rnd() < 0.45 ? 0 : rnd() < 0.8 ? 1 : 1.8;
+      flowerDot(sway, Math.round(Math.cos(ang) * rr), yy, Math.round(Math.sin(ang) * rr),
+        pal.accent, 0.4 + rnd() * 0.12);
+    }
+    const bolt = finishPlant(stat, sway);
+    bolt.userData.heightFactor = 1; // a bolted head is TALLER than 0.95× allows
+    return bolt;
   },
 };

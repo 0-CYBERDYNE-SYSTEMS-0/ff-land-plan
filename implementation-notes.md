@@ -1012,3 +1012,71 @@ healthy margin still hue/droop-led for tomato/wheat (critic caveat, wave-3
 polish list); ghost overlay does not yet consume states (wave 4); stress
 0.55 scrub cell still subtle (tint-strength tuning backlog); Tris HUD 10×
 read discrepancy still queued.
+
+## 2026-09-12 — Growth Visual Evolution wave 3: Tier-3 phenology + de-cloning + s5 pick-me
+
+The archetype map stops lying: 7 crops de-cloned into dedicated builders,
+corn/apple re-scripted on 10-keyframe phenology axes, allium tops-down lands,
+the §5.1 s5 "pick me" backlog cleared across every flagged archetype. Spec
+§2.5 table complete; §2.4 keyframe-count mechanism shipped end-to-end with
+corn+apple opting in (deviation below).
+
+- **NEW src/creative/crops/specials/** (7 builders + types/index):
+  Pepper/Eggplant (compact bush, pendant bell/oval fruit — no cordon stake,
+  no truss chains), Sunflower (stout stalk, heart leaves, nodding disc head —
+  no tassel/ear), Pumpkin/Zucchini/Melon/Cucumber (ground-sphere ribbed /
+  upright-bush cylinder / netted tan ground oval / climbing hanging cylinder —
+  four habits, not four palettes). SPECIAL_BUILDERS dispatch in makeCropFor
+  wins over archetype; palette/scale overrides still apply on top.
+- **10-keyframe axes** (mechanism + first two crops): view.ts gains
+  CROP_STAGE_COUNTS/ARCH_STAGE_COUNTS + stageCountFor() (single source);
+  makeCropFor clamp relaxed to the per-crop axis; World3D passes
+  stageCount into both projectPlant call sites; registry ArchDef.stages
+  drives lane-B entries (109 → 117). Corn: boot→tassel→silk(red)→blister→
+  milk→dough→ripe with OPEN husk + gold kernel patch at s9 (ear-emergence +
+  tassel pop-in cliffs killed). Apple: perennial AGE series whip→fork→
+  scaffold→blossom→bearing→red harvest (s9 reproduces states/apple-tree.ts
+  geometry so dead/harvested read as the same tree).
+- **Phenology**: allium tops-down (s4 kinks → s5 folded tops + swollen bulb
+  shoulders); leafy-head OVERRIPE re-authored as BOLTED (tall stalk, yellow
+  blooms — replaces the split-head pose); cilantro/lettuce bolting covered by
+  herb-clump/leafy-head overripe states (wave 2). Potato die-back = wave-2
+  dead state (unchanged).
+- **s5 pick-me fixes** (critic backlog §5.1, all palette-driven): tomato
+  (gloss + breaker orange + 4th truss + deepened canopy), greens-open
+  (harvest rosette + accent bud flag), bush-bean (fat pods in open gaps,
+  gloss, foliage recedes), legume-trellis (heavy paired fatPods, tip growth
+  ceases, base yellowing; Pea palette verified), carrot (3-voxel pal.fruit
+  crown + soil-crack crescent), potato (blooms + cracked-mound tuber peek),
+  herb-clump (harvest poms — marigold's flowers ARE the crop), herb-shrub
+  (woody base + tip pop, variants intact), leafy-head vs brassica silhouette
+  split (cannonball-in-collar vs beaded-crown-on-stalk; plan-view distinct).
+- **Scrub tool**: ids now case-insensitive (canonical map; 'sunflower' no
+  longer silently falls back to tomato) and previews crop NAMES through
+  makeCropFor so specials + state fallbacks render under their own palette.
+
+Integration points touched: makeCropFor dispatch + clamp (map.ts), registry
+entries loop, view.ts stage-count tables, World3D ×2 projectPlant sites,
+scrub.ts normalize/preview, 7 archetype builder files + states/leafy-head.ts
+(overripe only).
+
+Verified: typecheck + build green; Math.random audit clean (comments only);
+plain-world GATE + **Draws: 273 exact** (no-run path byte-identical — stage
+axes only widen in run mode / showcase); blueprint GATE PASS; ffvis=lifecycle
+GATE PASS (stageCountFor plumbed through the demo path too); lane-B full
+sheet "showcase-ready 117"; determinism probe (tomato+Pepper scrub ×2 renders
+byte-identical, cmp); acceptance critic: **27/27 PASS** (de-clone
+nameability, continuous story, s5 pick-me, state coherence, artifact sweep —
+melon needed a cropped-band retry after 4 empty vision results; verdict
+unchanged). Template memory: +8 merged geometries worst case (corn/apple
+6→10 templates, resident only as stages appear). NEW TRAP (hit twice, now
+documented): scrub sheets are ~1600px tall per crop — a 1050px viewport
+clips everything below the first row while `--expect "showcase-ready N"`
+still passes (the count is DOM-based, not framing-based). Always shoot
+single-crop scrub sheets at 1680x1800 and READ the PNG before judging.
+Deviations: §2.4 keyframe expansion ships for corn+apple only — the rest of
+the table stays 6 pending authored keyframes (recorded follow-up; Tier-1
+continuous channels carry the time-lapse feel meanwhile). Known follow-ups:
+tomato overripe-vs-healthy still hue/droop-led (wave-2 carryover); stress
+0.55 scrub cell subtle (tint-strength backlog); Tris HUD 10× read artifact
+queued.

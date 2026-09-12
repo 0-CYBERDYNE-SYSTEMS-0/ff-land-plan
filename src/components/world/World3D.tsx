@@ -10,7 +10,7 @@ import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForSca
 import { makeCropFor } from '@/creative/crops/map';
 import { parseKey } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
-import { projectPlant, type PlantViewParams } from '@/lib/sim/view';
+import { projectPlant, stageCountFor, type PlantViewParams } from '@/lib/sim/view';
 import type { CellState } from '@/lib/sim/types';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
 import type { PlanState, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
@@ -556,7 +556,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       if (!crop) continue;
       viewByCell.set(
         key,
-        projectPlant({ cell, crop, env: runDayEnv(record, st.dayIndex), dayIndex: st.dayIndex, cellKey: key }),
+        projectPlant({ cell, crop, env: runDayEnv(record, st.dayIndex), dayIndex: st.dayIndex, cellKey: key, stageCount: stageCountFor(crop.name) }),
       );
     }
     const runDate = new Date(`${runDateISO(record, st.dayIndex)}T00:00:00`);
@@ -1165,7 +1165,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         stress: { water, heat: 0, cold: 0, nitrogen: 0 },
         ...extra,
       };
-      viewByCell.set(key, projectPlant({ cell, crop, env: null, dayIndex: 60, cellKey: key }));
+      viewByCell.set(key, projectPlant({ cell, crop, env: null, dayIndex: 60, cellKey: key, stageCount: stageCountFor(crop.name) }));
     }
     plantBatchesRef.current = updatePlants(
       plantBatchesRef.current,

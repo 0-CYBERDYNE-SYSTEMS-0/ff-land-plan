@@ -6,7 +6,7 @@
 import { PALETTE, Voxel, rng } from '@/creative/voxel';
 import {
   CropPalette, foliage, shade, put, vline, soilPad, finishPlant,
-  sproutLoop, blade, frond, tubeLeaf, flowerDot, pompom,
+  sproutLoop, blade, frond, tubeLeaf, flowerDot, pompom, umbel,
 } from './shared';
 
 const R8: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
@@ -39,7 +39,9 @@ export function makeHerbClump(stage: number, pal: CropPalette = HERBCLUMP_PAL, o
   const f = foliage(pal, stage);
   const edge = shade(f, pal.dark, 0.36);
   const vein = shade(f, pal.light, 0.42);
+  const gloss = shade(pal.light, 0xffffff, 0.32); // harvest-shine new tip growth
   const feathery = opts.variant === 'feathery';
+  const harvest = stage === 5;
 
   if (stage === 1) {
     vline(stat, 0, 0, 0, 0, 2, 0, pal.stem);
@@ -48,8 +50,8 @@ export function makeHerbClump(stage: number, pal: CropPalette = HERBCLUMP_PAL, o
     return finishPlant(stat, sway);
   }
 
-  const H = [0, 0, 2, 3, 4, 4][stage];
-  const nStems = [0, 0, 5, 6, 7, 8][stage];
+  const H = [0, 0, 2, 3, 4, 5][stage];
+  const nStems = [0, 0, 5, 6, 7, 9][stage];
 
   for (let i = 0; i < nStems; i++) {
     const [dx, dz] = R8[i % 8];
@@ -68,17 +70,33 @@ export function makeHerbClump(stage: number, pal: CropPalette = HERBCLUMP_PAL, o
 
     // opposite leaf pairs climbing the stem, offsets alternating per level
     // so the clump reads knobby-leafy rather than slabby columns (basil habit)
+    // harvest: two outer stems relax their leaves open — cut-me droop
+    const laidOpen = harvest && (i === 1 || i === 6);
+    const w = laidOpen ? 1.75 : 1;
     for (let k = 0; k <= sh; k++) {
-      const y = sh - k + sh * 0.15;
+      const y = sh - k + sh * 0.15 - (laidOpen ? k * 0.12 : 0);
       const o = k % 2;
       const scale = k === sh ? 1 : 0.78;
-      put(sway, tx + (sz ? o : 0), y, tz + (sx ? o : 0),
+      put(sway, (tx + (sz ? o : 0)) * w, y, (tz + (sx ? o : 0)) * w,
         (i + k) % 2 ? f : shade(f, pal.light, 0.16), 0.9 * scale + 0.1);
-      put(sway, tx - (sz ? o : 0), y + 0.3, tz - (sx ? o : 0), shade(f, pal.dark, 0.14), 0.85 * scale);
+      put(sway, (tx - (sz ? o : 0)) * w, y + 0.3, (tz - (sx ? o : 0)) * w, shade(f, pal.dark, 0.14), 0.85 * scale);
+      if (harvest && k >= sh - 1) put(sway, tx * 0.6, y + 0.45, tz * 0.6, shade(f, pal.light, 0.3), 0.7);
     }
-    // tip pair
-    put(sway, tx * 1.8, sh + 0.7, tz * 1.8, vein, 0.85);
-    put(sway, tx * 1.2 - (sz || 0), sh + 0.9, tz * 1.2 - (sx || 0), f, 0.75);
+    // tip pair — glossy bright new growth pops at harvest
+    put(sway, tx * (harvest ? 2.1 : 1.8), sh + (laidOpen ? 0.45 : 0.7), tz * (harvest ? 2.1 : 1.8),
+      harvest ? gloss : vein, harvest ? 0.95 : 0.85);
+    put(sway, tx * 1.2 - (sz || 0), sh + (laidOpen ? 0.6 : 0.9), tz * 1.2 - (sx || 0),
+      harvest ? shade(f, pal.light, 0.35) : f, 0.75);
+  }
+
+  // harvest mound: a dense wide skirt of the oldest leaves ringing the clump —
+  // maximum spread reads "lush and ready to cut" from plan view too
+  if (harvest && !feathery) {
+    for (let i = 0; i < 8; i++) {
+      const [dx, dz] = R8[i];
+      put(sway, dx * 1.5, 0.5 + (i % 3) * 0.22, dz * 1.5, i % 2 ? f : shade(f, pal.dark, 0.12), 1);
+      put(sway, dx * 2 + dz * 0.3, 0.35 + (i % 2) * 0.3, dz * 2 - dx * 0.3, shade(f, pal.light, 0.18), 0.9);
+    }
   }
 
   // s3: buds tightening at the tips (the spikes open from s4)
@@ -91,16 +109,33 @@ export function makeHerbClump(stage: number, pal: CropPalette = HERBCLUMP_PAL, o
 
   // flower spikes from s4 (pinch them and the leaves keep coming)
   if (stage >= 4) {
-    const spikes = stage === 4 ? 3 : 5;
+    const spikes = stage === 4 ? 3 : 6;
     for (let i = 0; i < spikes; i++) {
       const [dx, dz] = R8[(i * 2 + 1) % 8];
       const bx = Math.round(dx * 0.8), bz = Math.round(dz * 0.8);
-      const spikeH = H + 1 + (i % 2) + (stage === 5 ? 1 : 0);
+      const spikeH = H + 1 + (i % 2);
       vline(sway, bx, H - 1, bz, bx, spikeH, bz, pal.stem);
+      if (feathery && harvest) {
+        // dill harvest: open flat umbel crowns on the wands — the yellow
+        // bloom is the crop, so it carries the pick-me signal
+        umbel(sway, bx, spikeH + 0.4, bz, 1, pal.accent);
+        flowerDot(sway, bx, spikeH - 0.6, bz, shade(pal.accent, pal.dark, 0.2), 0.4);
+        continue;
+      }
       for (let r = 0; r < 4; r++)
         flowerDot(sway, bx + (r % 2 ? 0.32 : -0.32), H + r * 0.6, bz + ((r + 1) % 2 ? 0.32 : -0.32),
           r >= 2 ? pal.accent : shade(pal.accent, pal.light, 0.2), 0.4);
-      flowerDot(sway, bx, spikeH + 0.5, bz, pal.accent, 0.42); // tip bud
+      if (harvest) {
+        // open blossom crown: an accent pom dithered toward fruit reads FULL on
+        // marigold (orange + golden yellow — its flowers are the crop) and a
+        // light pale dusting on basil/mint; the palette does the work.
+        pompom(sway, bx, spikeH + 0.7, bz, 0.7, shade(pal.accent, 0xffffff, 0.1),
+          shade(pal.fruit, pal.accent, 0.45), 700 + i);
+        flowerDot(sway, bx + 0.75, spikeH + 0.4, bz, pal.accent, 0.46);
+        flowerDot(sway, bx - 0.75, spikeH + 0.4, bz, shade(pal.accent, pal.fruit, 0.45), 0.46);
+      } else {
+        flowerDot(sway, bx, spikeH + 0.5, bz, pal.accent, 0.42); // tip bud
+      }
     }
   }
   return finishPlant(stat, sway);
@@ -145,6 +180,7 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
   const f = foliage(pal, stage);
   const needle = shade(f, pal.dark, 0.18);
   const wood = shade(PALETTE.woodDark, pal.stem, 0.25);
+  const harvest = stage === 5;
 
   if (stage === 1) {
     vline(stat, 0, 0, 0, 0, 2, 0, pal.stem);
@@ -164,19 +200,27 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
       tubeLeaf(sway, 0, 0, 0, 2, -0.3, 0.4, body, tip);
       return finishPlant(stat, sway);
     }
-    const nTubes = [0, 0, 5, 7, 8, 9][stage];
+    const nTubes = [0, 0, 5, 7, 8, harvest ? 11 : 9][stage];
     const h = [0, 0, 4, 6, 7, 8][stage];
     for (let i = 0; i < nTubes; i++) {
       const a = (i / nTubes) * Math.PI * 2;
       tubeLeaf(sway, Math.round(Math.cos(a) * 0.7), 0, Math.round(Math.sin(a) * 0.7), h - (i % 3), Math.cos(a) * 0.7, Math.sin(a) * 0.7,
         i % 2 ? body : shade(body, pal.light, 0.18), tip);
     }
+    // harvest clump: a couple of spears splay wide open — ready to cut
+    if (harvest) {
+      tubeLeaf(sway, 1, 0, 0, h - 2, 1.6, 0.3, body, tip);
+      tubeLeaf(sway, -1, 0, 0, h - 3, -1.5, -0.8, shade(body, pal.light, 0.15), tip);
+    }
     if (stage >= 4) {
-      const nPoms = stage === 4 ? 2 : 4;
+      const nPoms = stage === 4 ? 2 : harvest ? 5 : 4;
       for (let i = 0; i < nPoms; i++) {
         const a = (i / Math.max(1, nPoms)) * Math.PI * 2;
-        vline(sway, Math.round(Math.cos(a)), 0, Math.round(Math.sin(a)), Math.round(Math.cos(a) * 1.2), h + 1, Math.round(Math.sin(a) * 1.2), shade(body, pal.stem, 0.4));
-        pompom(sway, Math.round(Math.cos(a) * 1.2), h + 1.9, Math.round(Math.sin(a) * 1.2), 0.95, pal.accent, shade(pal.accent, 0xffffff, 0.3), 91 + i);
+        const px = Math.round(Math.cos(a) * 1.2), pz = Math.round(Math.sin(a) * 1.2);
+        vline(sway, Math.round(Math.cos(a)), 0, Math.round(Math.sin(a)), px, h + 1, pz, shade(body, pal.stem, 0.4));
+        // papery bloom head (accent — purple on chives) swells at harvest
+        pompom(sway, px, h + 1.9, pz, harvest ? 1.05 : 0.95, pal.accent, shade(pal.accent, 0xffffff, 0.3), 91 + i);
+        if (harvest) flowerDot(sway, px, h + 2.9, pz, shade(pal.accent, 0xffffff, 0.45), 0.4);
       }
     }
     return finishPlant(stat, sway);
@@ -187,18 +231,27 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
     const spread = [0, 0, 2, 2.5, 3, 3.5][stage];
     const hMax = [0, 0, 1, 2, 2, 2][stage];
     const rnd = rng(300 + stage);
-    for (let i = 0; i < 10 + stage * 4; i++) {
+    for (let i = 0; i < 10 + stage * 4 + (harvest ? 8 : 0); i++) {
       const a = rnd() * Math.PI * 2;
       const r = rnd() * spread;
       const x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
       const y = rnd() < 0.65 ? 0.6 : 1.3 + (hMax > 1 && rnd() < 0.3 ? 0.6 : 0);
-      put(sway, x, y, z, y > 1 ? f : needle, 0.72);
+      // harvest: the tight mat's raised tips catch the light — brightness pop
+      put(sway, x, y, z, harvest && y > 1 ? shade(f, pal.light, 0.35) : y > 1 ? f : needle, 0.72);
+    }
+    // thyme's woody crown peeks through the base of the mature mat
+    if (harvest) {
+      put(stat, 0, 0.35, 0, wood, 0.75);
+      put(stat, 0.6, 0.3, 0.35, wood, 0.6);
+      put(stat, -0.55, 0.3, -0.4, wood, 0.6);
     }
     if (stage >= 4) {
-      const nBloom = stage === 4 ? 3 : 6;
+      const nBloom = stage === 4 ? 3 : harvest ? 9 : 6;
       for (let i = 0; i < nBloom; i++) {
         const a = (i / nBloom) * Math.PI * 2 + stage;
-        flowerDot(sway, Math.round(Math.cos(a) * spread * 0.7), 1.9, Math.round(Math.sin(a) * spread * 0.7), pal.accent, 0.4);
+        const br = harvest ? spread * (i % 2 ? 0.45 : 0.75) : spread * 0.7;
+        flowerDot(sway, Math.round(Math.cos(a) * br), 1.9, Math.round(Math.sin(a) * br),
+          harvest && i % 3 === 0 ? shade(pal.accent, 0xffffff, 0.22) : pal.accent, harvest ? 0.46 : 0.4);
       }
     }
     return finishPlant(stat, sway);
@@ -206,10 +259,16 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
 
   /* --- default: mounded needle shrub (rosemary / sage / oregano) -------- */
   const H = [0, 0, 3, 4, 5, 6][stage];
-  const nStems = [0, 0, 5, 6, 7, 8][stage];
-  // short gnarled wood at the base only
+  const nStems = [0, 0, 5, 6, 7, harvest ? 10 : 8][stage];
+  // short gnarled wood at the base only — thickens into a visible trunk at harvest
   put(stat, 0, 0.5, 0, wood, 1);
   if (stage >= 3) { put(stat, 0.5, 0.4, 0.4, wood, 0.7); put(stat, -0.5, 0.4, -0.3, wood, 0.7); }
+  if (harvest) {
+    vline(stat, 0, 0, 0, 0, 1, 0, wood);
+    put(stat, 0.9, 0.35, -0.6, wood, 0.65);
+    put(stat, -0.8, 0.35, 0.7, wood, 0.65);
+    put(stat, 0.35, 1.1, -0.3, shade(wood, pal.stem, 0.3), 0.6);
+  }
 
   for (let i = 0; i < nStems; i++) {
     const [dx, dz] = R8[i % 8];
@@ -221,7 +280,8 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
     let x = sx, y = 0, z = sz;
     for (let k = 0; k <= sh; k++) {
       x = sx + Math.round(dx * 0.38 * k); z = sz + Math.round(dz * 0.38 * k); y = k + (ringR ? 0 : 0);
-      put(stat, x, y, z, k < 1 && i % 2 === 0 ? wood : stemC);
+      // harvest: the lower two nodes of every stem go woody — heavy old shrub
+      put(stat, x, y, z, k < (harvest ? 2 : 1) && (harvest || i % 2 === 0) ? wood : stemC);
       // needle whorls alternate sides per level so columns never slab
       const px = -(dz || 1), pz = dx || -1;
       if (k % 2 === 0) {
@@ -231,6 +291,8 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
         put(sway, x, y + 0.2, z + pz, needle, 0.72);
         put(sway, x + px, y + 0.3, z, shade(needle, pal.light, 0.18), 0.7);
       }
+      // harvest density: one more diagonal needle per node, mound fills in
+      if (harvest) put(sway, x + px - dx, y + 0.45, z + pz - dz, needle, 0.62);
       if (k >= 2) put(sway, x, y + 0.55, z, shade(needle, pal.light, 0.28), 0.55);
     }
     // bud then bloom whorl at the tips
@@ -240,6 +302,11 @@ export function makeHerbShrub(stage: number, pal: CropPalette = HERBSHRUB_PAL, o
       flowerDot(sway, x, y + 0.8, z, bloom, 0.5);
       flowerDot(sway, x + 0.4, y + 1.05, z, bloom, 0.4);
       flowerDot(sway, x - 0.4, y + 1.0, z, shade(bloom, pal.dark, 0.2), 0.4);
+      if (harvest) {
+        // glossy new-tip pop under the blooms + one more open floret
+        put(sway, x + dx * 0.5, y + 0.55, z + dz * 0.5, shade(needle, pal.light, 0.5), 0.6);
+        flowerDot(sway, x, y + 1.3, z, shade(pal.accent, 0xffffff, 0.25), 0.38);
+      }
     }
   }
   return finishPlant(stat, sway);

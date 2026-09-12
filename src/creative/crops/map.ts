@@ -7,8 +7,10 @@
  */
 import * as THREE from 'three';
 import { PALETTE } from '@/creative/voxel';
+import { stageCountFor } from '@/lib/sim/view';
 import type { CropPalette, PlantStateVisual } from './shared';
 import { STATE_BUILDERS } from './states';
+import { SPECIAL_BUILDERS } from './specials';
 import { makeTomato, TOMATO_PAL } from './tomato';
 import {
   makeLeafyHead, makeBrassica, makeGreensOpen,
@@ -179,8 +181,14 @@ export function makeCropFor(name: string, stage: number, state?: PlantStateVisua
     if (!buildState) return null;
     obj = buildState(pal);
   } else {
-    if (stage < 0 || stage > 5) return null;
-    obj = BUILDERS[m.archetype](stage, pal, m.variant ? { variant: m.variant } : undefined);
+    // Visual keyframe axis: crops with authored extra keyframes accept stages
+    // past 5 (view.ts stageCountFor); everything else stays on the engine axis.
+    if (stage < 0 || stage > stageCountFor(name) - 1) return null;
+    // Tier-3 specials (de-cloned crops) win over the archetype dispatch.
+    const special = SPECIAL_BUILDERS[name] ?? null;
+    obj = special
+      ? special(stage, pal)
+      : BUILDERS[m.archetype](stage, pal, m.variant ? { variant: m.variant } : undefined);
   }
   if (m.scale !== undefined && m.scale !== 1) obj.scale.setScalar(m.scale);
   return obj;

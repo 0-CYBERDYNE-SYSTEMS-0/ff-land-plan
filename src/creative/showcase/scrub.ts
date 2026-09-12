@@ -19,10 +19,10 @@
 import * as THREE from 'three';
 import type { AssetEntry } from '@/creative/registry-types';
 import { ARCHETYPES } from '@/creative/crops/registry';
-import { ARCHETYPE_DEFAULTS } from '@/creative/crops/map';
+import { ARCHETYPE_DEFAULTS, cropAssetMap, makeCropFor } from '@/creative/crops/map';
 import { STATE_BUILDERS } from '@/creative/crops/states';
 import { STATE_HEIGHT_FACTOR, type CropPalette, type PlantStateVisual } from '@/creative/crops/shared';
-import { growthToStage, stressTintMultiplier } from '@/lib/sim/view';
+import { growthToStage, stageCountFor, stressTintMultiplier } from '@/lib/sim/view';
 
 export const GROWTH_SAMPLES = 12;
 
@@ -30,14 +30,6 @@ export const GROWTH_SAMPLES = 12;
  * (renderer-side math; view.ts owns the projection channels). */
 function templateScaleT(progress: number): number {
   return 0.15 + 0.85 * progress;
-}
-
-/** Per-archetype visual keyframe counts (SPEC-GROWTH-VISUAL §2.4) — bump as
- * waves 2–3 add builder keyframes; 6 = today's library. */
-const SCRUB_STAGE_COUNTS: Record<string, number> = {};
-
-function stageCountFor(archId: string): number {
-  return SCRUB_STAGE_COUNTS[archId] ?? 6;
 }
 
 /** Real stress tint from the projection seam (view.ts), as a tuple. */
@@ -74,9 +66,14 @@ const LIFECYCLE_STATES: LifecycleState[] = [
 
 const HELPER_MATERIAL = new THREE.MeshBasicMaterial({ visible: false });
 
-function builderFor(archId: string) {
+function builderFor(archId: string): { build: (stage: number) => THREE.Object3D } {
+  // Crop names (de-cloned specials, e.g. pepper/sunflower) preview through
+  // makeCropFor so the tool shows the catalog crop, palette + special and all.
+  if (archId in cropAssetMap) {
+    return { build: (stage) => makeCropFor(archId, stage) ?? new THREE.Group() };
+  }
   const arch = ARCHETYPES.find((a) => a.id === archId);
-  if (!arch) throw new Error(`scrub: unknown crop archetype "${archId}"`);
+  if (!arch) throw new Error(`scrub: unknown crop/archetype "${archId}"`);
   return arch;
 }
 
@@ -142,17 +139,25 @@ function tintMaterials(root: THREE.Object3D, tint: [number, number, number]): vo
 function makeScrubObject(archId: string, progress: number, state: ViewState & { geom?: PlantStateVisual }, frameBox: THREE.Box3): THREE.Group {
   const root = new THREE.Group();
 
-  // Real Tier-2 state geometry when the archetype authored it, normalized to
-  // the same height factor the renderer uses (plants.ts STATE_HEIGHT_FACTOR).
+  // Real Tier-2 state geometry when authored, normalized to the same height
+  // factor the renderer uses (plants.ts STATE_HEIGHT_FACTOR). Crop names
+  // resolve through makeCropFor (state axis keeps the crop's own palette and
+  // applies its catalog scale on top).
   if (state.geom) {
-    const builder = STATE_BUILDERS[archId]?.[state.geom];
-    if (builder) {
-      const plant = builder((ARCHETYPE_DEFAULTS as Record<string, CropPalette>)[archId]);
+    let plant: THREE.Object3D | null = null;
+    if (archId in cropAssetMap) {
+      plant = makeCropFor(archId, 5, state.geom);
+    } else {
+      const builder = STATE_BUILDERS[archId]?.[state.geom];
+      if (builder) plant = builder((ARCHETYPE_DEFAULTS as Record<string, CropPalette>)[archId]);
+    }
+    if (plant) {
       const box = new THREE.Box3().setFromObject(plant);
       const rawH = Math.max(0.01, box.max.y - box.min.y);
       const factor =
         (plant.userData as { heightFactor?: number } | undefined)?.heightFactor ?? STATE_HEIGHT_FACTOR[state.geom];
-      plant.scale.setScalar(factor / rawH);
+      const cropScale = cropAssetMap[archId]?.scale ?? 1;
+      plant.scale.setScalar((factor / rawH) * cropScale);
       root.add(plant, makeFrameHelper(frameBox));
       return root;
     }
@@ -172,12 +177,18 @@ function makeScrubObject(archId: string, progress: number, state: ViewState & { 
 }
 
 function normalizeArchetypeIds(requested: string[]): string[] {
-  const valid = new Set(ARCHETYPES.map((a) => a.id));
+  // Case-insensitive canonical ids: archetype ids + catalog crop names (the
+  // Tier-3 specials preview by NAME) — 'sunflower' and 'SUNFLOWER' both
+  // resolve to the crop 'Sunflower', never to the tomato fallback.
+  const canon = new Map<string, string>();
+  for (const a of ARCHETYPES) canon.set(a.id.toLowerCase(), a.id);
+  for (const name of Object.keys(cropAssetMap)) canon.set(name.toLowerCase(), name);
   const ids = [
     ...new Set(
       requested
-        .map((raw) => raw.trim().toLowerCase().replace(/-s\d+$/, ''))
-        .filter((id) => valid.has(id)),
+        .map((raw) => raw.trim().replace(/-s\d+$/, ''))
+        .map((raw) => canon.get(raw.toLowerCase()) ?? raw)
+        .filter((id) => canon.has(id.toLowerCase())),
     ),
   ];
   return ids.length > 0 ? ids : ['tomato'];

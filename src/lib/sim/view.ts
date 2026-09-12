@@ -118,6 +118,30 @@ export function growthToStage(growth: number, stageCount: number): number {
   return Math.min(n - 1, Math.max(0, Math.round(growth * (n - 1))));
 }
 
+// --- per-crop keyframe axis (SPEC §2.4 — "more keyframes, per-archetype") ----
+// The visual keyframe axis extends past the engine's 0..5 only where richer
+// keyframes have been authored (waves 2–3); every other crop stays on the
+// engine axis so the no-run path is unchanged. Keyed by crop NAME (the axis
+// makeCropFor consumes, name-keyed like the Tier-3 specials) and mirrored by
+// archetype id for the showcase/scrub surface.
+
+/** Crops whose VISUAL axis has more than 6 authored keyframes. */
+export const CROP_STAGE_COUNTS: Record<string, number> = {
+  'Sweet Corn': 10,
+  Apple: 10,
+};
+
+/** Archetype-keyed mirror (showcase lane B + scrub tool address archetypes). */
+const ARCH_STAGE_COUNTS: Record<string, number> = {
+  corn: 10,
+  'apple-tree': 10,
+};
+
+/** Keyframe count for a crop name OR archetype id (default 6 = engine axis). */
+export function stageCountFor(id: string): number {
+  return CROP_STAGE_COUNTS[id] ?? ARCH_STAGE_COUNTS[id] ?? 6;
+}
+
 // --- lifecycle derivation (SPEC §2.3 — tuned ONLY here, engine untouched) ----
 
 /** Hard frost kill: cold stress at/above this reads as frost death. */
