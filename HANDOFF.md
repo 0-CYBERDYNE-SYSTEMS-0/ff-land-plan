@@ -33,6 +33,37 @@ Read in order: this file → `SPEC.md` (the "Amendments" section is binding for
 the 2D designer) → `implementation-notes.md` (keep appending; it's a
 deliverable).
 
+## Growth Visual Evolution mission milestones (branch `growth-visual-evolution`, 2026-09-12)
+
+Branch cut from `pro-upgrade@6e23a98`; binding spec
+`quality/SPEC-GROWTH-VISUAL.md`; one dated entry per wave in
+`implementation-notes.md`. Never merged by agents.
+
+- **Wave 0 — DONE (ec7c559).** Baseline verified (Draws 273), showcase scrub
+  tool (`#mode=scrub`), spec authored, ASSETS.md corrected (50 crops).
+- **Wave 1 — DONE (e81865d).** `src/lib/sim/view.ts` pure projection seam
+  (PlantViewParams); Tier-1 per-instance channels in plants.ts
+  (instanceColor stress tint + genetic variation, wilt matrix channel);
+  batch-MAX tint replaced in run mode; `?ffvis=stress` proof hook.
+- **Wave 2 — DONE (e5b6215).** Tier-2 lifecycle state geometry for all 18
+  archetypes (`src/creative/crops/states/`): dead/desiccated,
+  harvested/stubble, overripe (+ CropPalette stress/dead slots); state axis
+  in template keys; day-keyed reconcile; lettuce bolting pose.
+- **Wave 3 — DONE (ada50bd).** Tier-3: 7 de-cloned crop specials
+  (`src/creative/crops/specials/` — Pepper, Eggplant, Sunflower, Pumpkin,
+  Zucchini, Melon, Cucumber); 10-keyframe visual axes (mechanism in
+  view.ts `stageCountFor` + registry `Archetype.stages`; corn phenology +
+  apple age series opted in); allium tops-down; s5 "pick me" fixes across
+  every flagged archetype; leafy-head vs brassica silhouette split. Critic
+  27/27 PASS; Draws still 273; lane-B sheet now 117 assets.
+- **Wave 4 — PENDING.** World coupling: run `envSeries` drives weather FX /
+  sky mood / sway; bloom gated by floweringFrac; soil-pad separation
+  (per-cell moisture tint); ghost overlay easing.
+- **Wave 5 — PENDING.** 2D blueprint overlays (opt-in RenderOptions flags,
+  default OFF) via the same projection layer; unmapped-crop fallback
+  improved; ASSETS/HANDOFF refresh; final full-lane critic + merge-readiness
+  report.
+
 ## Beta Notes (2026-08-25)
 
 ### How to run
