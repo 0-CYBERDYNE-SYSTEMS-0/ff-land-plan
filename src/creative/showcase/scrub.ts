@@ -9,10 +9,9 @@
  *   (2) the lifecycle state channels (healthy / stress tint / wilting / dead /
  *       harvested / overripe) as Tier-1-style previews (tint + droop + squash).
  *
- * The scale and tint math mirrors the live renderer (plants.ts, noted per
- * function). Wave 1 replaces these local approximations with the real
- * projection module (src/lib/sim/view.ts) so the tool previews actual pipeline
- * math instead of a copy.
+ * The height-scale math mirrors the live renderer (plants.ts, noted per
+ * function); stage selection and tint curves come from the REAL projection
+ * module (src/lib/sim/view.ts) so the tool previews actual pipeline math.
  *
  * Deterministic: pure functions of the seeded archetype builders — no rng, no
  * Math.random. Showcase-only; nothing here is imported by the app.
@@ -20,22 +19,28 @@
 import * as THREE from 'three';
 import type { AssetEntry } from '@/creative/registry-types';
 import { ARCHETYPES } from '@/creative/crops/registry';
+import { growthToStage, stressTintMultiplier } from '@/lib/sim/view';
 
 export const GROWTH_SAMPLES = 12;
 
-/** Mirrors templateScaleT (src/three/plants.ts:166) — the linear height ramp. */
+/** Mirrors templateScaleT (src/three/plants.ts:166) — the linear height ramp
+ * (renderer-side math; view.ts owns the projection channels). */
 function templateScaleT(progress: number): number {
   return 0.15 + 0.85 * progress;
 }
 
-/** Mirrors stageForBiomass (src/lib/sim/drivers.ts:102). */
-function stageForBiomass(biomassFrac: number): number {
-  return Math.min(5, Math.max(0, Math.round(biomassFrac * 5)));
+/** Per-archetype visual keyframe counts (SPEC-GROWTH-VISUAL §2.4) — bump as
+ * waves 2–3 add builder keyframes; 6 = today's library. */
+const SCRUB_STAGE_COUNTS: Record<string, number> = {};
+
+function stageCountFor(archId: string): number {
+  return SCRUB_STAGE_COUNTS[archId] ?? 6;
 }
 
-/** Mirrors the renderer stress tint curve (applyStressTint, src/three/plants.ts:425-435). */
-function stressTint(stress: number): [number, number, number] {
-  return [1, 1 - stress * 0.35, 1 - stress * 0.55];
+/** Real stress tint from the projection seam (view.ts), as a tuple. */
+function tintTuple(stress: number): [number, number, number] {
+  const m = stressTintMultiplier(stress);
+  return [m.r, m.g, m.b];
 }
 
 interface ViewState {
@@ -54,8 +59,8 @@ const NEUTRAL: ViewState = { tint: null, droopRad: 0, squashY: 1, uniformScale: 
 
 const LIFECYCLE_STATES: LifecycleState[] = [
   { id: 'healthy', label: 'healthy', ...NEUTRAL },
-  { id: 'stressed', label: 'stress tint 0.55', tint: stressTint(0.55), droopRad: 0.04, squashY: 0.97, uniformScale: 1 },
-  { id: 'wilting', label: 'wilting · water 0.8', tint: stressTint(0.8), droopRad: 0.22, squashY: 0.88, uniformScale: 1 },
+  { id: 'stressed', label: 'stress tint 0.55', tint: tintTuple(0.55), droopRad: 0.04, squashY: 0.97, uniformScale: 1 },
+  { id: 'wilting', label: 'wilting · water 0.8', tint: tintTuple(0.8), droopRad: 0.22, squashY: 0.88, uniformScale: 1 },
   { id: 'dead', label: 'dead · desiccated (T2 pending)', tint: [0.62, 0.52, 0.38], droopRad: 0.34, squashY: 0.78, uniformScale: 0.92 },
   { id: 'harvested', label: 'harvested · stubble (T2 pending)', tint: [0.86, 0.79, 0.62], droopRad: 0.02, squashY: 0.5, uniformScale: 0.72 },
   { id: 'overripe', label: 'overripe · past grace', tint: [0.9, 0.76, 0.5], droopRad: 0.15, squashY: 0.93, uniformScale: 1 },
@@ -129,7 +134,7 @@ function tintMaterials(root: THREE.Object3D, tint: [number, number, number]): vo
  * base-anchored droop/lean and Y squash applied on top.
  */
 function makeScrubObject(archId: string, progress: number, state: ViewState, frameBox: THREE.Box3): THREE.Group {
-  const stage = stageForBiomass(progress);
+  const stage = growthToStage(progress, stageCountFor(archId));
   const plant = builderFor(archId).build(stage);
   const rawH = rawStageHeight(archId, stage);
   const scale = (templateScaleT(progress) / rawH) * state.uniformScale;
@@ -161,7 +166,7 @@ export function makeScrubEntries(requested: string[]): AssetEntry[] {
     const frameBox = healthyFrameBox(archId);
     for (let i = 0; i < GROWTH_SAMPLES; i++) {
       const t = i / (GROWTH_SAMPLES - 1);
-      const stage = stageForBiomass(t);
+      const stage = growthToStage(t, stageCountFor(archId));
       entries.push({
         id: `scrub-${archId}-g${String(i).padStart(2, '0')}`,
         label: `${archId} · growth ${t.toFixed(2)} · stage ${stage}`,

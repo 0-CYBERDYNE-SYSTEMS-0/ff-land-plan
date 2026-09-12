@@ -10,6 +10,8 @@ import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForSca
 import { makeCropFor } from '@/creative/crops/map';
 import { parseKey } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
+import { projectPlant, type PlantViewParams } from '@/lib/sim/view';
+import type { CellState } from '@/lib/sim/types';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
 import type { PlanState, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
 import type { RunRecord, SimEvent, SimState } from '@/lib/sim';
@@ -517,6 +519,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const runActiveRef = useRef(runActive);
   runActiveRef.current = runActive;
 
+  // DEV-only Tier-1 proof hook (SPEC-GROWTH-VISUAL §4, wave 1): ?ffvis=stress
+  // paints a deterministic synthetic water-stress gradient over the live plan
+  // through the REAL projectPlant → viewByCell path (no sim run required).
+  // Same launch-param family as ffdebug.
+  const visStressDemo = import.meta.env.DEV && readLaunchParams().get('ffvis') === 'stress';
+
   /**
    * Run-mode plant reconcile: SimState biomass is the growth authority.
    * updatePlants clamps the per-cell override against the closed-form
@@ -535,18 +543,18 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const plantedAtShim: Record<string, string> = {};
     for (const key of Object.keys(plan.planting)) plantedAtShim[key] = FAR_FUTURE_ISO;
     const shimPlan: PlanState = { ...plan, plantedAt: plantedAtShim };
-    const progressByCell = new Map<string, number>();
-    const stressByCell = new Map<string, number>();
+    // View projection (SPEC-GROWTH-VISUAL §2.1): per-cell growth, stage, wilt
+    // and stress tint all derive from the pure seam — the aggregation (MAX of
+    // the four stress terms + pest × 0.8) lives in view.ts effectiveStress.
+    const viewByCell = new Map<string, PlantViewParams>();
     for (const [key, cell] of Object.entries(st.cells)) {
       if (plan.planting[key] === undefined) continue; // cell no longer in the live plan
-      progressByCell.set(key, cell.biomassFrac);
-      // Tint stress: MAX of the four stress terms — the same max-of-terms
-      // aggregation the RunInspector rows use (useSimRun.aggregateCells) —
-      // with pest pressure folded in at a documented 0.8 weight so outbreak
-      // days read on the crop (spec deliverable: pests tint, no pest models).
-      const terms = cell.stress;
-      const worst = Math.max(terms.water, terms.heat, terms.cold, terms.nitrogen);
-      stressByCell.set(key, Math.min(1, Math.max(worst, cell.pestPressure * 0.8)));
+      const crop = editor.cropById.get(cell.cropId);
+      if (!crop) continue;
+      viewByCell.set(
+        key,
+        projectPlant({ cell, crop, env: runDayEnv(record, st.dayIndex), dayIndex: st.dayIndex, cellKey: key }),
+      );
     }
     const runDate = new Date(`${runDateISO(record, st.dayIndex)}T00:00:00`);
     plantBatchesRef.current = updatePlants(
@@ -557,7 +565,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       runDate,
       undefined,
       growthCtxRef.current,
-      { progressByCell, stressByCell },
+      { viewByCell },
     );
   };
 
@@ -1097,6 +1105,55 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     if (!runActive) return;
     applyRunGrowth();
   }, [runActive, runTickVersion, sceneReady, editor.cropById, editor.planVersion]);
+
+  // DEV-only (ffvis=stress): deterministic synthetic water-stress gradient over
+  // the live plan → REAL projectPlant → viewByCell (SPEC-GROWTH-VISUAL §4
+  // wave-1 acceptance evidence). Suppressed whenever a real run is active.
+  useEffect(() => {
+    if (!visStressDemo || runActive) return;
+    const engine = engineRef.current;
+    const plan = editor.planRef.current;
+    if (!engine || !plan) return;
+    const keys = Object.keys(plan.planting);
+    if (keys.length === 0) return;
+    let span = 1;
+    for (const key of keys) {
+      const [cx, cy] = parseKey(key);
+      span = Math.max(span, cx + cy);
+    }
+    const plantedAtShim: Record<string, string> = {};
+    const viewByCell = new Map<string, PlantViewParams>();
+    for (const key of keys) {
+      plantedAtShim[key] = FAR_FUTURE_ISO;
+      const [cx, cy] = parseKey(key);
+      const stress01 = Math.min(1, (cx + cy) / span);
+      const crop = editor.cropById.get(plan.planting[key]!);
+      if (!crop) continue;
+      const cell: CellState = {
+        cropId: crop.id,
+        plantedAtDay: 0,
+        moistureFrac: 1 - stress01 * 0.8,
+        nitrogenKgHa: 120,
+        gddAccumC: 900,
+        biomassFrac: 0.85,
+        stage: 4,
+        floweringFrac: 0.2,
+        pestPressure: 0,
+        stress: { water: stress01, heat: 0, cold: 0, nitrogen: 0 },
+      };
+      viewByCell.set(key, projectPlant({ cell, crop, env: null, dayIndex: 60, cellKey: key }));
+    }
+    plantBatchesRef.current = updatePlants(
+      plantBatchesRef.current,
+      { ...plan, plantedAt: plantedAtShim },
+      editor.cropById,
+      engine.scene,
+      new Date(),
+      undefined,
+      growthCtxRef.current,
+      { viewByCell },
+    );
+  }, [visStressDemo, runActive, sceneReady, editor.planVersion, editor.cropById, scrubDate]);
 
   // Ghost-run reconcile (spec §3.5 Phase 4): reconciles the semi-transparent
   // second-run plants beside the solid primary. Day-keyed like the moisture

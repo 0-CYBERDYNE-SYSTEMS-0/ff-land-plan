@@ -4,6 +4,7 @@ import type { PlanState, Crop, ScenarioType } from '@/types';
 import { parseKey } from '@/lib/plan';
 import { growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
 import { cropAssetMap, makeCropFor } from '@/creative/crops/map';
+import { variationForCell, type PlantViewParams } from '@/lib/sim/view';
 
 /**
  * Plant rendering — one THREE.InstancedMesh per (crop, stage) template.
@@ -92,6 +93,12 @@ interface CellSlot {
   targetProgress: number;
   /** Progress 0..1 currently displayed (eased per frame; starts at target). */
   visualProgress: number;
+  /** Wilt channel 0..1 (droop lean + canopy squash); 0 ⇒ pre-channel matrix. */
+  wilt01: number;
+  /** Final per-instance color (condition tint × genetic variation). */
+  tintR: number;
+  tintG: number;
+  tintB: number;
 }
 
 /** Fallback (procedural clone) resources — owned by the batch, never cached. */
@@ -132,17 +139,26 @@ export interface PlantUpdateOptions {
    */
   progressByCell?: Map<string, number>;
   /**
-   * Run-mode per-cell tint stress ("x,y" → effective stress 0..1). World3D
-   * computes each cell as `max(water, heat, cold, nitrogen)` — the same
-   * max-of-terms aggregation the RunInspector rows use — with pest pressure
-   * folded in at a documented 0.8 weight. When present, the batch tint is the
-   * MAX effective stress across the batch's live cells (one material per
-   * (crop,stage) template is shared by every instance, so per-instance tint
-   * would need instanceColor buffers per batch — too costly for the draw
-   * budget). When absent, the legacy scenarioGrowthMod().stress tint path
+   * Run-mode per-cell tint stress ("x,y" → effective stress 0..1) — LEGACY
+   * run coupling, superseded by viewByCell (which carries the tint per
+   * instance). Kept as the batch-MAX fallback: when present without
+   * viewByCell, the batch tint is the MAX effective stress across the batch's
+   * live cells. When absent, the legacy scenarioGrowthMod().stress tint path
    * applies unchanged.
    */
   stressByCell?: Map<string, number>;
+  /**
+   * Run-mode per-cell view projection ("x,y" → PlantViewParams from
+   * src/lib/sim/view.ts — the pure seam per SPEC-GROWTH-VISUAL §2.1). When
+   * present, per-cell growth (view.growth clamps against computed exactly
+   * like progressByCell), stage, the wilt matrix channel, and the per-instance
+   * tint (view.tint × seeded genetic variation) all come from the projection,
+   * and the batch material tint resets to white (per-instance color carries
+   * stress; applying both would compound). When absent, behavior is unchanged
+   * except the universal per-instance genetic variation (de-clone), which
+   * applies in every mode.
+   */
+  viewByCell?: Map<string, PlantViewParams>;
 }
 
 // Height ranges (meters) by crop category: [min, max] — scaled for world visibility
@@ -477,11 +493,40 @@ const scratchMatrix = new THREE.Matrix4();
  */
 function writeCellMatrix(stageMesh: StageMesh, cell: CellSlot): void {
   const growthScale = (0.15 + 0.85 * cell.visualProgress) / templateScaleT(cell.stage);
+  // Wilt channel (SPEC-GROWTH-VISUAL §2.2 Tier 1): base-anchored lean + canopy
+  // squash folded into the same matrix write. wilt01 = 0 ⇒ bit-identical to
+  // the pre-channel matrix (rotation.set(0, rotY, 0), no Y squash).
+  const wilt = cell.wilt01;
+  const growthBase = growthScale * cell.baseScale;
   scratchObj.position.set(cell.x, cell.y, cell.z);
-  scratchObj.rotation.set(0, cell.rotY, 0);
-  scratchObj.scale.setScalar(growthScale * cell.baseScale);
+  scratchObj.rotation.set(wilt * 0.1, cell.rotY, wilt * 0.3);
+  scratchObj.scale.set(growthBase, growthBase * (1 - wilt * 0.18), growthBase);
   scratchObj.updateMatrix();
   stageMesh.mesh.setMatrixAt(cell.slot, scratchObj.matrix);
+}
+
+const scratchColor = new THREE.Color();
+
+/**
+ * Per-instance color = condition tint × seeded genetic variation
+ * (SPEC-GROWTH-VISUAL §2.2 Tier 1 — instanceColor multiplies the vertex
+ * colors in three r184; zero extra draw calls). Variation applies in every
+ * mode (de-clone); the tint multiplies in only when the projection provides
+ * one.
+ */
+function cellInstanceColor(key: string, view: PlantViewParams | undefined): { r: number; g: number; b: number } {
+  const v = variationForCell(key);
+  if (view?.tint) {
+    return { r: v.r * view.tint.r, g: v.g * view.tint.g, b: v.b * view.tint.b };
+  }
+  return v;
+}
+
+/** Write one cell's instance color buffer entry (lazily creates instanceColor). */
+function writeCellColor(stageMesh: StageMesh, cell: CellSlot): void {
+  scratchColor.setRGB(cell.tintR, cell.tintG, cell.tintB);
+  stageMesh.mesh.setColorAt(cell.slot, scratchColor);
+  if (stageMesh.mesh.instanceColor) stageMesh.mesh.instanceColor.needsUpdate = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +626,13 @@ function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: n
       (sm.mesh.instanceMatrix.array as Float32Array).subarray(0, sm.count * 16),
     );
     mesh.instanceMatrix.needsUpdate = true;
+    if (sm.mesh.instanceColor) {
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(newCap * 3).fill(1), 3);
+      (mesh.instanceColor.array as Float32Array).set(
+        (sm.mesh.instanceColor.array as Float32Array).subarray(0, sm.count * 3),
+      );
+      mesh.instanceColor.needsUpdate = true;
+    }
     sm.mesh.removeFromParent();
     sm.mesh.dispose(); // instance buffers only — geometry/material are cached
     batch.group.add(mesh);
@@ -605,6 +657,15 @@ function removeInstance(batch: PlantBatch, cell: CellSlot): void {
   if (cell.slot !== last) {
     sm.mesh.getMatrixAt(last, scratchMatrix);
     sm.mesh.setMatrixAt(cell.slot, scratchMatrix);
+    const movedColor = sm.mesh.instanceColor;
+    if (movedColor) {
+      const from = last * 3;
+      const to = cell.slot * 3;
+      movedColor.array[to] = movedColor.array[from];
+      movedColor.array[to + 1] = movedColor.array[from + 1];
+      movedColor.array[to + 2] = movedColor.array[from + 2];
+      movedColor.needsUpdate = true;
+    }
     const movedKey = sm.slotKeys[last];
     sm.slotKeys[cell.slot] = movedKey;
     if (movedKey !== undefined) {
@@ -655,7 +716,7 @@ function reconcileFallbackBatch(
   const wanted = new Map<string, number>(); // key → stage
   for (const key of keys) {
     const computed = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
-    const override = opts?.progressByCell?.get(key);
+    const override = opts?.viewByCell?.get(key)?.growth ?? opts?.progressByCell?.get(key);
     const progress = override !== undefined ? Math.max(computed, override) : computed;
     wanted.set(key, stageForScale(progress));
   }
@@ -723,24 +784,35 @@ function reconcileVoxelBatch(
     z: number;
     rotY: number;
     baseScale: number;
+    wilt01: number;
+    tintR: number;
+    tintG: number;
+    tintB: number;
   }
+  const viewByCell = opts?.viewByCell;
   const desired = new Map<string, Desired>();
   for (const key of keys) {
     const [cellX, cellY] = parseKey(key);
+    const view = viewByCell?.get(key);
     const computed = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
-    const override = opts?.progressByCell?.get(key);
+    const override = view?.growth ?? opts?.progressByCell?.get(key);
     const progress = override !== undefined ? Math.max(computed, override) : computed;
     const jitter = jitterForCell(cellX, cellY, plan.cellM);
     const liftSlugs = SHELF_LIFTS[plan.ground[key] ?? ''];
     const lift = liftSlugs ? liftSlugs[shelfForCell(cellX, cellY)]! : 0;
+    const tint = cellInstanceColor(key, view);
     desired.set(key, {
-      stage: stageForScale(progress),
+      stage: view ? view.stage : stageForScale(progress),
       progress,
       x: cellX * plan.cellM + plan.cellM / 2 + offsetX + jitter.offsetX,
       y: 0.01 + lift,
       z: cellY * plan.cellM + plan.cellM / 2 + offsetZ + jitter.offsetZ,
       rotY: jitter.rotY,
       baseScale: jitter.scaleY,
+      wilt01: view ? view.wilt : 0,
+      tintR: tint.r,
+      tintG: tint.g,
+      tintB: tint.b,
     });
   }
 
@@ -765,15 +837,23 @@ function reconcileVoxelBatch(
       prev.targetProgress = want.progress;
       if (
         prev.x !== want.x || prev.y !== want.y || prev.z !== want.z ||
-        prev.rotY !== want.rotY || prev.baseScale !== want.baseScale
+        prev.rotY !== want.rotY || prev.baseScale !== want.baseScale ||
+        prev.wilt01 !== want.wilt01
       ) {
         prev.x = want.x;
         prev.y = want.y;
         prev.z = want.z;
         prev.rotY = want.rotY;
         prev.baseScale = want.baseScale;
+        prev.wilt01 = want.wilt01;
         writeCellMatrix(sm, prev);
         sm.mesh.instanceMatrix.needsUpdate = true;
+      }
+      if (prev.tintR !== want.tintR || prev.tintG !== want.tintG || prev.tintB !== want.tintB) {
+        prev.tintR = want.tintR;
+        prev.tintG = want.tintG;
+        prev.tintB = want.tintB;
+        writeCellColor(sm, prev);
       }
       continue;
     }
@@ -791,8 +871,13 @@ function reconcileVoxelBatch(
       // Brand-new plants start AT their target (no grow-in); stage-changing
       // plants continue from their eased visual size.
       visualProgress: carried ?? want.progress,
+      wilt01: want.wilt01,
+      tintR: want.tintR,
+      tintG: want.tintG,
+      tintB: want.tintB,
     };
     writeCellMatrix(sm, cell);
+    writeCellColor(sm, cell);
     sm.slotKeys[sm.count] = key;
     sm.count++;
     sm.mesh.instanceMatrix.needsUpdate = true;
@@ -840,7 +925,10 @@ export function buildPlants(
       reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
     } else {
       reconcileVoxelBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
-      applyStressTint(batch, batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
+      // Run mode (viewByCell): per-instance color carries stress — reset the
+      // shared template material to white so batch + instance tints don't
+      // compound. Legacy paths keep the scenario / MAX-stress batch tint.
+      applyStressTint(batch, opts?.viewByCell ? 0 : batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
     }
     batches.push(batch);
   }
@@ -902,7 +990,10 @@ export function updatePlants(
       reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
     } else {
       reconcileVoxelBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
-      applyStressTint(batch, batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
+      // Run mode (viewByCell): per-instance color carries stress — reset the
+      // shared template material to white so batch + instance tints don't
+      // compound. Legacy paths keep the scenario / MAX-stress batch tint.
+      applyStressTint(batch, opts?.viewByCell ? 0 : batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
     }
     next.push(batch);
   }

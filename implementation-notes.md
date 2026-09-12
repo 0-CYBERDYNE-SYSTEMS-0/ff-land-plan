@@ -903,3 +903,59 @@ pro-upgrade's uncommitted working tree untouched.
 - Wave-0 verification evidence: GATE+EXPECT passes listed above; PNGs in
   $TMPDIR/gve-wave0/ (farm1-blueprint, farm1-world, laneb-sheet,
   scrub-tomato{,-r2}, scrub-corn{,-r2}); worktree dev server on :5199.
+
+## 2026-09-11 — Growth Visual Evolution wave 1: PlantViewParams projection + Tier-1 per-instance channels
+
+The pure projection seam + per-instance color/wilt channels, per
+SPEC-GROWTH-VISUAL §2/§4. Sim numerics untouched; every integration point
+listed.
+
+- **NEW src/lib/sim/view.ts** (pure, three-free, no Math.random): projectPlant
+  → PlantViewParams {growth, stage, stageCount, lifecycle, wilt, tint,
+  flowering, variation}; effectiveStress (max-of-4 + pest×0.8 — the
+  aggregation that lived in World3D, now single-sourced); stressTintMultiplier
+  (the old applyStressTint curve); wiltAmount (smoothstep 0.35→0.9 on water
+  + 0.5·heat); growthToStage(growth, stageCount) (count 6 ≡ engine
+  stageForBiomass; per-crop counts arrive with waves 2–3 keyframes);
+  variationForCell (FNV-1a(cellKey) → mulberry32; ±4% channel multipliers).
+  Lifecycle derivation: harvested > dead (cold ≥0.95 OR stressDaysCount ≥21 ∧
+  stress ≥0.85) > overripe (readyAtDay + category grace, fruit 21 d) > alive.
+- **plants.ts** (Tier 1): PlantUpdateOptions.viewByCell (Map cellKey →
+  PlantViewParams; when present it supplies growth override, stage, wilt and
+  tint per cell, and the batch material tint resets to white so tints don't
+  compound). CellSlot gains wilt01 + final tint; writeCellMatrix folds
+  base-anchored droop (rotZ ≤ ~17°, rotX ~⅓ of it) + canopy squash (≤0.18)
+  into the same matrix write — wilt01 0 ⇒ bit-identical matrix. Per-instance
+  color via setColorAt (instanceColor × vertexColors confirmed multiplying in
+  three r184): condition tint × seeded genetic variation; variation applies in
+  ALL modes (de-clone; deterministic per cellKey). Color bookkeeping:
+  removeInstance swap-with-last copies the color entry; capacity growth copies
+  the instanceColor array; survivors' colors diff-checked per reconcile.
+  stressByCell kept as documented legacy batch-MAX fallback. Fallback
+  (unmapped-name) crops read view.growth for progress; no instanceColor there
+  (clone-per-cell path unchanged).
+- **World3D.tsx**: applyRunGrowth now builds viewByCell via projectPlant
+  (env = runDayEnv(record, day)) and passes only that — the hand-rolled
+  progress/stress maps are gone (aggregation moved into view.ts). NEW DEV-only
+  proof hook: ?ffvis=stress (with ?ffview=world&ffdebug=1) paints a
+  deterministic synthetic water-stress gradient over the live plan through the
+  REAL projectPlant → viewByCell path — wave-1 acceptance evidence without a
+  sim run; suppressed when a run is active.
+- **showcase/scrub.ts**: stage selection + tint curves now import from
+  view.ts (tool previews the real pipeline); height ramp still mirrors
+  plants.ts (renderer-side); SCRUB_STAGE_COUNTS table ready for wave-2/3
+  per-archetype keyframe counts.
+
+Verified: typecheck + build green (three.js own chunk); world GATE+EXPECT
+with **Draws: 273 machine-asserted as a literal DOM substring on both the
+plain and ffvis=stress captures** (instanceColor adds zero draws; an initial
+vision read of "373" was a digit misread, settled by --expect); ffvis=stress
+screenshot shows the gradient legible in-world — lush green upright corner →
+yellow-brown drooping/squashed corner, per-cell (not per-bed), no artifacts
+(zoomed-neighbor caveat: immediate-neighbor Δstress is gradient-slope
+proportional; tint-strength tuning is a SPEC §5 backlog item); blueprint gate
+PASS; determinism probe: two independent scrub renders byte-identical
+(208016 bytes each, cmp). Known follow-ups: batch tint and instanceColor
+both write color state (batch=white in run mode — compounding documented);
+ghost overlay does not yet consume view params (wave 2/4); Tris HUD 10×
+discrepancy still queued for a real-GPU re-measure.
