@@ -73,6 +73,11 @@ function chromeRun(extraFlags, opts = {}) {
         // its actions quickly but never exits gracefully — the spawn timeout
         // below is the expected terminator; we validate outputs afterwards.
         '--virtual-time-budget=6000',
+        // Hard bound on Chrome's own wait-for-load: pages that stay busy
+        // (e.g. an active sim run) never let virtual time expire, so without
+        // this Chrome idles past the spawn kill and the shot is lost. 25 s is
+        // well above the normal <10 s action time, so quiet pages are immune.
+        '--timeout=25000',
         ...extraFlags,
       ],
       { timeout: 40_000, stdio: ['ignore', 'pipe', 'pipe'], ...opts },

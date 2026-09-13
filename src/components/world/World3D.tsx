@@ -7,7 +7,7 @@ import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
 import { fetchClimateNormals } from '@/lib/climate';
 import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
-import { makeCropFor } from '@/creative/crops/map';
+import { makeCropFor, makeCropForCustom } from '@/creative/crops/map';
 import { parseKey } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
 import { projectPlant, stageCountFor, type PlantViewParams } from '@/lib/sim/view';
@@ -183,7 +183,8 @@ function getGhostTemplate(crop: Crop, stage: number, height: number): THREE.Buff
   const hit = ghostTemplateCache.get(key);
   if (hit) return hit;
 
-  const asset = makeCropFor(crop.name, stage);
+  const asset = makeCropFor(crop.name, stage)
+    ?? makeCropForCustom(crop.name, crop.category, crop.colorHex, stage); // wave 5: custom crops get ghosts too
   if (!asset) return null;
   const bbox = new THREE.Box3().setFromObject(asset);
   const size = new THREE.Vector3();

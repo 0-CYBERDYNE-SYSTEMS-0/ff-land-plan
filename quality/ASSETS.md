@@ -34,12 +34,21 @@ above (plan view) AND attractive in 3D orbit view.
 ## Lane B — Crops & Growth Stages (`src/creative/crops/`) — registry: `crops/registry.ts`
 
 Six stages each: `s0` sprout → `s1` seedling → `s2` vegetative → `s3` flowering/bud →
-`s4` fruiting/heading → `s5` harvest-ready (visibly "pick me"). Stage entries generated
-per archetype as `<archetype>-s0..s5` — 18 archetypes × 6 stages = 108 stage entries,
-plus the `growth-demo` row (109 lane B entries). All 50 catalog crops (`src/data/crops.ts`)
-map 1:1 onto these archetypes with palette/scale/variant overrides in `crops/map.ts`.
-Growth + lifecycle-state preview tooling: `showcase.html#mode=scrub&only=<archetype>&spin=0`
-(see `quality/SPEC-GROWTH-VISUAL.md`).
+`s4` fruiting/heading → `s5` harvest-ready (visibly "pick me"); corn and apple opt
+into 10-keyframe axes (SPEC-GROWTH-VISUAL §2.4). Stage entries generated per
+archetype as `<archetype>-s0..s5` — 18 archetypes × 6 stages = 108 stage entries,
+plus 7 de-cloned special crops (`crops/specials/` — Pepper, Eggplant, Sunflower,
+Pumpkin, Zucchini, Melon, Cucumber render under their own names), lifecycle-state
+rows (`crops/states/`) and the `growth-demo` exhibit — the rendered sheet
+machine-asserts **`showcase-ready 117`**. All 50 catalog crops (`src/data/crops.ts`)
+map 1:1 onto these archetypes with palette/scale/variant overrides in `crops/map.ts`;
+CUSTOM crops (ids ≥ 1000, unmapped names) fall back to a per-category archetype
+recolored by the crop's own colorHex (`makeCropForCustom`, SPEC-GROWTH-VISUAL
+wave 5) — no crop ever regresses to the pre-voxel primitive look. Growth +
+lifecycle-state preview tooling: `showcase.html#mode=scrub&only=<archetype>&spin=0`
+(see `quality/SPEC-GROWTH-VISUAL.md`); the same mode previews the custom-crop
+fallback with a `custom:<Name>:<category>:<hex>` token (renders 18 cells
+through `makeCropForCustom`, the exact path plants.ts takes for ids ≥ 1000).
 
 | archetype | covers catalog crops |
 |---|---|

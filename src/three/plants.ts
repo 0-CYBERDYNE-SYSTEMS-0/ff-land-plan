@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { PlanState, Crop, ScenarioType } from '@/types';
 import { parseKey } from '@/lib/plan';
 import { growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
-import { cropAssetMap, makeCropFor } from '@/creative/crops/map';
+import { cropAssetMap, hasVoxelPathFor, makeCropFor, makeCropForCustom } from '@/creative/crops/map';
 import { variationForCell, type PlantViewParams } from '@/lib/sim/view';
 import { STATE_HEIGHT_FACTOR, unitPadGeometry, type PlantStateVisual } from '@/creative/crops/shared';
 import { hasStateBuilder } from '@/creative/crops/states';
@@ -383,7 +383,8 @@ function buildNormalizedVoxelRoot(
   targetWorldHeightParam: number,
   state?: PlantStateVisual,
 ): THREE.Object3D | null {
-  const asset = makeCropFor(crop.name, stage, state);
+  const asset = makeCropFor(crop.name, stage, state)
+    ?? makeCropForCustom(crop.name, crop.category, crop.colorHex, stage, state);
   if (!asset) return null;
 
   // State templates scale by a per-state height factor (builder override via
@@ -624,9 +625,11 @@ function createBatch(
     cells: new Map<string, CellSlot>(),
   };
 
-  // Fallback probe: the creative library is keyed by NAME (cropAssetMap),
-  // so novel custom-crop names get the procedural clone path.
-  if (!(crop.name in cropAssetMap)) {
+  // Fallback probe: the creative library is keyed by NAME (cropAssetMap);
+  // unmapped names with a category fallback archetype (wave 5) still take
+  // the VOXEL template path via makeCropForCustom — only categories with no
+  // representative at all keep the procedural clone path.
+  if (!hasVoxelPathFor(crop)) {
     batch.fallback = { stages: new Map<number, FallbackStage>(), instances: new Map() };
   }
   return batch;

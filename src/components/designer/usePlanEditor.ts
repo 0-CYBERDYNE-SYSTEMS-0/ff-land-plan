@@ -20,7 +20,7 @@ import {
   type PlanPairing,
   type PlanStats,
 } from '@/lib/plan';
-import { drawPlan, renderPlanToPng, type RenderOptions } from '@/lib/renderPlan';
+import { drawPlan, renderPlanToPng, type RenderOptions, type SimOverlayChannels } from '@/lib/renderPlan';
 import { useFarm } from '@/hooks/useFarms';
 import { useTheme } from '@/hooks/useTheme';
 import type { Crop, GardenAsset, PlanState, PlanSurface } from '@/types';
@@ -293,6 +293,14 @@ export function usePlanEditor(farmId: number) {
   const [showCompanions, setShowCompanions] = useState(() => readPref(PREF_KEYS.overlayCompanions, false));
   const [showPlants, setShowPlants] = useState(() => readPref(PREF_KEYS.layerPlants, true));
   const [showGround, setShowGround] = useState(() => readPref(PREF_KEYS.layerGround, true));
+  // Sim-run 2D overlays (SPEC-GROWTH-VISUAL wave 5): transient (not pref-
+  // backed — they only mean something while a run is active). The channel
+  // data is pushed in by PlotDesigner (which owns the run controller) via
+  // setSimChannels; toggles gate which channels reach the canvas.
+  const [showSimMoisture, setShowSimMoisture] = useState(false);
+  const [showSimStress, setShowSimStress] = useState(false);
+  const [showSimReady, setShowSimReady] = useState(false);
+  const [simChannels, setSimChannels] = useState<SimOverlayChannels | undefined>(undefined);
 
   const cropById = useMemo(() => new Map(crops.map((crop) => [crop.id, crop])), [crops]);
   const activeCrop = activeCropId ? cropById.get(activeCropId) ?? null : null;
@@ -428,8 +436,12 @@ export function usePlanEditor(farmId: number) {
       spacingViolations,
       companionHalos,
       layers: { plants: showPlants, ground: showGround },
+      // Sim overlays stay OFF unless toggled AND channels were pushed in.
+      simMoisture: showSimMoisture ? simChannels?.moisture ?? null : null,
+      simStress: showSimStress ? simChannels?.stress ?? null : null,
+      simReady: showSimReady ? simChannels?.ready ?? null : null,
     }),
-    [companionHalos, ghost, showGround, showPlants, spacingViolations],
+    [companionHalos, ghost, showGround, showPlants, spacingViolations, showSimMoisture, showSimStress, showSimReady, simChannels],
   );
 
   const redraw = useCallback(() => {
@@ -1217,6 +1229,9 @@ export function usePlanEditor(farmId: number) {
 
   const toggleSpacing = useCallback(() => setShowSpacing((v) => !v), []);
   const toggleCompanions = useCallback(() => setShowCompanions((v) => !v), []);
+  const toggleSimMoisture = useCallback(() => setShowSimMoisture((v) => !v), []);
+  const toggleSimStress = useCallback(() => setShowSimStress((v) => !v), []);
+  const toggleSimReady = useCallback(() => setShowSimReady((v) => !v), []);
   const togglePlantsLayer = useCallback(() => setShowPlants((v) => !v), []);
   const toggleGroundLayer = useCallback(() => setShowGround((v) => !v), []);
 
@@ -1298,6 +1313,16 @@ export function usePlanEditor(farmId: number) {
     togglePlantsLayer,
     showGround,
     toggleGroundLayer,
+
+    // sim-run overlays (SPEC-GROWTH-VISUAL wave 5) — channels present ⇒ run active
+    simChannels,
+    setSimChannels,
+    showSimMoisture,
+    toggleSimMoisture,
+    showSimStress,
+    toggleSimStress,
+    showSimReady,
+    toggleSimReady,
 
     // derived
     cropById,

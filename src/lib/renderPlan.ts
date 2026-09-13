@@ -43,6 +43,24 @@ export interface RenderOptions {
   companionHalos?: { good?: Set<string>; bad?: Set<string> } | null;
   /** false skips a layer entirely; undefined = visible (current behaviour). */
   layers?: { plants?: boolean; ground?: boolean };
+  // --- Sim-run overlays (SPEC-GROWTH-VISUAL wave 5, opt-in, default OFF) ------
+  // Fed by the same projection layer as the 3D world (src/lib/sim/view.ts);
+  // only the interactive canvas passes them, only while a run is active.
+  /** cellKey → moistureFrac 0..1: banded soil tint under the plant layer. */
+  simMoisture?: Map<string, number> | null;
+  /** cellKey → effective stress 0..1: severity tint under the plant layer. */
+  simStress?: Map<string, number> | null;
+  /** Harvest-ready cellKeys: amber corner triangle over the plant layer. */
+  simReady?: Set<string> | null;
+}
+
+/** 2D moisture band fills — mirror SimDrawer.MOISTURE_BANDS (keep in sync). */
+const SIM_MOISTURE_BAND_HEX = ['#92400e', '#ca8a04', '#65a30d', '#2563eb'];
+
+export interface SimOverlayChannels {
+  moisture?: Map<string, number> | null;
+  stress?: Map<string, number> | null;
+  ready?: Set<string> | null;
 }
 
 const EMOJI_MIN_PX = 16;
@@ -143,6 +161,33 @@ export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: R
     ctx.restore();
   }
 
+  // Sim-run overlays (SPEC-GROWTH-VISUAL wave 5) — UNDER the plant layer like
+  // the spacing tint: moisture as banded soil color (same bands as the 3D
+  // overlay legend), stress as a severity-weighted red wash on top of it.
+  if (opts.simMoisture && opts.simMoisture.size > 0) {
+    ctx.save();
+    for (const [key, m] of opts.simMoisture) {
+      const [x, y] = parseKey(key);
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const band = m < 0.25 ? 0 : m < 0.5 ? 1 : m < 0.75 ? 2 : 3;
+      ctx.fillStyle = SIM_MOISTURE_BAND_HEX[band]!;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(offsetX + x * cellPx, offsetY + y * cellPx, cellPx, cellPx);
+    }
+    ctx.restore();
+  }
+  if (opts.simStress && opts.simStress.size > 0) {
+    ctx.save();
+    for (const [key, s] of opts.simStress) {
+      if (s <= 0.15) continue; // floor: match the 3D tint gate
+      const [x, y] = parseKey(key);
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      ctx.fillStyle = `rgba(220, 38, 38, ${(0.10 + 0.38 * Math.min(1, s)).toFixed(3)})`;
+      ctx.fillRect(offsetX + x * cellPx, offsetY + y * cellPx, cellPx, cellPx);
+    }
+    ctx.restore();
+  }
+
   // Planting layer.
   if (opts.layers?.plants !== false) {
     const emoji = cellPx >= EMOJI_MIN_PX;
@@ -217,6 +262,25 @@ export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: R
     };
     if (halos.good && halos.good.size > 0) drawHalo(halos.good, '#16a34a', false);
     if (halos.bad && halos.bad.size > 0) drawHalo(halos.bad, '#dc2626', true);
+  }
+
+  // Harvest-ready markers (opt-in, wave 5): amber BOTTOM-left corner triangle
+  // — a third glyph class (halos own the top corners, conflicts the outline).
+  if (opts.simReady && opts.simReady.size > 0) {
+    const t = Math.max(3, Math.round(cellPx * 0.3));
+    ctx.fillStyle = '#f59e0b';
+    for (const key of opts.simReady) {
+      const [x, y] = parseKey(key);
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const px = offsetX + x * cellPx;
+      const py = offsetY + y * cellPx;
+      ctx.beginPath();
+      ctx.moveTo(px, py + cellPx);
+      ctx.lineTo(px + t, py + cellPx);
+      ctx.lineTo(px, py + cellPx - t);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 
   // Grid: faint cell lines at high zoom, 1 m lines always (every 4 cells).

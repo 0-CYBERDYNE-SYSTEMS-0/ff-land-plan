@@ -226,3 +226,45 @@ with file:line notes). **Wave 1 replaces the local mirror with imports from
 5. Determinism spot-probe for any new seeded channel.
 6. Append dated `implementation-notes.md` entry; commit with descriptive
    message; report touched integration points.
+
+## 7. Mission close — merge-readiness summary (2026-09-13)
+
+All six waves green on `growth-visual-evolution` (cut from `pro-upgrade@6e23a98`,
+five commits + wave 5). This branch is READY FOR HUMAN-DRIVEN MERGE; no agent
+merges it.
+
+**Merges cleanly into `pro-upgrade`** (expect zero textual conflicts if
+`pro-upgrade` has not moved since `6e23a98`; if it has, the risk concentrates
+in the shared files listed below):
+
+- New modules (no merge risk): `src/lib/sim/view.ts`, `src/lib/sim/runWeather.ts`,
+  `src/creative/crops/states/*` (18 files), `src/creative/crops/specials/*`
+  (8 files), `src/creative/showcase/scrub.ts`.
+- Shared-file edits the merger must expect (all surgical, per-wave diffs):
+  `src/three/plants.ts` (largest: template state axis, per-instance color/
+  wilt channels, pad instancing, custom-crop resolution), `src/three/sky.ts`
+  (cloudCover01 in update), `src/components/world/World3D.tsx` (run weather
+  bridge, vis demos, ghost easing, ghost template fallback),
+  `src/components/designer/usePlanEditor.ts` + `DesignerToolbar.tsx` +
+  `src/pages/PlotDesigner.tsx` (sim overlay channels/toggles + ffvis2d hook),
+  `src/lib/renderPlan.ts` (three opt-in RenderOptions flags, default OFF),
+  `src/creative/crops/map.ts` (buildMapping split + custom fallback),
+  `src/creative/voxel.ts` + `crops/shared.ts` (pad flag + unit pad geometry),
+  `tools/appshot.mjs` (Chrome `--timeout=25000` — keep it, it fixes busy-page
+  captures), showcase/main.ts, quality/ASSETS.md + HANDOFF.md +
+  implementation-notes.md (append-only entries).
+
+**Behavioral contract the merger should verify after merge** (all
+machine-assertable, commands in §6): no-run Draws stays 274; lane-B sheet
+`showcase-ready 117`; blueprint PNG export unchanged (no sim overlays);
+tomato scrub byte-identical ×2; `?ffvis2d=drought` probe reads
+`ff-plan-channels day=25 m=414 s=414 r=52`.
+
+**Deliberately left out** (recorded, not forgotten): authored >6-keyframe
+axes beyond corn/apple (§2.4 table stays 6 for the rest — Tier-1 continuous
+channels carry the time-lapse feel); ghost overlay still renders solid-stage
+geometry (no view params/states — deferred since wave 2); stress-tint
+strength at mid levels (backlog since wave 1); plant LOD/imposter system
+(project-scale, see HANDOFF known limitations); sim-side tuning proposals
+(summer-start baseline mass death, standing-ripe window length) — engine
+numerics were never touched per the mission rules.

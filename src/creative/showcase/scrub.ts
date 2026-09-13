@@ -19,7 +19,7 @@
 import * as THREE from 'three';
 import type { AssetEntry } from '@/creative/registry-types';
 import { ARCHETYPES } from '@/creative/crops/registry';
-import { ARCHETYPE_DEFAULTS, cropAssetMap, makeCropFor } from '@/creative/crops/map';
+import { ARCHETYPE_DEFAULTS, cropAssetMap, makeCropFor, makeCropForCustom } from '@/creative/crops/map';
 import { STATE_BUILDERS } from '@/creative/crops/states';
 import { STATE_HEIGHT_FACTOR, type CropPalette, type PlantStateVisual } from '@/creative/crops/shared';
 import { growthToStage, stageCountFor, stressTintMultiplier } from '@/lib/sim/view';
@@ -71,6 +71,17 @@ function builderFor(archId: string): { build: (stage: number) => THREE.Object3D 
   // makeCropFor so the tool shows the catalog crop, palette + special and all.
   if (archId in cropAssetMap) {
     return { build: (stage) => makeCropFor(archId, stage) ?? new THREE.Group() };
+  }
+  // Wave-5 custom-crop token: `custom:<Name>:<category>:<hex>` previews the
+  // UNMAPPED-name fallback (makeCropForCustom) — plants.ts renders exactly
+  // this path for user-defined crops (ids ≥ 1000), so the sheet proves the
+  // fallback never regresses to the pre-voxel primitive look.
+  if (archId.startsWith('custom:')) {
+    const [, name, category, hex] = archId.split(':');
+    return {
+      build: (stage) =>
+        makeCropForCustom(name ?? 'Custom', category ?? 'vegetable', hex ?? '#4caf50', stage) ?? new THREE.Group(),
+    };
   }
   const arch = ARCHETYPES.find((a) => a.id === archId);
   if (!arch) throw new Error(`scrub: unknown crop/archetype "${archId}"`);
@@ -187,8 +198,10 @@ function normalizeArchetypeIds(requested: string[]): string[] {
     ...new Set(
       requested
         .map((raw) => raw.trim().replace(/-s\d+$/, ''))
-        .map((raw) => canon.get(raw.toLowerCase()) ?? raw)
-        .filter((id) => canon.has(id.toLowerCase())),
+        // custom:<Name>:<category>:<hex> tokens bypass canon (they preview the
+        // unmapped-name fallback by construction).
+        .map((raw) => (raw.startsWith('custom:') ? raw : (canon.get(raw.toLowerCase()) ?? raw)))
+        .filter((id) => id.startsWith('custom:') || canon.has(id.toLowerCase())),
     ),
   ];
   return ids.length > 0 ? ids : ['tomato'];

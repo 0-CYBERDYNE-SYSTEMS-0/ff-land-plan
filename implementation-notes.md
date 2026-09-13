@@ -1172,3 +1172,116 @@ rain streak rendering could use a boost; drought demo plant gradient is
 carried mostly by pads+tint at near-camera scale (wilt reads best on the
 far rows); ghost overlay still does not consume view params/states (recorded
 since wave 2 — deferred by design).
+
+## 2026-09-13 — Growth Visual Evolution wave 5: 2D parity, custom-crop fallback, docs + mission close
+
+Blueprint gains sim-run overlays from the SAME projection layer as the world;
+unmapped custom crops stop regressing to the pre-voxel primitive look; the
+harness gained the hooks this wave's verification needed. Sim numerics
+untouched; no-run rendering paths byte-identical (Draws 274 held, PNG export
+never sees the new options).
+
+- **2D sim overlays (SPEC §wave 5)** — `src/lib/renderPlan.ts` grows three
+  opt-in `RenderOptions` flags, default OFF (the three-consumer rule holds:
+  only the interactive canvas passes them): `simMoisture` (banded soil fill
+  under the plant layer, band hexes mirror SimDrawer.MOISTURE_BANDS),`
+  `simStress` (per-cell red wash, alpha 0.10+0.38·stress, floor 0.15 = the 3D
+  tint gate), `simReady` (amber bottom-left corner triangle — third glyph
+  class; halos own the top corners). `usePlanEditor` holds transient toggle
+  state (NOT pref-backed: the channels only mean something while a run is
+  active) + `simChannels` pushed in via PlotDesigner; `DesignerToolbar` shows
+  Moisture/Stress/Ready toggles only when channels exist (`simActive`).
+- **Channel derivation (PlotDesigner)** — day-keyed useMemo over
+  `simRun.simStateRef` × plan × cropById through `projectPlant` /
+  `effectiveStress` / `stageCountFor` (view.ts is now the single projection
+  seam for BOTH frontends, spec §1 satisfied). READY semantics fixed during
+  verification: the engine sets `readyAtDay = crossDay+3` and auto-harvests
+  at `dayIndex >= readyAtDay` (engine.ts HARVEST_GRACE_DAYS), so "alive AND
+  readyAtDay set" is exactly the ~3-day standing-ripe window — an initial
+  `dayIndex >= readyAtDay` condition was provably empty (r=0 at every day).
+- **Custom-crop voxel fallback** — `crops/map.ts` gains
+  `makeCropForCustom(name, category, colorHex, stage, state)` (per-category
+  representative archetype, colorHex → accent/fruit/unripe slots; shares the
+  buildMapping core with makeCropFor) + `hasVoxelPathFor(crop)`;
+  `plants.ts` `createBatch` keeps the procedural-clone path ONLY for
+  categories with no representative, and `buildNormalizedVoxelRoot` +
+  World3D `getGhostTemplate` resolve custom names to voxel templates. The
+  pre-voxel primitive look is unreachable for every catalog category.
+- **Showcase scrub `custom:` tokens** — `#mode=scrub&only=custom:Name:category:hex`
+  renders 12 growth + 6 lifecycle cells through makeCropForCustom
+  (normalizeArchetypeIds passes the token past canon; builderFor routes it).
+- **`?ffvis2d=` DEV proof hook + `#ff-plan-channels` probe** — PlotDesigner
+  composes a REAL run via apiFetch.createSimRun (identical path to the
+  Simulations page; seed 7, startDate 2026-09-01 fixed), startRun → seekDay
+  (pendingSeek path is safe pre-context), then flips the three toggles; the
+  probe span reports `day/m/s/r` every re-derivation. `?ffvis2dDay=N` picks
+  the day. StrictMode double-create absorbed by mark-after-start (one orphan
+  record per cold profile is the accepted dev artifact).
+- **appshot `--timeout=25000`** — sim-run pages never let Chrome's virtual
+  time expire (pending work + throttled commits), so `--screenshot` idled
+  past the spawn kill with the PNG never written; Chrome's own load-timeout
+  bound fixes the harness for any busy page (quiet pages act in <10 s and
+  are immune).
+
+Integration points touched: renderPlan.ts (drawPlan overlay passes +
+SimOverlayChannels export); usePlanEditor (overlayOpts memo + toggle state +
+editor API additions); DesignerToolbar (three conditional toggles);
+PlotDesigner (vis2d/vis2dDay params, demo effect, channel memo, probe);
+crops/map.ts (buildMapping split + CATEGORY_FALLBACK + two new exports);
+plants.ts (createBatch fallback probe + buildNormalizedVoxelRoot resolution);
+World3D.tsx (ghost template fallback); showcase/scrub.ts (custom token);
+tools/appshot.mjs (--timeout flag); ASSETS.md/HANDOFF.md/SPEC refreshes.
+
+Verified: typecheck + build green; plain blueprint GATE+EXPECT (overlays-off
+path unchanged); ffvis2d=drought headless DOM gate `day=25 m=414 s=414 r=52`
++ ffvis2d=baseline&ffvis2dDay=40 `s=79 r=24` (scenario contrast is
+machine-asserted: drought stresses 414/414 cells, baseline 79/414), boot
+probe 0 errors on both; world GATE + **"Draws: 274"** literal (wave-4
+baseline held); lane-B sheet `showcase-ready 117`; tomato scrub ×2
+byte-identical (determinism); custom-crop scrub sheet `showcase-ready 18`.
+Real-browser verification (headed Chrome, isolated profile): the ffvis2d
+drought run rendered live with all three overlays ON — toolbar toggles
+active, moisture bands graded per bed (dry browns left → olive/blue right),
+stress wash strongest in open-field beds and lightest under
+greenhouse/polytunnel, ~52 ready triangles concentrated in the salad bed
+(vision-critic PASS); baseline day-40 shot shows ~24 amber triangles where
+expected and a sparse wash (PASS). Custom-crop sheet critic PASS (proper
+voxel rosette, gold accents at s3+, distinct lifecycle states; nit: late-
+stage gold reads uniform — fallback recolor puts colorHex in three slots).
+
+Traps recorded: (1) virtual-time captures RACE createSimRun's climate fetch —
+when the fetch loses, normals fall back to the flat 20 °C default and the run
+plays out completely differently (documented "invisible default"); headless
+DOM counts are structural evidence only, exact values need a real-time
+browser. (2) A May-start baseline run on farm 1 (Portland) chronically kills
+the whole field by ~day 48 (21+ days of ≥0.85 stress ⇒ view-layer chronic
+death) — September-start runs are living and productive; this is an engine/
+tuning question handed to the sim owner, NOT a visuals bug (sim numerics
+untouched per rule 6). (3) The ready-marker window is narrow by construction
+(3-day standing grace before auto-harvest) — if product wants a longer
+"pick me" phase in 2D, that's an engine parameter discussion. (4) Native
+color inputs ignore AXSetValue — form-driven custom-crop creation can't set
+the hue programmatically (default green used; the fallback path is
+color-agnostic). (5) Interactive in-world custom-crop painting was abandoned
+mid-proof: the desktop browser was being used concurrently by a human —
+don't fight for the pointer; the showcase sheet + type wiring carry the
+evidence instead. (6) The disk filled twice during this wave (ENOSPC wedges
+Chrome headless BEFORE any timeout fires — check df before blaming the
+harness; scratch profiles in $TMPDIR/appshot-profile-* pile up on kills).
+
+Known follow-ups: stress-wash alpha at low zoom reads subtle (wave-1/3
+tint-strength backlog, unchanged); engine tuning for summer-start baseline
+runs (mass chronic death) + possible longer standing-ripe window — both sim-
+side proposals, deliberately not touched here; custom-crop category coverage
+is English-category keyed (custom crops created via the UI always carry a
+valid category, so no gap in practice).
+
+## 2026-09-13 — Growth Visual Evolution: MISSION COMPLETE
+
+All six waves landed on `growth-visual-evolution` (cut from pro-upgrade@
+6e23a98; never merged by agents). Merge-readiness summary appended to
+quality/SPEC-GROWTH-VISUAL.md §7. Standing backlog for a future mission:
+stress-tint strength at mid levels; authored keyframes beyond corn/apple
+(spec §2.4); ghost overlay consuming view params/states (deferred since
+wave 2); plant LOD/imposter system for very large plans (project-scale,
+HANDOFF); sim-side tuning items above.

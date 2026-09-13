@@ -174,6 +174,11 @@ export const cropAssetMap: Record<string, CropAssetMapping> = {
 export function makeCropFor(name: string, stage: number, state?: PlantStateVisual): THREE.Object3D | null {
   const m = cropAssetMap[name];
   if (!m) return null;
+  return buildMapping(m, name, stage, state);
+}
+
+/** Shared build core of makeCropFor / makeCropForCustom. */
+function buildMapping(m: CropAssetMapping, name: string, stage: number, state?: PlantStateVisual): THREE.Object3D | null {
   const pal: CropPalette = { ...ARCHETYPE_DEFAULTS[m.archetype], ...m.palette };
   let obj: THREE.Object3D;
   if (state) {
@@ -192,4 +197,47 @@ export function makeCropFor(name: string, stage: number, state?: PlantStateVisua
   }
   if (m.scale !== undefined && m.scale !== 1) obj.scale.setScalar(m.scale);
   return obj;
+}
+
+/**
+ * Category fallback for crops whose name is NOT in cropAssetMap (custom
+ * crops, ids ≥ 1000): a representative archetype per catalog category with
+ * the crop's own colorHex recoloring the fruit/flower slots, so a custom
+ * "Golden Beet" reads as a voxel plant in its own color instead of the
+ * pre-voxel primitive-blob fallback (SPEC-GROWTH-VISUAL wave 5).
+ */
+const CATEGORY_FALLBACK: Record<string, ArchetypeId> = {
+  vegetable: 'greens-open',
+  herb: 'herb-clump',
+  fruit: 'berry-bush',
+  grain: 'wheat',
+  flower: 'herb-clump',
+  cover_crop: 'greens-open',
+  fungus: 'mushroom',
+};
+
+/** True when a crop has a voxel template path — exact name mapping OR a
+ *  category fallback archetype (wave 5). plants.ts uses this to choose the
+ *  voxel batch over the legacy primitive-blob fallback. */
+export function hasVoxelPathFor(crop: { name: string; category: string }): boolean {
+  return crop.name in cropAssetMap || CATEGORY_FALLBACK[crop.category] !== undefined;
+}
+
+/** Build a custom (unmapped) crop through its category fallback archetype. */
+export function makeCropForCustom(
+  name: string,
+  category: string,
+  colorHex: string,
+  stage: number,
+  state?: PlantStateVisual,
+): THREE.Object3D | null {
+  const archetype = CATEGORY_FALLBACK[category];
+  if (!archetype) return null;
+  const accent = new THREE.Color(colorHex).getHex();
+  return buildMapping(
+    { archetype, palette: { accent, fruit: accent, unripe: accent } },
+    name,
+    stage,
+    state,
+  );
 }
