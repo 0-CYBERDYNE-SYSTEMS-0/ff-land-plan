@@ -856,3 +856,76 @@ a differently-shaped fork draws the old footprint with no visual hint;
 batch-level tint granularity (one stressed sowing yellows its crop's whole
 batch); creatures counts animate existing flocks only on coop-free seeded
 plans (16-creature budget); named experiment sets (grouping runs) deferred.
+
+## Demo-video pipeline + Script Studio (2026-09-10)
+
+Built a HyperFrames (HTML→video) production pipeline and a 60s FarmFriend demo
+video, all real-capture based. New files live only under `tools/video/` and
+`videos/farmfriend-demo/` — no app-source changes.
+
+- `tools/video/lib/script-doc.mjs` — isomorphic SCRIPT.md/STORYBOARD.md
+  parser + serializer + validator (the node CLI block is marker-stripped and
+  inlined for browser use). `selftest` = 23-check fixture gate; `scaffold`
+  seeds project files. HyperFrames parses STORYBOARD.md leniently and ignores
+  unknown bullets, so our extra keys (`tags:`, `asset_candidates:`) and the
+  `## Video direction` preamble section coexist with Studio.
+- `tools/video/validate-script.mjs` — the gate: 60s ±0.5 total, script↔board
+  1:1, word-rate bands, asset existence, tag coverage. `--json` for CI.
+- `tools/video/script-studio.html` — built by `build-studio.mjs` from
+  `studio-template.html` + the lib (never edit the built file; shebang and
+  ESM exports don't survive `new Function`/classic-script inlining). Works
+  from file://; localStorage autosave; import/export round-trips the
+  HyperFrames formats.
+- Video project: `videos/farmfriend-demo/` (product-launch-video workflow,
+  editorial-forest preset remixed onto FarmFriend tokens). Captures are REAL
+  appshots (`tools/appshot*.mjs`, dev :5177). Two traps cost time: (1) the
+  blueprint 2D canvas does NOT paint under virtual-time budgets — use
+  `appshot-live --wait 14000`; (2) seed-farm plans re-seed from `seedPlans` on
+  every load, so blueprint content is the shipped showcase layout, not
+  localStorage. Sim runs are not seeded → the A/B beat uses the Simulations
+  page surface + authored run cards, ghost shown as a tint overlay.
+- Kokoro TTS speaks ~0.42s/word; `--speed` only reaches HeyGen, so the script
+  was tightened to 135 words (55.2s VO) and frame durations = voice + pad,
+  hand-balanced to sum exactly 60.00s. `sync-durations` would collapse frames
+  to raw voice lengths (55.2s) — do NOT re-run it after the hand balance.
+- Frame packets cap at 48KB: each cited rule id inlines its full recipe body,
+  so cite only 1–2 load-bearing rules per frame. Render needs ~15GB scratch
+  for a 60s 1080p job — use `--low-memory-mode` on this machine.
+
+## Sim-landscape + data-source research (2026-09-12)
+
+Two-agent web research pass (full reports saved at
+`quality/RESEARCH-SIM-LANDSCAPE-2026-09.md`): (1) the open-source headless
+crop/ecosystem simulator landscape (DSSAT, APSIM, AquaCrop-OSPy, PCSE/WOFOST,
+BioCro, RothC, EPIC, STICS…) distilled into the "skeletal archetype" of
+components that make such models scientifically credible; (2) open data APIs we
+are not yet consuming (CORS verified live 2026-09-12).
+
+Key conclusions for Sim Core roadmap, in build order:
+- The engine's shell (determinism, provenance tags, replay-as-storage,
+  interventions) is genuinely ahead of many academic tools; the process model
+  inside it is the gap.
+- A1 carry **solar radiation + VPD** into the env series (NASA POWER is free,
+  keyless, CORS-open) → enables PM dual-Kc ET and RUE biomass.
+- A3 **layer the soil bucket** from the SSURGO/SoilGrids horizon data we
+  already fetch (`chorizon`, SoilGrids depth series) — biggest single accuracy
+  lever; data is on disk, unused.
+- A5 replace GDD-fraction biomass with **RUE × intercepted PAR** (or
+  AquaCrop WP* × ΣTr) + Ks stress multipliers + CO2 factor; canopy cover
+  becomes a state that also drives the voxel visuals.
+- A6 **stage-indexed partitioning/HI** replaces the post-hoc season-mean
+  stress penalty.
+- A8 **cultivar parameter layer as data** (SIMPLE 13-param template;
+  DSSAT `dssat-csm-data` + APSIM `Models/Resources` for published values).
+- A11 **calibration/validation/UQ** is entirely absent — even a lightweight
+  version (param ranges + Monte Carlo yield bands + FAO test cases) would
+  separate us from hobby sims; SALib/PEcAn are the workflow references.
+- Port references by license: AquaCrop-OSPy (Apache-2.0, port first), BioCro
+  (MIT, architecture), RothC_Py (Apache-2.0, soil-C port), DSSAT (BSD,
+  read-reference); PCSE is EUPL copyleft — reference only. Avoid Cycles
+  (CC BY-NC-ND) and ApsimX code (custom licence).
+- Top data integrations: NASA POWER → NWS alerts → USA-NPN phenology
+  validation → GBIF/iNaturalist pest-pollinator panel → Open-Meteo
+  CMIP6/Seasonal → QuickStats county-yield benchmarks → SDA depth series →
+  3DEP elevation → vendored cultivar params → Sentinel-2 NDVI per patch
+  (opt-in).

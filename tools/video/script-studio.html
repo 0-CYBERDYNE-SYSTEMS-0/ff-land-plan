@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FarmFriend Script Studio</title>
+<style>
+  :root {
+    --bg: #0d1310; --panel: #131b16; --panel2: #182219; --line: #24352a;
+    --ink: #e8f0e9; --ink-dim: #9db3a4; --accent: #35c26e; --accent-dim: #1f7a47;
+    --amber: #d9a53a; --red: #e05c5c; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, "Segoe UI", Inter, Roboto, sans-serif; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--ink); padding: 6px 12px; }
+  button:hover { border-color: var(--accent-dim); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #06210f; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.ghost { background: transparent; }
+  input, textarea, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; width: 100%; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-dim); }
+  textarea { resize: vertical; min-height: 54px; }
+
+  header.bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: rgba(13,19,16,.92); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: .2px; }
+  .brand .dot { width: 12px; height: 12px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 12px rgba(53,194,110,.55); }
+  .brand small { color: var(--ink-dim); font-weight: 500; }
+  .spacer { flex: 1; }
+  #total-badge { font-family: var(--mono); font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap; }
+  #total-badge.ok { color: #7fe0a8; border-color: var(--accent-dim); }
+  #total-badge.bad { color: var(--red); border-color: var(--red); }
+  #gate-chip { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap; }
+  #gate-chip.pass { color: #7fe0a8; border-color: var(--accent-dim); }
+  #gate-chip.fail { color: var(--red); border-color: var(--red); }
+
+  .timeline { padding: 14px 16px 4px; }
+  .tl-track { display: flex; height: 34px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+  .tl-seg { position: relative; min-width: 6px; border-right: 1px solid var(--bg); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 10.5px; color: #06210f; cursor: pointer; overflow: hidden; white-space: nowrap; }
+  .tl-seg:hover { filter: brightness(1.15); }
+  .tl-seg:nth-child(6n+1) { background: #35c26e; } .tl-seg:nth-child(6n+2) { background: #2fae62; }
+  .tl-seg:nth-child(6n+3) { background: #57cf85; } .tl-seg:nth-child(6n+4) { background: #2b9d59; }
+  .tl-seg:nth-child(6n+5) { background: #6bd897; } .tl-seg:nth-child(6n+6) { background: #34b567; }
+  .tl-seg.over { background: var(--red); color: #2b0808; }
+  .tl-ruler { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--ink-dim); padding: 4px 2px 0; }
+
+  main { padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 12px; max-width: 1080px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .card.global label, .frame label { display: block; color: var(--ink-dim); font-size: 11.5px; text-transform: uppercase; letter-spacing: .8px; margin: 10px 0 4px; }
+  .frame .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .frame .num { font-family: var(--mono); font-size: 12px; color: #06210f; background: var(--accent); border-radius: 7px; padding: 3px 8px; font-weight: 700; }
+  .frame .head input.title { width: auto; flex: 1; min-width: 160px; font-weight: 600; }
+  .frame .dur { width: 84px; font-family: var(--mono); }
+  .frame .trans { width: 130px; }
+  .frame .meta-chips { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+  .chip { font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap; }
+  .chip.rate-ok { color: #7fe0a8; border-color: var(--accent-dim); }
+  .chip.rate-warn { color: var(--amber); border-color: var(--amber); }
+  .chip.rate-bad { color: var(--red); border-color: var(--red); }
+  .icon-btn { padding: 4px 9px; font-size: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .hint { color: var(--ink-dim); font-size: 12px; }
+
+  #findings { display: none; }
+  #findings .f { padding: 7px 10px; border-radius: 8px; margin: 6px 0; font-size: 13px; border: 1px solid var(--line); }
+  #findings .f.error { border-color: rgba(224,92,92,.5); background: rgba(224,92,92,.08); }
+  #findings .f.warning { border-color: rgba(217,165,58,.45); background: rgba(217,165,58,.07); }
+  #findings .f code { font-family: var(--mono); color: var(--ink-dim); font-size: 11.5px; margin-right: 6px; }
+  footer { display: flex; gap: 14px; padding: 10px 16px 18px; color: var(--ink-dim); font-size: 12px; max-width: 1080px; margin: 0 auto; }
+  #ready-marker { color: #3a4f41; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><span class="dot"></span> Script Studio <small>· FarmFriend 60s demo</small></div>
+  <span id="total-badge">Σ —</span>
+  <span id="gate-chip">not validated</span>
+  <span class="spacer"></span>
+  <button class="ghost" id="btn-new" title="Start from an empty script">New</button>
+  <button class="ghost" id="btn-demo" title="Load the canonical FarmFriend demo document">Load demo</button>
+  <button id="btn-import-sb">Import Storyboard</button>
+  <button id="btn-import-sc">Import Script</button>
+  <button id="btn-export-sc">Export Script.md</button>
+  <button id="btn-export-sb">Export Storyboard.md</button>
+  <button class="primary" id="btn-validate">Validate</button>
+  <input type="file" id="file-sb" accept=".md,.markdown,text/markdown" hidden>
+  <input type="file" id="file-sc" accept=".md,.markdown,text/markdown" hidden>
+</header>
+
+<section class="timeline">
+  <div class="tl-track" id="tl-track"></div>
+  <div class="tl-ruler" id="tl-ruler"></div>
+</section>
+
+<main>
+  <div class="card global" id="global-card"></div>
+  <div id="frames"></div>
+  <button class="ghost" id="btn-add">+ Add scene</button>
+  <div class="card" id="findings"></div>
+</main>
+
+<footer>
+  <span id="save-note">autosave on</span>
+  <span>Exports use the HyperFrames SCRIPT.md / STORYBOARD.md formats — round-trips through <code>tools/video/lib/script-doc.mjs</code>.</span>
+  <span class="spacer"></span>
+  <span id="ready-marker">script-studio-ready</span>
+</footer>
+
+<script>
+/**
+ * Isomorphic SCRIPT.md / STORYBOARD.md parser + serializer + validator for the
+ * FarmFriend demo-video pipeline. Consumed three ways:
+ *
+ *   node tools/video/lib/script-doc.mjs selftest           — fixture gate
+ *   node tools/video/lib/script-doc.mjs scaffold --out DIR — seed project files
+ *   inlined (node-cli block stripped, exports stripped) by
+ *   tools/video/build-studio.mjs into tools/video/script-studio.html
+ *
+ * Keep this file dependency-free and browser-safe outside the marked
+ * node-cli block (no static `import`, no `import.meta`, no top-level await).
+ */
+
+const TARGET_DEFAULT = 60;
+const TOLERANCE_DEFAULT = 0.5;
+const REQUIRED_TAGS_DEFAULT = ['pipelines', 'workflows', 'capabilities'];
+const WORD_RATE_WARN = [2.2, 3.0];
+const WORD_RATE_ERROR = [1.6, 3.8];
+const TIME_MATCH_TOLERANCE = 0.25;
+
+// ---------- small utils ----------
+
+function stripQuotes(s) {
+  const t = String(s).trim();
+  if (t.length >= 2 && ((t[0] === '"' && t.endsWith('"')) || (t[0] === "'" && t.endsWith("'")))) {
+    return t.slice(1, -1).replace(/\\"/g, '"').replace(/\\'/g, "'");
+  }
+  return t;
+}
+
+function quoteYaml(s) {
+  const t = String(s);
+  if (/["'\n]|[:#]\s|\s:#|^\s|[:#]$/.test(t) || t === '') return JSON.stringify(t);
+  return t;
+}
+
+function countWords(s) {
+  return String(s)
+    .trim()
+    .split(/\s+/)
+    .filter((t) => /[\p{L}\p{N}]/u.test(t)).length;
+}
+
+function parseSeconds(v) {
+  if (v == null) return null;
+  if (typeof v === 'number') return v;
+  const m = String(v).trim().match(/^([\d.]+)\s*s?$/i);
+  return m ? parseFloat(m[1]) : null;
+}
+
+function fmtSeconds(n) {
+  const r = Math.round(n * 100) / 100;
+  return String(r).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+}
+
+function fmtTime(t) {
+  return (Math.round(t * 10) / 10).toFixed(1);
+}
+
+function splitList(s) {
+  return String(s || '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+// ---------- frontmatter (YAML-lite: scalar `key: value` lines) ----------
+
+function parseFrontmatter(text, warnings = []) {
+  if (!/^---\r?\n/.test(text)) {
+    warnings.push({ code: 'frontmatter_missing', message: 'No YAML frontmatter found at top of file.' });
+    return { data: {}, body: text };
+  }
+  const end = text.indexOf('\n---', 3);
+  if (end < 0) {
+    warnings.push({ code: 'frontmatter_unclosed', message: 'Frontmatter is never closed (missing `---`).' });
+    return { data: {}, body: text };
+  }
+  const head = text.slice(4, end);
+  const body = text.slice(end + 4).replace(/^(\r?\n)/, '');
+  const data = {};
+  for (const line of head.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const i = line.indexOf(':');
+    if (i < 0) {
+      warnings.push({ code: 'frontmatter_line', message: `Unparsable frontmatter line: "${line.trim()}"` });
+      continue;
+    }
+    data[line.slice(0, i).trim()] = stripQuotes(line.slice(i + 1).trim());
+  }
+  return { data, body };
+}
+
+// ---------- STORYBOARD.md ----------
+
+const SCENE_KEYS = ['scene', 'description', 'summary', 'caption'];
+const VO_KEYS = ['voiceover', 'vo', 'voice_over', 'narration'];
+
+function parseStoryboard(text) {
+  const warnings = [];
+  const { data: fm, body } = parseFrontmatter(text, warnings);
+  const known = new Set(['format', 'duration', 'message', 'arc', 'audience', 'mode']);
+  const frontmatter = {
+    format: fm.format || null,
+    duration: fm.duration || null,
+    message: fm.message || '',
+    arc: fm.arc || '',
+    audience: fm.audience || '',
+    mode: fm.mode || '',
+    extra: {},
+  };
+  for (const [k, v] of Object.entries(fm)) if (!known.has(k)) frontmatter.extra[k] = v;
+
+  const raw = [];
+  let cur = null;
+  let inMeta = true;
+  for (const line of body.split(/\r?\n/)) {
+    const h = line.match(/^#{2,3}\s+(?:Frame|Beat|Scene)\s*(\d+)?\s*(?:[—–-]\s*(.*))?$/i);
+    if (h) {
+      if (cur) raw.push(cur);
+      cur = {
+        number: h[1] ? parseInt(h[1], 10) : raw.length + 1,
+        title: (h[2] || '').trim(),
+        meta: {},
+        narrative: [],
+      };
+      inMeta = true;
+      continue;
+    }
+    if (!cur) continue; // preamble before the first frame heading
+    if (inMeta) {
+      const m = line.match(/^-\s+([A-Za-z_][\w-]*)\s*:\s*(.*)$/);
+      if (m) {
+        cur.meta[m[1].toLowerCase()] = stripQuotes(m[2].trim());
+        continue;
+      }
+      if (line.trim() === '') continue;
+      inMeta = false;
+    }
+    cur.narrative.push(line);
+  }
+  if (cur) raw.push(cur);
+
+  const frames = raw.map((f, i) => ({
+    number: f.number || i + 1,
+    title: f.title,
+    status: f.meta.status || 'outline',
+    src: f.meta.src || null,
+    duration: f.meta.duration != null ? parseSeconds(f.meta.duration) : null,
+    durationRaw: f.meta.duration || null,
+    transitionIn: f.meta.transition_in || f.meta.transition || null,
+    scene: SCENE_KEYS.map((k) => f.meta[k]).find(Boolean) || '',
+    voiceover: VO_KEYS.map((k) => f.meta[k]).find(Boolean) || '',
+    poster: f.meta.poster != null ? parseSeconds(f.meta.poster) : null,
+    tags: splitList(f.meta.tags || ''),
+    assetCandidates: splitList(f.meta.asset_candidates || f.meta.assets || ''),
+    narrative: f.narrative.join('\n').trim(),
+  }));
+
+  return { frontmatter, frames, warnings };
+}
+
+function serializeStoryboard(doc) {
+  const fm = doc.frontmatter || {};
+  const out = ['---'];
+  out.push(`format: ${fm.format || '1920x1080'}`);
+  if (fm.duration != null && fm.duration !== '') out.push(`duration: ${fm.duration}`);
+  if (fm.message) out.push(`message: ${quoteYaml(fm.message)}`);
+  if (fm.arc) out.push(`arc: ${quoteYaml(fm.arc)}`);
+  if (fm.audience) out.push(`audience: ${quoteYaml(fm.audience)}`);
+  if (fm.mode) out.push(`mode: ${fm.mode}`);
+  for (const [k, v] of Object.entries(fm.extra || {})) out.push(`${k}: ${quoteYaml(v)}`);
+  out.push('---', '');
+  (doc.frames || []).forEach((f, i) => {
+    const num = f.number != null ? f.number : i + 1;
+    out.push(`## Frame ${num} — ${f.title || ''}`);
+    out.push('');
+    if (f.scene) out.push(`- scene: ${f.scene}`);
+    if (f.duration != null) out.push(`- duration: ${fmtSeconds(f.duration)}s`);
+    if (f.poster != null) out.push(`- poster: ${fmtSeconds(f.poster)}s`);
+    if (f.transitionIn) out.push(`- transition_in: ${f.transitionIn}`);
+    out.push(`- status: ${f.status || 'outline'}`);
+    if (f.voiceover) out.push(`- voiceover: ${quoteYaml(f.voiceover)}`);
+    if (f.src) out.push(`- src: ${f.src}`);
+    if (f.tags && f.tags.length) out.push(`- tags: ${f.tags.join(', ')}`);
+    if (f.assetCandidates && f.assetCandidates.length) {
+      out.push(`- asset_candidates: ${f.assetCandidates.join(', ')}`);
+    }
+    out.push('');
+    if (f.narrative) out.push(f.narrative, '');
+  });
+  return out.join('\n');
+}
+
+// ---------- SCRIPT.md ----------
+
+function parseTimeRange(s) {
+  const m = String(s).match(/([\d.]+)\s*[—–-]\s*([\d.]+)\s*s?/);
+  return m ? [parseFloat(m[1]), parseFloat(m[2])] : [null, null];
+}
+
+function parseScript(text) {
+  const doc = { title: '', voice: '', voiceSettings: '', voiceDirection: '', lines: [] };
+  let cur = null;
+  let spoken = [];
+  const push = () => {
+    if (cur) {
+      cur.text = spoken.join(' ').trim();
+      doc.lines.push(cur);
+    }
+    cur = null;
+    spoken = [];
+  };
+  for (const line of text.split(/\r?\n/)) {
+    const h = line.match(/^#\s+SCRIPT\s*[—–-]?\s*(.*)$/i);
+    if (h) {
+      doc.title = h[1].trim();
+      continue;
+    }
+    const l = line.match(/^##\s+Line\s+(\d+)\s*[—–-]\s*(.+?)\s*(?:\((?:Frame|frame)\s+(\d+)\))?\s*$/);
+    if (l) {
+      push();
+      cur = { n: parseInt(l[1], 10), label: l[2].trim(), frame: l[3] ? parseInt(l[3], 10) : null, start: null, end: null, delivery: '', text: '' };
+      continue;
+    }
+    if (!cur) {
+      let m;
+      if ((m = line.match(/^\*\*Voice:\*\*\s*(.*)$/i))) doc.voice = m[1].trim();
+      else if ((m = line.match(/^\*\*Voice settings:\*\*\s*(.*)$/i))) doc.voiceSettings = m[1].trim();
+      else if ((m = line.match(/^\*\*Voice direction:\*\*\s*(.*)$/i))) doc.voiceDirection = m[1].trim();
+      continue;
+    }
+    let m;
+    if ((m = line.match(/^\*\*Time:\*\*\s*(.*)$/i))) {
+      [cur.start, cur.end] = parseTimeRange(m[1].trim());
+    } else if ((m = line.match(/^\*\*Delivery:\*\*\s*(.*)$/i))) {
+      cur.delivery = m[1].trim();
+    } else if (/^\s{2,}\S/.test(line)) {
+      spoken.push(line.replace(/^\s+/, ''));
+    }
+  }
+  push();
+  return doc;
+}
+
+function serializeScript(doc) {
+  const out = [`# SCRIPT — ${doc.title || 'project'}`, ''];
+  if (doc.voice) out.push(`**Voice:** ${doc.voice}`);
+  if (doc.voiceSettings) out.push(`**Voice settings:** ${doc.voiceSettings}`);
+  if (doc.voiceDirection) out.push(`**Voice direction:** ${doc.voiceDirection}`);
+  out.push('', '---');
+  for (const ln of doc.lines || []) {
+    out.push('', `## Line ${ln.n} — ${ln.label}${ln.frame ? ` (Frame ${ln.frame})` : ''}`, '');
+    if (ln.start != null && ln.end != null) out.push(`**Time:** ${fmtTime(ln.start)} – ${fmtTime(ln.end)}s`);
+    if (ln.delivery) out.push(`**Delivery:** ${ln.delivery}`);
+    out.push('', `    ${ln.text}`);
+  }
+  out.push('');
+  return out.join('\n');
+}
+
+// ---------- validation ----------
+
+function computeTimeline(storyboard) {
+  let t = 0;
+  return (storyboard.frames || []).map((f, i) => {
+    const d = f.duration != null ? f.duration : 0;
+    const seg = { index: i, number: f.number != null ? f.number : i + 1, start: t, end: t + d, duration: d };
+    t += d;
+    return seg;
+  });
+}
+
+/**
+ * validateDoc({ storyboard, script, target, tolerance, requireTags,
+ *               fileExists, expectedFormat }) -> findings[]
+ * finding: { severity: 'error'|'warning', code, message, frame? }
+ * `fileExists(path)` is injected by the host (node: fs.existsSync-based;
+ * browser: omit to skip disk checks).
+ */
+function validateDoc(opts) {
+  const {
+    storyboard,
+    script = null,
+    target = TARGET_DEFAULT,
+    tolerance = TOLERANCE_DEFAULT,
+    requireTags = REQUIRED_TAGS_DEFAULT,
+    fileExists = null,
+    expectedFormat = '1920x1080',
+  } = opts;
+  const F = [];
+  const err = (code, message, frame) => F.push({ severity: 'error', code, message, frame });
+  const warn = (code, message, frame) => F.push({ severity: 'warning', code, message, frame });
+  const frames = (storyboard && storyboard.frames) || [];
+  if (!frames.length) err('storyboard_empty', 'Storyboard has no frames.');
+
+  // frontmatter
+  const fm = (storyboard && storyboard.frontmatter) || {};
+  if (fm.format && fm.format !== expectedFormat) {
+    err('frontmatter_format', `Frontmatter format ${fm.format} != expected ${expectedFormat}.`);
+  }
+  const fmDur = parseSeconds(fm.duration);
+  if (fmDur == null) warn('frontmatter_duration_missing', 'Frontmatter `duration` missing (e.g. `60s`).');
+  else if (Math.abs(fmDur - target) > tolerance) {
+    err('frontmatter_duration', `Frontmatter duration ${fmtSeconds(fmDur)}s misses the ${fmtSeconds(target)}s target by more than ${tolerance}s.`);
+  }
+
+  // per-frame
+  for (const f of frames) {
+    const n = f.number != null ? f.number : '?';
+    if (!f.title) err('frame_missing_field', `Frame ${n}: missing title.`, n);
+    if (f.duration == null) err('frame_missing_field', `Frame ${n}: missing \`duration\`.`, n);
+    if (!f.scene) warn('frame_missing_field', `Frame ${n}: missing \`scene\` caption.`, n);
+    if (!f.voiceover) err('frame_missing_field', `Frame ${n}: missing \`voiceover\`.`, n);
+    if (!f.src && (f.status === 'built' || f.status === 'animated')) {
+      warn('frame_src_missing', `Frame ${n}: status \`${f.status}\` but no \`src\` composition path.`, n);
+    }
+    if (f.src && fileExists && !fileExists(f.src)) {
+      warn('src_file_missing', `Frame ${n}: src not on disk yet: ${f.src}`, n);
+    }
+    if (f.poster == null) warn('frame_poster_missing', `Frame ${n}: missing \`poster\` seek (add e.g. \`- poster: 2s\`).`, n);
+    const words = countWords(f.voiceover || '');
+    if (f.duration != null && f.duration > 0 && words > 0) {
+      const rate = words / f.duration;
+      if (rate < WORD_RATE_ERROR[0] || rate > WORD_RATE_ERROR[1]) {
+        err('word_rate', `Frame ${n}: narration ${fmtSeconds(rate)} words/s (${words} words / ${fmtSeconds(f.duration)}s) outside feasible band ${WORD_RATE_ERROR[0]}–${WORD_RATE_ERROR[1]}.`, n);
+      } else if (rate < WORD_RATE_WARN[0] || rate > WORD_RATE_WARN[1]) {
+        warn('word_rate', `Frame ${n}: narration ${fmtSeconds(rate)} words/s (${words} words / ${fmtSeconds(f.duration)}s) outside comfort band ${WORD_RATE_WARN[0]}–${WORD_RATE_WARN[1]}.`, n);
+      }
+    }
+    for (const a of f.assetCandidates || []) {
+      if (fileExists && !fileExists(a)) {
+        err('asset_missing', `Frame ${n}: asset candidate not on disk: ${a}`, n);
+      }
+    }
+  }
+
+  // total duration
+  const timeline = computeTimeline(storyboard);
+  const total = timeline.length ? timeline[timeline.length - 1].end : 0;
+  if (frames.length) {
+    if (Math.abs(total - target) > tolerance) {
+      err('duration_total', `Frames total ${fmtSeconds(total)}s, target ${fmtSeconds(target)}s (tolerance ±${tolerance}s).`);
+    } else if (Math.abs(total - target) > 0.25) {
+      warn('duration_total', `Frames total ${fmtSeconds(total)}s (target ${fmtSeconds(target)}s).`);
+    }
+  }
+
+  // tag coverage
+  const covered = new Set();
+  for (const f of frames) for (const t of f.tags || []) covered.add(t);
+  for (const tag of requireTags) {
+    if (!covered.has(tag)) err('tag_coverage', `No frame carries required tag \`${tag}\`.`);
+  }
+
+  // script ↔ storyboard
+  if (script) {
+    if (script.lines.length !== frames.length) {
+      err('script_lines_mismatch', `SCRIPT.md has ${script.lines.length} lines for ${frames.length} storyboard frames.`);
+    }
+    const byIndex = timeline;
+    script.lines.forEach((ln, i) => {
+      if (ln.frame != null && ln.frame !== i + 1) {
+        err('line_frame_mismatch', `Line ${ln.n} references Frame ${ln.frame}; expected Frame ${i + 1}.`, ln.frame);
+      }
+      const seg = byIndex[i];
+      if (seg && ln.start != null && ln.end != null) {
+        if (Math.abs(ln.start - seg.start) > TIME_MATCH_TOLERANCE || Math.abs(ln.end - seg.end) > TIME_MATCH_TOLERANCE) {
+          warn('line_time_mismatch', `Line ${ln.n} window ${fmtTime(ln.start)}–${fmtTime(ln.end)}s vs frame window ${fmtTime(seg.start)}–${fmtTime(seg.end)}s.`, seg.number);
+        }
+      }
+      const words = countWords(ln.text || '');
+      if (seg && seg.duration > 0 && words > 0) {
+        const rate = words / seg.duration;
+        if (rate < WORD_RATE_ERROR[0] || rate > WORD_RATE_ERROR[1]) {
+          err('word_rate', `Line ${ln.n}: ${fmtSeconds(rate)} words/s outside feasible band ${WORD_RATE_ERROR[0]}–${WORD_RATE_ERROR[1]}.`, seg.number);
+        }
+      }
+      if (!ln.text) err('line_empty', `Line ${ln.n}: no spoken text.`, ln.frame);
+    });
+    if (!script.voice) warn('script_voice_missing', 'SCRIPT.md header has no **Voice:** line.');
+  }
+
+  return F;
+}
+
+
+
+window.ScriptDoc = { stripQuotes, quoteYaml, countWords, parseSeconds, fmtSeconds, fmtTime, splitList, parseFrontmatter, parseStoryboard, serializeStoryboard, parseTimeRange, parseScript, serializeScript, computeTimeline, validateDoc, TARGET_DEFAULT, TOLERANCE_DEFAULT, REQUIRED_TAGS_DEFAULT, WORD_RATE_WARN, WORD_RATE_ERROR };
+
+
+window.__SAMPLE__ = {"storyboard":{"frontmatter":{"format":"1920x1080","duration":"60s","message":"Plan it before you plant it — FarmFriend turns a blank plot into a simulated, living farm","arc":"Hook → Draw → Stand up → Grow → Test → Act","audience":"Gardeners, small farmers, and makers evaluating planning tools","mode":"autonomous","extra":{}},"frames":[{"number":1,"title":"Hook","status":"outline","src":"compositions/frames/01-hook.html","duration":5,"transitionIn":"cut","poster":2,"scene":"Voxel island at noon — a farm as a living digital twin","voiceover":"Meet FarmFriend — your farm as a living digital twin you can actually simulate.","delivery":"Warm, confident. Land the promise on the beat.","tags":["capabilities"],"assetCandidates":["capture/assets/world-noon.png"],"narrative":"Open on the full island in afternoon light with a slow push in. Title type punches in on the beat."},{"number":2,"title":"Blueprint workflow","status":"outline","src":"compositions/frames/02-blueprint.html","duration":8,"transitionIn":"crossfade","poster":2,"scene":"Blueprint painting with live spacing + companion overlays","voiceover":"Start on the blueprint. Paint beds, place assets, and live agronomy checks flag spacing problems and companion matches as you draw.","delivery":"Brisk, practical.","tags":["workflows"],"assetCandidates":["capture/assets/blueprint-overlays.png"],"narrative":"A cursor paints beds across the grid; a spacing violation tints red, a companion halo glows green. Keep the real toolbar visible."},{"number":3,"title":"Starter templates","status":"outline","src":"compositions/frames/03-templates.html","duration":6,"transitionIn":"crossfade","poster":2,"scene":"One-click starter templates","voiceover":"Short on time? Drop in a starter template — salad garden, salsa bed, four-bed rotation — then undo anything.","delivery":"Light, helpful.","tags":["workflows"],"assetCandidates":["capture/assets/blueprint-templates.png"],"narrative":"The templates card fans out; one template applies across the canvas with a wipe; the undo arrow spins it back for a beat."},{"number":4,"title":"Blueprint to World","status":"outline","src":"compositions/frames/04-world-flip.html","duration":8,"transitionIn":"crossfade","poster":2,"scene":"Blueprint → World: the plan stands up in 3D","voiceover":"Then flip to the world, and your plan stands up in 3D — every bed, barn, and hive placed exactly where you drew it.","delivery":"The wow moment — let it breathe.","tags":["pipelines"],"assetCandidates":["capture/assets/blueprint-overlays.png","capture/assets/world-noon.png"],"narrative":"The blueprint plane tilts back and extrudes into the 3D island; camera sweeps past barn and hives; animals idle nearby."},{"number":5,"title":"Growth time-lapse","status":"outline","src":"compositions/frames/05-growth.html","duration":8,"transitionIn":"crossfade","poster":2,"scene":"Six growth stages on the sim clock","voiceover":"Scrub time forward and crops grow through six real stages, driven by a deterministic simulation engine — same inputs, same result, every replay.","delivery":"Matter-of-fact authority on \"deterministic\".","tags":["capabilities","pipelines"],"assetCandidates":["capture/assets/world-growth.png","capture/assets/world-dawn.png"],"narrative":"Time-lapse one bed from sprout to harvest through the six stage builds; a small \"replay: byte-identical\" chip resolves on screen."},{"number":6,"title":"Sky and weather","status":"outline","src":"compositions/frames/06-weather.html","duration":6,"transitionIn":"crossfade","poster":2,"scene":"Day–night cycle with live weather","voiceover":"Real weather moves through the world too — day, night, and even rain, all included.","delivery":"Relaxed.","tags":["capabilities"],"assetCandidates":["capture/assets/world-dusk.png","capture/assets/world-night.png"],"narrative":"Sun arcs to dusk, then moonlit night; the cloud deck drifts; rain streaks the scene if captured."},{"number":7,"title":"A/B simulation","status":"outline","src":"compositions/frames/07-sim-ab.html","duration":8,"transitionIn":"crossfade","poster":2,"scene":"A/B sim compare with ghost overlay","voiceover":"Test decisions before you plant: run two simulations side by side, overlay the ghost, and compare yield, water, and ecosystem impact.","delivery":"Sharp; this is the differentiator.","tags":["workflows","pipelines"],"assetCandidates":["capture/assets/sims-ab.png","capture/assets/world-ghost.png"],"narrative":"The simulations list splits into A and B; the world shows the baseline solid against a translucent ghost; a compare chip counts up deltas."},{"number":8,"title":"Ops views","status":"outline","src":"compositions/frames/08-ops.html","duration":6,"transitionIn":"crossfade","poster":2,"scene":"Calendar + weather ops views","voiceover":"Your plan becomes a workload: sow, transplant, and harvest dates land on a calendar tied to live forecasts.","delivery":"Grounded, practical close-out.","tags":["workflows"],"assetCandidates":["capture/assets/calendar.png","capture/assets/weather.png"],"narrative":"Calendar bars sweep in week by week; the weather panel with its soil card slides in from the right."},{"number":9,"title":"CTA","status":"outline","src":"compositions/frames/09-cta.html","duration":5,"transitionIn":"cut","poster":2,"scene":"157-asset voxel library + CTA","voiceover":"Under it all: 157 hand-built voxel assets. FarmFriend — plan it before you plant it.","delivery":"Stamp the tagline; hold a beat.","tags":["pipelines"],"assetCandidates":["capture/assets/showcase-sheet.png","capture/assets/dashboard.png"],"narrative":"The asset-library contact sheet scales into a grid wall; logo and tagline land center; hold."}]},"script":{"title":"farmfriend-demo","voice":"Local Kokoro — am_michael (offline)","voiceSettings":"speed 1.0","voiceDirection":"Confident, warm product-demo narrator. Clear enunciation, no hype.","lines":[{"n":1,"label":"Hook","frame":1,"start":0,"end":5,"delivery":"Warm, confident. Land the promise on the beat.","text":"Meet FarmFriend — your farm as a living digital twin you can actually simulate."},{"n":2,"label":"Blueprint workflow","frame":2,"start":5,"end":13,"delivery":"Brisk, practical.","text":"Start on the blueprint. Paint beds, place assets, and live agronomy checks flag spacing problems and companion matches as you draw."},{"n":3,"label":"Starter templates","frame":3,"start":13,"end":19,"delivery":"Light, helpful.","text":"Short on time? Drop in a starter template — salad garden, salsa bed, four-bed rotation — then undo anything."},{"n":4,"label":"Blueprint to World","frame":4,"start":19,"end":27,"delivery":"The wow moment — let it breathe.","text":"Then flip to the world, and your plan stands up in 3D — every bed, barn, and hive placed exactly where you drew it."},{"n":5,"label":"Growth time-lapse","frame":5,"start":27,"end":35,"delivery":"Matter-of-fact authority on \"deterministic\".","text":"Scrub time forward and crops grow through six real stages, driven by a deterministic simulation engine — same inputs, same result, every replay."},{"n":6,"label":"Sky and weather","frame":6,"start":35,"end":41,"delivery":"Relaxed.","text":"Real weather moves through the world too — day, night, and even rain, all included."},{"n":7,"label":"A/B simulation","frame":7,"start":41,"end":49,"delivery":"Sharp; this is the differentiator.","text":"Test decisions before you plant: run two simulations side by side, overlay the ghost, and compare yield, water, and ecosystem impact."},{"n":8,"label":"Ops views","frame":8,"start":49,"end":55,"delivery":"Grounded, practical close-out.","text":"Your plan becomes a workload: sow, transplant, and harvest dates land on a calendar tied to live forecasts."},{"n":9,"label":"CTA","frame":9,"start":55,"end":60,"delivery":"Stamp the tagline; hold a beat.","text":"Under it all: 157 hand-built voxel assets. FarmFriend — plan it before you plant it."}]}};
+
+(function () {
+  'use strict';
+  const LS_KEY = 'ff-script-studio-v1';
+  const $ = (sel) => document.querySelector(sel);
+
+  function blankState() {
+    return {
+      target: 60, tolerance: 0.5, format: '1920x1080', message: '', arc: '', audience: '', mode: 'autonomous',
+      voice: '', voiceSettings: '', voiceDirection: '',
+      frames: [{ title: '', duration: 5, transitionIn: 'cut', poster: 2, scene: '', voiceover: '', delivery: '', tags: [], assetCandidates: [], narrative: '' }],
+    };
+  }
+
+  function stateFromSample(s) {
+    const fm = s.storyboard.frontmatter;
+    return {
+      target: 60, tolerance: 0.5, format: fm.format || '1920x1080', message: fm.message || '', arc: fm.arc || '',
+      audience: fm.audience || '', mode: fm.mode || 'autonomous',
+      voice: s.script.voice || '', voiceSettings: s.script.voiceSettings || '', voiceDirection: s.script.voiceDirection || '',
+      frames: s.storyboard.frames.map((f) => ({
+        title: f.title, duration: f.duration, transitionIn: f.transitionIn || 'cut', poster: f.poster != null ? f.poster : 2,
+        scene: f.scene || '', voiceover: f.voiceover || '', delivery: f.delivery || '',
+        tags: (f.tags || []).slice(), assetCandidates: (f.assetCandidates || []).slice(), narrative: f.narrative || '',
+      })),
+    };
+  }
+
+  let state = blankState();
+  let saveTimer = null;
+
+  // ---------- derive HyperFrames docs from studio state ----------
+  function slug(t) {
+    return (t || 'scene').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'scene';
+  }
+  function timeline() {
+    let t = 0;
+    return state.frames.map((f) => {
+      const d = Number(f.duration) || 0;
+      const seg = { start: t, end: t + d, duration: d };
+      t += d;
+      return seg;
+    });
+  }
+  function deriveStoryboardDoc() {
+    const total = timeline().reduce((a, s) => a + s.duration, 0);
+    return {
+      frontmatter: { format: state.format, duration: ScriptDoc.fmtSeconds(total) + 's', message: state.message, arc: state.arc, audience: state.audience, mode: state.mode, extra: {} },
+      frames: state.frames.map((f, i) => ({
+        number: i + 1, title: f.title, status: 'outline',
+        src: 'compositions/frames/' + String(i + 1).padStart(2, '0') + '-' + slug(f.title) + '.html',
+        duration: Number(f.duration) || 0, transitionIn: f.transitionIn, poster: Number(f.poster) || null,
+        scene: f.scene, voiceover: f.voiceover, tags: f.tags.slice(), assetCandidates: f.assetCandidates.slice(),
+        narrative: f.narrative,
+      })),
+    };
+  }
+  function deriveScriptDoc() {
+    const tl = timeline();
+    return {
+      title: 'farmfriend-demo',
+      voice: state.voice, voiceSettings: state.voiceSettings, voiceDirection: state.voiceDirection,
+      lines: state.frames.map((f, i) => ({
+        n: i + 1, label: f.title || 'Scene ' + (i + 1), frame: i + 1,
+        start: tl[i].start, end: tl[i].end, delivery: f.delivery, text: f.voiceover,
+      })),
+    };
+  }
+
+  // ---------- rendering ----------
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function rateClass(rate) {
+    if (rate == null) return '';
+    if (rate < 1.6 || rate > 3.8) return 'rate-bad';
+    if (rate < 2.2 || rate > 3.0) return 'rate-warn';
+    return 'rate-ok';
+  }
+  function rateText(i) {
+    const f = state.frames[i];
+    const words = ScriptDoc.countWords(f.voiceover || '');
+    const d = Number(f.duration) || 0;
+    if (!d || !words) return null;
+    return (words / d).toFixed(1) + ' w/s';
+  }
+
+  function renderGlobal() {
+    $('#global-card').innerHTML = [
+      '<div class="head"><strong>Video</strong> <span class="hint">frontmatter — lands in STORYBOARD.md</span></div>',
+      '<div class="grid2">',
+      '<div><label>Message (thesis)</label><input data-g="message" value="' + esc(state.message) + '"></div>',
+      '<div><label>Arc</label><input data-g="arc" value="' + esc(state.arc) + '"></div>',
+      '<div><label>Audience</label><input data-g="audience" value="' + esc(state.audience) + '"></div>',
+      '<div class="row"><div style="flex:1"><label>Format</label><input data-g="format" value="' + esc(state.format) + '"></div>',
+      '<div style="width:110px"><label>Target (s)</label><input type="number" data-g="target" value="' + esc(state.target) + '"></div>',
+      '<div style="width:110px"><label>Tolerance (s)</label><input type="number" step="0.1" data-g="tolerance" value="' + esc(state.tolerance) + '"></div></div>',
+      '<div><label>Voice</label><input data-g="voice" value="' + esc(state.voice) + '"></div>',
+      '<div><label>Voice settings</label><input data-g="voiceSettings" value="' + esc(state.voiceSettings) + '"></div>',
+      '<div><label>Voice direction</label><input data-g="voiceDirection" value="' + esc(state.voiceDirection) + '"></div>',
+      '<div><label>Mode</label><input data-g="mode" value="' + esc(state.mode) + '"></div>',
+      '</div>',
+    ].join('');
+  }
+
+  function renderFrame(i) {
+    const f = state.frames[i];
+    const tl = timeline()[i];
+    const rt = rateText(i);
+    return [
+      '<div class="card frame" data-frame="' + i + '">',
+      '<div class="head">',
+      '<span class="num">' + String(i + 1).padStart(2, '0') + '</span>',
+      '<input class="title" data-f="title" data-i="' + i + '" value="' + esc(f.title) + '" placeholder="Scene title">',
+      '<input class="dur" type="number" step="0.5" min="0.5" data-f="duration" data-i="' + i + '" value="' + esc(f.duration) + '" title="Duration (seconds)">',
+      '<select class="trans" data-f="transitionIn" data-i="' + i + '">',
+      ['cut', 'crossfade', 'wipe', 'fade'].map((t) => '<option' + (f.transitionIn === t ? ' selected' : '') + '>' + t + '</option>').join(''),
+      '</select>',
+      '<span class="meta-chips">',
+      '<span class="chip">' + ScriptDoc.fmtTime(tl.start) + '–' + ScriptDoc.fmtTime(tl.end) + 's</span>',
+      rt ? '<span class="chip ' + rateClass(Number(rt)) + '" title="Narration words per second (comfort band 2.2–3.0)">' + rt + '</span>' : '',
+      '<button class="icon-btn ghost" data-act="up" data-i="' + i + '" title="Move up">↑</button>',
+      '<button class="icon-btn ghost" data-act="down" data-i="' + i + '" title="Move down">↓</button>',
+      '<button class="icon-btn ghost" data-act="del" data-i="' + i + '" title="Delete scene">✕</button>',
+      '</span>',
+      '</div>',
+      '<div class="grid2">',
+      '<div><label>Scene caption</label><input data-f="scene" data-i="' + i + '" value="' + esc(f.scene) + '" placeholder="One-line contact-sheet caption"></div>',
+      '<div><label>Delivery</label><input data-f="delivery" data-i="' + i + '" value="' + esc(f.delivery) + '" placeholder="Per-line delivery note (SCRIPT.md)"></div>',
+      '</div>',
+      '<label>Voiceover — the spoken line</label>',
+      '<textarea data-f="voiceover" data-i="' + i + '" placeholder="Exactly what the narrator says in this scene">' + esc(f.voiceover) + '</textarea>',
+      '<div class="grid2">',
+      '<div><label>Tags (comma-separated)</label><input data-f="tags" data-i="' + i + '" value="' + esc(f.tags.join(', ')) + '" placeholder="pipelines, workflows, capabilities"></div>',
+      '<div><label>Asset candidates (comma-separated paths)</label><input data-f="assetCandidates" data-i="' + i + '" value="' + esc(f.assetCandidates.join(', ')) + '" placeholder="capture/assets/world-noon.png"></div>',
+      '</div>',
+      '<label>Narrative (visual direction)</label>',
+      '<textarea data-f="narrative" data-i="' + i + '" style="min-height:40px">' + esc(f.narrative) + '</textarea>',
+      '</div>',
+    ].join('');
+  }
+
+  function render() {
+    renderGlobal();
+    $('#frames').innerHTML = state.frames.map((_, i) => renderFrame(i)).join('');
+    renderTimeline();
+    saveSoon();
+  }
+
+  function renderTimeline() {
+    const tl = timeline();
+    const total = tl.length ? tl[tl.length - 1].end : 0;
+    const denom = Math.max(total, state.target) || 1;
+    $('#tl-track').innerHTML = state.frames
+      .map((f, i) => {
+        const w = ((Number(f.duration) || 0) / denom) * 100;
+        const over = tl[i].end > state.target + 1e-6;
+        return '<div class="tl-seg' + (over ? ' over' : '') + '" style="width:' + w + '%" data-act="seek" data-i="' + i + '" title="' + esc((f.title || 'Scene') + ' · ' + ScriptDoc.fmtSeconds(f.duration) + 's') + '">' + (i + 1) + '</div>';
+      })
+      .join('');
+    const marks = [];
+    const step = state.target > 90 ? 15 : state.target > 45 ? 10 : 5;
+    for (let s = 0; s <= denom; s += step) marks.push('<span>' + s + 's</span>');
+    $('#tl-ruler').innerHTML = marks.join('');
+    const badge = $('#total-badge');
+    badge.textContent = 'Σ ' + ScriptDoc.fmtSeconds(total) + 's / target ' + state.target + 's';
+    badge.className = Math.abs(total - state.target) <= state.tolerance ? 'ok' : 'bad';
+  }
+
+  // ---------- persistence ----------
+  function saveSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state)); $('#save-note').textContent = 'saved ' + new Date().toLocaleTimeString(); } catch (e) { /* storage unavailable */ }
+    }, 400);
+  }
+
+  // ---------- imports / exports ----------
+  function download(name, text) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  }
+  function importText(text, kind) {
+    if (kind === 'sb') {
+      const doc = ScriptDoc.parseStoryboard(text);
+      state.format = doc.frontmatter.format || state.format;
+      state.message = doc.frontmatter.message || '';
+      state.arc = doc.frontmatter.arc || '';
+      state.audience = doc.frontmatter.audience || '';
+      state.mode = doc.frontmatter.mode || state.mode;
+      state.frames = doc.frames.map((f) => ({
+        title: f.title, duration: f.duration != null ? f.duration : 5, transitionIn: f.transitionIn || 'cut',
+        poster: f.poster != null ? f.poster : 2, scene: f.scene || '', voiceover: f.voiceover || '', delivery: '',
+        tags: f.tags.slice(), assetCandidates: f.assetCandidates.slice(), narrative: f.narrative || '',
+      }));
+    } else {
+      const doc = ScriptDoc.parseScript(text);
+      state.voice = doc.voice || state.voice;
+      state.voiceSettings = doc.voiceSettings || state.voiceSettings;
+      state.voiceDirection = doc.voiceDirection || state.voiceDirection;
+      doc.lines.forEach((ln, i) => {
+        if (!state.frames[i]) return;
+        if (ln.text) state.frames[i].voiceover = ln.text;
+        if (ln.delivery) state.frames[i].delivery = ln.delivery;
+      });
+    }
+    render();
+    flash('imported ' + kind);
+  }
+  function flash(msg) {
+    const n = $('#save-note');
+    n.textContent = msg;
+    setTimeout(() => { n.textContent = 'autosave on'; }, 2200);
+  }
+
+  // ---------- validation ----------
+  function runValidate() {
+    const findings = ScriptDoc.validateDoc({
+      storyboard: deriveStoryboardDoc(),
+      script: deriveScriptDoc(),
+      target: Number(state.target) || 60,
+      tolerance: Number(state.tolerance) || 0.5,
+      fileExists: null,
+    });
+    const errors = findings.filter((f) => f.severity === 'error').length;
+    const chip = $('#gate-chip');
+    chip.textContent = errors ? errors + ' error(s)' : findings.length ? 'pass (with notes)' : 'clean pass';
+    chip.className = errors ? 'fail' : 'pass';
+    const box = $('#findings');
+    box.style.display = 'block';
+    box.innerHTML = '<strong>Validation</strong> <span class="hint">' + findings.length + ' finding(s)</span>' +
+      (findings.length ? '' : '<div class="f" style="border-color:var(--accent-dim)">Clean — script and storyboard satisfy every gate.</div>') +
+      findings.map((f) => '<div class="f ' + f.severity + '"><code>' + esc(f.code) + (f.frame ? ' · frame ' + f.frame : '') + '</code>' + esc(f.message) + '</div>').join('');
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ---------- events ----------
+  document.body.addEventListener('input', (e) => {
+    const el = e.target;
+    if (el.dataset.g) {
+      const k = el.dataset.g;
+      state[k] = k === 'target' || k === 'tolerance' ? Number(el.value) || 0 : el.value;
+      renderTimeline();
+      saveSoon();
+    } else if (el.dataset.f) {
+      const f = state.frames[Number(el.dataset.i)];
+      if (!f) return;
+      const k = el.dataset.f;
+      if (k === 'duration') { f.duration = Number(el.value) || 0; render(); }
+      else if (k === 'tags' || k === 'assetCandidates') { f[k] = el.value.split(',').map((s) => s.trim()).filter(Boolean); renderTimeline(); saveSoon(); }
+      else { f[k] = el.value; if (k === 'voiceover') renderTimeline(); saveSoon(); }
+    }
+  });
+  document.body.addEventListener('change', (e) => {
+    const el = e.target;
+    if (el.dataset.f === 'transitionIn') { state.frames[Number(el.dataset.i)].transitionIn = el.value; saveSoon(); }
+  });
+  document.body.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const i = Number(btn.dataset.i);
+    const act = btn.dataset.act;
+    if (act === 'seek') { const card = document.querySelector('.frame[data-frame="' + i + '"]'); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (act === 'up' && i > 0) { [state.frames[i - 1], state.frames[i]] = [state.frames[i], state.frames[i - 1]]; render(); }
+    if (act === 'down' && i < state.frames.length - 1) { [state.frames[i + 1], state.frames[i]] = [state.frames[i], state.frames[i + 1]]; render(); }
+    if (act === 'del') { state.frames.splice(i, 1); render(); }
+  });
+  $('#btn-add').addEventListener('click', () => {
+    state.frames.push({ title: '', duration: 5, transitionIn: 'crossfade', poster: 2, scene: '', voiceover: '', delivery: '', tags: [], assetCandidates: [], narrative: '' });
+    render();
+  });
+  $('#btn-new').addEventListener('click', () => { state = blankState(); render(); });
+  $('#btn-demo').addEventListener('click', () => { state = stateFromSample(window.__SAMPLE__); render(); });
+  $('#btn-validate').addEventListener('click', runValidate);
+  $('#btn-export-sb').addEventListener('click', () => download('STORYBOARD.md', ScriptDoc.serializeStoryboard(deriveStoryboardDoc())));
+  $('#btn-export-sc').addEventListener('click', () => download('SCRIPT.md', ScriptDoc.serializeScript(deriveScriptDoc())));
+  $('#btn-import-sb').addEventListener('click', () => $('#file-sb').click());
+  $('#btn-import-sc').addEventListener('click', () => $('#file-sc').click());
+  $('#file-sb').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) { f.text().then((t) => importText(t, 'sb')); e.target.value = ''; } });
+  $('#file-sc').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) { f.text().then((t) => importText(t, 'sc')); e.target.value = ''; } });
+
+  // ---------- boot ----------
+  try {
+    const saved = localStorage.getItem(LS_KEY);
+    if (saved) state = JSON.parse(saved);
+    else state = stateFromSample(window.__SAMPLE__);
+  } catch (e) {
+    state = stateFromSample(window.__SAMPLE__);
+  }
+  render();
+})();
+</script>
+</body>
+</html>
