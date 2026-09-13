@@ -56,9 +56,16 @@ Branch cut from `pro-upgrade@6e23a98`; binding spec
   apple age series opted in); allium tops-down; s5 "pick me" fixes across
   every flagged archetype; leafy-head vs brassica silhouette split. Critic
   27/27 PASS; Draws still 273; lane-B sheet now 117 assets.
-- **Wave 4 — PENDING.** World coupling: run `envSeries` drives weather FX /
-  sky mood / sway; bloom gated by floweringFrac; soil-pad separation
-  (per-cell moisture tint); ghost overlay easing.
+- **Wave 4 — DONE.** World coupling: run `envSeries` day drives weather FX /
+  sky mood (dome greys under overcast, sun/ambient dim) / sway via the pure
+  `envToWeatherCurrent` bridge (day-keyed cache — zero per-frame allocs);
+  soil pads separated into 2 shared instanced meshes with per-cell moisture
+  tint through `PlantViewParams.moisture` (Draws 273→274, +1 flat pad mesh);
+  ghost A/B growth easing (per-cell visualP carried across stage re-buckets);
+  `?ffvis=drought|rain` demos + `#ff-env-bridge` DOM probe for headless
+  proof. Critic round 4 ALL PASS; interactive real-run verification (drought
+  run to day 90, A/B ghost to day 19). Known follow-ups: stress-tint
+  strength backlog (wave 1/3), rain streaks subtle under headless.
 - **Wave 5 — PENDING.** 2D blueprint overlays (opt-in RenderOptions flags,
   default OFF) via the same projection layer; unmapped-crop fallback
   improved; ASSETS/HANDOFF refresh; final full-lane critic + merge-readiness

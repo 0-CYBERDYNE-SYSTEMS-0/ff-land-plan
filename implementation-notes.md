@@ -1080,3 +1080,95 @@ continuous channels carry the time-lapse feel meanwhile). Known follow-ups:
 tomato overripe-vs-healthy still hue/droop-led (wave-2 carryover); stress
 0.55 scrub cell subtle (tint-strength backlog); Tris HUD 10× read artifact
 queued.
+
+## 2026-09-12 — Growth Visual Evolution wave 4: world coupling (env bridge, soil pads, ghost easing)
+
+Run envSeries drives the world's weather presentation; soil pads became a
+per-cell-tintable instanced channel; ghost A/B growth now eases; the sky
+greys under overcast. Sim numerics untouched; no-run path behavior
+byte-identical (Draws 273 → 274, the +1 is the flat pad mesh).
+
+- **NEW src/lib/sim/runWeather.ts** — pure `envToWeatherCurrent(env, base)`:
+  projects one DailyEnvironment onto the WeatherCurrent shape the renderer
+  already consumes (aridity from ET₀−rain, cloud/humidity/wind derived,
+  WMO codes, snow below 2 °C). No clock, no rng. Only the run path calls it.
+- **World3D.tsx** — runEnvRef + runWeatherRef (day-keyed bridge cache; the
+  rAF reads the cached object instead of projecting per frame — zero
+  per-frame allocations); when a run is active clouds/weather-FX/ambient/
+  sway consume the bridged weather and sky.update gets cloudCover01; the
+  weather chip falls back to runWeatherPreview when the live fetch is
+  unavailable (HUD tells the same story as the sky). DEV `?ffvis=drought` /
+  `?ffvis=rain` demos drive the REAL bridge + projection path end to end;
+  `#ff-env-bridge` DOM probe (display:none span, written every frame under
+  ffdebug/ffvis) asserts which weather the world renders with, plus pad
+  counters (flat/hilled/instanceColor samples/moist hits) via plants.ts
+  `__padProbe`. **Two ownership fixes found the hard way** (critic rounds
+  1–2 failed): the legacy scrub effect re-runs when ambientTempC /
+  climateBaseline land asynchronously and rewrote plants untinted — under
+  virtual-time captures the demo's re-apply never got a rendered frame. Fix
+  A mirrors the async deps onto the vis effect; fix B (the load-bearing one)
+  makes the legacy scrub effect defer to an active vis demo entirely.
+- **Soil-pad separation (Tier-1 extension)** — `voxel.ts` Voxel gains a
+  `pad` flag; soilPad/soilPadEllipse flag their voxels; finishPlant splits
+  them into a NAMED 'pad' child (showcase/ghost/direct makeCropFor consumers
+  render unchanged; the ghost template merge already handles multi-mesh
+  assets). plants.ts strips the pad child at template build, reports world
+  radii + hilledness on the template, and reconciles TWO shared
+  InstancedMeshes (flat + hilled, unit geometries seeded 4242 via
+  unitPadGeometry) — +1 draw flat (+1 hilled only when hilled cells exist),
+  capacity grows ×1.5, swap-with-last removal, per-cell tint =
+  padMoistureTint(moistureFrac): dusty-pale (×~1.45) → wet-dark (×~0.5)
+  through PlantViewParams.moisture. reconcilePads runs at updatePlants
+  cadence (day-keyed), never per frame.
+- **sky.ts** — cloudCover01 dims sun (×0.55 at full cover) and ambient
+  (×0.22), and **greys the dome**: quadratic-weighted desaturation toward
+  luminance + slight dimming (c≈0.94 ⇒ ~0.88 grey blend; scattered c≈0.3
+  barely registers; 0 = byte-identical). This closed the "rain at a glance"
+  gap — light dimming alone didn't read.
+- **Ghost easing (wave-4 optional item, shipped)** — GhostRunBatch carries
+  per-cell entries {pos, rotY, baseScale, denom, targetP, visualP};
+  reconcile builds them carrying visualP across stage re-buckets via
+  ghostVisualPByCell (cleared on ghost teardown); advanceGhostGrowth eases
+  per frame in the rAF (same contract as advancePlantGrowth: allocation-
+  free, matrices rewritten only while diffs persist, zero extra draws).
+  New cells start at target so nothing pops in.
+
+Integration points touched: World3D rAF (sky/clouds/weather-FX/sway/ghost
+advance), run-growth + vis-demo + legacy-scrub effects (ownership), SimDrawer
+weather prop; plants.ts buildNormalizedVoxelRoot/getVoxelTemplate/
+buildPlants/updatePlants/disposePlants (+ new PadState module state); sky.ts
+update signature; shared.ts finishPlant/soilPad/soilPadEllipse + new
+unitPadGeometry; voxel.ts Voxel type; view.ts PlantViewParams.moisture.
+
+Verified: typecheck + build green; world GATE + **"Draws: 274" machine-
+asserted as a literal DOM substring** (baseline 273; +1 = flat pad mesh —
+an initial vision read of "374/13 FPS" was a digit misread of the tiny HUD
+font, settled by --expect; wave 1 hit the SAME misread, precedent noted);
+blueprint GATE PASS; ffvis=drought/rain/stress GATE+EXPECT (bridge text,
+viscells, pad moist counters); showcase lane-B "showcase-ready 117"
+regression PASS; tomato scrub ×2 byte-identical (determinism); Math.random
+audit clean in touched files (weather-fx rain particles are pre-existing
+live-weather cosmetic, outside the creative/sim determinism law). Critic
+rounds on drought/rain/stress/plain PNGs: **round 4 ALL PASS** (sky contrast
+strong, wet-dark vs dusty-tan pad flip strong, stress gradient strong and
+spatially coherent soil↔foliage, zero pad/z-fight artifacts) after rounds
+1–2 exposed the clobber race and the round-3 pixel-diff analysis confirmed
+the fixes landed. Interactive real-browser verification (throwaway Chrome
+profile): created a 90-day Drought Stress run + a Current Conditions run on
+farm 1, played the drought run to day 90 (field reads drought: browner
+patches, clear sky, HUD stress rows), and ran the A/B compare (solid=
+baseline, ghost=drought) to day 19 — ghost plants grow in lockstep with the
+solids, correctly seated, unmangled; ghost label + Clear control functional.
+
+Traps recorded: (1) HUD digit misreads — always --expect the literal;
+(2) legacy-scrub vs vis-demo ownership — any new plant-rewriting effect
+must defer to demos/runs or re-apply after them; (3) instanceColor changes
+are buffer-level until the next rendered frame — under virtual-time
+captures the LAST writer must be settled before frames stop; (4) weather-fx
+rain is subtle under headless SwiftShader (pre-existing; the overcast dome
+carries the rain read); (5) Tris HUD 10× artifact persists. Known follow-
+ups: stress-tint strength at mid levels remains the wave-1/3 backlog item;
+rain streak rendering could use a boost; drought demo plant gradient is
+carried mostly by pads+tint at near-camera scale (wilt reads best on the
+far rows); ghost overlay still does not consume view params/states (recorded
+since wave 2 — deferred by design).

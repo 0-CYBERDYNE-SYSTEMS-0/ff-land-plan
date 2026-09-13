@@ -40,6 +40,9 @@ export interface PlantViewParams {
   tint: { r: number; g: number; b: number } | null;
   /** Passthrough of floweringFrac for pollinator gating. */
   flowering: number;
+  /** Passthrough of moistureFrac (0..1) for the soil-pad tint channel;
+   *  null when the cell carries no moisture reading (pad untinted). */
+  moisture: number | null;
   variation: PlantVariation;
 }
 
@@ -202,6 +205,7 @@ export function projectPlant(input: PlantViewInput): PlantViewParams {
     wilt,
     tint: stress > 0.2 ? stressTintMultiplier(stress) : null,
     flowering: Math.min(1, Math.max(0, cell.floweringFrac ?? 0)),
+    moisture: cell.moistureFrac === undefined ? null : Math.min(1, Math.max(0, cell.moistureFrac)),
     variation: variationForCell(cellKey),
   };
 }

@@ -34,7 +34,10 @@ export interface Sky {
   /** Fixed, very dim bluish night fill (NOT a competing sun: ≤0.13, cool, shadowless). */
   moonLight: THREE.DirectionalLight;
   state: SkyState;
-  update: (timeOfDay: number) => void;
+  /** cloudCover01 (0..1) dims the sun/ambient like an overcast sky — only
+   *  passed by the run-env bridge (SPEC-GROWTH-VISUAL wave 4); default 0 keeps
+   *  the live-weather presentation byte-identical. */
+  update: (timeOfDay: number, cloudCover01?: number) => void;
   dispose: () => void;
 }
 
@@ -103,6 +106,8 @@ const scratch = {
   ambient: new THREE.Color(),
   sun: new THREE.Color(),
 };
+/** Reused target for the overcast desaturation (wave 4). */
+const overcastGrey = new THREE.Color();
 
 /** Weighted 4-way color blend written into `out` (no allocation). */
 function blendInto(
@@ -165,7 +170,7 @@ export function createSky(scene: THREE.Scene): Sky {
     moonIntensity: 0,
   };
 
-  function update(timeOfDay: number) {
+  function update(timeOfDay: number, cloudCover01 = 0) {
     const t = Math.max(0, Math.min(1, timeOfDay));
 
     // Warped clock: sun elevation follows sin(u·π) so the daylight window is
@@ -189,6 +194,20 @@ export function createSky(scene: THREE.Scene): Sky {
     blendInto(scratch.ambient, PAL_NIGHT.ambient, wNight, PAL_MORN.ambient, wMorn, PAL_EVE.ambient, wEve, PAL_DAY.ambient, wDay);
     blendInto(scratch.sun, PAL_NIGHT.sun, wNight, PAL_MORN.sun, wMorn, PAL_EVE.sun, wEve, PAL_DAY.sun, wDay);
 
+    // Overcast mood (wave 4): heavy cloud greys the dome — desaturate toward
+    // the blended color's luminance and dim it slightly. Quadratic weight so
+    // scattered clouds (c≈0.3, k≈0.09) barely register while a storm
+    // (c≈0.94, k≈0.88) reads at a glance. cloudCover01 = 0 (live default)
+    // leaves the palette byte-identical.
+    if (cloudCover01 > 0.01) {
+      const k = cloudCover01 * cloudCover01 * (1 - 0.15 * cloudCover01);
+      for (const c of [scratch.top, scratch.bottom] as const) {
+        const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+        overcastGrey.setRGB(lum, lum, lum);
+        c.lerp(overcastGrey, Math.min(0.92, k * 1.1));
+      }
+    }
+
     material.uniforms.uTopColor.value.copy(scratch.top);
     material.uniforms.uBottomColor.value.copy(scratch.bottom);
     material.uniforms.uSunColor.value.copy(scratch.sun);
@@ -197,10 +216,11 @@ export function createSky(scene: THREE.Scene): Sky {
     // Single-sun intensity curve: ramps with altitude to a crisp ~1.15 at noon,
     // keeps a warm ~0.3 rim right at the horizon (dawn pink / dusk amber),
     // reaches exactly 0 once the sun is below the horizon. No night sun.
-    const sunI = Math.max(1.15 * dayF, 0.3 * glow * glow);
+    const sunI = Math.max(1.15 * dayF, 0.3 * glow * glow) * (1 - 0.55 * cloudCover01);
     // Ambient hue comes from the palette; strength has a deliberate night floor
     // (0.40) so nights stay legible, rising to 0.56 under full daylight.
-    const ambientI = 0.4 + 0.16 * dayF;
+    // Overcast dims it less than the sun — clouds diffuse, they don't eclipse.
+    const ambientI = (0.4 + 0.16 * dayF) * (1 - 0.22 * cloudCover01);
     // Cool moon-fill: fully on in deep night, gone well before mid-morning.
     const moonI = 0.13 * (1 - THREE.MathUtils.smoothstep(yn, -0.12, 0.1));
 

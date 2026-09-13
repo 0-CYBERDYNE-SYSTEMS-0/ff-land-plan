@@ -14,6 +14,10 @@ export type Voxel = {
   /** size in voxel units (defaults 1) */
   s?: number;
   color: number;
+  /** true for soil-pad voxels (soilPad/soilPadEllipse) — the renderer splits
+   *  these into a named 'pad' group so pads can be instanced/tinted per cell
+   *  (SPEC-GROWTH-VISUAL wave 4). Showcase/ghost paths render them as ever. */
+  pad?: boolean;
 };
 
 /** Curated master palette — Minecraft-adjacent saturation, slightly warmer. */
