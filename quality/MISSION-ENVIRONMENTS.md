@@ -45,7 +45,16 @@ Deferred (roadmap only, see Non-goals): `container` farm, mushroom house, lean-t
 microgreens as *surfaces* — NFT/DWC/aquaponics/nursery arrive as **equipment assets + dioramas**
 instead, because they are growing systems inside a shell, not shells.
 
-## Constants (all `Record<PlanSurface, …>` tables must be extended; TS enforces)
+## Constants
+
+Compiler-forced tables (`Record<PlanSurface, …>` — typecheck fails until extended):
+`SURFACE_SHELTER`, `SURFACE_PLANT_SCALE` (growth.ts), `SURFACE_FLOOR` (ground.ts).
+**String-keyed tables the compiler will NOT force** (manual audit required, red-team finding):
+`SURFACE_AMBIENT` (World3D — currently `Record<string, number>` with a `?? 1` fallback;
+RETYPE to `Record<PlanSurface, number>` and drop the fallback), `SURFACE_OPTIONS`
+(DesignerToolbar — plain array), `SLUG_MAP`/`SLUG_TILES` (structures.ts/ground.ts — a missing
+key silently never renders in 3D). The weather-FX gate is a positive `=== 'outdoor'` test and
+needs NO change — new surfaces are gated automatically; do not rewrite it into an enumeration.
 
 Research-justified values for the two new surfaces:
 
@@ -57,11 +66,11 @@ Research-justified values for the two new surfaces:
 | `SURFACE_FLOOR` `src/three/ground.ts:49` | **'soil-tilled-dry'** | **'floor-concrete'** | High tunnels grow in ground soil beds (A4b); warehouse = concrete + tape lines (A9e). |
 | `SURFACE_BG` `src/lib/renderPlan.ts:10` | warm tan | dark slate | 2D canvas floor colors, matching floor tiles. |
 | weather-FX gate `World3D.tsx:811-814` | gated off | gated off | Film/steel roof excludes rain/snow like the other enclosed surfaces. |
-| `SURFACE_OPTIONS` `src/components/designer/DesignerToolbar.tsx:28` | "Hoop house" | "Warehouse farm" | Settings drawer picker. |
+| `SURFACE_OPTIONS` `src/components/designer/DesignerToolbar.tsx:28` | "Hoop house" | "Warehouse farm" | Settings drawer picker. Also RENAME the existing `indoor` label "Indoor Warehouse" → "Indoor grow room" so the drawer doesn't show two warehouse-ish labels. |
 
 ## Work plan
 
-### W1 — Creative environment kit (owner: S1, files under `src/creative/environments/` ONLY)
+### W1 — Creative environment kit (owner: S1 — ALL of `src/creative/**`, including the append to `src/creative/structures/registry.ts`)
 
 1. **Parametric shell builders** (`src/creative/environments/shells.ts`), one per enclosed
    surface, consumed by both the runtime adapter and the dioramas:
@@ -83,6 +92,15 @@ Research-justified values for the two new surfaces:
    - **No lights** — sky.ts keeps owning THE light; glow reads via unlit `MeshBasicMaterial` /
      bright vertex colors only (existing pattern in shell.ts light bars).
    - Deterministic `rng(seed)`; PALETTE-only colors; merged geometries via `buildVoxelGeometry`.
+   - **Fresh ownership per build** — shell makers return freshly-created geometries/materials
+     every call, NO shared cached templates and NO `InstancedMesh` in their outputs (the
+     `disposeShell` contract traverses and disposes everything; shared/cached geometry would be
+     poisoned by the first dispose — the structures.ts clone-cache pattern is explicitly
+     WRONG here).
+   - **Roof policy** (red-team): greenhouse + hoophouse get translucent glazing roofs; tent,
+     indoor, warehouse are OPEN-TOPPED dollhouse style — warehouse reads "hall" via 4 m far
+     walls, roof truss beams + duct columns + hanging glow strips at wall height, never a solid
+     ceiling (a solid slab walls off the high default camera — existing shell.ts comment).
    - **Voxel budget ≤ ~25k voxels per shell** — use scaled voxels (`Voxel.s` 2–6, i.e. 20–60 cm
      blocks) for large wall/roof planes, full-res (s=1) only for signature details (hoop legs,
      mullions, zippers, duct stubs, rack glow strips). These shells can span 30+ m — naive s=1
@@ -103,7 +121,8 @@ Research-justified values for the two new surfaces:
    by S2 (see W2.4).
 
 3. **Diorama registry** (`src/creative/environments/registry.ts`) — `AssetEntry[]`, showcase
-   lane `e`. Minimum 8 entries (fixed footprints 30–80 voxels, fixed seeds, a few live crops via
+   lane `e`. Minimum 8 entries (miniature scenes at plausible 3–8 m footprints — i.e. ~30–80
+   voxels on the long side, NOT full-canvas shells; fixed seeds; a few live crops via
    `makeCropFor` for life): `env-greenhouse`, `env-hoophouse`, `env-grow-tent`, `env-grow-room`,
    `env-grow-shelf`, `env-warehouse`, `env-container-farm`, `env-aquaponics`. Stretch (only if
    quality holds): `env-nft-gully`, `env-lean-to`. Each diorama = shell builder at a plausible
@@ -120,20 +139,31 @@ Research-justified values for the two new surfaces:
 2. Rewrite `src/three/shell.ts` `buildShell` to dispatch to the creative shell makers
    (keep `ShellGroup`/`disposeShell` + the `shell:${surface}` root name; keep interior light
    bars for surfaces whose creative shell doesn't already carry them). Remove the SKINS
-   box-building path it replaces.
-3. Grep-audit every `surface ===` / surface literal check outside the typed tables
-   (World3D weather gate + ambient, plants shelf-lift, sky) — the compiler can't catch string
-   comparisons; hoophouse/warehouse must join every enclosed-surface branch.
+   box-building path it replaces. **Cache the built shell at module scope keyed
+   `(surface, widthM, heightM)`** (red-team): the planVersion effect dispose/rebuilds on every
+   brush dab — a 10k-voxel merged geometry rebuilt per dab is jank. Cache hit ⇒ reuse without
+   dispose; key change or teardown ⇒ dispose old, build new.
+3. Audit the string-keyed surface sites listed in "Constants" above (retype
+   `SURFACE_AMBIENT` to `Record<PlanSurface, number>` and drop its `?? 1`; add the two
+   `SURFACE_OPTIONS` entries + rename the `indoor` label). Leave the positive
+   `=== 'outdoor'` weather gate alone. Also extend EXISTING equipment `surfaces` arrays in
+   `src/data/assets.ts` for the new surfaces (red-team: `grow-light`, `plant-rack`,
+   `hydro-channel`, `clip-fan`, `hvac-unit`, `grow-bench` += `warehouse` where sensible;
+   `inground-bed`/`raised-bed`/`trellis`/`irrigation-line`/water gear += `hoophouse`; NO soil
+   beds on `warehouse`) — per research Part A(b)/Part C.
 4. New plan assets in `src/data/assets.ts`: `fish-tank`, `hydro-raft`, `dehumidifier`,
    `seedling-tray`, `co2-tank` (category equipment, `surfaces` gating from research — e.g.
    fish-tank/hydro-raft on greenhouse+indoor+warehouse, dehumidifier on tent+indoor+warehouse,
    seedling-tray everywhere enclosed, co2-tank greenhouse+warehouse) + `SLUG_MAP` entries in
    `src/three/structures.ts` (non-linear, one per contiguous region, sized from defaultWM/HM).
-5. Templates: `GardenTemplate` gains `surface?: PlanSurface`; `TemplatesCard.applyTemplate`
-   threads it through the existing `replacePlan` seam (NO new mutation paths). Add 3 starters:
-   "Tunnel tomatoes" (hoophouse, inground-bed rows + trellis + tomatoes/peppers),
-   "Warehouse greens" (warehouse, plant-rack rows + lettuce/basil),
-   "Tent starters" (tent, grow-tent + seedling-tray + basil/peppers).
+5. Templates: `GardenTemplate` gains `surface?: PlanSurface` AND optional
+   `widthM`/`heightM` canvas dims (red-team trap A: a tent template stamped onto a 40×24
+   canvas would wrap a 40 m tent around a corner cluster — templates must carry their canvas);
+   `TemplatesCard.applyTemplate` threads all three through the single existing `replacePlan`
+   seam (full `PlanState`; do NOT reuse `applySettings`). Add 3 starters:
+   "Tunnel tomatoes" (hoophouse, ~10×8, inground-bed rows + trellis + tomatoes/peppers),
+   "Warehouse greens" (warehouse, ~12×10, plant-rack rows + lettuce/basil),
+   "Tent starters" (tent, ~5×5, grow-tent + seedling-tray + basil/peppers).
 6. Seed farms: farm 8 "hoophouse" demo + farm 9 "warehouse" demo in `src/data/seed.ts`
    (follow the farms 5/6/7 pattern; verify id uniqueness).
 7. Showcase lane `e` wiring in `showcase/main.ts` (import, `LANE_LABELS.e = 'Environments'`,
@@ -168,7 +198,7 @@ Research-justified values for the two new surfaces:
 ## Verification gates (must all pass before "complete")
 
 1. `npm run typecheck` clean; `npm run build` clean.
-2. Showcase: `node tools/appshot.mjs "http://localhost:5173/showcase.html#lane=e&mode=sheet" <png> --expect "showcase-ready 8"` (count = registry length); big-mode shots of ≥ 4 dioramas reviewed against QUALITY_BAR by human eye.
+2. Showcase: `node tools/appshot.mjs "http://localhost:5173/showcase.html#lane=e&mode=sheet" <png> --expect "showcase-ready N"` where N = the ACTUAL lane-e registry length at verification time (per-lane count after filtering); big-mode shots of ≥ 4 dioramas reviewed against QUALITY_BAR by human eye.
 3. Determinism: two showcase loads (`#spin=0`) produce byte-identical PNGs for one fixed diorama.
 4. World: `node tools/appshot.mjs "http://localhost:5173/?ffview=world#/farms/8/map" <png> --gate` and farm 9 likewise (boot probe active; note HANDOFF trap 10 — world captures race plan loading, so gate lines outrank PNG content).
 5. Blueprint: `#/farms/8/map` gate + Settings drawer shows the 6 surface options; AssetPalette
