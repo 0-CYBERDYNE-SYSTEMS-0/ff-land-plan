@@ -103,6 +103,19 @@ deliverable).
 - Wide-spacing pairs (e.g. fruit trees, ≥4 m thresholds) are only flagged by the
   spacing overlay within its ±4-cell scan window (~1.41 m radius).
 
+## Environments update (2026-09-13 — branch `indoor-environments`)
+
+Indoor growing became a first-class world: six plan surfaces
+(`outdoor|greenhouse|hoophouse|tent|indoor|warehouse`), voxel shells from
+`src/creative/environments/` behind the cached adapter in `src/three/shell.ts`,
+showcase lane `e`, 5 new equipment slugs, seed farms 8/9, enclosed starter
+templates. Read `quality/MISSION-ENVIRONMENTS.md` + the 2026-09-13 ledger
+entry before touching surface behavior. Trap: four surface-keyed sites do NOT
+fail typecheck when incomplete — `SURFACE_OPTIONS` (DesignerToolbar),
+`SLUG_MAP` (structures.ts), `SLUG_TILES` (ground.ts), showcase lane wiring —
+audit them by hand when adding a surface. Visual human-eye pass over the new
+renders is the one open gate before mainline merge.
+
 ## Where things stand
 
 | Work | State |

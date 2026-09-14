@@ -208,4 +208,33 @@ Research-justified values for the two new surfaces:
 
 ## Verification log
 
-(appended as gates pass)
+2026-09-13, branch `indoor-environments` (W1 `6f2366b`, W2 `bfed797`):
+
+1. **Typecheck + build — PASS** (`tsc --noEmit` exit 0; `vite build` clean,
+   three.js still isolated in its lazy chunk).
+2. **Showcase lane e — PASS**: `--expect "showcase-ready 9"` on
+   `#lane=e&mode=sheet`; all 9 dioramas render, no untextured/blown cells in
+   pixel stats.
+3. **Determinism — PASS**: two loads of `#only=env-greenhouse&spin=0`
+   produced byte-identical PNGs (`cmp` equal).
+4. **World runtime — PASS (gate-lines-outrank-PNG per HANDOFF trap 10)**:
+   farms 8 + 9 `GATE PASS: zero runtime errors` at
+   `?ffview=world&fftime=0.5&ffdebug=1#/farms/{8,9}/map`; `fftime` hook
+   verified responsive (dawn 0.12 vs noon 0.5 luminance differential).
+5. **Blueprint — PASS**: `#/farms/8/map` GATE PASS; 6 surface options +
+   renamed "Indoor grow room" in the Settings drawer; equipment gating by
+   surface per assets.ts arrays.
+6. **Sim shelter — PASS**: headless probe of `shelteredTemps` — a 30/40 °C
+   heatwave yields effective 30/40 outdoor, 25.5/35.5 hoophouse,
+   23.5/33.5 greenhouse, 20.6/30.6 warehouse (monotone with research).
+7. **Shell adapter probe — PASS**: headless scene-graph probe — build/attach
+   `shell:hoophouse`, dispose detaches without freeing (cache), same-key
+   rebuild returns the SAME group (no per-dab rebuild), key change rebuilds
+   fresh `shell:warehouse`, `outdoor` returns null and frees the cache.
+8. **Visual human-eye pass — DEFERRED**: image ingestion was unavailable to
+   every agent this session, so the quality-bar pass ran on pixel statistics
+   + code audit (which refuted the "duplicate diorama" and "no glow" alarms —
+   warm-white LED palette by design, distinct builders verified in source).
+   **Before merging to mainline: run `npm run dev`, open
+   `showcase.html#lane=e` and farms 8/9 in World view, and eyeball against
+   QUALITY_BAR.md.** Scratch renders kept at `$TMPDIR/envshot/` for review.
