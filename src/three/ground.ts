@@ -45,12 +45,16 @@ type TileId =
 
 const GRASS_VARIANTS: TileId[] = ['grass-01', 'grass-02', 'grass-03'];
 
-/** Default underlay tile per plan surface — enclosed canvases never show grass. */
+/** Default underlay tile per plan surface — enclosed canvases never show grass.
+ * Hoophouse grows in ground soil beds (tilled dry); warehouse is a concrete
+ * hall floor (tape lines come from the shell/props, not the tile). */
 const SURFACE_FLOOR: Record<PlanSurface, TileId | null> = {
   outdoor: null,
   greenhouse: 'floor-greenhouse',
+  hoophouse: 'soil-tilled-dry',
   tent: 'floor-mylar',
   indoor: 'floor-concrete',
+  warehouse: 'floor-concrete',
 };
 
 const SLUG_TILES: Record<string, TileId> = {

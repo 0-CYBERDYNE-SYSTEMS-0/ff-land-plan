@@ -11,7 +11,7 @@ import { makeCropFor } from '@/creative/crops/map';
 import { parseKey } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
-import type { PlanState, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
+import type { PlanState, PlanSurface, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
 import type { RunRecord, SimEvent, SimState } from '@/lib/sim';
 import {
   buildCellDiagnostics,
@@ -371,12 +371,16 @@ const DEFAULT_WEATHER: WeatherCurrent = {
 };
 
 /** Ambient-light multiplier per surface — enclosed interiors read dimmer; the
- * shell's own LED bars (see three/shell.ts) provide the "artificial" light. */
-const SURFACE_AMBIENT: Record<string, number> = {
+ * shells' own glow reads (unlit strips in the creative shells) provide the
+ * "artificial" light. Hoophouse is bright diffuse poly; warehouse is a dark
+ * hall lit by glow stripes. */
+const SURFACE_AMBIENT: Record<PlanSurface, number> = {
   outdoor: 1,
   greenhouse: 0.88,
+  hoophouse: 0.92,
   tent: 0.55,
   indoor: 0.6,
+  warehouse: 0.45,
 };
 
 /**
@@ -800,7 +804,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         // surfaces dim the ambient so the shell's LED bars carry the light.
         const surface = editor.planRef.current?.surface ?? 'outdoor';
         ambientLight.color.copy(sky.state.ambientColor);
-        ambientLight.intensity = sky.state.ambientIntensity * (SURFACE_AMBIENT[surface] ?? 1);
+        ambientLight.intensity = sky.state.ambientIntensity * SURFACE_AMBIENT[surface];
       }
 
       // Clouds / weather FX / audio — live weather via ref, defaults until it

@@ -1,14 +1,25 @@
 // Starter garden templates for the Plot Designer (cold-start aid). Data only —
 // no logic. `ground` values MUST be asset slugs that exist in `assetLibrary`
-// (src/data/assets.ts); `planting` values are crop NAMES resolved against the
-// loaded catalog at apply time (see TemplatesCard) so custom crops and future
-// catalog edits never invalidate this file. Layouts use realistic 0.25 m-cell
-// spacing; garden designs stay under ~60 cells, the field design is larger.
+// (src/data/assets.ts) AND be allowed on the template's `surface` (paint-time
+// gating is bypassed by templates — be correct by construction);
+// `planting` values are crop NAMES resolved against the loaded catalog at
+// apply time (see TemplatesCard) so custom crops and future catalog edits
+// never invalidate this file. Layouts use realistic 0.25 m-cell spacing;
+// garden designs stay under ~60 cells, the field/enclosed designs are larger.
+
+import type { PlanSurface } from '@/types';
 
 export interface GardenTemplate {
   id: string;
   name: string;
   description: string;
+  /** Canvas surface stamped onto the plan at apply time (enclosed templates
+   *  carry their own shell — see widthM/heightM). Omitted = keep current. */
+  surface?: PlanSurface;
+  /** Canvas width in meters stamped at apply time; omitted = keep current. */
+  widthM?: number;
+  /** Canvas height in meters stamped at apply time; omitted = keep current. */
+  heightM?: number;
   /** "x,y" -> asset slug (existing `assetLibrary` slugs only). */
   ground: Record<string, string>;
   /** "x,y" -> crop name exactly as spelled in the catalog. */
@@ -120,6 +131,92 @@ export const templates: GardenTemplate[] = [
       '2,15': 'Pumpkin', '6,15': 'Pumpkin', '10,15': 'Pumpkin', '14,15': 'Pumpkin', '18,15': 'Pumpkin',
     },
     plantedAtDaysAgo: { 'Sweet Corn': 40, 'Pole Bean': 30, 'Pumpkin': 15 },
+  },
+  {
+    id: 'tunnel-tomatoes',
+    name: 'Tunnel Tomatoes',
+    description: 'A 10×8 m high tunnel: three in-ground beds under trellis lines — tomatoes, peppers and heat-loving herbs.',
+    surface: 'hoophouse',
+    widthM: 10,
+    heightM: 8,
+    ground: {
+      // Three in-ground beds (~1.75 m wide) running the tunnel length with
+      // ~1.25 m aisles; a trellis line at the head of each bed carries the vines.
+      ...bed('inground-bed', 1, 2, 38, 8),
+      ...bed('inground-bed', 1, 13, 38, 19),
+      ...bed('inground-bed', 1, 24, 38, 30),
+      ...bed('trellis', 1, 2, 38, 2),
+      ...bed('trellis', 1, 13, 38, 13),
+      ...bed('trellis', 1, 24, 38, 24),
+    },
+    planting: {
+      ...row('Tomato', 2, 3, 37),
+      ...row('Pepper', 2, 6, 37),
+      ...row('Tomato', 2, 14, 37),
+      ...row('Basil', 2, 17, 37),
+      ...row('Pepper', 2, 25, 37),
+      ...row('Lettuce', 2, 28, 37),
+    },
+    plantedAtDaysAgo: { Tomato: 35, Pepper: 28, Basil: 21, Lettuce: 14 },
+  },
+  {
+    id: 'warehouse-greens',
+    name: 'Warehouse Greens',
+    description: 'A 12×10 m vertical-farm hall: glowing rack rows of lettuce and basil between taped aisles.',
+    surface: 'warehouse',
+    widthM: 12,
+    heightM: 10,
+    ground: {
+      // Five 0.5 m rack rows (2 cells deep) with ~2 m aisles; climate gear at
+      // the walls, a seedling-tray nursery and a CO2 tank by the corners.
+      ...bed('plant-rack', 2, 2, 45, 3),
+      ...bed('plant-rack', 2, 10, 45, 11),
+      ...bed('plant-rack', 2, 18, 45, 19),
+      ...bed('plant-rack', 2, 26, 45, 27),
+      ...bed('plant-rack', 2, 34, 45, 35),
+      ...bed('clip-fan', 0, 5, 0, 5),
+      ...bed('clip-fan', 47, 22, 47, 22),
+      ...bed('hvac-unit', 0, 37, 3, 37),
+      ...bed('hvac-unit', 44, 37, 47, 37),
+      ...bed('co2-tank', 46, 0, 47, 0),
+      ...bed('seedling-tray', 46, 30, 47, 31),
+    },
+    planting: {
+      ...row('Lettuce', 2, 2, 45),
+      ...row('Basil', 2, 3, 45),
+      ...row('Lettuce', 2, 10, 45),
+      ...row('Lettuce', 2, 11, 45),
+      ...row('Basil', 2, 18, 45),
+      ...row('Basil', 2, 19, 45),
+      ...row('Lettuce', 2, 26, 45),
+      ...row('Lettuce', 2, 27, 45),
+      ...row('Basil', 2, 34, 45),
+      ...row('Lettuce', 2, 35, 45),
+    },
+    plantedAtDaysAgo: { Lettuce: 14, Basil: 21 },
+  },
+  {
+    id: 'tent-starters',
+    name: 'Tent Starters',
+    description: 'A 5×5 m grow tent: peppers and basil under the LED bar, seedling trays hardening off by the door.',
+    surface: 'tent',
+    widthM: 5,
+    heightM: 5,
+    ground: {
+      // 3×3 m grow-tent footprint mid-canvas, an LED bar over the canopy,
+      // seedling trays staged in the near corner.
+      ...bed('grow-tent', 4, 4, 15, 15),
+      ...bed('grow-light', 4, 3, 15, 3),
+      ...bed('seedling-tray', 1, 1, 2, 1),
+      ...bed('seedling-tray', 1, 3, 2, 3),
+    },
+    planting: {
+      ...row('Pepper', 6, 7, 13),
+      ...row('Pepper', 6, 9, 13),
+      ...row('Basil', 6, 11, 13),
+      ...row('Basil', 6, 13, 13),
+    },
+    plantedAtDaysAgo: { Pepper: 28, Basil: 21 },
   },
 ];
 
