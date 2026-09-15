@@ -19,6 +19,7 @@ import {
   Wind,
   Cloud,
   Sprout,
+  Waves,
 } from 'lucide-react';
 import { useNavigation } from '@/hooks/useNavigation';
 
@@ -31,8 +32,143 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Stat } from '@/components/shared/Stat';
 import { WeatherIcon } from '@/components/weather/WeatherIcon';
 import { SoilProfileCard } from '@/components/weather/SoilProfileCard';
+import { fetchAirQuality } from '@/lib/airquality';
+import { fetchFloodRisk } from '@/lib/flood';
+import { fetchDiseasePressure } from '@/lib/disease';
 
 const WEATHER_STALE_MS = 15 * 60 * 1000;
+
+// Ozone leaf-injury guard: CAMS ozone in μg/m³; sustained levels ≥ 100 signal
+// visible foliar injury on sensitive crops — the EU ambient-ozone target value
+// for vegetation protection is ≈ 120 μg/m³ (18 h mean, Directive 2004/107/EC),
+// so 100 is a conservative early-warning line below it.
+const OZONE_LEAF_RISK_UG_M3 = 100;
+
+function EnvironmentCard({ lat, lng }: { lat: number; lng: number }) {
+  const air = useQuery({
+    queryKey: ['air-quality', lat, lng],
+    queryFn: () => fetchAirQuality(lat, lng),
+    staleTime: 60 * 60 * 1000, // module caches 1 h — match it (hostile defaults trap)
+  });
+  const flood = useQuery({
+    queryKey: ['flood-risk', lat, lng],
+    queryFn: () => fetchFloodRisk(lat, lng),
+    staleTime: 12 * 60 * 60 * 1000, // module caches 12 h
+  });
+
+  if (air.isLoading || flood.isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <Skeleton className="h-5 w-36" />
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Skeleton className="h-4 w-56" />
+          <Skeleton className="h-4 w-40" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const ozone = air.data?.ozoneUgM3 ?? null;
+  const fr = flood.data;
+  if (ozone === null && !fr) return null; // both sources unavailable — hide entirely
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Wind className="w-4 h-4 text-primary" /> Environment
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {ozone !== null && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Ozone</span>
+            <span className="font-medium">{ozone.toFixed(0)} μg/m³</span>
+            {ozone >= OZONE_LEAF_RISK_UG_M3 && (
+              <Badge variant="secondary" className="text-amber-600">
+                leaf-damage risk for sensitive crops
+              </Badge>
+            )}
+          </div>
+        )}
+        {fr && fr.riskLevel !== 'low' && (
+          <div className="flex items-center gap-2 text-sm">
+            <Waves className="w-4 h-4 text-blue-500" />
+            <span className="text-muted-foreground">Flood</span>
+            <Badge
+              variant="secondary"
+              className={fr.riskLevel === 'high' ? 'text-red-600 capitalize' : 'text-amber-600 capitalize'}
+            >
+              {fr.riskLevel}
+            </Badge>
+            <span className="font-medium">{fr.dischargeM3s.toFixed(2)} m³/s river discharge</span>
+          </div>
+        )}
+        {fr && fr.riskLevel === 'low' && (
+          <div className="text-sm text-muted-foreground">No flood signal on the river forecast.</div>
+        )}
+        <div className="text-xs text-muted-foreground">CAMS · Copernicus / GloFAS · Copernicus</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DiseasePressureCard({ lat, lng }: { lat: number; lng: number }) {
+  const disease = useQuery({
+    queryKey: ['disease-pressure', lat, lng],
+    queryFn: () => fetchDiseasePressure(lat, lng),
+    staleTime: 60 * 60 * 1000, // module caches 1 h — match it (hostile defaults trap)
+  });
+
+  if (disease.isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <Skeleton className="h-5 w-40" />
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Skeleton className="h-4 w-56" />
+          <Skeleton className="h-4 w-64" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const dp = disease.data;
+  if (!dp) return null; // source unavailable — hide entirely
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Sprout className="w-4 h-4 text-primary" /> Disease pressure
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">7-day blight/mildew index</span>
+          <span className="font-medium">{dp.index} / 100</span>
+          <Badge
+            variant={dp.riskLevel === 'high' ? 'destructive' : 'secondary'}
+            className={dp.riskLevel === 'high' ? 'capitalize' : dp.riskLevel === 'moderate' ? 'text-amber-600 capitalize' : 'capitalize'}
+          >
+            {dp.riskLevel}
+          </Badge>
+        </div>
+        {dp.riskLevel === 'high' && (
+          <div className="text-sm">
+            Scout solanaceae and cucurbits for blight/mildew; avoid overhead watering
+          </div>
+        )}
+        <div className="text-xs text-muted-foreground">
+          Computed from Open-Meteo hourly forecast (RH ≥ 90 %, 10–25 °C)
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function Weather({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
@@ -220,6 +356,10 @@ export function Weather({ farmId }: { farmId: number }) {
       )}
 
       {farm && <SoilProfileCard lat={farm.lat} lng={farm.lng} />}
+
+      {farm && <EnvironmentCard lat={farm.lat} lng={farm.lng} />}
+
+      {farm && <DiseasePressureCard lat={farm.lat} lng={farm.lng} />}
 
       {chartData.length > 1 && (
         <Card>
