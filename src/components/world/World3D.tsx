@@ -23,6 +23,7 @@ import {
   type SimRunController,
 } from '@/hooks/useSimRun';
 import { buildAnimals, disposeAnimals, setFaunaPresence, updateAnimals, type AnimalSystem, type FaunaPresence } from '@/three/animals';
+import { fetchMonthlyDli } from '@/lib/light';
 import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dressing';
 import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
 import { createClouds, type Clouds } from '@/three/clouds';
@@ -379,6 +380,18 @@ const SURFACE_AMBIENT: Record<string, number> = {
   indoor: 0.6,
 };
 
+/** Display names for the tools that claim left-drag for painting in here;
+ * used by the orbit hint chip so the gate never feels like a dead canvas. */
+const TOOL_LABELS: Record<string, string> = {
+  brush: 'Brush',
+  rect: 'Rect',
+  asset: 'Asset',
+  erase: 'Erase',
+  pick: 'Pick',
+  fill: 'Fill',
+  line: 'Line',
+};
+
 /**
  * Test-hook launch params, read ONCE on mount. Inert unless present.
  * Checks BOTH `?a=b` in the real query string AND inside the hash fragment
@@ -431,8 +444,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const weatherRef = useRef<WeatherCurrent | null>(null);
   // Growth-model climate context fed to buildPlants/updatePlants/HUD. Starts
   // empty (legacy 20 °C baseline) and gains live ambientTempC + farm
-  // baselineTempC (ERA5 normals) as their fetches land.
-  const growthCtxRef = useRef<{ ambientTempC?: number; baselineTempC?: number }>({});
+  // baselineTempC (ERA5 normals) + scrub-month DLI as their fetches land.
+  const growthCtxRef = useRef<{ ambientTempC?: number; baselineTempC?: number; dliMol?: number }>({});
+  // Latest monthly DLI (mol/m²/day, index 0 = January) consumed via helper
+  // below by the ref-based plant builders; refs never appear in dep arrays.
+  const monthlyDliRef = useRef<number[] | null>(null);
 
   // Launch params (test hooks): fftime = initial timeOfDay, ffdebug = open Perf HUD.
   const [scrubDate, setScrubDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -478,6 +494,9 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // Climate baseline provenance for the drawer chip: the growth model runs on
   // farm-specific ERA5 normals once fetched, until then the honest default.
   const [climateBaseline, setClimateBaseline] = useState<ClimateBaselineInfo>(DEFAULT_CLIMATE_BASELINE);
+  // State mirror of monthlyDliRef so the growth-only effect and the HUD memo
+  // recompute when the DLI series lands (refs alone don't trigger renders).
+  const [monthlyDli, setMonthlyDli] = useState<number[] | null>(null);
   const [showDebug, setShowDebug] = useState(() => readLaunchParams().get('ffdebug') === '1');
   const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
   const [audioOn, setAudioOn] = useState(false);
@@ -592,6 +611,16 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     };
   }, [runEventsRef]);
 
+
+  // Growth ctx for the ref-based plant builders (mount-once init + plan-change
+  // effects): the latest climate ctx plus the DLI of the SCRUB DATE's month,
+  // so a December scrub shows winter light stress even on later plan edits.
+  const growthCtxForBuilders = (): typeof growthCtxRef.current => {
+    const dli = monthlyDliRef.current;
+    const m = Number(scrubDateRef.current.slice(5, 7)); // calendar month from the string — new Date('YYYY-MM-DD') parses UTC and shifts the day in TZ behind UTC
+    return { ...growthCtxRef.current, dliMol: dli ? (dli[m - 1] ?? undefined) : undefined }; // m is 1..12; MonthlyDli is 0-based
+  };
+
   const achievements = useRef(createAchievementSystem());
   const flightTime = useRef(0);
 
@@ -617,6 +646,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const farm = editor.farm;
     if (!farm) return;
     let cancelled = false;
+    // Stale-data guard: switching farms must not keep serving the previous
+    // farm's DLI until a replacement arrives.
+    monthlyDliRef.current = null;
+    setMonthlyDli(null);
     apiFetch
       .getWeather(farm.id)
       .then((w: Weather) => {
@@ -630,6 +663,16 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       .catch((err: unknown) => {
         console.warn('weather unavailable, using defaults', err);
       });
+    // Monthly light (DLI): fetched independently of the weather request so a
+    // weather failure (offline, no cache) can't suppress it; localStorage-
+    // cached, resolves null offline, never rejects.
+    fetchMonthlyDli(farm.lat, farm.lng)
+      .then((dli) => {
+        if (cancelled || !dli) return;
+        monthlyDliRef.current = dli;
+        setMonthlyDli(dli);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [editor.farm]);
 
@@ -706,7 +749,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
 
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
-    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxRef.current);
+    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders());
     waterPlanesRef.current = buildWaterPlanes(plan, engine.scene);
 
     // Animals
@@ -964,7 +1007,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       // of the scene rebuilds (next run commit would restore them anyway).
       applyRunGrowth();
     } else {
-      plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxRef.current);
+      plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders());
     }
 
     // Water planes
@@ -1037,6 +1080,17 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     }
   }, [editor.planVersion, editor.cropById, showHistory]);
 
+  // Scrub month 1..12 — memo-friendly integer derived where scrubDate is
+  // already a dep; feeds the DLI lookup at every growth-ctx construction.
+  const scrubMonth = useMemo(() => Number(scrubDate.slice(5, 7)), [scrubDate]); // 1..12, parsed from the calendar string (UTC-parse safe)
+  const scrubDliMol = useMemo(
+    () => (monthlyDli ? (monthlyDli[scrubMonth - 1] ?? undefined) : undefined),
+    [monthlyDli, scrubMonth],
+  );
+
+  // Growth-only update: advancing the sim date (or switching scenario, or the
+  // live ambient temp landing) must NOT rebuild ground/structures/animals —
+  // only the plant stages change.
   // Growth-only update: advancing the sim date (or switching scenario, the
   // climate baseline landing, or the live ambient temp arriving) must NOT
   // rebuild ground/structures/animals — only the plant stages change, and
@@ -1052,6 +1106,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const ctx: GrowthModCtx = {
       ambientTempC: ambientTempC ?? undefined,
       baselineTempC: climateBaseline.source === 'era5-normals' ? climateBaseline.tempC : undefined,
+      dliMol: scrubDliMol,
     };
 
     // Monotonic playback clamp (legacy-path stopgap until the stateful sim
@@ -1084,10 +1139,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       engine.scene,
       new Date(scrubDate),
       scenario,
-      ctx,
+      { ...ctx, dliMol: scrubDliMol },
       opts,
     );
-  }, [scrubDate, scenario, ambientTempC, climateBaseline, editor.cropById, runActive]);
+  }, [scrubDate, scenario, ambientTempC, climateBaseline, scrubDliMol, editor.cropById, runActive]);
 
   // Run-mode growth reconcile: run state (per-cell biomass) is the target.
   // Separate effect — the init effect's deps stay [sceneReady, farmId], and
@@ -1353,6 +1408,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const ctx: GrowthModCtx = {
       ambientTempC: ambientTempC ?? undefined,
       baselineTempC: climateBaseline.source === 'era5-normals' ? climateBaseline.tempC : undefined,
+      dliMol: scrubDliMol,
     };
     const rows: CropProgressRow[] = [];
     const seen = new Set<string>();
@@ -1389,7 +1445,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     return rows.sort(
       (a, b) => a.name.localeCompare(b.name) || (a.label ?? '').localeCompare(b.label ?? ''),
     );
-  }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC, climateBaseline]);
+  }, [editor.cropById, editor.planVersion, scenario, scrubDate, ambientTempC, climateBaseline, scrubDliMol]);
 
   // --- Run-mode drawer payloads (spec §3.3 provenance surfaces) ---
   // Derived from live SimState at each throttled run commit; refs are read
@@ -1484,6 +1540,18 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
           controls while the drawer is closed. */}
       <span className="sr-only">Sim controls: date, time of day, speed, scenario, per-crop growth</span>
 
+      {/* Orbit hint: paint tools claim left-drag for strokes in here too, so
+       * tell the user how to get rotation back instead of leaving the drag
+       * feeling dead. Suppressed while a tour owns the top-center strip. */}
+      {editor.tool !== 'select' && !tourActive && (
+        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+          <span className="font-medium text-foreground">{TOOL_LABELS[editor.tool] ?? editor.tool}</span>
+          {' '}active — drag paints the plan. Press{' '}
+          <kbd className="rounded border border-border bg-muted px-1 font-sans">V</kbd>
+          {' '}or pick Select to orbit again.
+        </div>
+      )}
+
       {/* Top-left view cluster — top-right belongs to the perf HUD (z-100) */}
       <div className={`pointer-events-none absolute left-3 top-3 flex flex-wrap gap-1.5 transition-opacity duration-300 ${dimCls}`}>
         <button
@@ -1521,6 +1589,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         >
           {audioOn ? '🔊' : '🔇'}
         </button>
+
         <button
           type="button"
           onClick={() => {

@@ -1,0 +1,49 @@
+name: main-guard
+
+# Branch protection isn't available on this plan, so this is the
+# enforcement-lite equivalent: any commit landing on main without an
+# associated PR (i.e. a direct push of new work) turns the run red.
+# Merge commits and the root commit are exempt.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  require-pr:
+    name: every commit on main came from a PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check pushed commits for PR association
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          check_sha() {
+            local sha="$1" parents count
+            parents=$(gh api "repos/$REPO/commits/$sha" --jq '.parents | length')
+            if [ "$parents" -ne 1 ]; then
+              echo "skip $sha (merge or root commit)"
+              return 0
+            fi
+            count=$(gh api "repos/$REPO/commits/$sha/pulls" --jq 'length')
+            if [ "$count" -eq 0 ]; then
+              echo "::error::commit $sha landed on main with no associated PR — land changes via pull requests so the CI gate runs on them"
+              return 1
+            fi
+            echo "ok $sha ← PR-associated"
+          }
+          fails=0
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            check_sha "${{ github.event.after }}" || fails=1
+          else
+            for sha in $(gh api "repos/$REPO/compare/${{ github.event.before }}...${{ github.event.after }}" --jq '.commits[].sha'); do
+              check_sha "$sha" || fails=1
+            done
+          fi
+          exit $fails

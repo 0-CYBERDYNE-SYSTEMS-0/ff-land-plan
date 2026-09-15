@@ -929,3 +929,188 @@ Key conclusions for Sim Core roadmap, in build order:
   CMIP6/Seasonal → QuickStats county-yield benchmarks → SDA depth series →
   3DEP elevation → vendored cultivar params → Sentinel-2 NDVI per patch
   (opt-in).
+## Mission TWIN — Wave 2 (2026-09-03, branch `mission-twin`)
+
+**Real simulation engine (`lib/sim.ts`):** `runSimulation(farm, plan, crops,
+input, forecast?, climate?, startDate?)` — pure, deterministic, plan-aware.
+Daily series = live forecast first, then ERA5 monthly normals (linear
+mid-month blend), then a documented generic fallback. Per-crop: GDD (base =
+clamp(minTempC, 0, 10)), heat/cold stress days vs catalog tolerances, water
+deficit vs `waterNeedMmDay` (irrigation proxy = ET₀ × 0.7), nutrient stress
+relieved by fertilizerBoost. Stress → Ky-style growthFactor (1 − 0.6·stress);
+yield = catalog `yieldTonHa` × area × factor. Carbon = category residue base
+× (1 + 0.1·boost); profit = price bands by category − water/fert costs. All
+constants carry origin comments. `localApi.createSimulation` wires it (same
+`Api` signature); results JSON gains optional `perCrop` + `provenance` —
+old saved sims render untouched.
+
+**Monitoring truth pass:** NDVI grid is now `planNdviGrid(plan, crops)` —
+stage-driven proxy off the real planting map (soil 0.12, stage curve
+0.25→0.75, category nudges, ≤4 000-pt stride) with the honest label
+"Modeled from plan (not satellite imagery)". The fictional "weather-fusion
+model (SAR proxy)" line and the `listCells` seed-noise stat row are gone
+from the page (endpoints kept for compat). Sensors: soil_moisture/
+temperature/humidity/rainfall hydrate from live Open-Meteo as "Virtual ·
+Open-Meteo"; the pulse badge appears only when a virtual feed is live or a
+manual read is <24 h old. Stat row = plan-based estimates (thirsty cells,
+nitrogen-demand share, live soil moisture vs crop need; enclosed surfaces
+exempt from irrigation nagging).
+
+**World3D climate identity:** `fetchClimateNormals` baseline threads into
+`growthCtxRef.baselineTempC` (state mirror + growth-effect/HUD deps). A
+date-scrub to March now runs a Portland farm against its real 17.4 °C
+growing-season math, not a hardcoded 20. Provenance chip "ERA5 2016–2025"
+in the footer when connected; offline = byte-identical legacy behavior.
+
+**Validation:** Wave 2 GREEN — determinism/plan-awareness/shelter probes,
+4/4 route smoke, diff review in `quality/MISSION-TWIN.md` Verification Log.
+
+## Mission TWIN — Wave 3 (2026-09-04, branch `twin-w3`)
+
+**Yield ranges, not single numbers:** `fetchSeasonEnsembles` (one ERA5
+archive request, 10 complete years, per-year daily tmean/precip/ET₀;
+NASA POWER `T2M_MAX/T2M_MIN/PRECTOTCORR` fallback with Hargreaves ET₀ via
+the FAO-56 Annex 2 RA mid-month table) feeds `runSimulation`'s new
+`ensembles` arg — the per-crop core now runs once per historical season and
+SimOutcome gains `range {low, median, high, years}`. Median uses the
+even-count average-of-middle rule. `ff-pro:seasons:*` cache keyed to the
+exact window.
+
+**Real climate scenarios:** `fetchClimateProjection` (CMIP6 MRI_AGCM3_2_S,
+2021–2025 vs 2041–2045, forever-cached `ff-pro:cmip6:*`, fetched only when
+the climate_change scenario runs) replaces the legacy constant +2 °C with
+the farm's projected deltas; precip delta guarded to null under ~5 mm/month
+baselines (then the preset's multiplier survives — documented reading).
+
+**Environment awareness:** CAMS ozone (1 h TTL, current-hour index) and
+GloFAS river discharge (12 h TTL; forecast max vs 30-day sorted-index
+p95/p75 ⇒ high/elevated/low; oceans ⇒ null) power the Weather page's
+Environment card — Portland showed ozone 74 µg/m³ and "High" 1.98 m³/s
+live during validation.
+
+**Budget:** happy path ≤3 requests (L1) + 2 (L2) per cold cache; every
+module catch-all → null; old stored sims byte-identical.
+
+## Mission TWIN — Wave 4 (2026-09-04, branch `twin-w4`)
+
+**FAO-56 agronomy in the sim:** per-category Kc curves + Ky factors
+(`src/data/fao56.ts`, values verified against the published FAO-56 Ch. 6
+tables — orchard 0.45/0.95/0.70 replaced the spec's sketch). Demand is now
+stage-aware `ETc = Kc(f) × ET0` with a `0.6 × waterNeedMmDay` floor; yield
+response is `1 − Ky × deficitRatio` (true relative-ET deficit — denominator
+switched to accumulated stage-aware demand). Fungus: zero demand, Ky 0.
+
+**Soil → sim:** `soilEffect.ts` (AWC deficit buffering vs 25 cm rooting,
+pH nutrient factor 1.0 in 6–7 falling to 0.6 at 4.5/9, OM carbon ±0.05/pt)
+wired through `runSimulation`'s new `soil` arg from the forever-cached USDA/
+SoilGrids profile. All nulls ⇒ identity: no soil data = Wave 3 behavior.
+
+**Light model:** `light.ts` (one ERA5 radiation request/year → 12 monthly
+DLI via the 2.02 MJ→mol conversion; missing months imputed from neighbors,
+cache v2) feeds `growth.ts`'s enclosed-surface light stress (category need
+table, ×0.4 weight; outdoor + fungus exempt). World3D threads the SCRUB
+month's DLI so December shows winter greenhouse stress. TZ trap fixed:
+calendar months parsed from the string, never `new Date('YYYY-MM-DD')`.
+
+**Disease pressure:** `disease.ts` — 7-day blight/mildew index from hourly
+RH ≥ 90 % + 10–25 °C with linear recency decay; Weather-page card with the
+computation basis printed. Failed lookups evict from the 1 h cache.
+
+**Process note:** two structured review rounds each shook out real bugs —
+including two introduced by earlier fixes. Review loops pay for themselves.
+
+## 2026-09-05 — World3D orbit restore (branch `fix/world3d-orbit-controls`)
+
+**Regression:** the autoreview commits (d6f43ad + e7ab50e, Sep 3) gated
+left-drag/one-finger orbit behind `tool === 'select'`
+(`setEngineOrbitEnabled`), but the editor default tool is `brush` — so
+entering the 3D world view left rotation dead (drags silently painted
+instead) while wheel zoom kept working. The arbitration itself is correct
+(paint tools must own the drag); the DEFAULT state was the bug.
+
+**Fix:** (1) `PlotDesigner` switches the tool to Select when the world view
+opens (effect keyed on viewMode only — switching tools INSIDE the world view
+must not snap back; painting in 3D stays available from the toolbar).
+(2) World3D shows a top-center hint chip while a paint tool claims the drag
+("Brush active — drag paints the plan. Press V or pick Select to orbit
+again."), suppressed while a tour owns the top strip.
+
+**Verification:** typecheck + build + appshot gate (zero runtime errors) +
+a CDP drag harness: real mouse drag with Select changed 31.5 % of canvas
+pixels (ambient-motion baseline 0.27 %); the same drag with Brush changed
+3.2 % (painted strip only, no rotation); chip appears iff a paint tool is
+active. Lesson: gating a viewer's primary gesture behind shared editor
+state needs an entry-path reset or the gate feels like a dead canvas.
+
+## 2026-09-05 — CI/CD bootstrap (`ci-bootstrap` branch)
+
+Goal: `origin/main` always release-ready, changes land only through green PRs.
+
+- **ci.yml** — three parallel jobs per PR/push to `main`: `typecheck + build`
+  (Node 22, `dist/` artifact, 7-day retention); `headless smoke` (dev server on
+  :5177 + `appshot --gate --expect "Plot Designer"` on `#/farms/1/map` — fresh
+  CI profiles get the seeded demo farm — and `--expect "showcase-ready"` on
+  `showcase.html`; shots uploaded for eyeballing); `secret + private-file scan`
+  (gitleaks v8.30.1 pinned binary, `--redact`, full history via
+  `fetch-depth: 0`, plus the filename-based private-file guard).
+- **tools/check-private-files.mjs** (`npm run check:private`) — fails on
+  tracked env files (`.env.example` allowlisted), key material, OS cruft,
+  sqlite dumps, farm/plan data exports, agent state dirs. Complements
+  gitleaks: pattern-scan vs filename guard. App is local-first and its external
+  APIs are keyless, so filename hygiene is the realistic PII risk.
+- **tools/appshot.mjs** — Chrome candidates now: `FF_CHROME_BIN` → macOS paths
+  → Linux runner paths (`google-chrome` etc.). No behavior change on macOS.
+  (Untracked `tools/appshot-live.mjs` still has the macOS-only list — patch it
+  the same way when it gets committed.) First CI run failed the showcase shot:
+  GPU-less runners refuse software WebGL unless Chrome gets
+  `--enable-unsafe-swiftshader` (now always passed). appshot also gained an
+  `FF_CHROME_FLAGS` env passthrough and a `--vt <ms>` virtual-time-budget
+  override (spawn ceiling = max(40 s, 4×vt)); the CI showcase shot is scoped
+  to `#only=tomato,wheat` because the full 4-lane page needs ~100 s wall under
+  SwiftShader.
+- **release.yml** — `v*` tag → typecheck + build → `dist` tarball on an
+  auto-created GitHub Release (uses `gh release create`, no third-party action).
+- **dependabot.yml** — weekly npm + github-actions updates; minor/patch grouped
+  to keep PR noise down.
+- **Branch protection** on `main` applied after first green run: required
+  checks (`typecheck + build`, `headless smoke`, `secret + private-file scan`),
+  up-to-date branches, linear history, admin enforcement on, no required
+  reviews (solo repo — self-approval is impossible, so reviews would deadlock).
+- **Baseline findings (the scans paid for themselves on day one):**
+  `.commandcode/` (agent tool state — taste prefs, plan notes) was TRACKED on
+  main → untracked (`git rm -r --cached`) + gitignored along with
+  `.code-review-graph/`. Gitleaks full-history scan found 2 `generic-api-key`
+  hits — BOTH manually verified as documentation text (MISSION-TWIN.md ERA5/
+  USDA keyless-API table; a flight-camera bullet list in the now-untracked
+  .commandcode plan), no real credentials anywhere. Verified false positives
+  are pinned in `.gitleaksignore` (4-part `commit:file:rule:line` fingerprints
+  — the 3-part report format does NOT match). Repo's 72 tracked `quality/shots`
+  PNGs are deterministic dev shots by convention, not private data. Final
+  state: guard passes on 240 tracked files, gitleaks reports `no leaks found`.
+
+Deliberately out of scope: auto-deploy/hosting (no target exists), reviving the
+broken ESLint, test runner, husky pre-commit hooks — CI is the single gate.
+
+## 2026-09-06 — Dependency review round + main guard (`ci-hardening`, `fix-guard`)
+
+- Dependabot's first wave reviewed end-to-end: merged #7/#8/#9 (Actions v4→v7),
+  #10 (minor group), #11 (recharts 3 — verified beyond CI with an 8-route
+  gate sweep + live-mode shot of Simulations; bars/radar data-correct),
+  #14 (resolvers 5 — form page shot clean), #13 (TypeScript 7). Closed #12
+  (react-dom 19 while react stayed 18 — invalid; react ecosystem now bumps
+  as one dependabot group).
+- TypeScript 7 needed a 2-line tsconfig fix on the PR branch (TS5102 removed
+  `baseUrl`, TS5090 bans non-relative paths values; `./src/*` equivalent).
+  After the fix: tsc 7.0.2 typecheck + build green, CI green. Merged.
+- Workflow-file PRs can't be merged by the `gh` OAuth token without the
+  `workflow` scope — merged those locally via worktree + SSH push (the
+  mechanical equivalent of the merge button; CI re-validated on main).
+- `main-guard.yml`: branch protection is plan-gated (GitHub Pro/public), so
+  enforcement-lite: non-merge commits on main without an associated PR go
+  red. First run 403'd — the commit→PR association API needs
+  `pull-requests: read`, not just `contents: read`. Now green on real pushes.
+- Release path smoke-tested with throwaway `v0.0.0-ci-check` (typed, built,
+  tarball attached), then release + tag deleted.
+- PII sweep: no personal data in tracked files; gitleaks history clean.
+  One flag for the future: 15 commits authored as craigs.seller.sixx@gmail.com
+  — rewrite with git-filter-repo BEFORE ever making the repo public.

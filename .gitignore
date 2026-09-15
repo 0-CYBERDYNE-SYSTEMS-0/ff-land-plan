@@ -44,5 +44,6 @@ AGENTS.local.md
 # Aperant data directory
 .auto-claude/
 
-# agent/tool state
+# Agent tool state (local preferences/plans only — never commit)
 .commandcode/
+.code-review-graph/
