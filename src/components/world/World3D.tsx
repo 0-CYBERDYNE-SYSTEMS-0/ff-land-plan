@@ -37,7 +37,8 @@ import { createFlightCamera, type FlightCamera } from '@/three/flight';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
 import { __padProbe, advancePlantGrowth, buildPlants, disposePlants, type PlantBatch, type PlantUpdateOptions, swayPlants, updatePlants } from '@/three/plants';
 import { buildGround, disposeGround, updateGround, type GroundBatch } from '@/three/ground';
-import { buildShell, disposeShell, type ShellGroup } from '@/three/shell';
+import { buildShell, disposeShell, releaseShellCache, type ShellGroup } from '@/three/shell';
+import { World3DErrorBoundary } from './World3DErrorBoundary';
 import { createSky, type Sky } from '@/three/sky';
 import { buildStructures, disposeStructures, type StructureGroup, updateStructures } from '@/three/structures';
 import { createTour, generateTourWaypoints, type Tour } from '@/three/tour';
@@ -964,8 +965,14 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     // 3D voxel ground blocks (replaces flat texture plane)
     groundBatchesRef.current = buildGround(plan, engine.scene);
 
-    // Enclosure shell for non-outdoor surfaces (tent / warehouse / greenhouse)
-    shellRef.current = buildShell(plan, engine.scene);
+    // Enclosure shell for non-outdoor surfaces (tent / warehouse / greenhouse).
+    // A shell failure must not take the whole view down — log + go shell-less.
+    try {
+      shellRef.current = buildShell(plan, engine.scene);
+    } catch (err) {
+      console.error('shell build failed', err);
+      shellRef.current = null;
+    }
 
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
@@ -1236,6 +1243,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       disposeWaterPlanes(waterPlanesRef.current);
       disposeShell(shellRef.current);
       shellRef.current = null;
+      releaseShellCache(); // free the module-cached shell — nothing outlives the view
       disposeGhostPlants(undoGhostsRef.current);
       disposeGhostPlants(redoGhostsRef.current);
       disposeGhostRunBatches(ghostRunBatchesRef.current); // Phase 4 ghost-run plants
@@ -1369,10 +1377,16 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       maxZ: plan.heightM / 2 + 2,
     });
 
-    // Rebuild 3D ground blocks + enclosure shell (surface / dims may have changed)
+    // Rebuild 3D ground blocks + enclosure shell (surface / dims may have
+    // changed). buildShell is idempotent on a cache hit — no pre-dispose, so
+    // brush dabs don't detach/reattach the cached shell.
     groundBatchesRef.current = updateGround(groundBatchesRef.current, plan, engine.scene);
-    disposeShell(shellRef.current);
-    shellRef.current = buildShell(plan, engine.scene);
+    try {
+      shellRef.current = buildShell(plan, engine.scene);
+    } catch (err) {
+      console.error('shell build failed', err);
+      shellRef.current = null;
+    }
 
     // Structures & plants
     structureBatchesRef.current = updateStructures(structureBatchesRef.current, plan, engine.scene);
@@ -2054,6 +2068,9 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   };
 
   return (
+    // Crash net: render-time errors degrade to a panel, not a white screen.
+    // (Tree left at its original indent to keep this diff minimal.)
+    <World3DErrorBoundary>
     <div
       ref={containerRef}
       className="relative h-[60dvh] min-h-[320px] bg-muted/30 xl:h-auto xl:min-h-0 xl:flex-1"
@@ -2340,5 +2357,6 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         </div>
       )}
     </div>
+    </World3DErrorBoundary>
   );
 }

@@ -26,11 +26,12 @@ export interface ShellSpec {
   depthM: number;
 }
 
-/** Spec → voxel extents, clamped so tiny canvases stay buildable (≥ 5 m). */
+/** Spec → voxel extents, clamped so tiny canvases stay buildable. */
 function shellVoxels(spec: ShellSpec): { wV: number; dV: number } {
   return {
-    wV: Math.max(50, Math.round(spec.widthM * 10)),
-    dV: Math.max(50, Math.round(spec.depthM * 10)),
+    // 20-vox floor matches MIN_DIM_M (2 m) so shells hug small canvases
+    wV: Math.max(20, Math.round(spec.widthM * 10)),
+    dV: Math.max(20, Math.round(spec.depthM * 10)),
   };
 }
 
@@ -270,9 +271,10 @@ export function makeGreenhouseShell(spec: ShellSpec): THREE.Object3D {
     solid.push({ x: hx - 1, y: 1, z, s: 2.15, color: weighted([[T.concrete, 0.6], [T.concreteLight, 0.4]], rand()) });
   }
 
-  // glazed side walls (translucent — near sides included, glass is allowed);
-  // pane rows are centered over the curb→eave span so the top course meets
-  // the eave ring whatever block scale the canvas forced
+  // glazed side walls — far faces only (dollhouse: the camera looks from
+  // +X/+Z, so near panes are omitted); pane rows are centered over the
+  // curb→eave span so the top course meets the eave ring whatever block
+  // scale the canvas forced
   const rowsW = Math.max(1, Math.round((eave - 2.5) / st));
   const stepY = (eave - 2.5) / rowsW;
   const paneS = Math.max(st, stepY) * 1.05;
@@ -281,12 +283,10 @@ export function makeGreenhouseShell(spec: ShellSpec): THREE.Object3D {
     for (let ix = 0; ix < wV / st; ix++) {
       const x = -hx + (ix + 0.5) * st;
       glass.push({ x, y, z: -hz + st / 2, s: paneS, color: T.glassPane });
-      glass.push({ x, y, z: hz - st / 2, s: paneS, color: T.glassPane });
     }
     for (let iz = 1; iz < dV / st; iz++) {
       const z = -hz + (iz + 0.5) * st;
       glass.push({ x: -hx + st / 2, y, z, s: paneS, color: T.glassPane });
-      glass.push({ x: hx - st / 2, y, z, s: paneS, color: T.glassPane });
     }
   }
 
@@ -531,6 +531,7 @@ export function makeWarehouseShell(spec: ShellSpec): THREE.Object3D {
   const rand = rng(5501);
   const solid: Voxel[] = [];
   const glow: Voxel[] = [];
+  const skylight: Voxel[] = [];
   const { wV, dV } = shellVoxels(spec);
   const hx = wV / 2;
   const hz = dV / 2;
@@ -642,7 +643,29 @@ export function makeWarehouseShell(spec: ShellSpec): THREE.Object3D {
       solid.push({ x: lx, y: 0.45, z, s: 0.85, color: T.tape });
   }
 
-  return group([solidMesh(solid), glowMesh(glow)]);
+  // translucent skylight strips in the truss bays — low-opacity panes so the
+  // open top reads as a glazed hall roof instead of a sky hole at obliques
+  const skyS = Math.max(2.2, st * 1.1);
+  for (let z = -hz + trussStep / 2; z < hz - 2; z += trussStep)
+    for (let x = -hx + 4; x <= hx - 4; x += skyS * 1.15)
+      skylight.push({ x, y: 38, z, s: skyS, color: T.glassPane });
+
+  // roll-up door on the far (-X) wall: slat curtain between proud guide
+  // tracks, bottom seal + wall-parked operator box with a status LED
+  const doorW = Math.max(6, Math.min(18, Math.round(dV * 0.26)));
+  const doorTop = 24;
+  for (let y = 3.5; y <= doorTop; y += 2)
+    for (let z = -doorW / 2 + 1; z <= doorW / 2 - 1; z += 1.8)
+      solid.push({ x: -hx + 2.2, y, z, s: 1.95, color: y % 6 < 2 ? T.galvDark : PALETTE.metal });
+  for (let z = -doorW / 2 + 0.8; z <= doorW / 2 - 0.8; z += 1.6)
+    solid.push({ x: -hx + 2.4, y: 2.8, z, s: 1.7, color: T.panelSeam }); // bottom seal
+  for (const gz of [-doorW / 2 - 0.6, doorW / 2 + 0.6])
+    for (let y = 2; y <= doorTop + 2.5; y += 1.7)
+      solid.push({ x: -hx + 2.7, y, z: gz, s: 1.05, color: PALETTE.metalDark });
+  solid.push({ x: -hx + 2.9, y: doorTop + 4.5, z: 0, s: 1.6, color: T.panelDark }); // operator
+  glow.push({ x: -hx + 3.4, y: doorTop + 4.5, z: 1.8, s: 0.5, color: T.ledGreen });
+
+  return group([solidMesh(solid), glowMesh(glow), paneMesh(skylight, 0.25, PALETTE.glass)]);
 }
 
 // ---------------------------------------------------------------------------

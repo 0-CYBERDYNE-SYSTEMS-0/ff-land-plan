@@ -1602,3 +1602,41 @@ broken ESLint, test runner, husky pre-commit hooks — CI is the single gate.
 - PII sweep: no personal data in tracked files; gitleaks history clean.
   One flag for the future: 15 commits authored as craigs.seller.sixx@gmail.com
   — rewrite with git-filter-repo BEFORE ever making the repo public.
+
+## 2026-09-15 — Environments beta hardening (`feat/environments-beta-hardening`)
+
+- Discovery (3-specialist sweep) → spec in `quality/SPEC-ENVIRONMENTS-BETA.md`.
+  Three axes: sim sheltered temperature-stress ONLY (GDD pace, precip, ET0, N
+  mineralization all rode raw outdoor weather on enclosed surfaces — engine
+  contradicted its own stress terms); shells leaked sun (no castShadow),
+  misfit 2–4.9 m canvases (50-vox min), greenhouse rendered all 4 transparent
+  walls, every brush dab detached/reattached the cached shell; and the beta
+  net was hollow (CI never rendered World3D, `appshot --gate` failed OPEN on a
+  missing probe, no ErrorBoundary, localStorage quota silently dropped
+  persistence, corrupt blob silently reseeded).
+- Sim: `effectiveEnvironmentForSurface` (drivers.ts) = shelter at ingestion,
+  once per day; outdoor passes through by reference (byte-identical). Enclosed:
+  sheltered temps → recomputed gddBase10C (fixes the P0 pace/stress split),
+  precipMm 0 (roofs — enclosed runs are irrigation-driven; supersedes
+  simLegacy's scenario-only precip attenuation, documented), ET0 ×
+  SURFACE_ET_FACTOR. New SURFACE_ET_FACTOR table (greenhouse .85 → warehouse
+  .6) is a beta approximation — single constants table, trivially tunable.
+  Frost event message now reports the sheltered low it actually fired on.
+- Shells: solidMesh casts/receives shadows (walls shade interiors; panes stay
+  transmissive); shellVoxels floor 50→20 vox (MIN_DIM_M); greenhouse near-face
+  panes dropped (dollhouse discipline); warehouse got a far roll-up door +
+  truss-bay skylight strips; buildShell idempotent + NaN guard +
+  releaseShellCache() on World3D unmount; shell builds try/catch-guarded;
+  World3DErrorBoundary wraps the view.
+- Harness/storage: `--gate` fails closed (missing probe = exit 1 — future
+  steps must hit the dev server, `vite preview` will now fail the gate);
+  ci.yml gained World3D shots for farms 1/8/9 (--gate --expect --vt 25000;
+  trap-10: gate lines outrank PNG); store quarantines corrupt blobs under
+  `ff-pro:v1:corrupt`; simRuns capped at 40, readings at 500/sensor (quota
+  driver); Weather page shows an amber "enclosed canvas" context banner.
+- Verified: typecheck + build green; appshot gates PASS on map farm 1, world
+  farms 1/8/9 (zero runtime errors), showcase expect PASS; aesthetics glance
+  on world 8/9 renders clean (no z-fight/shadow acne at default camera).
+- Deferred (in spec): CEA setpoints (CO2/RH/photoperiod), passive-solar gain,
+  LOD/quality tiers, quota-failure toast, restApi live parity smoke, dioramas
+  in the designer palette.

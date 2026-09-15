@@ -114,7 +114,8 @@ const dom = res.stdout?.toString() ?? '';
 if (gate) {
   const m = /<div id="ff-probe"[^>]*data-error-count="(\d+)"/.exec(dom);
   if (!m) {
-    console.error('GATE INCONCLUSIVE: #ff-probe not found in DOM (is this a dev build with the boot probe?)');
+    console.error('GATE FAIL: boot probe missing from DOM (--gate requires a dev build; the probe is dev-only)');
+    process.exit(1);
   } else if (m[1] !== '0') {
     const detail = /data-errors="([^"]*)"/.exec(dom)?.[1] ?? '';
     console.error(`GATE FAIL: ${m[1]} runtime error(s):\n  ${detail.replace(/ ⏐ /g, '\n  ')}`);

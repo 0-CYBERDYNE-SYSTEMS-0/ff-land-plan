@@ -39,11 +39,11 @@ import {
   antagonistStressAdd,
   biomassFromGdd,
   companionRateBonus,
+  effectiveEnvironmentForSurface,
   floweringForBiomass,
   gddGain,
   gddRequiredC,
   meanStress,
-  shelteredTemps,
   stageForBiomass,
   thermalStress,
 } from './drivers';
@@ -383,13 +383,17 @@ export function stepDay(
   let butterflyCapacity = 0;
   let pestSum = 0;
 
+  // Shelter at ingestion: one effective env per day feeds every consumer in
+  // the pass below (outdoor passes through by reference).
+  const env2 = effectiveEnvironmentForSurface(env, surface);
+
   for (const key of Object.keys(cells)) {
     const prev = cells[key]!;
     const crop = crops.get(prev.cropId);
     const kc = kcForBiomass(prev.biomassFrac);
     const bucket = stepBucketMoisture(
       prev.moistureFrac * capacity,
-      env,
+      env2,
       kc,
       irrigationByCell.get(key) ?? 0,
       params,
@@ -408,7 +412,7 @@ export function stepDay(
 
     // --- Nitrogen pool (Phase 3): mineralize always, uptake + stress while
     // the crop is growing, leach on heavy water-input days (rain + irrigation).
-    const tMeanC = (env.tMinC + env.tMaxC) / 2;
+    const tMeanC = (env2.tMinC + env2.tMaxC) / 2;
     let nitrogenKgHa = r2(prev.nitrogenKgHa + mineralizationKgHa(omRef, tMeanC));
     let nitrogen = 0;
     let required = 0;
@@ -421,12 +425,12 @@ export function stepDay(
       nitrogen = nitrogenStress(nitrogenKgHa, seasonalNeed, prev.biomassFrac);
       const demand = uptakeDemandKgHa(
         seasonalNeed,
-        env.gddBase10C / required, // potential (unstressed) biomass gain
+        env2.gddBase10C / required, // potential (unstressed) biomass gain
         prev.biomassFrac,
       );
       nitrogenKgHa = r2(nitrogenKgHa - Math.min(nitrogenKgHa, demand));
     }
-    const waterInMm = env.precipMm + (irrigationByCell.get(key) ?? 0);
+    const waterInMm = env2.precipMm + (irrigationByCell.get(key) ?? 0);
     if (waterInMm > N_LEACH_MM) {
       nitrogenKgHa = r2(nitrogenKgHa * (1 - N_LEACH_FRACTION));
     }
@@ -436,8 +440,9 @@ export function stepDay(
     // real term in the stress max; neighbors bend rate (companions) and
     // stress (antagonists).
     if (growing && crop) {
-      const t = shelteredTemps(env, surface);
-      const th = thermalStress(crop, t.tMinC, t.tMaxC);
+      // env2 already carries the sheltered temps (idempotent with
+      // shelteredTemps: raw handling reads env.raw, preserved by the spread).
+      const th = thermalStress(crop, env2.tMinC, env2.tMaxC);
       heat = th.heat;
       cold = th.cold;
       frost = th.frost;
@@ -446,16 +451,16 @@ export function stepDay(
         1,
         Math.max(water, heat, cold, nitrogen) + antagonistStressAdd(nb),
       );
-      gddAccumC = r2(prev.gddAccumC + gddGain(env, maxStress, companionRateBonus(nb)));
+      gddAccumC = r2(prev.gddAccumC + gddGain(env2, maxStress, companionRateBonus(nb)));
       biomassFrac = r4(biomassFromGdd(gddAccumC, required));
       stage = stageForBiomass(biomassFrac);
       floweringFrac = r4(floweringForBiomass(biomassFrac));
       pestPressure = stepPestPressure(
         prev.pestPressure,
         {
-          tMeanC: (t.tMinC + t.tMaxC) / 2,
-          tMinShelteredC: t.tMinC,
-          precipMm: env.precipMm,
+          tMeanC: (env2.tMinC + env2.tMaxC) / 2,
+          tMinShelteredC: env2.tMinC,
+          precipMm: env2.precipMm,
           moistureFrac,
           hostRatio: (nb?.sameCrop ?? 0) / NEIGHBOR_WINDOW,
         },
@@ -552,8 +557,8 @@ export function stepDay(
         kind: 'frost',
         cell: key,
         cropId: prev.cropId,
-        message: `Frost hit ${name} at ${key} (low ${r1(env.tMinC)} °C)`,
-        data: { tMinC: r1(env.tMinC) },
+        message: `Frost hit ${name} at ${key} (low ${r1(env2.tMinC)} °C)`,
+        data: { tMinC: r1(env2.tMinC) },
       });
     }
     if (prev.pestPressure < PEST_OUTBREAK && pestPressure >= PEST_OUTBREAK) {
@@ -593,7 +598,7 @@ export function stepDay(
 
     // Day aggregates + creature capacities, folded into this same pass.
     liveCells++;
-    etcMmSum += env.etoMm * kcForBiomass(biomassFrac);
+    etcMmSum += env2.etoMm * kcForBiomass(biomassFrac);
     if (nextMax >= STRESS_ONSET) statsStressCellDays++;
     if (nextStress.water >= STRESS_ONSET) statsStressDays.water++;
     if (nextStress.heat >= STRESS_ONSET) statsStressDays.heat++;
@@ -665,8 +670,11 @@ export function simulateRun(
   for (const env of envSeries) {
     const res = stepDay(st, env, config, ctx);
     st = res.state;
-    rainMm += env.precipMm; // effective (scenario) rain — the world the run lives in
-    etoMm += env.etoMm;
+    // Summary rain/ET reflect the world the run lives in: the effective env
+    // (an enclosed run reports 0 rain, attenuated ET0).
+    const eff = effectiveEnvironmentForSurface(env, st.surface);
+    rainMm += eff.precipMm;
+    etoMm += eff.etoMm;
     const ds = res.dayStats;
     if (ds) {
       stressCellDays += ds.stressCellDays;

@@ -102,7 +102,16 @@ function load(): AppState {
     const maxFarmId = merged.farms.reduce((m, f) => Math.max(m, f.id), 0);
     merged.counters.farm = Math.max(merged.counters.farm, maxFarmId + 1);
     return merged;
-  } catch {
+  } catch (err) {
+    // Quarantine the corrupt blob (best-effort) so the data survives for
+    // inspection instead of being silently overwritten by the reseed.
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw !== null) localStorage.setItem(`${STORAGE_KEY}:corrupt`, raw);
+    } catch {
+      /* quarantine is best-effort; the reset below proceeds regardless */
+    }
+    console.error('FarmFriend: stored data was corrupt — quarantined and reset.', err);
     return fresh;
   }
 }

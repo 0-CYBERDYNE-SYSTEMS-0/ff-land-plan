@@ -61,6 +61,17 @@ jobs:
           mkdir -p smoke-shots
           node tools/appshot.mjs "http://localhost:5177/#/farms/1/map" \
             smoke-shots/map.png 1440x900 --gate --expect "Plot Designer"
+      # World captures race plan loading (HANDOFF trap 10 — gate lines outrank
+      # PNG content); --vt raises the SwiftShader spawn ceiling, mirroring the
+      # showcase step.
+      - name: Shot — World3D view (runtime-error gate)
+        run: |
+          node tools/appshot.mjs "http://localhost:5177/?ffview=world#/farms/1/map" \
+            smoke-shots/world1.png 1440x900 --gate --expect "Plot Designer" --vt 25000
+          node tools/appshot.mjs "http://localhost:5177/?ffview=world#/farms/8/map" \
+            smoke-shots/world8.png 1440x900 --gate --expect "Plot Designer" --vt 25000
+          node tools/appshot.mjs "http://localhost:5177/?ffview=world#/farms/9/map" \
+            smoke-shots/world9.png 1440x900 --gate --expect "Plot Designer" --vt 25000
       # CI runners are GPU-less: --enable-unsafe-swiftshader (added in appshot)
       # opts into software WebGL so three.js contexts actually come up. The
       # showcase is scoped to two crop archetypes — the full 4-lane page takes

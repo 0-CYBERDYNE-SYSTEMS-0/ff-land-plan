@@ -208,7 +208,8 @@ export const localApi: Api = {
       value,
       recordedAt: new Date().toISOString(),
     };
-    state.readings[sensorId] = [...(state.readings[sensorId] ?? []), reading];
+    // Cap per sensor to the newest 500 (localStorage-quota driver).
+    state.readings[sensorId] = [...(state.readings[sensorId] ?? []), reading].slice(-500);
     sensor.lastValue = value;
     sensor.lastUnit = unit;
     sensor.lastReadingAt = reading.recordedAt;
@@ -306,7 +307,9 @@ export const localApi: Api = {
       summary,
       status: 'complete',
     };
-    state.simRuns = [record, ...state.simRuns];
+    // Cap to the newest 40: each run carries a full envSeries, so an unbounded
+    // list is the main localStorage-quota driver.
+    state.simRuns = [record, ...state.simRuns].slice(0, 40);
     persist();
     return record;
   },

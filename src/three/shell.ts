@@ -11,13 +11,15 @@
  * ground at y=0 — the same anchor the old box shell used (walls at
  * ±widthM/2, ±heightM/2), so no repositioning is needed.
  *
- * MODULE-SCOPE CACHE (red-team): the World3D planVersion effect runs
- * disposeShell + buildShell on EVERY brush dab, and a shell is a ~10k-voxel
- * merged geometry. One cached shell keyed (surface, widthM, heightM): a cache
- * hit re-attaches the cached root without disposing it; a key change (or a
- * surface with no shell) disposes the old root and builds fresh. disposeShell
- * only DETACHES the cache-owned root — any shell the cache no longer backs is
- * fully freed, so teardown stays correct and GPU memory is bounded to one shell.
+ * MODULE-SCOPE CACHE (red-team): the World3D planVersion effect calls
+ * buildShell on EVERY brush dab, and a shell is a ~10k-voxel merged geometry.
+ * One cached shell keyed (surface, widthM, heightM): a cache hit whose root is
+ * already attached to the scene is a no-op (callers need not pre-dispose); a
+ * key change (or a surface with no shell) frees the old root and builds fresh.
+ * disposeShell only DETACHES the cache-owned root — any shell the cache no
+ * longer backs is fully freed; releaseShellCache() frees the cached shell on
+ * view unmount, so GPU memory stays bounded to one shell while mounted and
+ * zero after.
  */
 import * as THREE from 'three';
 import type { PlanState, PlanSurface } from '@/types';
@@ -92,7 +94,8 @@ export function buildShell(plan: PlanState, scene: THREE.Scene): ShellGroup | nu
 
   const key = shellKey(surface, plan.widthM, plan.heightM);
   if (cachedShell && cachedShell.key === key) {
-    // Cache hit: the previous disposeShell only detached the root — re-attach.
+    // Idempotent: an already-attached root returns immediately (no re-add), so
+    // callers can buildShell on every plan change without pre-disposing.
     if (cachedShell.group.root.parent !== scene) scene.add(cachedShell.group.root);
     return cachedShell.group;
   }
@@ -100,6 +103,12 @@ export function buildShell(plan: PlanState, scene: THREE.Scene): ShellGroup | nu
   if (cachedShell) {
     freeGroup(cachedShell.group);
     cachedShell = null;
+  }
+
+  // NaN/zero/negative dims would poison the cache key and the makers — bail
+  // WITHOUT caching so a later good plan rebuilds cleanly.
+  if (!Number.isFinite(plan.widthM) || !Number.isFinite(plan.heightM) || plan.widthM <= 0 || plan.heightM <= 0) {
+    return null;
   }
 
   const root = new THREE.Group();
@@ -119,4 +128,16 @@ export function disposeShell(shell: ShellGroup | null): void {
   // very next plan change) — keep its resources; everything else is fully freed.
   if (cachedShell && cachedShell.group === shell) return;
   freeGroup(shell);
+}
+
+/**
+ * Fully free the cached shell, if any (World3D unmount). disposeShell alone
+ * keeps cache-owned GPU resources alive for the next plan change — this is
+ * the bounded-teardown half of that bargain.
+ */
+export function releaseShellCache(): void {
+  if (cachedShell) {
+    freeGroup(cachedShell.group);
+    cachedShell = null;
+  }
 }

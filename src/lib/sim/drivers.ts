@@ -7,6 +7,8 @@ import type { Crop, PlanSurface } from '@/types';
 import type { CellStress, DailyEnvironment, NeighborContext } from './types';
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+// Same 2dp idiom as environment.ts round2 / engine.ts r2.
+const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /** Fallback mean daily GDD when no climate normals exist: 10 °C·day is what a
  * 20 °C mean day accumulates at base 10 — the legacy growth.ts baseline. */
@@ -45,6 +47,46 @@ export function shelteredTemps(
   return {
     tMinC: raw.tMinC + (env.tMinC - raw.tMinC) * shelter,
     tMaxC: raw.tMaxC + (env.tMaxC - raw.tMaxC) * shelter,
+  };
+}
+
+/**
+ * Beta approximation for reduced wind/VPD under enclosure: reference ET is
+ * scaled per surface. Single-table constant, trivially tunable.
+ */
+export const SURFACE_ET_FACTOR: Record<PlanSurface, number> = {
+  outdoor: 1,
+  greenhouse: 0.85,
+  hoophouse: 0.9,
+  tent: 0.75,
+  indoor: 0.6,
+  warehouse: 0.6,
+};
+
+/**
+ * The environment a cell on `surface` actually experiences — computed ONCE
+ * per day and fed to every sim consumer (shelter at ingestion). Outdoor
+ * returns `env` by reference: zero-cost, behavior-identical. Enclosed
+ * surfaces get SURFACE_SHELTER-attenuated temps (scenario ΔT only, semantics
+ * unchanged), gddBase10C recomputed from those temps with environment.ts's
+ * max(0, mean − 10) formula so GDD pace matches stress, and precipMm 0 —
+ * roofs keep rain out, so enclosed runs are irrigation-driven. That
+ * deliberately supersedes simLegacy's scenario-only precip attenuation. ET0
+ * scales by SURFACE_ET_FACTOR.
+ */
+export function effectiveEnvironmentForSurface(
+  env: DailyEnvironment,
+  surface: PlanSurface,
+): DailyEnvironment {
+  if ((SURFACE_SHELTER[surface] ?? 1) >= 1) return env;
+  const { tMinC, tMaxC } = shelteredTemps(env, surface);
+  return {
+    ...env,
+    tMinC,
+    tMaxC,
+    gddBase10C: round2(Math.max(0, (tMinC + tMaxC) / 2 - 10)),
+    precipMm: 0,
+    etoMm: round2(env.etoMm * SURFACE_ET_FACTOR[surface]),
   };
 }
 
