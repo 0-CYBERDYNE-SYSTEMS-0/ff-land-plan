@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiFetch } from '@/lib/api';
+import { isInputCaptured } from '@/lib/inputArbiter';
 import type { SimEvent, SimState } from '@/lib/sim';
 import { runDayEnv } from '@/hooks/useSimRun';
 import { effectiveStress, projectPlant, stageCountFor } from '@/lib/sim/view';
@@ -229,6 +230,7 @@ const [cinema, setCinema] = useState(false);
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.toLowerCase() !== 'h') return;
       if (isTypingTarget(e.target)) return;
+      if (isInputCaptured()) return; // flight owns the keyboard
       e.preventDefault();
       setCinema((c) => !c);
     };

@@ -174,8 +174,8 @@ export interface SimDrawerProps {
   onClearGhost?: () => void;
 }
 
-function formatTimeOfDay(t: number): string {
-  const hours = Math.floor(t * 24);
+export function formatTimeOfDay(t: number): string {
+  const hours = Math.floor(t * 24) % 24;
   const minutes = Math.floor(((t * 24) % 1) * 60);
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }

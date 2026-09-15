@@ -7,6 +7,8 @@ export interface Achievement {
   description: string;
   icon: string;
   unlocked: boolean;
+  // Unlocks persist but never surface a toast.
+  silent?: boolean;
 }
 
 const DEFINITIONS: Omit<Achievement, 'unlocked'>[] = [
@@ -20,11 +22,15 @@ const DEFINITIONS: Omit<Achievement, 'unlocked'>[] = [
   { id: 'chickens', label: 'Farm Fresh', description: 'Place a chicken coop', icon: '🐔' },
   { id: 'greenhouse', label: 'Under Glass', description: 'Place a greenhouse', icon: '🏠' },
   { id: 'tour_complete', label: 'Grand Tour', description: 'Complete a farm tour', icon: '🎥' },
-  { id: 'flight_time', label: 'Pilot', description: 'Fly for 60 seconds total', icon: '✈️' },
-  { id: 'rain_day', label: 'Rainy Day', description: 'See rain falling on your farm', icon: '🌧️' },
-  { id: 'snow_day', label: 'Winter Wonderland', description: 'See snow falling on your farm', icon: '❄️' },
-  { id: 'dawn_patrol', label: 'Early Riser', description: 'Visit your farm at dawn', icon: '🌅' },
-  { id: 'night_owl', label: 'Night Owl', description: 'Visit your farm after dark', icon: '🌙' },
+  { id: 'flight_time', label: 'Pilot', description: 'Fly for 60 seconds total', icon: '✈️', silent: true },
+  { id: 'rain_day', label: 'Rainy Day', description: 'See rain falling on your farm', icon: '🌧️', silent: true },
+  { id: 'snow_day', label: 'Winter Wonderland', description: 'See snow falling on your farm', icon: '❄️', silent: true },
+  { id: 'dawn_patrol', label: 'Early Riser', description: 'Visit your farm at dawn', icon: '🌅', silent: true },
+  { id: 'night_owl', label: 'Night Owl', description: 'Visit your farm after dark', icon: '🌙', silent: true },
+  { id: 'first_run', label: 'First Season', description: 'Run your first simulation', icon: '🚜' },
+  { id: 'first_intervention', label: 'Saved the Crop', description: 'Apply your first intervention to a run', icon: '🚿' },
+  { id: 'first_compare', label: 'Two Futures', description: 'Overlay a ghost run to compare scenarios', icon: '👻' },
+  { id: 'moisture_lens', label: 'Thirst Check', description: 'Read the moisture overlay during a run', icon: '💧' },
 ];
 
 const STORAGE_KEY = 'ff-pro:v1-achievements';
@@ -32,7 +38,7 @@ const STORAGE_KEY = 'ff-pro:v1-achievements';
 export interface AchievementSystem {
   achievements: Achievement[];
   unlocked: Achievement[];
-  check: (id: string) => void;
+  check: (id: string) => Achievement | null;
   isUnlocked: (id: string) => boolean;
   stats: () => { total: number; unlocked: number };
 }
@@ -68,12 +74,13 @@ export function createAchievementSystem(): AchievementSystem {
     return unlockedSet.has(id);
   }
 
-  function check(id: string): void {
+  function check(id: string): Achievement | null {
     const achievement = achievements.find((a) => a.id === id);
-    if (!achievement || achievement.unlocked) return;
+    if (!achievement || achievement.unlocked) return null;
     achievement.unlocked = true;
     unlockedSet.add(id);
     save();
+    return achievement;
   }
 
   function stats() {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -7,8 +7,9 @@ import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
 import { fetchClimateNormals } from '@/lib/climate';
 import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
+import { setInputMode } from '@/lib/inputArbiter';
 import { makeCropFor, makeCropForCustom } from '@/creative/crops/map';
-import { parseKey } from '@/lib/plan';
+import { parseKey, planCols, planRows } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
 import { projectPlant, stageCountFor, type PlantViewParams } from '@/lib/sim/view';
 import { envToWeatherCurrent } from '@/lib/sim/runWeather';
@@ -45,7 +46,7 @@ import { buildWaterPlanes, disposeWaterPlanes, updateWaterPlanes, type WaterPlan
 import { createGrowthFX, type GrowthFX } from '@/three/growth-fx';
 import { createPerfHUD, type PerfHUD } from '@/three/perf';
 import { createWeatherFX, type WeatherFX } from '@/three/weather-fx';
-import { MOISTURE_BANDS, SimDrawer, type CropProgressRow, type ClimateBaselineInfo } from './SimDrawer';
+import { formatTimeOfDay, MOISTURE_BANDS, SimDrawer, type CropProgressRow, type ClimateBaselineInfo } from './SimDrawer';
 
 /** Provenance tag for the growth model's baseline temperature (spec §3.3:
  * every number traces to its source). */
@@ -505,6 +506,7 @@ interface PointerHandlers {
   down: PointerHandler2;
   move: PointerHandler2;
   up: (camera: THREE.Camera, scene: THREE.Scene, ndcX?: number, ndcY?: number) => void;
+  leave: () => void;
 }
 
 export default function World3D({ editor, cinema = false, onToggleCinema, simRun = null, compareRuns, runEventsRef }: World3DProps) {
@@ -591,6 +593,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // button and by Escape inside flight.ts), which alone never re-renders React.
   const [flightActive, setFlightActive] = useState(false);
   const flightActiveRef = useRef(false);
+  // True only for the first 5 s after flight engages (controls hint card).
+  const [flightHintVisible, setFlightHintVisible] = useState(false);
   const [tourProgress, setTourProgress] = useState(0);
   const lastTourProgressRef = useRef(0);
   const [weather, setWeather] = useState<WeatherCurrent | null>(null);
@@ -609,11 +613,21 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   showDebugRef.current = showDebug;
   const [audioOn, setAudioOn] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Hover readout chip (fixed, bottom-left above the dock): rebuilt only on
+  // cell change by the onHoverCell callback — never per pointermove. Null =
+  // pointer off-plan / outside the world.
+  const [hoverInfo, setHoverInfo] = useState<{ key: string; title: string; sub: string } | null>(null);
   // Run-mode UI state (moisture overlay is opt-in; drawer row selection).
   const [showMoisture, setShowMoisture] = useState(false);
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
   // Moisture-band overlay meshes (≤4 InstancedMesh batches, run mode only).
   const moistureRef = useRef<THREE.InstancedMesh[]>([]);
+  // One-mesh interaction overlays: hover highlight (init effect), selection
+  // ring + drag preview (their own effects below). Each owns its
+  // geometry+material and disposes them in its cleanup.
+  const hoverMeshRef = useRef<THREE.Mesh | null>(null);
+  const selectionRingRef = useRef<THREE.Mesh | null>(null);
+  const previewOverlayRef = useRef<THREE.InstancedMesh | null>(null);
 
   // Latest-value refs: the mount-once init effect and its listeners read these
   // instead of capturing render-time values.
@@ -743,13 +757,81 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const achievements = useRef(createAchievementSystem());
   const flightTime = useRef(0);
 
-  const { handlePointerDown, handlePointerMove, handlePointerUp } = use3DEditor(editor);
+  // Hover readout builder (use3DEditor dedupes to one call per cell change):
+  // positions the ONE hover-highlight mesh (created in the init effect) and
+  // computes the chip text from the same growth math as the cropProgress HUD
+  // rows. All inputs are refs, so the callback identity is stable.
+  const onHoverCell = useCallback((cell: { x: number; y: number; key: string } | null) => {
+    const mesh = hoverMeshRef.current;
+    const plan = editor.planRef.current;
+    // Flight/tour own the pointer — the fixed screen point would raycast
+    // whatever the sweeping camera crosses. Freeze + clear instead of tracking.
+    if (flightActiveRef.current || tourRef.current?.active) {
+      if (mesh) mesh.visible = false;
+      setHoverInfo(null);
+      return;
+    }
+    if (!cell || !plan) {
+      if (mesh) mesh.visible = false;
+      setHoverInfo(null);
+      return;
+    }
+    if (mesh) {
+      mesh.position.set(cell.x * plan.cellM + plan.cellM / 2 - plan.widthM / 2, 0.035, cell.y * plan.cellM + plan.cellM / 2 - plan.heightM / 2);
+      mesh.scale.set(plan.cellM * 0.98, 1, plan.cellM * 0.98);
+      mesh.visible = true;
+    }
+    const cropId = plan.planting[cell.key];
+    if (cropId === undefined) {
+      const slug = plan.ground[cell.key];
+      setHoverInfo({
+        key: cell.key,
+        title: slug
+          ? slug.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+          : 'Soil',
+        sub: '',
+      });
+      return;
+    }
+    const crop = cropByIdRef.current.get(cropId);
+    if (!crop) {
+      setHoverInfo(null);
+      return;
+    }
+    const mod = scenarioGrowthMod(crop, scenarioRef.current, plan.surface ?? 'outdoor', growthCtxForBuilders());
+    const prog = growthProgress(crop, plan.plantedAt?.[cell.key], new Date(scrubDateRef.current), mod.rate);
+    // Same plantedAt parsing as the cropProgress memo: date-only scrub input
+    // vs full ISO (seed data) must never read "Invalid Date".
+    const plantedAt = plan.plantedAt?.[cell.key] ?? '';
+    const planted = plantedAt
+      ? (/^\d{4}-\d{2}-\d{2}$/.test(plantedAt) ? new Date(`${plantedAt}T00:00:00`) : new Date(plantedAt))
+      : null;
+    const sown = planted && !Number.isNaN(planted.getTime())
+      ? planted.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      : 'unknown date';
+    setHoverInfo({
+      key: cell.key,
+      title: crop.name,
+      sub: `Sown ${sown} · ${Math.round(prog * 100)}% grown${mod.stress > 0.2 ? ' · ⚠ stress' : ''}`,
+    });
+  }, []);
+
+  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = use3DEditor(editor, onHoverCell);
 
   // Handler identity changes whenever the picked tool/crop changes (they are
   // useCallback-wrapped over editor state). The canvas listeners are created
   // once and read the latest handlers through this ref.
-  const handlersRef = useRef<PointerHandlers>({ down: handlePointerDown, move: handlePointerMove, up: handlePointerUp });
-  handlersRef.current = { down: handlePointerDown, move: handlePointerMove, up: handlePointerUp };
+  const handlersRef = useRef<PointerHandlers>({ down: handlePointerDown, move: handlePointerMove, up: handlePointerUp, leave: handlePointerLeave });
+  handlersRef.current = { down: handlePointerDown, move: handlePointerMove, up: handlePointerUp, leave: handlePointerLeave };
+
+  // Flight/tour starting mid-hover must drop the readout immediately, not at
+  // the next pointermove (which may never come — pointer lock swallows moves).
+  useEffect(() => {
+    if (flightActive || tourActive) {
+      if (hoverMeshRef.current) hoverMeshRef.current.visible = false;
+      setHoverInfo(null);
+    }
+  }, [flightActive, tourActive]);
 
   // Painting tools claim left-drag/one-finger for strokes; orbit stays enabled
   // only while the select tool is active. Synced render-phase like handlersRef
@@ -848,6 +930,25 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     engineRef.current = engine;
     setEngineOrbitEnabled(engine, toolRef.current === 'select');
 
+    // Per-frame target clamp (flight keeps the camera over the plan; skipped
+    // while orbit controls drive). Re-applied by the plan-change effect.
+    engine.setTargetBounds({
+      minX: -(plan.widthM / 2) - 2,
+      maxX: plan.widthM / 2 + 2,
+      minZ: -(plan.heightM / 2) - 2,
+      maxZ: plan.heightM / 2 + 2,
+    });
+
+    // Hover highlight — ONE reusable mesh; the onHoverCell callback only
+    // moves/scales it (no per-move rebuild). Disposed in this effect's cleanup.
+    const hoverMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 0.06, 1),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, depthWrite: false }),
+    );
+    hoverMesh.visible = false;
+    engine.scene.add(hoverMesh);
+    hoverMeshRef.current = hoverMesh;
+
     // Sky system
     const sky = createSky(engine.scene);
     skyRef.current = sky;
@@ -909,12 +1010,22 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const waypoints = generateTourWaypoints(plan, cropById);
     tourRef.current = createTour(engine, waypoints, () => {
       setTourActive(false);
-      achievements.current.check('tour_complete');
+      unlock('tour_complete');
     });
 
-    // Flight camera
+    // Flight camera — the LIVE bounds getter re-reads the plan each call so
+    // mid-flight plan changes (farm nav, resize) clamp against current dims.
     flightRef.current = createFlightCamera(engine, () => {
-      achievements.current.check('flight_time');
+      unlock('flight_time');
+    }, () => {
+      const p = editor.planRef.current;
+      if (!p) return { minX: -50, maxX: 50, minZ: -50, maxZ: 50 };
+      return {
+        minX: -(p.widthM / 2) - 10,
+        maxX: p.widthM / 2 + 10,
+        minZ: -(p.heightM / 2) - 10,
+        maxZ: p.heightM / 2 + 10,
+      };
     });
 
     // Ambient light from sky
@@ -1033,7 +1144,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         flightRef.current.update(dt);
         flightTime.current += dt;
         if (flightTime.current > 60) {
-          achievements.current.check('flight_time');
+          unlock('flight_time');
         }
       }
       const flightNow = flightRef.current?.active ?? false;
@@ -1054,9 +1165,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         });
       }
 
-      // Achievement checks (time-based) — use ref for rAF-time
-      if (timeRef.current > 0.2 && timeRef.current < 0.3) achievements.current.check('dawn_patrol');
-      if (timeRef.current > 0.8 || timeRef.current < 0.1) achievements.current.check('night_owl');
+      // Achievement checks (time-based) — use ref for rAF-time. Both ids are
+      // silent, so unlock() never setState from the rAF loop.
+      if (timeRef.current > 0.2 && timeRef.current < 0.3) unlock('dawn_patrol');
+      if (timeRef.current > 0.8 || timeRef.current < 0.1) unlock('night_owl');
     };
 
     engine.addUpdate(update);
@@ -1085,10 +1197,14 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       handlersRef.current.up(engine.camera, engine.scene, ndc.x, ndc.y);
       canvas.releasePointerCapture(e.pointerId);
     };
+    const onPointerLeave = () => {
+      handlersRef.current.leave();
+    };
 
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointerleave', onPointerLeave);
 
     // Resize
     const resize = () => {
@@ -1105,6 +1221,15 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
+      setInputMode('default'); // defensive reset: flight capture must never outlive the world
+      // rectPreview is shared editor state that outlives this view — a stale
+      // 3D drag must never bleed into the 2D blueprint as a phantom rectangle.
+      editor.setRectPreview(null);
+      hoverMesh.removeFromParent();
+      hoverMesh.geometry.dispose();
+      (hoverMesh.material as THREE.Material).dispose();
+      hoverMeshRef.current = null;
       disposeGround(groundBatchesRef.current);
       disposeStructures(structureBatchesRef.current);
       disposePlants(plantBatchesRef.current);
@@ -1131,12 +1256,118 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     };
   }, [sceneReady, farmId]); // mount-once per farm: see comment above the effect
 
+  // Selection ring (blueprint-selected cell): creation is keyed to the world
+  // mount exactly like the init effect (one ring per engine, disposed with
+  // it); a separate effect repositions in place so plan edits never rebuild
+  // the geometry.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.36, 0.5, 28),
+      new THREE.MeshBasicMaterial({
+        color: '#16a34a',
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.05;
+    ring.visible = false;
+    engine.scene.add(ring);
+    selectionRingRef.current = ring;
+    return () => {
+      ring.removeFromParent();
+      ring.geometry.dispose();
+      (ring.material as THREE.Material).dispose();
+      if (selectionRingRef.current === ring) selectionRingRef.current = null;
+    };
+  }, [sceneReady, farmId]);
+
+  useEffect(() => {
+    const ring = selectionRingRef.current;
+    const plan = editor.planRef.current;
+    if (!ring || !plan) return;
+    if (editor.selectedKey) {
+      const [cx, cy] = parseKey(editor.selectedKey);
+      ring.position.set(cx * plan.cellM + plan.cellM / 2 - plan.widthM / 2, 0.05, cy * plan.cellM + plan.cellM / 2 - plan.heightM / 2);
+      ring.scale.setScalar(plan.cellM);
+      ring.visible = true;
+    } else {
+      ring.visible = false;
+    }
+  }, [sceneReady, editor.selectedKey, editor.planVersion]);
+
+  // Drag-preview overlay (rect/line tools): ONE InstancedMesh rebuilt only
+  // when the string signature changes, so per-pointermove setRectPreview calls
+  // with the same shape never churn GPU buffers. planVersion re-applies after
+  // whole-scene rebuilds; cleanup disposes (and covers unmount).
+  const previewSig = editor.rectPreview
+    ? `${editor.rectPreview.x0},${editor.rectPreview.y0},${editor.rectPreview.x1},${editor.rectPreview.y1},${editor.rectPreview.color},${editor.rectPreview.kind ?? 'rect'},${editor.rectPreview.cells?.length ?? 0}`
+    : 'null';
+  useEffect(() => {
+    const engine = engineRef.current;
+    const preview = editor.rectPreview;
+    const plan = editor.planRef.current;
+    if (!engine || !preview || !plan) return;
+    const cells: Array<[number, number]> = preview.cells ? [...preview.cells] : [];
+    if (preview.cells === undefined) {
+      // Rect drag: expand the corner pair inclusive, clamped to the grid.
+      const cols = planCols(plan);
+      const rows = planRows(plan);
+      const x0 = Math.max(0, Math.min(preview.x0, preview.x1));
+      const x1 = Math.min(cols - 1, Math.max(preview.x0, preview.x1));
+      const y0 = Math.max(0, Math.min(preview.y0, preview.y1));
+      const y1 = Math.min(rows - 1, Math.max(preview.y0, preview.y1));
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) cells.push([x, y]);
+      }
+    }
+    if (cells.length === 0) return;
+    const geometry = new THREE.BoxGeometry(0.96, 0.04, 0.96);
+    const material = new THREE.MeshBasicMaterial({ color: preview.color, transparent: true, opacity: 0.35, depthWrite: false });
+    const mesh = new THREE.InstancedMesh(geometry, material, cells.length);
+    mesh.name = 'plan-preview';
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.frustumCulled = false; // instances span the whole plan
+    const dummy = new THREE.Object3D();
+    const offsetX = -(plan.widthM / 2);
+    const offsetZ = -(plan.heightM / 2);
+    cells.forEach(([cx, cy], i) => {
+      dummy.position.set(cx * plan.cellM + plan.cellM / 2 + offsetX, 0.03, cy * plan.cellM + plan.cellM / 2 + offsetZ);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.setScalar(plan.cellM);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    engine.scene.add(mesh);
+    previewOverlayRef.current = mesh;
+    return () => {
+      mesh.removeFromParent();
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+      if (previewOverlayRef.current === mesh) previewOverlayRef.current = null;
+    };
+  }, [previewSig, sceneReady, editor.planVersion]);
+
   // React to plan changes
   useEffect(() => {
     const engine = engineRef.current;
     const plan = editor.planRef.current;
     const cropById = editor.cropById;
     if (!engine || !plan) return;
+
+    // Keep the flight target clamp in sync with the current plan dims.
+    engine.setTargetBounds({
+      minX: -(plan.widthM / 2) - 2,
+      maxX: plan.widthM / 2 + 2,
+      minZ: -(plan.heightM / 2) - 2,
+      maxZ: plan.heightM / 2 + 2,
+    });
 
     // Rebuild 3D ground blocks + enclosure shell (surface / dims may have changed)
     groundBatchesRef.current = updateGround(groundBatchesRef.current, plan, engine.scene);
@@ -1189,12 +1420,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const waypoints = generateTourWaypoints(plan, cropById);
     tourRef.current = createTour(engine, waypoints, () => {
       setTourActive(false);
-      achievements.current.check('tour_complete');
+      unlock('tour_complete');
     });
 
     // Check achievements based on plan
     if (Object.keys(plan.planting).length > 0) {
-      achievements.current.check('first_plant');
+      unlock('first_plant');
     }
     const families = new Set<string>();
     let uniqueCropIds = new Set<number>();
@@ -1203,23 +1434,23 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       const crop = cropById.get(cropId);
       if (crop?.family) families.add(crop.family);
     }
-    if (families.size >= 5) achievements.current.check('five_families');
-    if (uniqueCropIds.size >= 10) achievements.current.check('ten_crops');
+    if (families.size >= 5) unlock('five_families');
+    if (uniqueCropIds.size >= 10) unlock('ten_crops');
 
     const bedSlugs = new Set(['raised-bed', 'inground-bed']);
     const bedCells = Object.entries(plan.ground).filter(([, s]) => bedSlugs.has(s));
     const plantedCells = Object.keys(plan.planting).length;
     if (bedCells.length > 0 && plantedCells >= bedCells.length * 0.5) {
-      achievements.current.check('half_beds');
+      unlock('half_beds');
     }
     if (bedCells.length > 0 && plantedCells >= bedCells.length) {
-      achievements.current.check('full_beds');
+      unlock('full_beds');
     }
     for (const [, slug] of Object.entries(plan.ground)) {
-      if (slug === 'pond') achievements.current.check('water_feature');
-      if (slug === 'beehive') achievements.current.check('beehive');
-      if (slug === 'chicken-coop') achievements.current.check('chickens');
-      if (slug === 'greenhouse') achievements.current.check('greenhouse');
+      if (slug === 'pond') unlock('water_feature');
+      if (slug === 'beehive') unlock('beehive');
+      if (slug === 'chicken-coop') unlock('chickens');
+      if (slug === 'greenhouse') unlock('greenhouse');
     }
   }, [editor.planVersion, editor.cropById, showHistory]);
 
@@ -1452,6 +1683,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       disposeGhostRunBatches(ghostRunBatchesRef.current);
       return;
     }
+    unlock('first_compare'); // idempotent — safe on every re-run
     reconcileGhostRunBatches(ghostRunBatchesRef.current, {
       record: gRec,
       state: gState,
@@ -1481,6 +1713,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       disposeOverlay();
       return;
     }
+    unlock('moisture_lens'); // idempotent — safe on every re-run
     const offsetX = -(plan.widthM / 2);
     const offsetZ = -(plan.heightM / 2);
     const byBand: string[][] = [[], [], [], []];
@@ -1564,15 +1797,30 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // A run activating (e.g. opened from the Simulations page) surfaces the
   // RunInspector transport so the run is visibly controllable.
   useEffect(() => {
-    if (runActive) setDrawerOpen(true);
+    if (runActive) {
+      setDrawerOpen(true);
+      unlock('first_run');
+    }
   }, [runActive]);
 
   // Check rain/snow achievement
   useEffect(() => {
     if (!weather) return;
-    if (weather.precipMm > 0 && weather.tempC > 2) achievements.current.check('rain_day');
-    if (weather.precipMm > 0 && weather.tempC <= 2) achievements.current.check('snow_day');
+    if (weather.precipMm > 0 && weather.tempC > 2) unlock('rain_day');
+    if (weather.precipMm > 0 && weather.tempC <= 2) unlock('snow_day');
   }, [weather]);
+
+  // Flight controls hint: a self-dismissing 5 s card whenever flight engages
+  // (Exit/Escape clears it immediately via the flightActive flip).
+  useEffect(() => {
+    if (!flightActive) {
+      setFlightHintVisible(false);
+      return;
+    }
+    setFlightHintVisible(true);
+    const id = window.setTimeout(() => setFlightHintVisible(false), 5000);
+    return () => window.clearTimeout(id);
+  }, [flightActive]);
 
   // Sync timeRef → timeOfDay state for the slider UI (throttled)
   useEffect(() => {
@@ -1770,22 +2018,15 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       }));
   }, [runActive, runRecord?.id, compareRuns]);
 
-  // Update weather FX + audio params in the rAF loop already handles audio
-  const lastAchievement = achievements.current.unlocked[achievements.current.unlocked.length - 1];
   const [achievementToast, setAchievementToast] = useState<string | null>(null);
 
-  // Track new achievement unlocks
-  const unlockedCountRef = useRef(0);
-  useEffect(() => {
-    const currentCount = achievements.current.stats().unlocked;
-    if (currentCount > unlockedCountRef.current && unlockedCountRef.current > 0) {
-      const latest = achievements.current.unlocked[achievements.current.unlocked.length - 1];
-      if (latest) {
-        setAchievementToast(`${latest.icon} ${latest.label} — ${latest.description}`);
-      }
-    }
-    unlockedCountRef.current = currentCount;
-  }, [lastAchievement]);
+  // Call-site unlocks: check() is idempotent and returns the newly unlocked
+  // achievement (or null). Silent ids (time/rain/flight-based, frequently
+  // re-checked from the rAF loop) never setState.
+  const unlock = useCallback((id: string) => {
+    const a = achievements.current.check(id);
+    if (a && !a.silent) setAchievementToast(`${a.icon} ${a.label} — ${a.description}`);
+  }, []);
 
   // Auto-dismiss the toast; the cleanup guards an unmount mid-toast.
   useEffect(() => {
@@ -1827,9 +2068,25 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       {editor.tool !== 'select' && !tourActive && (
         <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
           <span className="font-medium text-foreground">{TOOL_LABELS[editor.tool] ?? editor.tool}</span>
-          {' '}active — drag paints the plan. Press{' '}
+          {' '}active — drag paints the plan · Right-drag to orbit · wheel to zoom. Press{' '}
           <kbd className="rounded border border-border bg-muted px-1 font-sans">V</kbd>
           {' '}or pick Select to orbit again.
+        </div>
+      )}
+
+      {/* Hover readout — fixed chip above the dock (never cursor-following);
+       * content is written only on cell change by the onHoverCell callback. */}
+      {hoverInfo && !dimmed && (
+        <div className="pointer-events-none absolute bottom-20 left-3 rounded-md bg-background/90 px-3 py-1.5 text-xs shadow-sm">
+          <div className="font-medium text-foreground">{hoverInfo.title}</div>
+          {hoverInfo.sub && <div className="text-muted-foreground">{hoverInfo.sub}</div>}
+        </div>
+      )}
+
+      {/* Flight controls hint — centered card, auto-dismissed after 5 s. */}
+      {flightHintVisible && (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background/90 px-4 py-3 text-center text-xs text-muted-foreground shadow-lg">
+          Fly — W/S throttle (S to stop) · A/D turn · Q/E roll · Space/⇧ altitude · mouse look · Esc exit
         </div>
       )}
 
@@ -1898,6 +2155,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
           <span className="whitespace-nowrap">
             {new Date(`${displayDate}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             {seasonDay !== null && !runActive && <> · Day {Math.min(seasonDay, 365)}</>}
+            {!runActive && <> · {formatTimeOfDay(timeOfDay)}</>}
+            {!runActive && weather && <> · {Math.round(weather.tempC)}°C 💨{Math.round(weather.windSpeedKmh)}</>}
             {runActive && <> · Day {Math.min(runDayIndex, runRecord?.envSeries.length ?? 0)}</>}
           </span>
           {weatherCached && (
@@ -2043,7 +2302,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         runUnsaved={simRun?.unsavedChanges ?? false}
         onAddIntervention={
           runActive
-            ? (iv) => simRunRef.current?.applyIntervention(iv) ?? { ok: false, error: 'No active run.' }
+            ? (iv) => {
+                const res = simRunRef.current?.applyIntervention(iv);
+                if (res?.ok) unlock('first_intervention');
+                return res ?? { ok: false, error: 'No active run.' };
+              }
             : undefined
         }
         compareRuns={compareItems.length > 0 ? compareItems : undefined}
