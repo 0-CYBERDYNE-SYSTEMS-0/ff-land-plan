@@ -43,3 +43,6 @@ AGENTS.local.md
 
 # Aperant data directory
 .auto-claude/
+
+# agent/tool state
+.commandcode/
