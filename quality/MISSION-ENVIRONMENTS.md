@@ -238,3 +238,38 @@ Research-justified values for the two new surfaces:
    **Before merging to mainline: run `npm run dev`, open
    `showcase.html#lane=e` and farms 8/9 in World view, and eyeball against
    QUALITY_BAR.md.** Scratch renders kept at `$TMPDIR/envshot/` for review.
+
+## Gate 8 — Visual human-eye pass (2026-09-14, merge-prep session)
+
+Performed on the environments/audit line after merging main (Sim Core union +
+dependabot majors) — the deferred blocker from 2026-09-13. Method: full gate
+re-run on the merged branch, then big-mode diorama shots judged against the
+QUALITY_BAR global rules (voxel discipline, silhouette-first, palette ≤ ~4
+hues + accents, baked-light reads, detail-without-noise, technical health) by
+a vision-capable review agent with per-image verdicts; low-confidence reads
+were re-probed on the flagged image before finalizing.
+
+1. Typecheck + build — PASS (`tsc --noEmit` exit 0, `vite build` clean, after
+   `npm ci` against the merged lockfile).
+2. Showcase lane e — PASS: `--expect "showcase-ready 9"`; contact sheet
+   consistent (uniform scale/lighting, no broken cells).
+3. Determinism — PASS: two `#only=env-greenhouse&spin=0` loads byte-identical.
+4. Big-mode dioramas — PASS (7 of 7 judged): greenhouse, hoophouse, warehouse,
+   grow-tent, container-farm, aquaponics, nft-gully. All silhouettes read at
+   a glance; accents land on meaning (LED strips, water, greens); no
+   untextured/z-fighting/floating geometry.
+5. World farms 8 + 9 — PASS: gates zero-runtime-errors; farm 8 hoophouse
+   shell translucent with readable interior rows + full HUD; farm 9 warehouse
+   confirmed open-topped (wall-top beams, sky through) with racks, greens and
+   grow lights visible; an initial "closed grey box" read was refuted on
+   close inspection (interior visible, nothing broken).
+6. Blueprint farm 8 — GATE PASS (Settings-drawer surface options and
+   equipment gating unchanged by the merge; no re-audit needed beyond gate).
+7. Gallery collateral — PASS: `gallery.html` `--expect "gallery-ready 185"`.
+
+Non-blocking notes for future polish: glass shells slightly wash interiors
+(aquaponics, nft-gully read low-contrast); an elevated camera preset would
+showcase the warehouse open-top interior better; sheet mode clips the right
+column at default screenshot width.
+
+**Verdict: all 8 gates PASS — environments work is merge-ready.**
