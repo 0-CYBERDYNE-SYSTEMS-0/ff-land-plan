@@ -50,8 +50,12 @@ export function TemplatesCard({ editor }: { editor: PlanEditor }) {
     // Resolve crop NAME -> catalog id at apply time; custom crops and catalog
     // edits can never invalidate the data file. Unknown names are skipped.
     const nameToId = new Map(editor.crops.map((crop) => [crop.name.toLowerCase(), crop.id]));
-    const cols = planCols(plan);
-    const rows = planRows(plan);
+    // Enclosed templates carry their own canvas (surface + dims): bounds are
+    // checked against the INCOMING canvas, not the current one.
+    const widthM = tpl.widthM ?? plan.widthM;
+    const heightM = tpl.heightM ?? plan.heightM;
+    const cols = planCols({ ...plan, widthM });
+    const rows = planRows({ ...plan, heightM });
     const inBounds = (key: string) => {
       const [x, y] = parseKey(key);
       return x >= 0 && y >= 0 && x < cols && y < rows;
@@ -78,6 +82,9 @@ export function TemplatesCard({ editor }: { editor: PlanEditor }) {
     }
     const next: PlanState = {
       ...plan,
+      widthM,
+      heightM,
+      ...(tpl.surface ? { surface: tpl.surface } : {}),
       planting,
       ground,
       plantedAt,

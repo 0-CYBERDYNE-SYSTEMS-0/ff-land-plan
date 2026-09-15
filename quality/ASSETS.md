@@ -96,6 +96,11 @@ Matches the designer's asset library (`src/data/assets.ts`) slugs 1:1, plus icon
 | `clip-fan` | clip-on fan | 16-segment ring cage, pitched blades, clamp jaws + wing screw, tilt joint |
 | `hvac-unit` | HVAC unit | louvered case, grid-aligned elliptical fan intake (ring + spokes + hub) |
 | `grow-bench` | potting bench | continuous rim lip, calm deck dither, seed tray with cuttings + spare pot |
+| `fish-tank` | round aquaponics fish tank | royal-blue tank, central drain, pipework (research B/#20) |
+| `hydro-raft` | DWC hydro raft pond | water body + floating raft boards of lettuce (research A12) |
+| `dehumidifier` | dehumidifier | box unit with intake grille + drip bucket (research B/#8) |
+| `seedling-tray` | 1020 tray + humidity dome | propagation flat, condensation dome, heat mat, spare stack (research B/#23/#24) |
+| `co2-tank` | CO2 tank + regulator | cylinder, valve + gauge (research B/#33) |
 
 ## Lane D — Creatures, Tools & Atmosphere (`src/creative/creatures/`, `src/creative/studio/`) — registry: `creatures/registry.ts`
 
@@ -115,6 +120,32 @@ Atmosphere:
   registry `tune()` demo entries `preset-dawn` … so they can be judged visually.
 - `wind-sway-demo` — row of wheat + tomato swaying (canonical wind animation).
 - water shimmer util shared with Lane A's pond.
+
+## Lane E — Growing Environments (`src/creative/environments/`) — registry: `environments/registry.ts`
+
+Complete indoor/protected growing scenes (research-grounded:
+`RESEARCH-CEA-ENVIRONMENTS.md`; contract: `MISSION-ENVIRONMENTS.md`). The
+directory also owns the **parametric surface shells** (`shells.ts`:
+`makeGreenhouseShell`/`makeHoophouseShell`/`makeTentShell`/`makeIndoorShell`/
+`makeWarehouseShell` + bonus `makeContainerShell`, all `(ShellSpec{widthM,
+depthM}) => Object3D`) consumed by the runtime adapter `src/three/shell.ts`,
+plus 16 reusable interior equipment makers (`interior.ts`). Shells: dollhouse
+discipline (near side open/glazed), translucent glazing on greenhouse +
+hoophouse only, open-top tent/indoor/warehouse, NO lights (unlit glow
+materials), fresh-ownership geometry (disposeShell contract), scaled voxels
+(s 2–6) for big planes.
+
+| id | diorama | notes |
+|---|---|---|
+| `env-greenhouse` | glass greenhouse grow | glazed A-frame, benches, tomato/pepper + greens, controller |
+| `env-hoophouse` | high-tunnel hoophouse | quonset hoops + poly film, roll-up crease, in-ground vine beds |
+| `env-grow-tent` | residential grow tent | canvas tent, fabric pots, flood tray, warm LED glow |
+| `env-grow-room` | spare-room grow room | lined walls, blackout door curtain with glow seam, shelves |
+| `env-grow-shelf` | home grow shelf corner | wire rack, 1020 trays + domes, timer strip, mylar backdrop |
+| `env-warehouse` | vertical farm warehouse | dark hall, glowing rack canyons, taped aisles, HVAC column |
+| `env-container-farm` | shipping-container farm | corrugated ISO shell dollhouse-cut, pink-lit rack wall, dosing barrels |
+| `env-aquaponics` | aquaponics greenhouse | round fish tanks, DWC rafts, swirl filter |
+| `env-nft-gully` | NFT gully greenhouse | sloped channel benches, reservoirs |
 
 ---
 

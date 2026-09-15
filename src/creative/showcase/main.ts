@@ -2,7 +2,7 @@
  * Asset showcase renderer — one WebGL context, many scenes via scissor viewports.
  *
  * URL options (hash params):
- *   #lane=a|b|c|d        only show one lane's registry
+ *   #lane=a|b|c|d|e      only show one lane's registry
  *   #only=id1,id2        only show these entry ids
  *   #mode=sheet|big      sheet: 4-col contact grid; big: 2-col close-ups
  *   #spin=0              freeze turntable (for perfectly deterministic shots)
@@ -17,12 +17,14 @@ import { entries as terrainEntries } from '@/creative/terrain/registry';
 import { entries as cropsEntries } from '@/creative/crops/registry';
 import { entries as structuresEntries } from '@/creative/structures/registry';
 import { entries as creaturesEntries } from '@/creative/creatures/registry';
+import { entries as environmentsEntries } from '@/creative/environments/registry';
 
 const LANE_LABELS: Record<string, string> = {
   a: 'Terrain & Soil',
   b: 'Crops & Growth',
   c: 'Structures',
   d: 'Creatures & Atmosphere',
+  e: 'Environments',
 };
 
 interface TaggedEntry extends AssetEntry {
@@ -34,6 +36,7 @@ const allEntries: TaggedEntry[] = [
   ...cropsEntries.map((e) => ({ ...e, lane: 'b' })),
   ...structuresEntries.map((e) => ({ ...e, lane: 'c' })),
   ...creaturesEntries.map((e) => ({ ...e, lane: 'd' })),
+  ...environmentsEntries.map((e) => ({ ...e, lane: 'e' })),
 ];
 
 const params = new URLSearchParams(location.hash.replace(/^#/, ''));

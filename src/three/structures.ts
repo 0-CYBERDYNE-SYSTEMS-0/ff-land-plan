@@ -99,6 +99,12 @@ const SLUG_MAP: Record<string, SlugMapping> = {
   'clip-fan':      { entryId: 'clip-fan' },
   'hvac-unit':     { entryId: 'hvac-unit' },
   'grow-bench':    { entryId: 'grow-bench' },
+  // Environment equipment — one instance per contiguous region (research Part B).
+  'fish-tank':     { entryId: 'fish-tank' },
+  'hydro-raft':    { entryId: 'hydro-raft' },
+  'dehumidifier':  { entryId: 'dehumidifier' },
+  'seedling-tray': { entryId: 'seedling-tray' },
+  'co2-tank':      { entryId: 'co2-tank' },
   // Linear — connective per-cell placement so runs read continuously.
   fence:           { entryId: 'fence-post-rail', targetSizeM: 0.55, linear: true },
   'picket-fence':  { entryId: 'fence-picket', targetSizeM: 0.55, linear: true },

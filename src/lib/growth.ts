@@ -79,8 +79,13 @@ export interface GrowthMod {
 export const SURFACE_SHELTER: Record<PlanSurface, number> = {
   outdoor: 1,
   greenhouse: 0.35,
+  // Passive film tunnel: blocks wind/rain and traps day solar, but nights
+  // track the outdoors (between the open field and a heated greenhouse).
+  hoophouse: 0.55,
   tent: 0.12,
   indoor: 0.15,
+  // Sealed LED hall is weather-blind.
+  warehouse: 0.06,
 };
 
 /**
@@ -91,8 +96,12 @@ export const SURFACE_SHELTER: Record<PlanSurface, number> = {
 export const SURFACE_PLANT_SCALE: Record<PlanSurface, number> = {
   outdoor: 1,
   greenhouse: 0.7,
+  // Full-size vine crops are the hoophouse norm.
+  hoophouse: 0.85,
   tent: 0.45,
   indoor: 0.6,
+  // Warehouse greens live on 45-60 cm tier pitch — small plants.
+  warehouse: 0.35,
 };
 
 /**
