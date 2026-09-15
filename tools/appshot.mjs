@@ -20,27 +20,37 @@ import { existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+// Resolution order: FF_CHROME_BIN override, then macOS app bundles, then the
+// Linux paths GitHub Actions runners use (same binary, headless CI).
 const CHROME_CANDIDATES = [
+  process.env.FF_CHROME_BIN,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
-];
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+].filter((p) => p && existsSync(p));
 
 const argv = process.argv.slice(2);
 const gate = argv.includes('--gate');
 const expectIdx = argv.indexOf('--expect');
 const expectText = expectIdx !== -1 ? argv[expectIdx + 1] : null;
-// Drop --gate, and (only when --expect is actually present) the flag + its value.
+const vtIdx = argv.indexOf('--vt');
+const vtMs = vtIdx !== -1 ? Number(argv[vtIdx + 1]) || 6000 : 6000;
+// Drop --gate, and (only when --expect/--vt are actually present) flag + value.
 const skip = new Set([argv.indexOf('--gate')]);
 if (expectIdx !== -1) { skip.add(expectIdx); skip.add(expectIdx + 1); }
+if (vtIdx !== -1) { skip.add(vtIdx); skip.add(vtIdx + 1); }
 const rest = argv.filter((a, i) => !skip.has(i));
 const [url = '', out = '', geom = ''] = rest;
 if (!url || !out) {
   console.error('usage: node tools/appshot.mjs <url> <outPath> [WxH] [--gate] [--expect <text>]');
   process.exit(2);
 }
-const chrome = CHROME_CANDIDATES.find((p) => existsSync(p));
+const chrome = CHROME_CANDIDATES[0];
 if (!chrome) {
-  console.error('no Chrome/Chromium binary found');
+  console.error('no Chrome/Chromium binary found (set FF_CHROME_BIN to override)');
   process.exit(2);
 }
 const [w = '1440', h = '900'] = geom.split('x');
@@ -69,18 +79,25 @@ function chromeRun(extraFlags, opts = {}) {
         `--user-data-dir=${profileDir}`,
         `--window-size=${w},${h}`,
         // Budget: enough virtual time for the lazy three.js chunk + WebGL
-        // warm-up. NOTE: with a dev-server HMR socket open, Chrome performs
+        // warm-up; `--vt <ms>` raises it for slow software-GL runners.
+        // --enable-unsafe-swiftshader: GPU-less CI runners need explicit
+        // opt-in for software WebGL or three.js contexts never come up.
+        // NOTE: with a dev-server HMR socket open, Chrome performs
         // its actions quickly but never exits gracefully — the spawn timeout
         // below is the expected terminator; we validate outputs afterwards.
-        '--virtual-time-budget=6000',
+        `--virtual-time-budget=${vtMs}`,
+        '--enable-unsafe-swiftshader',
         // Hard bound on Chrome's own wait-for-load: pages that stay busy
         // (e.g. an active sim run) never let virtual time expire, so without
         // this Chrome idles past the spawn kill and the shot is lost. 25 s is
         // well above the normal <10 s action time, so quiet pages are immune.
         '--timeout=25000',
+        ...(process.env.FF_CHROME_FLAGS
+          ? process.env.FF_CHROME_FLAGS.split(' ').filter(Boolean)
+          : []),
         ...extraFlags,
       ],
-      { timeout: 40_000, stdio: ['ignore', 'pipe', 'pipe'], ...opts },
+      { timeout: Math.max(40_000, vtMs * 4), stdio: ['ignore', 'pipe', 'pipe'], ...opts },
     );
   } finally {
     rmSync(profileDir, { recursive: true, force: true });

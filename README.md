@@ -1,5 +1,7 @@
 # FarmFriend — Land & Garden Planner
 
+[![CI](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/workflows/ci.yml/badge.svg)](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/workflows/ci.yml)
+
 FarmFriend is a local-first land and garden planning SPA. Design scale-accurate
 plots, plan crops with real spacing data, generate planting calendars, and check
 live weather/frost risk without a backend.

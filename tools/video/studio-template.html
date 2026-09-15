@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FarmFriend Script Studio</title>
+<style>
+  :root {
+    --bg: #0d1310; --panel: #131b16; --panel2: #182219; --line: #24352a;
+    --ink: #e8f0e9; --ink-dim: #9db3a4; --accent: #35c26e; --accent-dim: #1f7a47;
+    --amber: #d9a53a; --red: #e05c5c; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, "Segoe UI", Inter, Roboto, sans-serif; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--ink); padding: 6px 12px; }
+  button:hover { border-color: var(--accent-dim); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #06210f; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.ghost { background: transparent; }
+  input, textarea, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; width: 100%; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-dim); }
+  textarea { resize: vertical; min-height: 54px; }
+
+  header.bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: rgba(13,19,16,.92); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: .2px; }
+  .brand .dot { width: 12px; height: 12px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 12px rgba(53,194,110,.55); }
+  .brand small { color: var(--ink-dim); font-weight: 500; }
+  .spacer { flex: 1; }
+  #total-badge { font-family: var(--mono); font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap; }
+  #total-badge.ok { color: #7fe0a8; border-color: var(--accent-dim); }
+  #total-badge.bad { color: var(--red); border-color: var(--red); }
+  #gate-chip { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap; }
+  #gate-chip.pass { color: #7fe0a8; border-color: var(--accent-dim); }
+  #gate-chip.fail { color: var(--red); border-color: var(--red); }
+
+  .timeline { padding: 14px 16px 4px; }
+  .tl-track { display: flex; height: 34px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+  .tl-seg { position: relative; min-width: 6px; border-right: 1px solid var(--bg); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 10.5px; color: #06210f; cursor: pointer; overflow: hidden; white-space: nowrap; }
+  .tl-seg:hover { filter: brightness(1.15); }
+  .tl-seg:nth-child(6n+1) { background: #35c26e; } .tl-seg:nth-child(6n+2) { background: #2fae62; }
+  .tl-seg:nth-child(6n+3) { background: #57cf85; } .tl-seg:nth-child(6n+4) { background: #2b9d59; }
+  .tl-seg:nth-child(6n+5) { background: #6bd897; } .tl-seg:nth-child(6n+6) { background: #34b567; }
+  .tl-seg.over { background: var(--red); color: #2b0808; }
+  .tl-ruler { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--ink-dim); padding: 4px 2px 0; }
+
+  main { padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 12px; max-width: 1080px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .card.global label, .frame label { display: block; color: var(--ink-dim); font-size: 11.5px; text-transform: uppercase; letter-spacing: .8px; margin: 10px 0 4px; }
+  .frame .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .frame .num { font-family: var(--mono); font-size: 12px; color: #06210f; background: var(--accent); border-radius: 7px; padding: 3px 8px; font-weight: 700; }
+  .frame .head input.title { width: auto; flex: 1; min-width: 160px; font-weight: 600; }
+  .frame .dur { width: 84px; font-family: var(--mono); }
+  .frame .trans { width: 130px; }
+  .frame .meta-chips { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+  .chip { font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap; }
+  .chip.rate-ok { color: #7fe0a8; border-color: var(--accent-dim); }
+  .chip.rate-warn { color: var(--amber); border-color: var(--amber); }
+  .chip.rate-bad { color: var(--red); border-color: var(--red); }
+  .icon-btn { padding: 4px 9px; font-size: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .hint { color: var(--ink-dim); font-size: 12px; }
+
+  #findings { display: none; }
+  #findings .f { padding: 7px 10px; border-radius: 8px; margin: 6px 0; font-size: 13px; border: 1px solid var(--line); }
+  #findings .f.error { border-color: rgba(224,92,92,.5); background: rgba(224,92,92,.08); }
+  #findings .f.warning { border-color: rgba(217,165,58,.45); background: rgba(217,165,58,.07); }
+  #findings .f code { font-family: var(--mono); color: var(--ink-dim); font-size: 11.5px; margin-right: 6px; }
+  footer { display: flex; gap: 14px; padding: 10px 16px 18px; color: var(--ink-dim); font-size: 12px; max-width: 1080px; margin: 0 auto; }
+  #ready-marker { color: #3a4f41; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><span class="dot"></span> Script Studio <small>· FarmFriend 60s demo</small></div>
+  <span id="total-badge">Σ —</span>
+  <span id="gate-chip">not validated</span>
+  <span class="spacer"></span>
+  <button class="ghost" id="btn-new" title="Start from an empty script">New</button>
+  <button class="ghost" id="btn-demo" title="Load the canonical FarmFriend demo document">Load demo</button>
+  <button id="btn-import-sb">Import Storyboard</button>
+  <button id="btn-import-sc">Import Script</button>
+  <button id="btn-export-sc">Export Script.md</button>
+  <button id="btn-export-sb">Export Storyboard.md</button>
+  <button class="primary" id="btn-validate">Validate</button>
+  <input type="file" id="file-sb" accept=".md,.markdown,text/markdown" hidden>
+  <input type="file" id="file-sc" accept=".md,.markdown,text/markdown" hidden>
+</header>
+
+<section class="timeline">
+  <div class="tl-track" id="tl-track"></div>
+  <div class="tl-ruler" id="tl-ruler"></div>
+</section>
+
+<main>
+  <div class="card global" id="global-card"></div>
+  <div id="frames"></div>
+  <button class="ghost" id="btn-add">+ Add scene</button>
+  <div class="card" id="findings"></div>
+</main>
+
+<footer>
+  <span id="save-note">autosave on</span>
+  <span>Exports use the HyperFrames SCRIPT.md / STORYBOARD.md formats — round-trips through <code>tools/video/lib/script-doc.mjs</code>.</span>
+  <span class="spacer"></span>
+  <span id="ready-marker">script-studio-ready</span>
+</footer>
+
+<script>
+/*__SCRIPT_DOC_JS__*/
+
+window.__SAMPLE__ = /*__SAMPLE_DOC_JSON__*/;
+
+(function () {
+  'use strict';
+  const LS_KEY = 'ff-script-studio-v1';
+  const $ = (sel) => document.querySelector(sel);
+
+  function blankState() {
+    return {
+      target: 60, tolerance: 0.5, format: '1920x1080', message: '', arc: '', audience: '', mode: 'autonomous',
+      voice: '', voiceSettings: '', voiceDirection: '',
+      frames: [{ title: '', duration: 5, transitionIn: 'cut', poster: 2, scene: '', voiceover: '', delivery: '', tags: [], assetCandidates: [], narrative: '' }],
+    };
+  }
+
+  function stateFromSample(s) {
+    const fm = s.storyboard.frontmatter;
+    return {
+      target: 60, tolerance: 0.5, format: fm.format || '1920x1080', message: fm.message || '', arc: fm.arc || '',
+      audience: fm.audience || '', mode: fm.mode || 'autonomous',
+      voice: s.script.voice || '', voiceSettings: s.script.voiceSettings || '', voiceDirection: s.script.voiceDirection || '',
+      frames: s.storyboard.frames.map((f) => ({
+        title: f.title, duration: f.duration, transitionIn: f.transitionIn || 'cut', poster: f.poster != null ? f.poster : 2,
+        scene: f.scene || '', voiceover: f.voiceover || '', delivery: f.delivery || '',
+        tags: (f.tags || []).slice(), assetCandidates: (f.assetCandidates || []).slice(), narrative: f.narrative || '',
+      })),
+    };
+  }
+
+  let state = blankState();
+  let saveTimer = null;
+
+  // ---------- derive HyperFrames docs from studio state ----------
+  function slug(t) {
+    return (t || 'scene').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'scene';
+  }
+  function timeline() {
+    let t = 0;
+    return state.frames.map((f) => {
+      const d = Number(f.duration) || 0;
+      const seg = { start: t, end: t + d, duration: d };
+      t += d;
+      return seg;
+    });
+  }
+  function deriveStoryboardDoc() {
+    const total = timeline().reduce((a, s) => a + s.duration, 0);
+    return {
+      frontmatter: { format: state.format, duration: ScriptDoc.fmtSeconds(total) + 's', message: state.message, arc: state.arc, audience: state.audience, mode: state.mode, extra: {} },
+      frames: state.frames.map((f, i) => ({
+        number: i + 1, title: f.title, status: 'outline',
+        src: 'compositions/frames/' + String(i + 1).padStart(2, '0') + '-' + slug(f.title) + '.html',
+        duration: Number(f.duration) || 0, transitionIn: f.transitionIn, poster: Number(f.poster) || null,
+        scene: f.scene, voiceover: f.voiceover, tags: f.tags.slice(), assetCandidates: f.assetCandidates.slice(),
+        narrative: f.narrative,
+      })),
+    };
+  }
+  function deriveScriptDoc() {
+    const tl = timeline();
+    return {
+      title: 'farmfriend-demo',
+      voice: state.voice, voiceSettings: state.voiceSettings, voiceDirection: state.voiceDirection,
+      lines: state.frames.map((f, i) => ({
+        n: i + 1, label: f.title || 'Scene ' + (i + 1), frame: i + 1,
+        start: tl[i].start, end: tl[i].end, delivery: f.delivery, text: f.voiceover,
+      })),
+    };
+  }
+
+  // ---------- rendering ----------
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function rateClass(rate) {
+    if (rate == null) return '';
+    if (rate < 1.6 || rate > 3.8) return 'rate-bad';
+    if (rate < 2.2 || rate > 3.0) return 'rate-warn';
+    return 'rate-ok';
+  }
+  function rateText(i) {
+    const f = state.frames[i];
+    const words = ScriptDoc.countWords(f.voiceover || '');
+    const d = Number(f.duration) || 0;
+    if (!d || !words) return null;
+    return (words / d).toFixed(1) + ' w/s';
+  }
+
+  function renderGlobal() {
+    $('#global-card').innerHTML = [
+      '<div class="head"><strong>Video</strong> <span class="hint">frontmatter — lands in STORYBOARD.md</span></div>',
+      '<div class="grid2">',
+      '<div><label>Message (thesis)</label><input data-g="message" value="' + esc(state.message) + '"></div>',
+      '<div><label>Arc</label><input data-g="arc" value="' + esc(state.arc) + '"></div>',
+      '<div><label>Audience</label><input data-g="audience" value="' + esc(state.audience) + '"></div>',
+      '<div class="row"><div style="flex:1"><label>Format</label><input data-g="format" value="' + esc(state.format) + '"></div>',
+      '<div style="width:110px"><label>Target (s)</label><input type="number" data-g="target" value="' + esc(state.target) + '"></div>',
+      '<div style="width:110px"><label>Tolerance (s)</label><input type="number" step="0.1" data-g="tolerance" value="' + esc(state.tolerance) + '"></div></div>',
+      '<div><label>Voice</label><input data-g="voice" value="' + esc(state.voice) + '"></div>',
+      '<div><label>Voice settings</label><input data-g="voiceSettings" value="' + esc(state.voiceSettings) + '"></div>',
+      '<div><label>Voice direction</label><input data-g="voiceDirection" value="' + esc(state.voiceDirection) + '"></div>',
+      '<div><label>Mode</label><input data-g="mode" value="' + esc(state.mode) + '"></div>',
+      '</div>',
+    ].join('');
+  }
+
+  function renderFrame(i) {
+    const f = state.frames[i];
+    const tl = timeline()[i];
+    const rt = rateText(i);
+    return [
+      '<div class="card frame" data-frame="' + i + '">',
+      '<div class="head">',
+      '<span class="num">' + String(i + 1).padStart(2, '0') + '</span>',
+      '<input class="title" data-f="title" data-i="' + i + '" value="' + esc(f.title) + '" placeholder="Scene title">',
+      '<input class="dur" type="number" step="0.5" min="0.5" data-f="duration" data-i="' + i + '" value="' + esc(f.duration) + '" title="Duration (seconds)">',
+      '<select class="trans" data-f="transitionIn" data-i="' + i + '">',
+      ['cut', 'crossfade', 'wipe', 'fade'].map((t) => '<option' + (f.transitionIn === t ? ' selected' : '') + '>' + t + '</option>').join(''),
+      '</select>',
+      '<span class="meta-chips">',
+      '<span class="chip">' + ScriptDoc.fmtTime(tl.start) + '–' + ScriptDoc.fmtTime(tl.end) + 's</span>',
+      rt ? '<span class="chip ' + rateClass(Number(rt)) + '" title="Narration words per second (comfort band 2.2–3.0)">' + rt + '</span>' : '',
+      '<button class="icon-btn ghost" data-act="up" data-i="' + i + '" title="Move up">↑</button>',
+      '<button class="icon-btn ghost" data-act="down" data-i="' + i + '" title="Move down">↓</button>',
+      '<button class="icon-btn ghost" data-act="del" data-i="' + i + '" title="Delete scene">✕</button>',
+      '</span>',
+      '</div>',
+      '<div class="grid2">',
+      '<div><label>Scene caption</label><input data-f="scene" data-i="' + i + '" value="' + esc(f.scene) + '" placeholder="One-line contact-sheet caption"></div>',
+      '<div><label>Delivery</label><input data-f="delivery" data-i="' + i + '" value="' + esc(f.delivery) + '" placeholder="Per-line delivery note (SCRIPT.md)"></div>',
+      '</div>',
+      '<label>Voiceover — the spoken line</label>',
+      '<textarea data-f="voiceover" data-i="' + i + '" placeholder="Exactly what the narrator says in this scene">' + esc(f.voiceover) + '</textarea>',
+      '<div class="grid2">',
+      '<div><label>Tags (comma-separated)</label><input data-f="tags" data-i="' + i + '" value="' + esc(f.tags.join(', ')) + '" placeholder="pipelines, workflows, capabilities"></div>',
+      '<div><label>Asset candidates (comma-separated paths)</label><input data-f="assetCandidates" data-i="' + i + '" value="' + esc(f.assetCandidates.join(', ')) + '" placeholder="capture/assets/world-noon.png"></div>',
+      '</div>',
+      '<label>Narrative (visual direction)</label>',
+      '<textarea data-f="narrative" data-i="' + i + '" style="min-height:40px">' + esc(f.narrative) + '</textarea>',
+      '</div>',
+    ].join('');
+  }
+
+  function render() {
+    renderGlobal();
+    $('#frames').innerHTML = state.frames.map((_, i) => renderFrame(i)).join('');
+    renderTimeline();
+    saveSoon();
+  }
+
+  function renderTimeline() {
+    const tl = timeline();
+    const total = tl.length ? tl[tl.length - 1].end : 0;
+    const denom = Math.max(total, state.target) || 1;
+    $('#tl-track').innerHTML = state.frames
+      .map((f, i) => {
+        const w = ((Number(f.duration) || 0) / denom) * 100;
+        const over = tl[i].end > state.target + 1e-6;
+        return '<div class="tl-seg' + (over ? ' over' : '') + '" style="width:' + w + '%" data-act="seek" data-i="' + i + '" title="' + esc((f.title || 'Scene') + ' · ' + ScriptDoc.fmtSeconds(f.duration) + 's') + '">' + (i + 1) + '</div>';
+      })
+      .join('');
+    const marks = [];
+    const step = state.target > 90 ? 15 : state.target > 45 ? 10 : 5;
+    for (let s = 0; s <= denom; s += step) marks.push('<span>' + s + 's</span>');
+    $('#tl-ruler').innerHTML = marks.join('');
+    const badge = $('#total-badge');
+    badge.textContent = 'Σ ' + ScriptDoc.fmtSeconds(total) + 's / target ' + state.target + 's';
+    badge.className = Math.abs(total - state.target) <= state.tolerance ? 'ok' : 'bad';
+  }
+
+  // ---------- persistence ----------
+  function saveSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state)); $('#save-note').textContent = 'saved ' + new Date().toLocaleTimeString(); } catch (e) { /* storage unavailable */ }
+    }, 400);
+  }
+
+  // ---------- imports / exports ----------
+  function download(name, text) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  }
+  function importText(text, kind) {
+    if (kind === 'sb') {
+      const doc = ScriptDoc.parseStoryboard(text);
+      state.format = doc.frontmatter.format || state.format;
+      state.message = doc.frontmatter.message || '';
+      state.arc = doc.frontmatter.arc || '';
+      state.audience = doc.frontmatter.audience || '';
+      state.mode = doc.frontmatter.mode || state.mode;
+      state.frames = doc.frames.map((f) => ({
+        title: f.title, duration: f.duration != null ? f.duration : 5, transitionIn: f.transitionIn || 'cut',
+        poster: f.poster != null ? f.poster : 2, scene: f.scene || '', voiceover: f.voiceover || '', delivery: '',
+        tags: f.tags.slice(), assetCandidates: f.assetCandidates.slice(), narrative: f.narrative || '',
+      }));
+    } else {
+      const doc = ScriptDoc.parseScript(text);
+      state.voice = doc.voice || state.voice;
+      state.voiceSettings = doc.voiceSettings || state.voiceSettings;
+      state.voiceDirection = doc.voiceDirection || state.voiceDirection;
+      doc.lines.forEach((ln, i) => {
+        if (!state.frames[i]) return;
+        if (ln.text) state.frames[i].voiceover = ln.text;
+        if (ln.delivery) state.frames[i].delivery = ln.delivery;
+      });
+    }
+    render();
+    flash('imported ' + kind);
+  }
+  function flash(msg) {
+    const n = $('#save-note');
+    n.textContent = msg;
+    setTimeout(() => { n.textContent = 'autosave on'; }, 2200);
+  }
+
+  // ---------- validation ----------
+  function runValidate() {
+    const findings = ScriptDoc.validateDoc({
+      storyboard: deriveStoryboardDoc(),
+      script: deriveScriptDoc(),
+      target: Number(state.target) || 60,
+      tolerance: Number(state.tolerance) || 0.5,
+      fileExists: null,
+    });
+    const errors = findings.filter((f) => f.severity === 'error').length;
+    const chip = $('#gate-chip');
+    chip.textContent = errors ? errors + ' error(s)' : findings.length ? 'pass (with notes)' : 'clean pass';
+    chip.className = errors ? 'fail' : 'pass';
+    const box = $('#findings');
+    box.style.display = 'block';
+    box.innerHTML = '<strong>Validation</strong> <span class="hint">' + findings.length + ' finding(s)</span>' +
+      (findings.length ? '' : '<div class="f" style="border-color:var(--accent-dim)">Clean — script and storyboard satisfy every gate.</div>') +
+      findings.map((f) => '<div class="f ' + f.severity + '"><code>' + esc(f.code) + (f.frame ? ' · frame ' + f.frame : '') + '</code>' + esc(f.message) + '</div>').join('');
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ---------- events ----------
+  document.body.addEventListener('input', (e) => {
+    const el = e.target;
+    if (el.dataset.g) {
+      const k = el.dataset.g;
+      state[k] = k === 'target' || k === 'tolerance' ? Number(el.value) || 0 : el.value;
+      renderTimeline();
+      saveSoon();
+    } else if (el.dataset.f) {
+      const f = state.frames[Number(el.dataset.i)];
+      if (!f) return;
+      const k = el.dataset.f;
+      if (k === 'duration') { f.duration = Number(el.value) || 0; render(); }
+      else if (k === 'tags' || k === 'assetCandidates') { f[k] = el.value.split(',').map((s) => s.trim()).filter(Boolean); renderTimeline(); saveSoon(); }
+      else { f[k] = el.value; if (k === 'voiceover') renderTimeline(); saveSoon(); }
+    }
+  });
+  document.body.addEventListener('change', (e) => {
+    const el = e.target;
+    if (el.dataset.f === 'transitionIn') { state.frames[Number(el.dataset.i)].transitionIn = el.value; saveSoon(); }
+  });
+  document.body.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const i = Number(btn.dataset.i);
+    const act = btn.dataset.act;
+    if (act === 'seek') { const card = document.querySelector('.frame[data-frame="' + i + '"]'); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (act === 'up' && i > 0) { [state.frames[i - 1], state.frames[i]] = [state.frames[i], state.frames[i - 1]]; render(); }
+    if (act === 'down' && i < state.frames.length - 1) { [state.frames[i + 1], state.frames[i]] = [state.frames[i], state.frames[i + 1]]; render(); }
+    if (act === 'del') { state.frames.splice(i, 1); render(); }
+  });
+  $('#btn-add').addEventListener('click', () => {
+    state.frames.push({ title: '', duration: 5, transitionIn: 'crossfade', poster: 2, scene: '', voiceover: '', delivery: '', tags: [], assetCandidates: [], narrative: '' });
+    render();
+  });
+  $('#btn-new').addEventListener('click', () => { state = blankState(); render(); });
+  $('#btn-demo').addEventListener('click', () => { state = stateFromSample(window.__SAMPLE__); render(); });
+  $('#btn-validate').addEventListener('click', runValidate);
+  $('#btn-export-sb').addEventListener('click', () => download('STORYBOARD.md', ScriptDoc.serializeStoryboard(deriveStoryboardDoc())));
+  $('#btn-export-sc').addEventListener('click', () => download('SCRIPT.md', ScriptDoc.serializeScript(deriveScriptDoc())));
+  $('#btn-import-sb').addEventListener('click', () => $('#file-sb').click());
+  $('#btn-import-sc').addEventListener('click', () => $('#file-sc').click());
+  $('#file-sb').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) { f.text().then((t) => importText(t, 'sb')); e.target.value = ''; } });
+  $('#file-sc').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) { f.text().then((t) => importText(t, 'sc')); e.target.value = ''; } });
+
+  // ---------- boot ----------
+  try {
+    const saved = localStorage.getItem(LS_KEY);
+    if (saved) state = JSON.parse(saved);
+    else state = stateFromSample(window.__SAMPLE__);
+  } catch (e) {
+    state = stateFromSample(window.__SAMPLE__);
+  }
+  render();
+})();
+</script>
+</body>
+</html>

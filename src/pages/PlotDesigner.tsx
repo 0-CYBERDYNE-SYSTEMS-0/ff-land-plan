@@ -205,17 +205,21 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     return 'blueprint';
   });
 
-  const [cinema, setCinema] = useState(false);
+const [cinema, setCinema] = useState(false);
 
   // The 3D world claims left-drag for the camera only while the Select tool is
   // active (paint tools bind drag for strokes). The editor defaults to Brush,
   // which would leave the world view unrotatable on arrival — so entering the
-  // world always resets to Select. Picking a paint tool afterwards re-claims
+  // world always resets to Select; the guard keeps an in-view tool switch from
+  // being snapped back on re-render. Picking a paint tool afterwards re-claims
   // the drag for painting, in 3D as in blueprint. `setTool` is a useState
-  // setter (stable), so keying on viewMode alone runs exactly on view switches.
+  // setter (stable), so this runs exactly on view switches.
   useEffect(() => {
-    if (viewMode === 'world') editor.setTool('select');
-    else setCinema(false);
+    if (viewMode === 'world') {
+      if (editor.tool !== 'select') editor.setTool('select');
+    } else {
+      setCinema(false);
+    }
   }, [viewMode, editor.setTool]);
 
   // `h` toggles cinema in the world view; Escape stays reserved for flight.
