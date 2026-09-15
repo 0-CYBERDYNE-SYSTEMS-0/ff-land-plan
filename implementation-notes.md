@@ -552,6 +552,26 @@ sheets + close-ups from the pass live in `$TMPDIR/ff-asset-qa/` (ephemeral;
 regenerate via the showcase URL formulas above). `quality/ASSETS.md` inventory
 updated: mushroom archetype + the 8 CE structures were missing from the tables.
 
+## 2026-09-14 — gallery.html remedied: missing module rebuilt (src/creative/showcase/gallery.ts)
+
+User-reported: `gallery.html` (untracked scratch page, "Asset Gallery v2")
+rendered blank — Vite log showed `Pre-transform error: Failed to load url
+/src/creative/showcase/gallery.ts`. The HTML ships a full error-throwing
+onerror + DOM but its module had never been committed and no copy existed
+anywhere (no git history, no stash, no scratch dir). Rebuilt
+`src/creative/showcase/gallery.ts` to the HTML's contract: all five registries
+tagged by lane, cells built once (185), tab/search/refined filters toggle DOM
+visibility only (no geometry rebuilds), scissor viewports with the scroll-
+offset fix from 2026-09-06, click-to-zoom modal with an "open in showcase ↗"
+deep link (`/showcase.html#lane=X&only=ID&mode=big`), Esc/backdrop close,
+`gallery-ready N` title for `appshot --expect`. The "✦ refined" badge is the
+Sep 2026 QA-pass set from this ledger (lane A 3 tiles; 16 crop archetypes by
+`<arch>-sN` prefix; 13 structures incl. the 8 CE; 9 creatures/tools).
+Sub-text updated "four lanes" → five (environments lane existed by then).
+Verified: typecheck green; headless `--expect "gallery-ready 185"` PASS; top
+and scrolled captures confirm lane-A/B cells, preset lighting cells (tune
+presets isolated per cell), and all 9 env dioramas render aligned.
+
 ## 2026-09-06 — Showcase gallery: scroll-offset fix (labels/images desync)
 
 User-reported: scrolling `showcase.html` made asset names sit under foreign

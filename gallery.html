@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Asset Gallery v2</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #ece9dd; }
+    #canvas { position: absolute; top: 0; left: 0; z-index: 0; }
+
+    #bar {
+      position: sticky; top: 0; z-index: 6;
+      display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+      padding: 12px 20px; background: #24211a; border-bottom: 2px solid #3a352a;
+      color: #e8e2d2; font-family: ui-monospace, Menlo, monospace;
+    }
+    #bar h1 { margin: 0; font-size: 15px; letter-spacing: 0.4px; white-space: nowrap; }
+    #bar .sub { width: 100%; margin: 0; font-size: 11.5px; color: #a89f8a; }
+    #bar .sub b { color: #cfc7b2; }
+    .tab, .chip {
+      background: #33302a; border: 1px solid #4a4436; color: #cfc7b2;
+      border-radius: 999px; padding: 5px 14px; cursor: pointer;
+      font: 600 12px ui-monospace, Menlo, monospace;
+    }
+    .tab:hover, .chip:hover { border-color: #6b6250; }
+    .tab.active { background: #3f9142; border-color: #3f9142; color: #fff; }
+    .chip.on { background: #b8860b; border-color: #b8860b; color: #fff; }
+    #q {
+      background: #191713; border: 1px solid #4a4436; color: #e8e2d2;
+      border-radius: 8px; padding: 6px 12px; width: 210px;
+      font: 12px ui-monospace, Menlo, monospace;
+    }
+    #q:focus { outline: 1px solid #6b6250; }
+    #count { margin-left: auto; font-size: 12px; color: #a89f8a; white-space: nowrap; }
+
+    #app {
+      position: relative; z-index: 1;
+      display: grid; grid-template-columns: repeat(5, 380px); gap: 16px;
+      padding: 16px; justify-content: center; align-items: start;
+    }
+    .cell { width: 380px; }
+    .label {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 13px; font-weight: 600; color: #3b3527;
+      padding: 2px 6px; height: 18px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .viewport {
+      position: relative; height: 280px; border-radius: 6px;
+      outline: 1px solid rgba(60,54,40,0.12); cursor: zoom-in;
+    }
+    .id-tag::after {
+      content: attr(data-id);
+      position: absolute; right: 10px; bottom: 8px;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 11px; color: rgba(40,36,26,0.55);
+    }
+    .refined {
+      position: absolute; top: 8px; left: 8px;
+      background: #3f9142; color: #fff;
+      font: 700 10px ui-monospace, Menlo, monospace;
+      padding: 2px 8px; border-radius: 999px; letter-spacing: 0.4px;
+    }
+    #empty {
+      grid-column: 1 / -1; text-align: center; padding: 60px 0;
+      font: 13px ui-monospace, Menlo, monospace; color: #6b6250;
+    }
+
+    #modal {
+      position: fixed; inset: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(20,18,14,0.72);
+    }
+    #modal[hidden] { display: none; }
+    .modal-card {
+      background: #f5f2e8; border-radius: 12px; padding: 16px 16px 12px;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.4);
+    }
+    .modal-card canvas {
+      display: block; border-radius: 8px;
+      max-width: min(88vw, 920px); height: auto;
+    }
+    .modal-meta {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 16px; padding-top: 10px;
+      font-family: ui-monospace, Menlo, monospace; color: #3b3527;
+    }
+    .modal-meta .m-label { font-size: 14px; font-weight: 700; }
+    .modal-meta .m-id { font-size: 11px; color: #8a8370; padding-top: 2px; }
+    .modal-meta .m-actions { display: flex; gap: 14px; align-items: center; white-space: nowrap; }
+    .modal-meta a { color: #2f6c37; font-size: 12px; font-weight: 600; }
+    .modal-meta button {
+      background: #3b3527; color: #f5f2e8; border: 0; border-radius: 8px;
+      padding: 6px 12px; font: 600 12px ui-monospace, Menlo, monospace; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <header id="bar">
+    <h1>VOXEL FARM ASSET GALLERY — v2</h1>
+    <p class="sub">all five lanes, current builders · <b>✦ refined</b> = rebuilt or reworked in the Sep&nbsp;2026 QA pass · click any tile for a close-up</p>
+    <nav id="tabs"></nav>
+    <input id="q" type="search" placeholder="filter by name or id…" />
+    <button id="refined" class="chip" title="show only assets reworked in the Sep 2026 QA pass">✦ refined only</button>
+    <span id="count"></span>
+  </header>
+  <main id="app"></main>
+  <div id="modal" hidden></div>
+  <script>
+    window.onerror = function (msg, src, line) {
+      document.title = 'GALLERY-ERROR: ' + msg + ' @' + line;
+      var d = document.createElement('div');
+      d.style.cssText = 'position:relative;z-index:9;font:14px monospace;color:#a00;padding:12px';
+      d.textContent = 'ERROR: ' + msg + ' (' + (src || '') + ':' + line + ')';
+      document.getElementById('app').appendChild(d);
+    };
+  </script>
+  <script type="module" src="/src/creative/showcase/gallery.ts"></script>
+</body>
+</html>
