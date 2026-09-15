@@ -1,0 +1,79 @@
+[
+  {
+    "id": "WD-1",
+    "area": "world/season-sim",
+    "title": "Default seed farm 1 (North Meadow) ships without plantedAt — pressing Simulate reads every crop as instantly mature and auto-pauses with a spurious 'Season complete' banner",
+    "severity": "P1",
+    "evidence": "seed.ts:112-122 — buildNorthMeadowPlan's PlanState has NO plantedAt key; :124-176 plants ~60+ cells via fillCrop, and the fillCrop helper (seed.ts:103-110, immediately above buildNorthMeadowPlan) writes only `plan.planting[key] = cropId`. Farms 2-7 all stamp (seed.ts:387-410 per-crop table; :518, :589, :625, :663, :702 via stampPlantedAt helper :421-428) — farm 1 alone was missed. Consequence chain: growth.ts:121 `if (!plantedAt) return 1; // no planting date -> show mature` → World3D.tsx:666 maturity loop sees progress 1 for every cell on the first playing tick → matureSinceRef anchored (:671) → 14 sim-days later `setPlaying(false); setSeasonComplete(true)` (:653-656) → drawer auto-opens (:637-641) with 'Every planted crop has matured' (SimDrawer.tsx:108). Repro: open /?ffview=world#/farms/1/map, press ▶ Simulate — at default 1×/day the sim kills itself ~15 s later; at 1×/week ~3 s, at 1×/month ~2 s. Also visible statically: status chip shows 'Sep 7' with NO '· Day N' (seasonDay null, World3D.tsx:829, earliestPlantedAt :675-683) and drawer growth rows all read 100% from t=0 — see screenshot /var/folders/.../ffqa-world/w1.png.",
+    "expected": "The flagship seed farm opens mid-season (Day N on the chip, staged growth) and playback runs a full season before the documented 14-days-after-maturity auto-pause.",
+    "actual": "Farm 1's growth sim is a no-op (everything 100% mature from t=0, no Day N) and any Simulate run ends in a misleading amber 'season complete' auto-pause within 2-15 seconds.",
+    "confidence": "high",
+    "fixHint": "Stamp farm 1 in buildNorthMeadowPlan like the other six builders (one stampPlantedAt(plan, {...}) call, seed.ts:421), and/or make growth.ts:121 treat missing plantedAt as 'not mature' (or 'planted today') instead of mature so legacy plans can't fake completion."
+  },
+  {
+    "id": "WD-2",
+    "area": "world/SimDrawer",
+    "title": "SimDrawerProps seasonDay and playing are accepted and passed but never used (dead contract surface)",
+    "severity": "P3",
+    "evidence": "SimDrawer.tsx:22 (`seasonDay: number | null`) and :30 (`playing: boolean`) are on the props interface; World3D.tsx:911 passes seasonDay and :921 passes playing; the destructuring at SimDrawer.tsx:46-66 omits both. SPEC-WORLD-HUD.md §4b explicitly sanctions this ('keeps playing/seasonDay on the props contract (unused in the drawer body to satisfy noUnusedLocals)'), so this is logged as spec-sanctioned hygiene debt, not a regression.",
+    "expected": "Props on a controlled component's contract are consumed, or dropped from the contract.",
+    "actual": "Dead props kept deliberately to stabilize parent wiring; TS-clean only because they are simply not destructured.",
+    "confidence": "high",
+    "fixHint": "Either render seasonDay in the season banner / a Day row (it is useful context) or drop both from SimDrawerProps in a follow-up contract cleanup."
+  },
+  {
+    "id": "WD-3",
+    "area": "three/ground",
+    "title": "Broken ground tile builder silently drops all its cells with zero console output",
+    "severity": "P3",
+    "evidence": "src/three/ground.ts:216-220 — `try { template = buildTemplate(id, cellM); } catch { continue; // a broken tile type must never take down the whole ground }`. If buildTemplate throws for any slug, that tile type's cells vanish from the 3D ground with no warning, unlike the rest of the codebase where failures at least console.warn (cf. weather fallback World3D.tsx:203-205).",
+    "expected": "A degrading fallback should log once (console.warn) so partial-ground states are diagnosable from the console gate.",
+    "actual": "Silent continue; a future bad tile slug would ship as an invisible visual hole that no GATE run can catch.",
+    "confidence": "high",
+    "fixHint": "console.warn(`ground tile '${id}' failed to build — skipped`, err) inside the catch (dev-only if noise is a concern)."
+  },
+  {
+    "id": "WD-4",
+    "area": "world/achievements-toast",
+    "title": "Achievement toast: first-ever unlock never shows, and rAF-unlocked achievements surface only when an unrelated re-render happens",
+    "severity": "P3",
+    "evidence": "World3D.tsx:721-730 — toast requires `currentCount > unlockedCountRef.current && unlockedCountRef.current > 0`, so the session's first achievement is silently swallowed. Additionally the effect depends on [lastAchievement] (:730) which is only re-evaluated when React re-renders; dawn_patrol/night_owl/flight_time unlock inside the rAF loop (:378-379, :401-402) which touches no state, so during a stationary flight the 60 s flight_time unlock renders no toast until playback ticks, tour progress steps, or another state change. Pre-existing wiring the spec chose to keep ('Keep … achievement toast'), and ff-toast-in + clearTimeout cleanup (:733-737, index.css:117-121) are correct.",
+    "expected": "Every unlock shows its toast within ~a frame, including the first.",
+    "actual": "First unlock suppressed by the count guard; rAF-only unlocks delayed indefinitely while idle.",
+    "confidence": "high",
+    "fixHint": "Have achievements.push an event or callback that setState directly; drop the `> 0` guard."
+  },
+  {
+    "id": "WD-5",
+    "area": "designer/cinema",
+    "title": "Cinema mode hides the save-state badge, so a failed autosave is invisible while cinema is on",
+    "severity": "P3",
+    "evidence": "PlotDesigner.tsx:89-94 — the save Badge (Saving…/Saved/Unsaved/error variant) renders only `!cinemaOn`; cinema hides toolbar+sidebar+badge per SPEC §PlotDesigner. 3D painting still mutates the plan (use3DEditor → applyBrushAt), so a user can edit in cinema with zero save feedback; if the 600 ms debounced autosave fails (saveState 'error'), the destructive badge is hidden until the user exits cinema with H. Mitigation: autosave still runs and the normal dirty window is ≤600 ms, so impact is limited to storage-failure scenarios.",
+    "expected": "Persisted error state remains visible (or minimally surfaced) even in cinema.",
+    "actual": "All save feedback hidden in cinema, including the error case.",
+    "confidence": "high",
+    "fixHint": "Keep rendering the Badge in cinema only when saveState === 'error'."
+  },
+  {
+    "id": "WD-6",
+    "area": "world/SimDrawer-a11y",
+    "title": "Closed SimDrawer is aria-hidden but its controls remain keyboard-focusable (no inert)",
+    "severity": "P3",
+    "evidence": "SimDrawer.tsx:84-90 — closed state sets aria-hidden={!open}=true, pointer-events-none and translate-x-full, but the date input, Today, Auto/Manual, selects and banner buttons keep visibility, so Tab still moves focus into an aria-hidden dialog (focus vanishes off-screen; screen readers are told it is hidden). World3D.tsx:905 mounts the drawer permanently per spec.",
+    "expected": "An aria-hidden container must not contain tabbable descendants (inert attribute, visibility:hidden after transition, or focus trap when open).",
+    "actual": "Keyboard users can tab into the closed 320px off-canvas drawer.",
+    "confidence": "high",
+    "fixHint": "Add `inert={!open}` (React 19 attr via ref or the `inert` polyfill pattern) or toggle `invisible` on the closed state after the 200 ms transform."
+  },
+  {
+    "id": "WD-7",
+    "area": "ui-primitives",
+    "title": "Dead animate-in/out classes persist in ui/select and ui/alert-dialog (tailwindcss-animate not installed)",
+    "severity": "P3",
+    "evidence": "grep: no tailwindcss-animate in package.json/tailwind config; src/components/ui/select.tsx:43 and ui/alert-dialog.tsx:16,32 still use data-[state=open]:animate-in / fade-in-0 / zoom-in-95 — these compile to nothing, so the SimDrawer's scenario/speed Select and the template confirm dialog simply pop with no animation. SPEC trap 10 bans NEW animate-in usage and SimDrawer.tsx itself complies (uses ff-toast-in pattern world-side only); this is pre-existing primitive debt that the new drawer now inherits visually.",
+    "expected": "No dead animation classes on primitives the new HUD mounts.",
+    "actual": "Classes reference a plugin that is not installed; animations silently no-op.",
+    "confidence": "high",
+    "fixHint": "Either add tailwindcss-animate or strip the animate-* classes from the two primitives."
+  }
+]

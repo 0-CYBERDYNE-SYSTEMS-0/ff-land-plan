@@ -90,8 +90,8 @@ export function makeGate(): THREE.Object3D {
       const c = y % 3 === 0 ? mixColor(C.postWood, PALETTE.black, 0.12) : rand() < 0.25 ? C.postWood : C.postWoodLight;
       solid.push({ x: px, y, z: 0, s: 1.38, color: c });
     }
-    solid.push({ x: px, y: 10.58, z: 0, s: 1.5, color: C.trimWhite }); // ball-ish cap
-    solid.push({ x: px, y: 11.15, z: 0, s: 0.9, color: C.trimWhite });
+    solid.push({ x: px, y: 10.58, z: 0, s: 1.5, color: PALETTE.plankLight }); // pale end-grain cap
+    solid.push({ x: px, y: 11.15, z: 0, s: 0.9, color: PALETTE.plankLight });
     groundTuft(solid, rand, px);
   }
   // gate frame: stiles + top/bottom rails + diagonal brace
@@ -110,10 +110,13 @@ export function makeGate(): THREE.Object3D {
     const y = 3 + Math.round((t / 10) * 5);
     solid.push({ x, y, z: 0.32, s: 0.72, color: frameTone() });
   }
-  // infill pickets
+  // infill pickets — weathered wood matching the frame (joinery reads as one build)
   for (let x = 3; x <= 11; x += 2)
     for (let y = 4; y <= 7; y++)
-      solid.push({ x, y, z: -0.28, s: 0.8, color: rand() < 0.15 ? C.trimShadow : C.trimWhite });
+      solid.push({
+        x, y, z: -0.28, s: 0.8,
+        color: rand() < 0.18 ? mixColor(frameTone(), PALETTE.black, 0.2) : frameTone(),
+      });
   // strap hinges on the right post
   for (const hy of [3.5, 7.5]) {
     solid.push({ x: 12.6, y: hy, z: 0, s: 1.02, color: PALETTE.ironDark });

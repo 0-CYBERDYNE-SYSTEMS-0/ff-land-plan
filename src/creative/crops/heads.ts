@@ -64,22 +64,21 @@ export function makeLeafyHead(stage: number, pal: CropPalette = LEAFYHEAD_PAL): 
       blade(sway, inner ? 0 : Math.sign(dx) * 0, 0.6, inner ? 0 : Math.sign(dz) * 0, dx, dz, inner ? 2 : 3, 3, inner ? 0.62 : 0.16, 0.03, f, vein, edge, 40 + i * 5);
     });
     vline(sway, 0, 0.6, 0, 0, 1.4, 0, vein);
-    blob(sway, 0, 2.1, 0, 0.95, 0.85, 0.95, pal.unripe, shade(pal.unripe, pal.light, 0.35), { seed: 7 });
+    blob(sway, 0, 2.1, 0, 1.1, 0.95, 1.1, pal.unripe, shade(pal.unripe, pal.light, 0.35), { seed: 7 });
     return finishPlant(stat, sway);
   }
 
-  // s4/s5 — firm head wrapped in outer leaves
-  const headR = stage === 4 ? 1.45 : 1.8;
-  const headH = stage === 4 ? 1.2 : 1.55;
+  // s4/s5 — firm head: stepped dome wrapped in outer leaves (never a box)
+  const headR = stage === 4 ? 1.6 : 1.9;
   const headC = stage === 4 ? pal.unripe : pal.fruit;
   DIRS8.forEach(([dx, dz], i) => {
-    if (i < 4) blade(sway, 0, 0.6, 0, dx, dz, 3, 3, 0.14, 0.04, shade(f, pal.dark, 0.18), vein, edge, 50 + i * 5);
+    if (i < 4) blade(sway, 0, 0.6, 0, dx, dz, 3, 3, 0.5, 0.04, shade(f, pal.dark, 0.18), vein, edge, 50 + i * 5);
     else blade(sway, 0, 0.9, 0, dx, dz, 2, 2, 0.5, 0.05, f, vein, edge, 56 + i * 3);
   });
   vline(sway, 0, 0.6, 0, 0, 1.6, 0, vein);
-  blob(sway, 0, 1.6 + headH, 0, headR, headH, headR, headC, shade(headC, pal.light, 0.3), { seed: 11 });
-  // highlight cap so heads read from above
-  blob(sway, 0, 1.6 + headH * 2 - 0.2, 0, headR * 0.62, 0.32, headR * 0.62, shade(headC, 0xffffff, 0.28), null);
+  // wide base + narrower crown read as a rounded head from every angle
+  blob(sway, 0, 1.9, 0, headR, 1.0, headR, headC, shade(headC, pal.light, 0.28), { seed: 11 });
+  blob(sway, 0, 3.0, 0, headR * 0.62, 0.72, headR * 0.62, shade(headC, pal.light, 0.22), shade(headC, pal.light, 0.5), { seed: 12 });
   if (stage === 5) {
     // harvest signal: wrapper leaves split slightly at the base line
     put(sway, 2, 0.5, 1, edge, 0.8);
@@ -112,8 +111,8 @@ export const BRASSICA_PAL: CropPalette = {
   light: 0x7ba36a,
   stem: 0x5f8a52,
   accent: PALETTE.flowerYellow,
-  fruit: 0x6fae52,    // floret green — lighter than wrapper leaves
-  unripe: 0x8fbf62,
+  fruit: 0x86bd6a,    // floret green — clearly paler than wrapper leaves
+  unripe: 0x9cc878,
 };
 
 /** Broccoli/kale: raised rosette, waxy leaves, bumpy floret dome late. */
@@ -155,8 +154,9 @@ export function makeBrassica(stage: number, pal: CropPalette = BRASSICA_PAL): Re
     blade(sway, 0, stemH, 0, dx, dz, stage >= 4 ? 4 : 3, 3, 0.24, 0.06, i % 2 ? f : shade(f, pal.dark, 0.2), vein, edge, 70 + i * 6);
   }
   if (stage === 3) {
-    // button: tight knot of tiny buds, pale enough to spot
-    blob(sway, 0, stemH + 1.2, 0, 1.0, 0.8, 1.0, pal.unripe, shade(pal.unripe, 0xffffff, 0.25), { seed: 21 });
+    // button: low tight knot of tiny buds, pale enough to spot
+    blob(sway, 0, stemH + 0.85, 0, 1.35, 0.62, 1.35, pal.unripe, shade(pal.unripe, 0xffffff, 0.25), { seed: 21 });
+    put(sway, 0, stemH + 1.5, 0, shade(pal.unripe, 0xffffff, 0.4), 0.5);
   } else {
     const r = stage === 4 ? 1.7 : 2.2;
     const rnd = rng(88 + stage);

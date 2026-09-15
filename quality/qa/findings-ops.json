@@ -1,0 +1,123 @@
+[
+  {
+    "id": "OP-1",
+    "area": "dashboard/active-alerts-banner",
+    "title": "ActiveAlertsBanner reads only farms[0]'s alerts; 'Mark all read' silently covers farm 1 only",
+    "severity": "P2",
+    "evidence": "src/pages/Dashboard.tsx:213-215 — `const first = farms[0]; const { data: alerts = [] } = useFarmAlerts(first?.id);` and :217 `mutationFn: () => apiFetch.markAllAlertsRead(first.id)`. The banner renders only when farms[0] has unread alerts (:224) and the button marks only farms[0] read. Screenshot evidence: /…/ffqa-ops/dash.png shows banner 'Active Alerts (1)' (farm 1's drought note) while ALL 7 farm cards simultaneously show '1 alerts' badges — alerts from farms 2-7 are never surfaced in the banner.",
+    "expected": "Banner aggregates unread alerts across all farms; 'Mark all read' marks all farms' alerts read.",
+    "actual": "Banner is a farms[0]-only view; clicking 'Mark all read' leaves other farms' alerts unread (they remain as per-card badges with no way to clear from the dashboard).",
+    "confidence": "high",
+    "fixHint": "Map over farms collecting alerts per farm (or a farm-scoped mark-all loop); relabel button if it stays per-farm."
+  },
+  {
+    "id": "OP-2",
+    "area": "farmform/frost-heuristic",
+    "title": "Latitude frost estimate is ~6-7 weeks wrong on each end at mid latitudes; seeded as default on every farm",
+    "severity": "P2",
+    "evidence": "src/lib/frost.ts:46 — `season = clamp(365 - 6.4*L, 30, 365)`. For farm 1 (lat 45.5231): season = 73.6 days → last frost doy 166 = 06-15, first frost doy 240 = 08-28. Verified live: /…/ffqa-ops/calendar1.png badge reads '06-15 → 08-28' for Portland OR (real ~mid-Apr → late-Oct). store.ts:43-47 applies estimateFrostDates(f.lat) to ALL seed farms; FarmForm.tsx:54 uses it as form default. Downstream: calendar frost badge/markers and frostRisk flags over-fire — every one of the 9 'This week' cards and all timeline rows on farm 1 show 'frost risk' (calendar1.png).",
+    "expected": "Default frost dates in the right ballpark for temperate maritime climates (the majority of seeded farms), or clearly labeled as rough estimates in the UI.",
+    "actual": "Frost-free season shrinks 6.4 d/degree from the equator — models continental interiors, not maritime/temperate zones; UI presents the numbers without the 'rough heuristic' caveat (only the code comments admit it).",
+    "confidence": "high",
+    "fixHint": "Soften the slope (e.g. ~4.0-4.5/degree) or wire the already-written ERA5 normals (src/lib/climate.ts, currently orphaned — OP-4) into the form as a better estimator."
+  },
+  {
+    "id": "OP-3",
+    "area": "dashboard/active-alerts-banner",
+    "title": "markAll mutation onSuccess is an empty stub; refresh only works because onClick invalidates",
+    "severity": "P3",
+    "evidence": "src/pages/Dashboard.tsx:216-221 — onSuccess body is only the comment 'Refresh alerts on every farm' (it does nothing). The click handler :238-241 does `await markAll.mutateAsync(); qc.invalidateQueries({ queryKey: ['alerts'] });`, which invalidates every farm's alerts query. Verified: the list DOES refresh and there is NO double-invalidation (stub is a no-op). Contrast Monitoring.tsx:284-287 which correctly invalidates inside onSuccess.",
+    "expected": "Invalidation lives in the mutation's onSuccess so every caller gets the refresh; stub comment removed.",
+    "actual": "Works as shipped, but any future `markAll.mutate()` caller silently gets no refresh — a trap, and the comment is false.",
+    "confidence": "high",
+    "fixHint": "Move the invalidateQueries into onSuccess (copy Monitoring's pattern) and delete the stub comment."
+  },
+  {
+    "id": "OP-4",
+    "area": "lib/climate",
+    "title": "src/lib/climate.ts is entirely orphaned — fetchClimateNormals has zero consumers",
+    "severity": "P3",
+    "evidence": "grep across src/ finds no import of '@/lib/climate' outside the module itself (SoilProfileCard uses soil.ts only; FarmForm uses frost.ts estimateFrostDates). 296 lines (ERA5 archive pull + deriveClimateNormals) ship dead. The probed cache-key concern (climate.ts:44-62 — key `ff-pro:climate:{2dp coords}` with startYear/endYear stored inside the entry → readCache returns null every Jan 1 → one refetch per farm per year) is real in code but has NO consumer impact while the module is unused; failures are never cached and it never throws (:93-102), so if wired later the worst case is one extra archive call per farm per year.",
+    "expected": "Either wired (e.g. FarmForm 'Estimate from climate normals', calendar frost markers) or removed.",
+    "actual": "Dead module; the good ERA5 frost data it can produce never reaches the UI (leaves OP-2's weak heuristic as the only estimator).",
+    "confidence": "high",
+    "fixHint": "Wire fetchClimateNormals into FarmForm as a 'refine from climate normals' action, or delete the file."
+  },
+  {
+    "id": "OP-5",
+    "area": "lib/api-seam",
+    "title": "Api.setCellCrop implemented in both clients, consumed nowhere (dead seam / doc drift)",
+    "severity": "P3",
+    "evidence": "localApi.ts:81+212-218 and restApi.ts:113-122 implement setCellCrop; grep finds no page/hook caller (Monitoring reads cells via listCells only). README.md:73+91 documents `POST /api/farms/:id/cells` with `{ id, cropId }` for it. The designer edits plans via savePlan, not cells.",
+    "expected": "Either a consumer (or removal from Api + README), or README noting it as backend-only surface.",
+    "actual": "Dead code kept alive in the Api contract and README in three places that must stay in sync.",
+    "confidence": "high",
+    "fixHint": "Drop setCellCrop from Api/localApi/restApi + README line 91's mapping note, or delete after confirming no roadmap consumer."
+  },
+  {
+    "id": "OP-6",
+    "area": "weather/refresh",
+    "title": "Weather page Refresh button is a no-op within the 15-minute memo window",
+    "severity": "P3",
+    "evidence": "Weather.tsx:113-121 calls `weather.refetch()`, which re-runs getWeather → localApi.ts:42-52 farmWeather(): memo hit (15-min TTL, keyed `${lat},${lng}`) returns the SAME promise without hitting Open-Meteo. User sees the spinner, gets byte-identical data. (Soil's Refresh works because soil.ts:177 deletes the inflight entry and clearSoilCache drops the localStorage copy — no such bypass exists for weather.)",
+    "expected": "Manual refresh bypasses the dedupe/TTL memo (or at least changes the data timestamp).",
+    "actual": "Refresh within 15 min re-shows the same payload with no visible signal that nothing was refetched.",
+    "confidence": "high",
+    "fixHint": "Export a weatherMemo.clear()/bypass (or accept a force flag through the Api seam) wired to the Refresh button."
+  },
+  {
+    "id": "OP-7",
+    "area": "monitoring/sensor-readings",
+    "title": "addReading labels every non-soil_moisture reading '°C' (humidity %, rainfall mm, NDVI unitless); range check only covers 2 of 5 sensor types",
+    "severity": "P3",
+    "evidence": "Monitoring.tsx:84 — `apiFetch.addReading(sensor.id, v, sensor.sensorType === 'soil_moisture' ? '%' : '°C')` → a humidity reading displays '48 °C' via sensor.lastUnit (:130). isInRange (:40-44) returns true for humidity/ndvi_proxy/rainfall, so those sensors can never show the out-of-range warning icon.",
+    "expected": "Unit per sensor type (%, °C, mm, index) and plausible ranges per type.",
+    "actual": "Wrong unit label for 3 of 5 types; missing-type sensors silently always 'in range'.",
+    "confidence": "high",
+    "fixHint": "Unit map Record<SensorType,string> + extend isInRange with per-type bounds (or return true explicitly as 'no range defined')."
+  },
+  {
+    "id": "OP-8",
+    "area": "dashboard/weather-pill",
+    "title": "FarmCard weather pill shows 'Loading weather…' indefinitely when weather fails (offline, no cache)",
+    "severity": "P3",
+    "evidence": "Dashboard.tsx:63-65 — WeatherPill has only a `!data` branch ('Loading weather…'); useFarmWeather (:45-52) has no retry and weather.ts:103-108 rethrows when offline with no last-good cache. Pill never resolves to an error state. Scoped check of the probed data risk: the Weather PAGE is not silently fake-good — total failure renders 'Weather data unavailable' (Weather.tsx:214-220), and cached:true shows the Cached badge (Weather.tsx:96-100). The DEFAULT_WEATHER fake-good fallback exists only in World3D.tsx:45,342 (World lane's finding, not the Weather page).",
+    "expected": "Pill degrades to 'Weather unavailable' on query error.",
+    "actual": "Permanent 'Loading weather…' on cards in the offline-no-cache edge case.",
+    "confidence": "high",
+    "fixHint": "Add an error/isError branch to WeatherPill mirroring the Weather page's empty state."
+  },
+  {
+    "id": "OP-9",
+    "area": "calendar/year-timeline",
+    "title": "Windows crossing Dec 31 render as 1.5% slivers (no year wrap); SH frost marker plots off-grid",
+    "severity": "P3",
+    "evidence": "Code trace: calendar.ts:32-35 doy() wraps into the previous/next year (e.g. sow_indoor starting ~Dec 21 → startDoy 355, endDoy 3). Calendar.tsx:149-151 computes width = max(1.5, calendarPercent(3) - calendarPercent(355)) = max(1.5, -96) = 1.5% — the bar collapses to a sliver at the right edge instead of wrapping to January. Tooltip/dates and the date-based 'This week' filter stay correct (actionsThisWeek uses Date math, calendar.ts:124-127). Similarly frostDoy (calendar.ts:142) pushes SH first frost +365 → Marker left >100% (Calendar.tsx:134-135) lands outside the 12-month grid (overflow-visible, no clip bug but floating in whitespace).",
+    "expected": "Wrapped windows draw as two segments (Dec tail + Jan head) or the timeline rolls to the season start.",
+    "actual": "Single sliver bar; correct only for N-hemisphere-style windows fully inside one calendar year.",
+    "confidence": "high",
+    "fixHint": "When endDoy < startDoy, draw two absolutely-positioned segments (left: start%…100% and 0…end%)."
+  },
+  {
+    "id": "OP-10",
+    "area": "monitoring/ndvi",
+    "title": "NDVI panel renders avg 0.00 ('Bare') for farms without seed NDVI as if it were a measurement",
+    "severity": "P3",
+    "evidence": "localApi.ts:219-223 — getNdvi returns `{ farmId, ndviGrid: [], timestamp }` for farms missing from state.ndvi; seedNdvi covers only farms 1-2 (seed.ts:886-889). NdviPanel (Monitoring.tsx:186) computes avg=0 over empty grid and displays a bold colored '0.00' + '0 cells' in every bucket, which reads as 'measured bare soil'. 'Modeled' badge (:199-201) partially mitigates.",
+    "expected": "Empty grid → 'No NDVI estimate yet' empty state instead of a 0.00 readout.",
+    "actual": "Farms 3-7 show a confident 0.00 average on the Monitoring page.",
+    "confidence": "high",
+    "fixHint": "Early-return an empty state when ndviGrid.length === 0."
+  },
+  {
+    "id": "OP-11",
+    "area": "farmform/validation",
+    "title": "Cleared lat/lng fields silently save as 0/0 (zod coerce of empty string)",
+    "severity": "P3",
+    "evidence": "FarmForm.tsx:25-26 — `lat: z.coerce.number().min(-90).max(90)`. A cleared number input yields '' → Number('') = 0 → passes validation; submit persists lat 0, lng 0 (Gulf of Guinea) with no error. areHa is protected (positive() rejects 0), name has min(1); only the coordinate pair coerces silently.",
+    "expected": "Empty coordinate fields show 'Required' like the name field.",
+    "actual": "Farm created at 0°N 0°E; every weather/soil lookup then queries the wrong point on Earth.",
+    "confidence": "high",
+    "fixHint": "Use z.string().min(1).pipe(z.coerce.number()…) or preprocess '' → undefined for lat/lng."
+  }
+]

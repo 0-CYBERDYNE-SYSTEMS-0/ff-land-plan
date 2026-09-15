@@ -90,16 +90,22 @@ function makePondCenter(seed: number): THREE.Object3D {
           c = weighted([[PALETTE.waterDeep, 0.6], [mixColor(PALETTE.waterDeep, PALETTE.water, 0.5), 0.4]], rand());
         else if (y === 2)
           c = weighted([[mixColor(PALETTE.waterDeep, PALETTE.water, 0.55), 0.6], [PALETTE.water, 0.4]], rand());
-        else c = weighted([[PALETTE.water, 0.55], [SHALLOW_WATER, 0.38], [PALETTE.waterLight, 0.07]], rand());
-        // depth tint: the middle of the pond reads deepest
-        if (radial < 0.42 && y >= 2) c = mixColor(c, PALETTE.waterDeep, 0.4 - radial * 0.5);
+        else {
+          c = weighted([[PALETTE.water, 0.55], [SHALLOW_WATER, 0.38], [PALETTE.waterLight, 0.07]], rand());
+          // surface depth tint: deepens toward the middle of the pond, pales
+          // into a shallow rim at the edges so the top face carries a gradient
+          c = mixColor(c, PALETTE.waterDeep, 0.52 * (1 - radial));
+          if (radial > 0.78) c = mixColor(c, SHALLOW_WATER, 0.35);
+        }
+        // subsurface darkening under the middle
+        if (y < 3 && radial < 0.42) c = mixColor(c, PALETTE.waterDeep, 0.4 - radial * 0.5);
         vx.push({ x, y, z, color: c });
       }
     }
 
   const water = solidMesh(vx);
   const plate = makeShimmerPlate(9.72, 9.72, 5, 5);
-  const specks = makeSpecks(rand, 5, 0.8, 9.2);
+  const specks = makeSpecks(rand, 9, 0.8, 9.2);
 
   const g = tileGroup([water, plate], 10);
   for (const sp of specks) g.add(sp.mesh);

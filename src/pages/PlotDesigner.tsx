@@ -1,10 +1,14 @@
 import { ArrowLeft, Check, Map as MapIcon } from 'lucide-react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
+import { apiFetch } from '@/lib/api';
+import type { SimEvent, SimState } from '@/lib/sim';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigation } from '@/hooks/useNavigation';
+import { useSimRun } from '@/hooks/useSimRun';
 import { AssetPalette } from '@/components/designer/AssetPalette';
 import { BlueprintCanvas } from '@/components/designer/BlueprintCanvas';
 import { CropPalette } from '@/components/designer/CropPalette';
@@ -18,10 +22,78 @@ import { usePlanEditor } from '@/components/designer/usePlanEditor';
 
 const World3D = lazy(() => import('@/components/world/World3D'));
 
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
+}
+
 export function PlotDesigner({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
   const editor = usePlanEditor(farmId);
   const { farm, isLoading, planRef, saveState, savedAt } = editor;
+
+  // --- Sim run lifecycle (SPEC-SIM-ECOSYSTEM Phase 1/2) ---
+  // Mounted HERE because this page owns both the world and the drawer. The
+  // event sink is a ref relay: useSimRun fires it from its own rAF loop and
+  // World3D binds it to the harvest celebration without prop-drilling state.
+  const runEventsRef = useRef<((events: SimEvent[], state: SimState) => void) | null>(null);
+  const simRun = useSimRun({
+    onEvents: (events, state) => runEventsRef.current?.(events, state),
+    farmCoords: farm ? { lat: farm.lat, lng: farm.lng } : undefined,
+  });
+
+  // ?ffrun=<id> launch param (BEFORE the hash, like ?ffview): load the
+  // RunRecord once per mount and hand it to the run controller. The attempt
+  // marker is set only AFTER the load resolves — marking synchronously would
+  // swallow the run under StrictMode's effect double-invoke (first pass is
+  // cancelled, second pass must still be allowed to start it).
+  // ?ffghost=<id> (Phase 4, same before-the-hash pattern): with ?ffrun
+  // present, also load that run as the GHOST comparison (alone it is inert —
+  // ghosts exist only against an active primary run).
+  const launchRunId = useMemo(() => new URLSearchParams(window.location.search).get('ffrun'), []);
+  const launchGhostId = useMemo(() => new URLSearchParams(window.location.search).get('ffghost'), []);
+  const launchRunDoneRef = useRef<Set<string>>(new Set());
+  // Latest-controller ref (handlersRef convention): simRun's identity changes
+  // every throttled commit while a run plays — it must not be an effect dep or
+  // the launch load re-fires each commit.
+  const simRunRef = useRef(simRun);
+  simRunRef.current = simRun;
+  useEffect(() => {
+    if (!launchRunId && !launchGhostId) return;
+    const launchKey = `${launchRunId ?? ''}|${launchGhostId ?? ''}`;
+    if (launchRunDoneRef.current.has(launchKey)) return;
+    if (launchRunId && simRunRef.current.record?.id === launchRunId) return; // already active
+    let cancelled = false;
+    apiFetch
+      .listSimRuns(farmId)
+      .then((runs) => {
+        if (cancelled) return;
+        launchRunDoneRef.current.add(launchKey); // hit or miss: one resolved attempt wins
+        const rec = launchRunId ? runs.find((r) => r.id === launchRunId) : undefined;
+        const ghost = launchGhostId ? runs.find((r) => r.id === launchGhostId) : undefined;
+        if (rec) simRunRef.current.startRun(rec);
+        // loadGhost guards identity (same farm, not the primary) and defers
+        // its fold until the replay context lands inside startRun.
+        if (rec && ghost && ghost.id !== rec.id) simRunRef.current.loadGhost(ghost);
+      })
+      .catch(() => {
+        // Missing/failed run load is a silent no-op — the world stays legacy.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [launchRunId, launchGhostId, farmId]);
+
+  // Run list for the in-world Compare picker (Phase 4): explicit queryFn —
+  // the QueryClient's hostile default + staleTime:Infinity make casual
+  // queries a trap (HANDOFF trap). Shares the Simulations page's cache key,
+  // so a run created there appears here on the next mount.
+  const { data: allRuns = [] } = useQuery({
+    queryKey: ['sim-runs', farmId],
+    queryFn: () => apiFetch.listSimRuns(farmId),
+  });
+
   const [viewMode, setViewMode] = useState<'blueprint' | 'world'>(() => {
     // Test hook for headless verification (tools/appshot.mjs): ?ffview=world
     // opens the 3D view immediately, no click required. Harmless in normal use.
@@ -29,16 +101,35 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     return 'blueprint';
   });
 
-  // The 3D view hands left-drag/one-finger to orbit ONLY while the Select tool
-  // is active (paint tools claim that drag for strokes). It is a viewer first,
-  // so entering it starts in inspect mode — arriving with a paint tool active
-  // (the editor default) used to leave rotate dead with no hint. Painting in
-  // 3D stays available by picking a paint tool from the toolbar. Deps
-  // deliberately exclude editor.tool: switching tools INSIDE the world view
-  // must not snap the user back to Select.
+const [cinema, setCinema] = useState(false);
+
+  // The 3D world claims left-drag for the camera only while the Select tool is
+  // active (paint tools bind drag for strokes). The editor defaults to Brush,
+  // which would leave the world view unrotatable on arrival — so entering the
+  // world always resets to Select; the guard keeps an in-view tool switch from
+  // being snapped back on re-render. Picking a paint tool afterwards re-claims
+  // the drag for painting, in 3D as in blueprint. `setTool` is a useState
+  // setter (stable), so this runs exactly on view switches.
   useEffect(() => {
-    if (viewMode === 'world' && editor.tool !== 'select') editor.setTool('select');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (viewMode === 'world') {
+      if (editor.tool !== 'select') editor.setTool('select');
+    } else {
+      setCinema(false);
+    }
+  }, [viewMode, editor.setTool]);
+
+  // `h` toggles cinema in the world view; Escape stays reserved for flight.
+  useEffect(() => {
+    if (viewMode !== 'world') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.toLowerCase() !== 'h') return;
+      if (isTypingTarget(e.target)) return;
+      e.preventDefault();
+      setCinema((c) => !c);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [viewMode]);
 
   if (isLoading) {
@@ -47,6 +138,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   if (!farm) return <div className="p-6">Farm not found.</div>;
   const currentPlan = planRef.current;
   if (!currentPlan) return <div className="p-6">Plan not found.</div>;
+  const cinemaOn = cinema && viewMode === 'world';
 
   return (
     <div className="flex flex-col p-4 lg:p-6 space-y-4 xl:h-full xl:min-h-0">
@@ -60,18 +152,21 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
           </h1>
           <p className="text-sm text-muted-foreground truncate">
             {farm.name} · {currentPlan.widthM} m × {currentPlan.heightM} m · 25 cm cells
+            {cinemaOn && ' · Cinema (H to exit)'}
           </p>
         </div>
         <ViewToggle mode={viewMode} onChange={setViewMode} />
-        <Badge variant={saveState === 'error' ? 'destructive' : 'secondary'} className="gap-1">
-          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? `Saved ${savedAt ?? ''}` : saveState === 'dirty' ? 'Unsaved' : 'Ready'}
-          {saveState === 'saved' && <Check className="w-3 h-3" />}
-        </Badge>
+        {!cinemaOn && (
+          <Badge variant={saveState === 'error' ? 'destructive' : 'secondary'} className="gap-1">
+            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? `Saved ${savedAt ?? ''}` : saveState === 'dirty' ? 'Unsaved' : 'Ready'}
+            {saveState === 'saved' && <Check className="w-3 h-3" />}
+          </Badge>
+        )}
       </div>
 
-      <div className="grid gap-4 xl:flex-1 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className={`grid gap-4 xl:flex-1 xl:min-h-0${cinemaOn ? '' : ' xl:grid-cols-[minmax(0,1fr)_360px]'}`}>
         <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
-          <DesignerToolbar editor={editor} />
+          {!cinemaOn && <DesignerToolbar editor={editor} />}
           {viewMode === 'blueprint' ? (
             <BlueprintCanvas editor={editor} />
           ) : (
@@ -83,19 +178,28 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
                 </div>
               </div>
             }>
-              <World3D editor={editor} />
+              <World3D
+                editor={editor}
+                cinema={cinema}
+                onToggleCinema={() => setCinema((c) => !c)}
+                simRun={simRun}
+                compareRuns={allRuns}
+                runEventsRef={runEventsRef}
+              />
             </Suspense>
           )}
         </div>
 
-        <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
-          <TemplatesCard editor={editor} />
-          <CropPalette editor={editor} />
-          <AssetPalette editor={editor} />
-          <SelectionPanel editor={editor} />
-          <StatsPanel editor={editor} />
-          <PairingsPanel editor={editor} />
-        </div>
+        {!cinemaOn && (
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
+            <TemplatesCard editor={editor} />
+            <CropPalette editor={editor} />
+            <AssetPalette editor={editor} />
+            <SelectionPanel editor={editor} />
+            <StatsPanel editor={editor} />
+            <PairingsPanel editor={editor} />
+          </div>
+        )}
       </div>
     </div>
   );

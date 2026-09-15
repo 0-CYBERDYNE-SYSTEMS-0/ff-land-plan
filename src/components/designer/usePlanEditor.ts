@@ -180,6 +180,26 @@ function csvCell(value: string | number): string {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+/**
+ * Fall direct-sow window relative to FIRST frost, as a category-level
+ * heuristic over existing catalog fields (no per-crop data): only
+ * cool-tolerant crops that can mature within a single fall season qualify.
+ * Formula: sow ceil(growthDays/7)+2 weeks before first frost so harvest
+ * lands just ahead of the freeze. Warm-season (tender) crops, heat-lovers,
+ * and slow overwinter/perennial crops return null.
+ */
+export function fallSowWeeksBeforeFirstFrost(crop: Crop): number | null {
+  // Catalog minTempC values jump from 7 (hardy greens/roots) to 10 (tender
+  // warm-season); 8 sits in the gap.
+  if (crop.minTempC > 8) return null;
+  // Heat-lovers (ceiling > 30°C) stress or bolt in fall beds.
+  if (crop.maxTempC > 30) return null;
+  // Must mature before frost — overwinter/perennial crops (garlic, rye,
+  // wheat, fruit) are out of scope for this formula.
+  if (crop.growthDays > 120) return null;
+  return Math.ceil(crop.growthDays / 7) + 2;
+}
+
 /** Human-readable sow window for a crop (CSV export + SelectionPanel inspector). */
 export function sowWindow(crop: Crop): string {
   const parts: string[] = [];
@@ -191,6 +211,10 @@ export function sowWindow(crop: Crop): string {
   }
   if (crop.directSowStartWeeks !== null && crop.directSowStartWeeks !== undefined) {
     parts.push(`${crop.directSowStartWeeks}-${crop.directSowEndWeeks ?? crop.directSowStartWeeks}w after frost direct`);
+  }
+  const fallWeeks = fallSowWeeksBeforeFirstFrost(crop);
+  if (fallWeeks !== null) {
+    parts.push(`fall: sow ${fallWeeks}w before first frost`);
   }
   return parts.join('; ') || 'Not specified';
 }

@@ -1,3 +1,11 @@
+// LEGACY twin-wave simulation engine (MISSION-TWIN waves 2–4: plan-aware
+// what-ifs, FAO-56 Kc/Ky, ensembles/CMIP6 yield ranges). Superseded as the
+// product path by the Sim Core deterministic run engine in src/lib/sim/
+// (SPEC-SIM-ECOSYSTEM); kept verbatim as the reference for re-wiring the
+// ensembles/CMIP6 scenario data into sim runs. Renamed from src/lib/sim.ts
+// in the pro-upgrade←main merge so '@/lib/sim' resolves to the Sim Core
+// engine index rather than this file (file would shadow the directory).
+
 // Real plan-aware simulation engine (WS-A). Pure + deterministic: identical
 // inputs (+ startDate) ⇒ identical output; no Math.random, no fetch, no
 // storage. Weather/climate data is passed IN by the caller (localApi wires

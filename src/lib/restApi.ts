@@ -26,6 +26,7 @@ import type {
   WeatherHistoryPoint,
 } from '@/types';
 import type { Api } from '@/lib/localApi';
+import type { RunRecord } from '@/lib/sim/types';
 
 export function createRestApi(baseUrl: string): Api {
   const base = baseUrl.replace(/\/+$/, '');
@@ -136,15 +137,22 @@ export function createRestApi(baseUrl: string): Api {
         body: JSON.stringify(plan),
       }),
 
-    // Simulations ---------------------------------------------------------------
+    // Simulations (legacy records only — creation was deleted with the
+    // farm-blind slider arithmetic; the run manager owns new simulations) ---
     listSimulations: (farmId) => request<Simulation[]>(`/farms/${farmId}/simulations`),
-    createSimulation: (farmId, input) =>
-      request<Simulation>(`/farms/${farmId}/simulations`, {
+    deleteSimulation: async (id) => {
+      await request<void>(`/simulations/${id}`, { method: 'DELETE' });
+    },
+
+    // Sim runs (deterministic engine runs — README contract) --------------------
+    listSimRuns: (farmId) => request<RunRecord[]>(`/farms/${farmId}/sim-runs`),
+    createSimRun: (input) =>
+      request<RunRecord>(`/farms/${input.farmId}/sim-runs`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    deleteSimulation: async (id) => {
-      await request<void>(`/simulations/${id}`, { method: 'DELETE' });
+    deleteSimRun: async (id) => {
+      await request<void>(`/sim-runs/${id}`, { method: 'DELETE' });
     },
 
     // Crops ---------------------------------------------------------------------

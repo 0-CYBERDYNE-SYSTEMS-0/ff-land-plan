@@ -39,10 +39,11 @@ export function makeWheat(stage: number, pal: CropPalette = WHEAT_PAL): ReturnTy
   const edgeC = shade(f, pal.dark, 0.35);
 
   if (stage === 1) {
-    // grassy seedling: thin blades only
-    for (let i = 0; i < 4; i++) {
-      const [dx, dz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][i] as [number, number];
-      blade(sway, 0, 0, 0, dx, dz, 3, 1, 0.62, 0.1, bladeC, pal.light, edgeC, 65 + i * 3);
+    // grassy seedling: thin arcing blades of varied length — never a flat cross
+    const dirs6: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]];
+    for (let i = 0; i < 6; i++) {
+      const [dx, dz] = dirs6[i];
+      blade(sway, 0, 0, 0, dx, dz, 2 + (i % 3), 1, 0.85, 0.05, bladeC, pal.light, edgeC, 65 + i * 3);
     }
     return finishPlant(stat, sway);
   }
@@ -61,23 +62,24 @@ export function makeWheat(stage: number, pal: CropPalette = WHEAT_PAL): ReturnTy
     vline(sway, ox, 0, oz, topX, h, oz, i % 2 ? stemC : shade(stemC, pal.dark, 0.15));
 
     if (stage <= 2) {
-      // young tiller: a couple of thin blade ticks
-      blade(sway, topX, Math.max(1, h - 2), oz, i % 2 ? 1 : -1, 0, 2, 1, 0.55, 0.12, bladeC, pal.light, edgeC, 70 + i * 3);
+      // young tiller: grassy blades at the tip and mid-stem
+      blade(sway, topX, Math.max(1, h - 2), oz, i % 2 ? 1 : -1, 0, 3, 1, 0.8, 0.06, bladeC, pal.light, edgeC, 70 + i * 3);
+      blade(sway, ox, Math.max(0, h - 3), oz, i % 2 ? -1 : 1, 0, 2, 1, 0.75, 0.07, shade(bladeC, pal.dark, 0.12), pal.light, edgeC, 75 + i * 5);
       continue;
     }
 
-    // headed stages: distinct 1-wide zigzag spike + fine awns
+    // headed stages: distinct tight zigzag spike + fine awns
     const headC = stage === 3 ? pal.unripe : stage === 4 ? shade(pal.unripe, pal.fruit, 0.6) : pal.fruit;
-    const headLen = stage === 3 ? 2 : 4;
+    const headLen = stage === 3 ? 3 : 4;
     for (let k = 0; k < headLen; k++) {
-      put(sway, topX, h + 1 + k, oz + (k % 2), headC, 0.9);
-      // awns — hair-fine spikes from every grain
-      flowerDot(sway, topX + 0.4, h + 2 + k * 0.95, oz + 0.6, stage >= 4 ? pal.accent : shade(headC, pal.light, 0.3), 0.26);
+      put(sway, topX, h + 1 + k, oz + (k % 2 ? 0.5 : -0.5), headC, 0.85);
+      put(sway, topX, h + 1 + k, oz + (k % 2 ? -0.35 : 0.35), shade(headC, pal.light, 0.25), 0.6);
+      // awns — hair-fine spikes rising straight off each grain (anchored, no float)
+      flowerDot(sway, topX + 0.35, h + 1.5 + k * 0.95, oz + (k % 2 ? 0.8 : -0.2), stage >= 4 ? pal.accent : shade(headC, pal.light, 0.3), 0.28);
     }
     if (stage >= 4) {
-      // long central awn bristle
-      put(sway, topX + 0.3, h + headLen + 1.2, oz + 0.4, pal.accent, 0.24);
-      put(sway, topX + 0.5, h + headLen + 2, oz + 0.6, pal.accent, 0.18);
+      // one fine awn bristle rising from the spike tip (anchored)
+      put(sway, topX + 0.3, h + headLen + 0.5, oz + 0.5, pal.accent, 0.26);
     }
     // nodding heads at harvest
     if (stage === 5) {
@@ -132,14 +134,16 @@ export function makeCorn(stage: number, pal: CropPalette = CORN_PAL): ReturnType
   put(stat, 0.8, 0, 0.3, shade(pal.stem, pal.dark, 0.25), 0.6);
   put(stat, -0.5, 0, -0.7, shade(pal.stem, pal.dark, 0.25), 0.6);
 
-  // arching blades alternating around the stalk, lower ones longest
+  // arching blades alternating around the stalk, lower ones longest —
+  // blades launch at the stalk and arc up-and-over so the plant never
+  // reads as a conifer
   const nBlades = [0, 0, 5, 6, 7, 8][stage];
   const dirs: Array<[number, number]> = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   for (let i = 0; i < nBlades; i++) {
     const [dx, dz] = dirs[i % dirs.length];
     const by = 1 + Math.floor((i / Math.max(1, nBlades)) * (H - 3));
-    const len = Math.max(4, 6 - Math.floor(i / 3) + (stage >= 4 ? 1 : 0));
-    blade(sway, dx, by, dz, dx, dz, len, stage >= 4 ? 3 : 2, 0.92, 0.092, bladeBase, pal.light, bladeEdge, 80 + i * 11);
+    const len = Math.max(4, (stage >= 4 ? 8 : 6) - Math.floor(i / 3));
+    blade(sway, 0, by, 0, dx, dz, len, stage >= 4 ? 3 : 2, 1.05, 0.135, bladeBase, pal.light, bladeEdge, 80 + i * 11);
   }
 
   // tassel from the crown — airy 1-wide gold spikes, never a chunk
@@ -154,25 +158,36 @@ export function makeCorn(stage: number, pal: CropPalette = CORN_PAL): ReturnType
     });
   }
 
-  // ear: husked capsule jutting clear of the blades, silk tuft at the tip
+  // ear: husked cob angling up on the open diagonal between blade whorls,
+  // silk tuft at the tip (the diagonal keeps it clear of the 4 blade axes)
   if (stage >= 4) {
-    const ey = Math.round(H * 0.5);
+    const ey = Math.round(H * 0.42);
     const ripe = stage === 5;
     const earLen = stage === 5 ? 4 : 3;
-    const tilt = stage === 5 ? 0.6 : 0.35;
-    const huskC = shade(f, pal.dark, 0.05);
+    // ripe husk dries toward straw so the cob reads against green blades
+    const huskC = ripe ? shade(f, PALETTE.straw, 0.45) : shade(f, pal.dark, 0.05);
+    put(sway, 0.6, ey, 0.6, shade(pal.stem, pal.dark, 0.2), 0.7); // shank to the stalk
     for (let k = 0; k < earLen; k++) {
-      const ex = 1.2 + tilt * k;
-      put(sway, ex, ey + k, 0.2, k === earLen - 1 ? shade(huskC, pal.light, 0.35) : huskC, 1);
-      put(sway, ex + 0.6, ey + k, 0.6, shade(huskC, pal.dark, 0.3), 0.65); // wrapper leaf
+      const ex = 1.1 + k * 0.55;
+      const eyy = ey + Math.round(k * 0.7);
+      put(sway, ex, eyy, ex, k === earLen - 1 ? shade(huskC, pal.light, 0.35) : huskC, 1);
+      // flanking wrapper leaves give the cob real girth
+      if (k >= 1) {
+        put(sway, ex + 0.6, eyy, ex - 0.6, shade(huskC, pal.dark, 0.3), 0.62);
+        put(sway, ex - 0.6, eyy, ex + 0.6, shade(huskC, pal.light, 0.18), 0.55);
+      }
     }
     // silk streaming from the tip (pale fresh → browned ripe)
     const silkC = ripe ? PALETTE.hay : shade(SILK_PALE, pal.light, 0.4);
     for (let s = 0; s < 4; s++)
-      flowerDot(sway, 1.2 + tilt * earLen + 0.3 + s * 0.35, ey + earLen - 0.3 + (s % 2) * 0.5, 0.3 + (s % 2) * 0.45, silkC, 0.36);
+      flowerDot(sway, 1.1 + earLen * 0.55 + 0.3 + s * 0.3, ey + earLen * 0.7 - 0.2 + (s % 2) * 0.5, 1.1 + earLen * 0.55 + 0.2 + (s % 2) * 0.3, silkC, 0.36);
     // flag leaf above the ear + kernel glimpse where the husk opens (s5)
-    blade(sway, 1, ey + earLen + 1, 0, 1, 0, 3, 2, 0.7, 0.09, bladeBase, pal.light, bladeEdge, 99);
-    if (ripe) flowerDot(sway, 1.2 + tilt * (earLen - 1) + 0.5, ey + earLen - 1, 0.2, pal.fruit, 0.6);
+    blade(sway, 1, ey + Math.round(earLen * 0.7) + 1, 1, 1, 0, 3, 2, 0.7, 0.09, bladeBase, pal.light, bladeEdge, 99);
+    if (ripe) {
+      const tx = 1.1 + (earLen - 1) * 0.55 + 0.4;
+      flowerDot(sway, tx, ey + Math.round((earLen - 1) * 0.7) + 0.3, tx, pal.fruit, 0.62);
+      flowerDot(sway, tx, ey + Math.round((earLen - 1) * 0.7) - 0.4, tx, shade(pal.fruit, PALETTE.hay, 0.35), 0.5);
+    }
   }
   return finishPlant(stat, sway);
 }

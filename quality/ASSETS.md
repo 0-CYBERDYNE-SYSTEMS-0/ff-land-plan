@@ -57,6 +57,7 @@ with palette variants in `crops/map.ts`.
 | `herb-shrub` | Rosemary, Thyme, Sage, Oregano, Chives (woody shrub / chive spears) |
 | `berry-bush` | Raspberry, Blueberry (canes/bush, berry clusters) |
 | `apple-tree` | Fruit Tree / Apple (trunk, scaffold limbs, canopy, fruit) — also the `fruit-tree` placeable |
+| `mushroom` | Mushroom (domed caps on stems, cluster habits; feeds the Mushroom Warehouse farm theme) |
 
 Also in lane B: `growth-demo` — one row showing all six stages of tomato side by side
 (the canonical "how growth reads" exhibit).
@@ -69,7 +70,7 @@ Matches the designer's asset library (`src/data/assets.ts`) slugs 1:1, plus icon
 |---|---|---|
 | `barn` | classic red barn | icon of the set: plank walls, gable roof, big doors, hay loft |
 | `shed` | garden shed | small timber, pitched roof, door + window |
-| `greenhouse` | glass greenhouse | gable, glazed walls/roof, door, ridge vent, interior benches hint |
+| `greenhouse` | glass greenhouse | arched hoophouse-style house: brick knee wall, gothic arch of glazed panes on galvanized ribs + purlins, framed gables, door, ridge vents, louvre, interior benches hint |
 | `polytunnel` | polytunnel | hoop ribs + translucent film, tied ends |
 | `cold-frame` | cold frame | low angled glazed lid over timber box |
 | `chicken-coop` | chicken coop | raised house, ramp, run fence hint, nest box |
@@ -87,6 +88,14 @@ Matches the designer's asset library (`src/data/assets.ts`) slugs 1:1, plus icon
 | `crate-stack` | harvest crates | stacked slatted crates |
 | `signpost` | plot signpost | post + board + carved arrow |
 | `scarecrow` | scarecrow | pole cross, straw head, patched shirt |
+| `grow-tent` | indoor grow tent | fabric panels + frame connectors, zippered edge, interior glow bars over seedling trays |
+| `fruit-tree` | orchard fruit tree placeable | flared trunk, root buttresses, scaffold limbs, lobe canopy with fruit on the surface |
+| `grow-light` | LED grow light bar | grounded floor stand (T-feet), LED underside strip + side glow, driver box, cable to plug |
+| `plant-rack` | vertical grow rack | metal shelving with joint bands, seedling trays per shelf, LED bar under top shelf, castors |
+| `hydro-channel` | hydro NFT channel | sloped channel on legs, lettuce in every hole, inlet fitting, feed line |
+| `clip-fan` | clip-on fan | 16-segment ring cage, pitched blades, clamp jaws + wing screw, tilt joint |
+| `hvac-unit` | HVAC unit | louvered case, grid-aligned elliptical fan intake (ring + spokes + hub) |
+| `grow-bench` | potting bench | continuous rim lip, calm deck dither, seed tray with cuttings + spare pot |
 
 ## Lane D — Creatures, Tools & Atmosphere (`src/creative/creatures/`, `src/creative/studio/`) — registry: `creatures/registry.ts`
 

@@ -10,7 +10,10 @@
  *  - Templates are authored at ~1 m footprints (1 voxel = 10 cm). Each slug
  *    maps to a target world size for its largest horizontal dimension; the
  *    template's bounding box is measured once and scaled uniformly to hit
- *    that target.
+ *    that target. At cache time each template is RE-CENTRED so its footprint
+ *    centre sits at the origin (builders anchor voxels at a corner, e.g. the
+ *    polytunnel spans 0..+Z); clones inherit that offset. y is untouched so
+ *    instances keep sitting at y=0 base.
  *
  *  - Region merge (audit finding A6): NON-linear slugs emit ONE instance per
  *    CONTIGUOUS REGION of same-slug cells (deterministic BFS flood fill,
@@ -19,8 +22,10 @@
  *    footprint rendered dozens–hundreds of overlapping copies (seed farm 1:
  *    64 overlapping sheds). Target sizes for non-linear slugs are DERIVED
  *    from the designer record (`assetLibrary`: Math.max(defaultWM, defaultHM))
- *    so the 3D model always matches the 2D footprint — a single source of
- *    truth, no magic numbers.
+ *    as an upper bound, then SHRUNK-TO-FIT the painted region's actual
+ *    footprint (floored at 0.5 so tiny paintings stay recognizable) and the
+ *    instance centre CLAMPED inside the plot bounds — structures may overlap
+ *    paths and beds, but never float off the platform into the void.
  *  - LINEAR slugs (fence, picket-fence, gate, trellis, irrigation-line) KEEP
  *    per-cell placement at connective sizes (~0.5–0.55 m) so adjacent
  *    segments visually tile into continuous runs.
@@ -53,8 +58,9 @@ interface SlugMapping {
    * Connective per-cell size in metres — ONLY set for linear slugs, whose
    * segments must overlap slightly to read as one run (~0.5–0.55 m).
    * Non-linear slugs omit it: their target size is derived from the designer
-   * record in `assetLibrary` (Math.max(defaultWM, defaultHM)) so the 3D size
-   * always equals the painted 2D footprint.
+   * record in `assetLibrary` (Math.max(defaultWM, defaultHM)) as an upper
+   * bound; instances then shrink to fit the painted region (see
+   * buildStructures).
    */
   targetSizeM?: number;
   /**
@@ -114,6 +120,12 @@ function hashCell(x: number, z: number): number {
 /** Fallback when a designer record is missing (should not happen). */
 const FALLBACK_SIZE_M = 0.5;
 
+/**
+ * Floor for region shrink-to-fit: a very small painting shrinks its structure
+ * at most to half the record-derived size so it stays recognizable.
+ */
+const MIN_FIT_SCALE = 0.5;
+
 /** Target world size for a slug: explicit for linear items, else the designer record. */
 function resolveTargetSizeM(slug: string, mapping: SlugMapping): number {
   if (mapping.targetSizeM !== undefined) return mapping.targetSizeM;
@@ -161,6 +173,8 @@ function contiguousRegions(keys: string[]): string[][] {
 
 interface Template {
   obj: THREE.Object3D;
+  /** Per-axis bbox size of the un-scaled template, in metres. */
+  size: THREE.Vector3;
   /** Largest horizontal dimension of the un-scaled template, in metres. */
   sizeM: number;
 }
@@ -175,11 +189,20 @@ function getTemplate(entryId: string): Template | null {
   if (!entry) return null;
 
   const obj = entry.make();
+  // Measure FIRST (object at identity), then re-centre: builders anchor voxels
+  // at a corner (e.g. the polytunnel spans 0..+Z with tie-down pegs at −x), but
+  // instances are placed at a region's centre, so the template's footprint
+  // CENTRE must sit at the origin. y is untouched — instances sit at y=0 base
+  // (yOffsetM lifts at placement). No-op for builders that already centre.
   const bbox = new THREE.Box3().setFromObject(obj);
   const size = new THREE.Vector3();
   bbox.getSize(size);
+  const center = new THREE.Vector3();
+  bbox.getCenter(center);
+  obj.position.x -= center.x;
+  obj.position.z -= center.z;
   const sizeM = Math.max(size.x, size.z) || 1;
-  const tpl = { obj, sizeM };
+  const tpl = { obj, size, sizeM };
   templateCache.set(entryId, tpl);
   return tpl;
 }
@@ -248,8 +271,30 @@ export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureG
         const wx = ((minCx + maxCx + 1) / 2) * cellM + offsetX;
         const wz = ((minCz + maxCz + 1) / 2) * cellM + offsetZ;
         const inst = tpl.obj.clone();
-        inst.scale.setScalar(scaleBase);
-        placeRoot(inst, wx, wz, mapping.yOffsetM);
+        // Shrink-to-fit: scaleBase ignores the painted region's actual size,
+        // so a small painting of a big structure would overflow. Shrink only
+        // (never grow above the record-derived size — keeps voxel density
+        // crisp), floored at MIN_FIT_SCALE.
+        const regionW = (maxCx - minCx + 1) * cellM;
+        const regionH = (maxCz - minCz + 1) * cellM;
+        const fit = Math.min(
+          1,
+          regionW / (tpl.size.x * scaleBase),
+          regionH / (tpl.size.z * scaleBase)
+        );
+        const scale = scaleBase * Math.max(fit, MIN_FIT_SCALE);
+        inst.scale.setScalar(scale);
+        // Clamp the centre so the scaled bbox stays on the platform. If the
+        // instance is wider than the plot itself, centre it instead.
+        const halfX = (tpl.size.x * scale) / 2;
+        const halfZ = (tpl.size.z * scale) / 2;
+        const px = 2 * halfX >= plan.widthM
+          ? offsetX + plan.widthM / 2
+          : Math.min(Math.max(wx, offsetX + halfX), -offsetX - halfX);
+        const pz = 2 * halfZ >= plan.heightM
+          ? offsetZ + plan.heightM / 2
+          : Math.min(Math.max(wz, offsetZ + halfZ), -offsetZ - halfZ);
+        placeRoot(inst, px, pz, mapping.yOffsetM);
       }
     }
   }

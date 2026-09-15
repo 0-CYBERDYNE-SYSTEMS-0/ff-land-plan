@@ -403,6 +403,532 @@ NFT channels, LED + glass shell).
 isometric camera looks down into the room and the lid eats the whole frame.
 Open-top beam frame + cutaway walls is the house style now.
 
+## Launch kit + appshot-live (2026-09-03)
+
+- Added `tools/appshot-live.mjs`: CDP-driven screenshot variant that waits REAL
+  time instead of a virtual-time budget. Needed because recharts animations
+  (Simulations, Monitoring) and the Blueprint 2D canvas freeze/blank under
+  `--virtual-time-budget`. Connects to the page target via `/json/list` (the
+  browser WS endpoint has no Page domain), supports `--wait <ms>` and `--full`.
+- World-view capture matrix that works headless: `?ffview=world&fftime=0.25`
+  (dawn, warm), `0.5` (noon hero), `0.05` (night). `fftime=0.9` renders a flat
+  orange sky + near-black ground under SwiftShader — avoid for beauty shots;
+  golden hour lives between 0.8 and 0.9 and is very narrow.
+- `marketing/launch-kit/`: rebuildable press kit (`build.mjs` → index.html +
+  deck.html → FarmFriend-Launch.pdf; `build-cards.mjs` → voxel quote cards).
+  26 social assets in `social/` named `<subject>-<WxH>.png`. Copy in
+  `copy/social-copy.md`. All images judged pass (2 judge rounds).
+
+## Growth realism + arched greenhouse (2026-09-04)
+
+- Sim playback pacing (World3D): the old 500 ms tick advancing
+  `round(speed*0.5)` days actually ran 2/8/30 days per real second, so the
+  default "1×/week" matured a 60-day crop in ~7.5 s and then sat static while
+  sky/weather looped ("overgrow and repeat"). Now a 1 s tick advances exactly
+  `simSpeed` days — labels are honest (1 day / 1 week / 1 month per second) —
+  and the default dropped to 1×/day.
+- Season-end auto-pause (World3D): once EVERY planted crop reads 100 % mature,
+  playback runs at most 14 more sim days, then auto-pauses with a
+  "Season complete" chip. Anchor date lives in `matureSinceRef`; cleared on
+  resume / scenario change / planVersion change so restarting re-arms the
+  grace window. No planted cells -> never pauses.
+- Per-surface plant scale (growth.ts + plants.ts): new
+  `SURFACE_PLANT_SCALE = { outdoor: 1, greenhouse: 0.7, tent: 0.45, indoor: 0.6 }`
+  multiplies `fullHeight` in `buildPlants` (both voxel-instanced and procedural
+  paths derive from it). Fixes biomass proportion: the grow-tent asset lands at
+  a 1.5x1.5 m footprint (~1.7 m tall) but fruit crops reached 2.6 m — plants
+  punched through the roof and filled the whole volume. Tent tomato now caps
+  ~1.17 m under the light bars.
+- Greenhouse rebuilt as an arched hoophouse-style glasshouse
+  (buildings.ts `makeGreenhouse`): gothic arch (two off-center ellipse halves,
+  crown ~2.2 m) on galvanized hoop ribs every 7 voxels + purlins + ridge tube,
+  translucent glass panes (0.42) over a 4-course brick knee wall, propped ridge
+  vents + rear louvre band, timber-panelled door; interior bench/pots/path
+  kept. Footprint contract preserved: 25x40 voxels, max horizontal 40 = 4.0 m
+  so `resolveTargetSizeM` still matches the 2.5x4 asset record. Deliberately
+  distinct from polytunnel (glass-on-steel + knee wall vs film on timber
+  rails). quality/ASSETS.md + QUALITY_BAR.md entries updated to match.
+- Verified: typecheck clean; appshot world view GATE PASS with arch reading
+  clearly and "1×/day" default visible; showcase iterations on
+  `#lane=c&only=greenhouse&mode=big` (3 rounds) for the arch silhouette.
+
+## Leftover closeout pass (2026-09-04)
+
+Swept every still-open item from "Known gaps / future work", HANDOFF's
+"Known limitations", and the per-entry "Still open" lists. Three parallel
+workers + lead integration; nothing committed yet.
+
+- **Fall frost-relative sowing windows DONE** (last open Known-gap).
+  `fallSowWeeksBeforeFirstFrost(crop)` in usePlanEditor.ts: category heuristic
+  over existing catalog fields — qualifies iff `minTempC <= 8` (catalog gap
+  7→10), `maxTempC <= 30` (heat-lovers bolt), `growthDays <= 120` (must mature
+  in one fall; garlic/rye/wheat/fruit deliberately out). Weeks =
+  `ceil(growthDays/7)+2` before first frost. `sowWindow` appends
+  "fall: sow Nw before first frost" (CSV export inherits it); SelectionPanel
+  resolves the farm's `firstFrost` "MM-DD" to concrete dates
+  ("Fall: sow around Aug 13 · first frost Oct 15") — no new queries, farm data
+  was already on the editor. Spinach 45d → 9w, kale 60d → 11w, radish 28d → 6w.
+- **staleTime Known-gap was already closed** (stale ledger line): Weather +
+  Dashboard queries carry WEATHER_STALE_MS 15 min, Monitoring uses
+  refetchInterval 30/60s. Refetch fires on route remount when stale
+  (refetchOnWindowFocus is off globally). Ledger line retired, nothing to do.
+- **Dead code removed**: `src/three/groundTexture.ts` deleted (verified zero
+  imports first; only two comment references, refreshed to say "the 3D
+  ground-tile path"). Build re-verified: main chunk 533.11 kB / 156.85 gzip,
+  three still its OWN lazy chunk (782.62 kB / 201.09 gzip), no WebGL symbols
+  leak into main.
+- **Large-plan perf BASELINE recorded** (HANDOFF limitation closed; headless
+  Chrome, appshot-live CDP at noon — the virtual-time harness distorts FPS):
+  farm 1 North Meadow 34 FPS / 273 draws / 2.3 M tris; farm 6 Mushroom
+  Warehouse 46 FPS / 82 draws / 1.6 M tris; farm 4 Market Field (40×24 m,
+  ~4,000 planted cells) 8 FPS / 665 draws / 18.6 M tris. Attribution is
+  linear: ~3.9 k tris/plant, draws unremarkable — no pathological builder, so
+  NO fix applied. The real lever for huge outdoor fields is a plant
+  LOD/imposter system (project-scale, unscheduled); real GPUs score higher.
+- **HANDOFF refreshed**: barn-livestock "interactive QA pending" bullet is now
+  a verified note (2026-08-25 QA landed); stale "farms 1–2, no farm 3" claims
+  fixed in both "How to run" and trap #9 (demo farms 1–7, see seed.ts);
+  perf bullet carries the baseline; groundTexture bullet marks deletion;
+  build-gate chunk sizes updated (~533 kB main).
+- **Animal-spawn palette hint DONE** ("discussed but not implemented" item):
+  one muted line under the AssetPalette search input — "Animals ship with
+  their structures — barn: cow · pig · sheep, coop: hens + rooster, hive:
+  bees, pond: ducks; planted beds draw butterflies." Pure presentation.
+- **Night-lighting human glance DONE** (MISSION-BETA deferral): all four
+  matrix shots readable with believable sun direction — night ground legible
+  under moon fill, noon cleanest, minor nits only (dawn sky→ground transition
+  slightly harsh; dusk orange band slightly flat/poster-like). Read-only;
+  no action taken.
+
+Still honestly open (need external inputs, not effort): REST client runtime
+exercise awaits a real backend; offline-weather fallback has no automated test
+(the repo deliberately has no test runner — decision needed before adding one).
+
+## Creative asset QA round — pre-market visual pass (2026-09-05)
+
+Full-library visual QA of all 171 showcase entries (Lane A 14, Lane B 109,
+Lane C 28, Lane D 20) against `quality/QUALITY_BAR.md`, run as three parallel
+QA agents over the headless showcase harness (`showcase.html#lane=…&only=…`,
+`tools/appshot.mjs`, `spin=0`). Every fix was re-rendered and re-judged;
+`npm run typecheck` green after every round; `npm run build` green at close.
+~30 assets revised, all verified:
+
+- **Lane A (3 fixed)**: `soil-tilled-dry/wet` — the `dips` undulation let
+  adjacent ridge columns dip at the same row, carving a 2-voxel rectangular
+  bite out of the silhouette; each ridge column now dips once in disjoint
+  interior z-bands. `pond-center` — radial depth tint + more shimmer specks so
+  it reads as water, not a blue slab.
+- **Lane B (9 archetypes fixed, 10 re-verified PASS)**: first agent pass fixed
+  tomato, wheat, corn, leafy-head, brassica, greens-open, cucurbit-vine,
+  legume-trellis, bush-bean, strawberry then stalled (inactive-timeout — no
+  code issue; its 4 edited files typechecked clean and were re-verified by the
+  follow-up pass). Follow-up fixed: `root-carrot` missing s3 umbel event +
+  s4 shoulder color; `allium` s5 gold bulb lifted into sight-lines;
+  `potato` s5 tubers rolled onto open soil (were tan-on-tan in foliage);
+  `herb-clump` rebuilt lower/wider with bud dots (was cactus pillars);
+  `herb-shrub` needle whorls break slab columns; `mushroom` domed cap tier.
+  `map.ts` audited: variants swap palette/scale only, never geometry.
+- **Lane C (13 fixed, incl. all 8 new CE assets — none were market-ready
+  before)**: dominant failure mode was seeded per-voxel speckle reading as
+  noise/holes (calmed tonal mixes) and hardware floating without grounding
+  (`grow-light` rebuilt as a floor stand, `fruit-tree` de-lollipopped with
+  root buttresses + surface fruit, `grow-tent` given fabric bands + zipper +
+  visible interior lights, `plant-rack`/`hydro-channel` given actual plants).
+  Classics: `shed` roof speckle, `chicken-coop` floating ramp tiles,
+  `beehive` white-box look, `hay-bale` twine bands, `gate` porcelain-white
+  pickets → weathered wood family. Barn/greenhouse/polytunnel PASS unchanged.
+- **Lane D (8 fixed)**: `chicken` skull 1 unit smaller; `pig` snout/ears/nostril
+  readability; `butterfly` wing fold capped ~25°; `watering-can` throat slimmed;
+  `hoe` blade plate; `pitchfork` tines flipped into the bale (read backwards);
+  `seed-bag` label patch overlap; wind-sway ripple amplitude +50% so the phase
+  offset reads in a static frame (tick now allocation-free).
+
+Residuals accepted for ship (noted, low impact at world scale): `pig` still the
+boxiest creature from pure side view; `grow-tent`/`hvac-unit` cube-dominant by
+nature; `ibc-tote` cage dither slightly noisy; allium s1/s2 chunky; s4
+"green fruit" signal subtle on berry-bush/potato. No shared-code changes were
+needed — every fix fit its lane directory (`voxel.ts` untouched). Contact
+sheets + close-ups from the pass live in `$TMPDIR/ff-asset-qa/` (ephemeral;
+regenerate via the showcase URL formulas above). `quality/ASSETS.md` inventory
+updated: mushroom archetype + the 8 CE structures were missing from the tables.
+
+## 2026-09-06 — Showcase gallery: scroll-offset fix (labels/images desync)
+
+User-reported: scrolling `showcase.html` made asset names sit under foreign
+images and some cells looked empty. Judge-verified root cause: `renderFrame`
+positioned each scissor viewport from `getBoundingClientRect()` (viewport-
+relative) while the canvas is absolutely positioned at the DOCUMENT origin —
+after scrolling by S, every WebGL image drew S px off its DOM cell. Fix: add
+`window.scrollX/Y` to the rect before converting to GL coords
+(`src/creative/showcase/main.ts`). No assets were actually missing: judge pass
+over full-page lane captures (A14/B21/C28/D20 cells) found every cell renders;
+the "missing" ones were scroll-displaced content. Full-page (unscrolled)
+captures were always correct, which matches the report. Also fixed a latent
+`tools/appshot-live.mjs` arg bug: absent `--wait`/`--scroll` made index -1
+bleed into the skip set, dropping the URL positional. Verified: typecheck +
+judge PASS on mid-scroll captures of lanes A/B/C and full lane B.
+
+## 2026-09-06 — World 3D: grab-rotate works on arrival (tool auto-resets to Select)
+
+User-reported on touchpad: wheel zoom worked in the 3D world but click-drag
+could not grab/spin the platform. Root cause: orbit (left-drag / one-finger)
+is enabled only while the Select tool is active (`setEngineOrbitEnabled` in
+`src/three/engine.ts`), and the editor defaults to Brush — so the world view
+opened with `mouseButtons.left = NONE` while the un-gated wheel kept dolling.
+Browser-verified (drag → zero camera movement; same drag after Select →
+rotates). Fix: entering the world view resets the tool to Select
+(`PlotDesigner.tsx` effect keyed on `viewMode`; `setTool` is a stable setter,
+so it fires only on view switches). Painting in 3D is unchanged — explicitly
+picking a paint tool still claims the drag for strokes and disables orbit,
+and 3D paint strokes record undo history (undo/redo verified live). Side
+benefit: click-to-inspect (SelectionPanel) works by default in 3D. Farm plans
+are untouched by this change; QA drags that painted cells during reproduce
+were reverted (localStorage restored to seed values 42,13=pepper, 47,16=spinach,
+51,21 removed). Verified: typecheck + live drag/zoom/paint/undo cycle in Chrome.
+
+## 2026-09-06 — World 3D HUD: sim dock, SimDrawer, cinema mode (SPEC-WORLD-HUD)
+
+Shipped per `quality/SPEC-WORLD-HUD.md` (3-agent build: lead = World3D
+restructure + integration, Sub A = SimDrawer, Sub B = PlotDesigner cinema +
+toast CSS). Motivation: the old wrapping footer (13+ controls) covered 40–50%
+of the 3D canvas and reflowed mid-interaction; the per-crop growth list
+hijacked wheel scroll over the scene.
+
+- `World3D.tsx`: footer replaced by a fixed-child-set bottom dock (status chip
+  [date · Day N · season dot · cached] + Simulate/Tour/Fly/Reset/Sim▸) and a
+  top-left cluster (Cinema/History/Audio/Debug; top-right is perf-HUD
+  territory). Dock never re-renders its child set — labels swap in place
+  (verified pixel-stable while playing). Reset view now shares `homeFrame()`
+  with the init camera (Reset == load-in framing; was maxDim*0.6 drift).
+  Tour progress throttled to 1% steps (was setState per rAF frame). Season
+  auto-pause now auto-opens the drawer once with an explained banner +
+  "Jump to season start"/"Keep watching" (guard ref resets with
+  seasonComplete). Toast uses a real `ff-toast-in` keyframe
+  (tailwindcss-animate was never installed — old classes were dead) and its
+  timeout cleans up on unmount. A11y: aria-pressed everywhere, audio
+  aria-label, sr-only "Sim controls…" summary stays mounted for appshot
+  --expect.
+- `SimDrawer.tsx` (new, controlled/presentational): date+Today, full-width
+  time-of-day slider (HH:MM readout, drag disables Auto), speed + scenario
+  via ui/select, full-height growth list (kills the canvas scroll-hijack),
+  weather footer. Mounted always, slides via transform; below xl it becomes a
+  bottom sheet. Trap found in live QA: Radix Select portals render at body
+  z-50 → behind the z-[150] drawer; fixed with `SelectContent
+  className="z-[200]"` (cn = tailwind-merge).
+- `PlotDesigner.tsx`: `cinema` state (world view only; `h` toggles, auto-exits
+  on blueprint switch; Escape untouched — flight owns it). Cinema unmounts
+  DesignerToolbar + right sidebar + save badge and collapses the grid to one
+  column; layout invariants (xl:h-full root, min-h-0 card, 60dvh below xl)
+  preserved. Painting-in-3D is intentionally unreachable while in cinema.
+- No changes to `usePlanEditor`, `src/three/*`, or the blueprint view.
+- Verified: typecheck + build green; appshot gate matrix 6/6 (world default,
+  night+ffdebug FPS:, tablet 820px, blueprint regression "Brush", farm 6,
+  sr-only "Sim controls"); live click-through: simulate without control
+  movement, season-end drawer auto-open + banner + dismissal, drawer
+  contents + both Radix selects, tour dim/undim, flight + Escape, cinema
+  on/off with restore, before/after screenshots at 1440×900 and 1150×760.
+
+## 2026-09-07 — Structure placement: re-center templates, fit-to-region, platform clamp
+
+Bug: non-linear 3D structures rendered shifted +½ footprint toward +X/+Z and
+could float off the ground platform (farm 1 polytunnel ~2 m into the void).
+Root cause: creative builders anchor voxels at the origin corner (polytunnel
+spans 0→6 m in +Z) while `structures.ts` placed the instance ORIGIN at the
+region's centre — plus instance size was fixed from the asset record,
+ignoring the painted region's extent.
+
+Fix (src/three/structures.ts only, +53/−8): (1) `getTemplate` measures the
+bbox at identity then re-centres the cached template horizontally
+(`position.x/z -= centre`; y untouched so instances keep their y=0 base;
+no-op for builders that already centre). (2) Non-linear regions shrink-to-fit
+their painted footprint: `fit = min(1, regionW/sizeX, regionH/sizeZ)`,
+floored at `MIN_FIT_SCALE = 0.5` (recognizability), shrink-only so voxel
+density never stretches. (3) Instance centre clamped inside plot bounds with
+a degenerate-size guard (oversized → centred). Linear slugs (fences, gates,
+trellis…) untouched. Deliberately NOT fixed by enlarging platforms —
+`buildGround` tiles every plot cell, so the platform exactly mirrors the
+blueprint; size now follows what the user paints (paint a bigger footprint →
+bigger structure, up to the record size).
+
+Verified: typecheck + build clean; appshot GATE/EXPECT pass on farms 1/2/3/5;
+live screenshots (`$TMPDIR/struct-qa/`) show farm 1 polytunnel, greenhouse,
+shed and coop fully on-platform; farm 2 coop sits at the east edge because
+the seed paints it there (clamp holds it inside); farm 5 tent interior
+unaffected.
+
+## 2026-09-08 — Sim Core waves 1+2: living-ecosystem engine, runs, provenance (SPEC-SIM-ECOSYSTEM)
+
+Implemented per `quality/SPEC-SIM-ECOSYSTEM.md` by a 5-agent team (A: 3D
+foundations, B: engine, C: integration/UI, D: ecosystem depth, plus a
+persistent validator that gated each wave). Rollback point: `c438019`;
+wave 1: `59598c8`.
+
+**Wave 1 (Phases 0+1).** `src/three/plants.ts`: module-level (crop,stage)
+template cache (session lifetime, height in key) + reconcile-based
+`updatePlants` (per-cell diff, swap-with-last removal, no dispose-all) +
+`advancePlantGrowth` per-frame easing (uniform scale off the y=0 base,
+module-scratch objects — zero per-frame allocation). World3D: setInterval
+playback replaced by rAF-dt accumulation (dt clamp 0.25 s; commits only on
+whole sim-days; UTC day-number math via `isoDayNumber` so DST nights can't
+stall it); all-mature auto-pause ignores undated cells; drawer rows keyed
+(cropId, plantedAt); monotonic progress clamp in the legacy scrub path (runs
+make it obsolete). `fetchClimateNormals` now feeds `growthCtxRef.baselineTempC`
+— the invisible 20 °C-everywhere default is dead (drawer chip shows
+"baseline 17.4 °C · ERA5"). `src/lib/sim/` (B): deterministic engine
+(createRun/stepDay/simulateRun; FNV-1a+splitmix32 keyed PRNG; copy-on-write
+cells), `buildEnvSeries` (Open-Meteo daily archive for past dates, forever-ish
+`ff-pro:simenv:` cache bounded 12 → ERA5-normals synth → temperate default;
+per-field provenance tags incl. `scenario-delta` and `model-estimate`),
+soil-water bucket (AWC mm/cm × 30 cm root depth, FAO-56-shaped Kc, ET0 real
+when available else documented proxy), GDD drivers (required = growthDays ×
+meanDailyGdd from normals, fallback 10; stress ×(1−0.6·max)), and
+`AppState.simRuns` persistence (RunRecord = config + envSeries + summary —
+replay IS the storage; legacy `createSimulation` still present at wave 1).
+
+**Wave 2 (integration + provenance + ecosystem).** `useSimRun` (C): own rAF
+tick loop (never setInterval), simStateRef as render truth, React commits
+throttled ~5/s, replay folds ONLY record.config × record.envSeries (ctx soil +
+crops fetched once per startRun, cached-forever modules — byte-identical to
+create-time summary), seekDay refolds from day 0 and never fires
+celebrations. World3D run mode: separate growth effect feeds biomass into
+`updatePlants` via `progressByCell` through a read-only plan shim
+(plantedAt 9999-12-31 ⇒ closed-form 0 ⇒ run biomass wins the max() clamp;
+shim never touches plan state — validator-verified). `GrowthFX.celebrate()`
+finally wired (harvest-ready events via event-sink ref, ≤12 cells/call,
+ref nulled in teardown). SimDrawer → RunInspector: run transport, timeline
+with intervention/event markers, per-day provenance chips, clickable crop
+rows with a "why" panel (GDD gain, bucket vs AWC, per-term stress with
+sources), opt-in moisture overlay (4 InstancedMesh bands, ≤4 draws, keyed on
+sim DAY not tickVersion). Simulations page is now a run manager (cards with
+honest-unit summaries, create form, comparison table, Open-in-world via
+`?ffrun=` before the hash, confirm-delete); farm-blind `createSimulation`
+DELETED from Api/localApi/restApi/README (legacy Simulation type + records
+stay readable/deletable). Ecosystem depth (D, `src/lib/sim/ecosystem.ts`):
+nitrogen pool (init OM%×250 clamp [200,1200]; mineralization
+0.002·pool·f(tMean); uptake ∝ growth; leach ×0.9 on >20 mm days; N stress in
+the GDD max + yield), neighbor cache (Chebyshev r=2, built once, rebuilt on
+plant) with companions +4%/cap +12% GDD rate and antagonists +0.05/cap 0.15
+stress (asymmetric by list), pest pressure (favorable warm+wet days
++0.015·density·u, frost ×0.2, outbreak hysteresis 0.6/<0.3, yield
+×(1−0.3·peak)), creatures (bees/butterflies ∝ flowering, pests ∝ pressure —
+for animals.ts wiring later), autoHarvest default true (payout 3 days after
+b=1.0, crop stands; manual pays at b≥0.8 else `harvest-too-early`); yield =
+yieldKgPerPlant ×(1−0.5·season-mean stress)×(1−0.3·peakPest); RunSummary
+gains waterUseMm/stressDays/outbreakDays/meanNitrogenKgHa.
+
+Verified: typecheck + build green after each wave; validator rounds 1+2 PASS
+(10/10 and 9/9 checks: determinism byte-identical, no Math.random in sim/,
+init deps frozen, shim isolation, seam sync incl. README, localStorage
+discipline, drawer presentational, overlay dispose); appshot GATE/EXPECT pass
+(world farm 1+2, simulations page); CDP end-to-end create→reload(?ffrun)→play
+(Day 0→34, 0 console errors); D's behavioral proofs — fertilize +10.4% yield
+& ripe day 106→91, companion +3.9% / antagonist −2.1% GDD, full drought ⇒ 0 kg
+yield, 10×10 monoculture 2,701 outbreak cell-days vs checkerboard 0.
+Known gaps (report-only, accepted): 4k-cell replay is seconds-class (spec
+updated with measured numbers); run-mode stress tint not applied to plant
+materials (drawer/overlay carry it); creatures counts not yet wired into
+animals.ts; interventions authoring UI, multi-run ghost A/B, rest-world runs
+= spec Phases 3-UI/4, not started.
+
+## 2026-09-08 — Sim Core wave 3 (Agent G): run stress tint + creature populations in the 3D world
+
+Closed the two wave-2 "known gaps" that kept the living ecosystem invisible in
+World3D (`quality/SPEC-SIM-ECOSYSTEM.md` §3.4). All changes ADDITIVE to the
+three owned files; `updatePlants`/`buildPlants`/`advancePlantGrowth` signatures
+unchanged (optional opts field only), init-effect deps untouched.
+
+**Run stress tint.** `PlantUpdateOptions` gains `stressByCell?: Map<string,
+number>` ("x,y" → effective stress 0..1). `plants.ts` centralizes the batch
+tint in `batchTintStress()`: when the map is present (run mode) the batch tint
+is the MAX per-cell effective stress across the batch's live cells (one
+material per (crop,stage) template — per-instance tint would need
+instanceColor buffers per batch); when absent, the legacy
+`scenarioGrowthMod().stress` path applies byte-identically (run mode passes
+`scenario: undefined`, so the two never fight over a shared material).
+World3D's `applyRunGrowth` builds `stressByCell` alongside `progressByCell`:
+per cell `max(water, heat, cold, nitrogen)` — the SAME max-of-terms
+aggregation the RunInspector rows use (`useSimRun.aggregateCells`) — with
+`pestPressure × 0.8` folded in (documented visual-only weight; outbreak days
+read on the crop without pest creature models). Existing tint curve reused
+(`applyStressTint`: (1, 1−0.35s, 1−0.55s)).
+
+**Creature populations.** `animals.ts` gains `setFaunaPresence(system,
+{bees01, butterflies01})`: of each pollinator flock's spawned members (stable
+spawn order), the first `round(fraction × count)` stay `obj.visible`, the rest
+hidden — renderer skips them (hiding REDUCES draws), zero allocations, no
+geometry changes, hidden members keep ticking (≤16 total). Fractions: World3D
+computes `creatures.bees ÷ (Σ floweringFrac of insect-pollinated cells × 8)`
+and `creatures.butterflies ÷ (Σ floweringFrac × 3)` — the same denominators
+`ecosystem.creaturesFromCells` uses, so ≤1 by construction (clamped anyway);
+practically bees/butterflies read as present-during-flowering on the tiny
+world flocks. Day-keyed effect (`[runActive, runDayIndex, sceneReady,
+editor.planVersion]` — NOT tickVersion, moisture-overlay lesson), placed after
+the planVersion effect so it reapplies after animal rebuilds; run-off and the
+run-loading window reset to full presence. Legacy mode untouched (flocks fully
+visible; scenario tint path intact).
+
+Verified: typecheck + build clean (three.js still its own lazy chunk);
+appshot GATE/EXPECT on world farm 1. CDP-driven end-to-end on a purpose-built
+QA farm (temperate June, tomato beds + 2×2 beehive, own dev port, headless
+Chrome + raw-WebSocket CDP, no new deps): irrigated vs drought runs at day 50
+— drought tomato visibly olive/yellow-brown vs vibrant green watered control,
+RunInspector row "stress" chip matching (watered 62% no chip, drought 40%
+chip; sim summaries 26k vs ~0 tomato water-stress cell-days); bees ABSENT at
+day 10 (pre-flowering, creatures.bees=0) and clearly orbiting the hive at
+day 62 (flowering window) in 3× zoom shots; butterflies likewise flowering-
+gated. QA lesson recorded: on this sim, an unirrigated "baseline" in a dry
+summer IS drought-stressed — tint comparisons need an irrigated control.
+Known gaps (report-only): pest tint term (×0.8) is a visual superset the
+drawer's four-term row does not display (why-panel is Agent F's surface);
+seeded farms' per-cell coop flocks eat the 16-creature budget before bees
+(pre-existing `buildAnimals` cap behavior — bees only spawn on coop-free
+plans), so run presence modulation is most visible on coop-free/painted
+plans; batch tint is crop-wide max (per-(crop,plantedAt) tinting would need
+per-group materials).
+
+## 2026-09-08 — Sim Core waves 3+4: intervention authoring, ecosystem visuals, A/B experimentation
+
+Wave 3 (commit `07ed6d8`) + wave 4, completing SPEC-SIM-ECOSYSTEM Phases 3-UI
+and 4. Team: F (interventions), G (visuals), E (Phase 4; stalled post-impl, a
+scoped finisher audited its complete diff), consistent validator rounds 3-4
+(both PASS).
+
+**Intervention authoring (F).** `useSimRun.applyIntervention(iv)` amends the
+ACTIVE record's config.interventions in memory (stable-sorted by day) and
+refolds to the CURRENT day via the existing deterministic `replayTo` —
+dayIndex never visually resets, `replayTo` still never fires `onEvents` (no
+celebration spam from rewritten history). Guards reject weather-kind (baked
+into envSeries at compose time), out-of-season dates, bad amounts.
+`unsavedChanges` + amber chip: amendments are SESSION-ONLY by design — the
+stored RunRecord keeps its frozen-provenance contract; persisting amendments
+needs a `saveSimRun(record)` seam across Api/localApi/restApi (named
+follow-up; the controller already holds the amended record). RunInspector
+gives a presentational add-form (irrigate 1-50 mm / fertilize 10-200 kg/ha N,
+sweet spot 60-150; date defaults to current sim day) + timeline markers.
+Validator live-proof: past-dated fertilize refold moved why-panel N 459.7 →
+560.4 kg/ha; localStorage record untouched.
+
+**ET0 normals bug (found by F, fixed + verified).** climate.ts monthly
+normals store precip/et0 as MEANS OF MONTHLY TOTALS; environment.ts's
+synthFromNormals fed et0 straight in as DAILY mm/day (July ≈ 150 mm/day!),
+pinning buckets at 0 on normals-only days. Fix: divide by daysInMonth like
+rain already did. Frozen envSeries in existing records replay unchanged
+(self-consistent); new runs get ~1-8 mm/day. Validator audited for a third
+total-field case — none exists (temps are means, consumed directly).
+
+**Ecosystem visuals (G).** Run-mode stress tint via
+`PlantUpdateOptions.stressByCell` (per-cell max of water/heat/cold/nitrogen
+and pest×0.8; batch tint = max across the batch's cells — draw-budget
+compromise; legacy path byte-identical when absent). `setFaunaPresence`
+scales bee/butterfly visibility fractions from SimState.creatures without
+rebuilds (day-keyed effect, hidden members keep ticking). CDP-proven:
+drought bed olive vs irrigated control green; bees appear only in the
+flowering window.
+
+**Phase 4 A/B (E + finisher).** useSimRun: `loadGhost/clearGhost` — the ghost
+folds ONE extra pure stepDay per sim-day through its OWN config × OWN
+envSeries (primary interventions structurally can't reach it; validator
+empirically probed primary replay identical with vs without a ghost). World3D:
+day-keyed ghost effect renders the second run as semi-transparent instanced
+plants (session-lifetime ghost geometry cache mirroring plants.ts's
+normalization math — audited helper-by-helper identical; per-batch transparent
+material clones, shared caches never touched; 60-template draw cap; ghost
+snaps per-day, documented). `?ffrun=<id>&ffghost=<id>` before the hash,
+StrictMode-safe, ghost deferred until primary replay ctx lands. RunInspector
+Compare block (picker/legend/clear, presentational). Simulations page:
+multi-select 2-6 runs → ComparePanel with honest-unit deltas vs the first
+selected + "Compare A/B in world". Finisher CDP: 19/19 checks incl. visual
+ghost confirmation, ghost-season-ended cap label, interventions work with a
+ghost active.
+
+**Label collision fix (validator round 4).** createSimRun default label now
+includes startDate + a time suffix so same-param runs never read
+"solid = X · ghost = X".
+
+Verified per wave: typecheck + build green (three.js lazy chunk intact);
+validator rounds 3 (8/8 + live proofs) and 4 (8/8 + determinism probe) PASS;
+appshot GATE/EXPECT on world + simulations pages each round; dev servers
+killed by PID; scratch confined to $TMPDIR.
+
+Known gaps (ledger): saveSimRun seam (amendments session-only); ghost has no
+per-day easing; procedural-fallback/custom-named crops get no ghost; ghost on
+a differently-shaped fork draws the old footprint with no visual hint;
+batch-level tint granularity (one stressed sowing yellows its crop's whole
+batch); creatures counts animate existing flocks only on coop-free seeded
+plans (16-creature budget); named experiment sets (grouping runs) deferred.
+
+## Demo-video pipeline + Script Studio (2026-09-10)
+
+Built a HyperFrames (HTML→video) production pipeline and a 60s FarmFriend demo
+video, all real-capture based. New files live only under `tools/video/` and
+`videos/farmfriend-demo/` — no app-source changes.
+
+- `tools/video/lib/script-doc.mjs` — isomorphic SCRIPT.md/STORYBOARD.md
+  parser + serializer + validator (the node CLI block is marker-stripped and
+  inlined for browser use). `selftest` = 23-check fixture gate; `scaffold`
+  seeds project files. HyperFrames parses STORYBOARD.md leniently and ignores
+  unknown bullets, so our extra keys (`tags:`, `asset_candidates:`) and the
+  `## Video direction` preamble section coexist with Studio.
+- `tools/video/validate-script.mjs` — the gate: 60s ±0.5 total, script↔board
+  1:1, word-rate bands, asset existence, tag coverage. `--json` for CI.
+- `tools/video/script-studio.html` — built by `build-studio.mjs` from
+  `studio-template.html` + the lib (never edit the built file; shebang and
+  ESM exports don't survive `new Function`/classic-script inlining). Works
+  from file://; localStorage autosave; import/export round-trips the
+  HyperFrames formats.
+- Video project: `videos/farmfriend-demo/` (product-launch-video workflow,
+  editorial-forest preset remixed onto FarmFriend tokens). Captures are REAL
+  appshots (`tools/appshot*.mjs`, dev :5177). Two traps cost time: (1) the
+  blueprint 2D canvas does NOT paint under virtual-time budgets — use
+  `appshot-live --wait 14000`; (2) seed-farm plans re-seed from `seedPlans` on
+  every load, so blueprint content is the shipped showcase layout, not
+  localStorage. Sim runs are not seeded → the A/B beat uses the Simulations
+  page surface + authored run cards, ghost shown as a tint overlay.
+- Kokoro TTS speaks ~0.42s/word; `--speed` only reaches HeyGen, so the script
+  was tightened to 135 words (55.2s VO) and frame durations = voice + pad,
+  hand-balanced to sum exactly 60.00s. `sync-durations` would collapse frames
+  to raw voice lengths (55.2s) — do NOT re-run it after the hand balance.
+- Frame packets cap at 48KB: each cited rule id inlines its full recipe body,
+  so cite only 1–2 load-bearing rules per frame. Render needs ~15GB scratch
+  for a 60s 1080p job — use `--low-memory-mode` on this machine.
+
+## Sim-landscape + data-source research (2026-09-12)
+
+Two-agent web research pass (full reports saved at
+`quality/RESEARCH-SIM-LANDSCAPE-2026-09.md`): (1) the open-source headless
+crop/ecosystem simulator landscape (DSSAT, APSIM, AquaCrop-OSPy, PCSE/WOFOST,
+BioCro, RothC, EPIC, STICS…) distilled into the "skeletal archetype" of
+components that make such models scientifically credible; (2) open data APIs we
+are not yet consuming (CORS verified live 2026-09-12).
+
+Key conclusions for Sim Core roadmap, in build order:
+- The engine's shell (determinism, provenance tags, replay-as-storage,
+  interventions) is genuinely ahead of many academic tools; the process model
+  inside it is the gap.
+- A1 carry **solar radiation + VPD** into the env series (NASA POWER is free,
+  keyless, CORS-open) → enables PM dual-Kc ET and RUE biomass.
+- A3 **layer the soil bucket** from the SSURGO/SoilGrids horizon data we
+  already fetch (`chorizon`, SoilGrids depth series) — biggest single accuracy
+  lever; data is on disk, unused.
+- A5 replace GDD-fraction biomass with **RUE × intercepted PAR** (or
+  AquaCrop WP* × ΣTr) + Ks stress multipliers + CO2 factor; canopy cover
+  becomes a state that also drives the voxel visuals.
+- A6 **stage-indexed partitioning/HI** replaces the post-hoc season-mean
+  stress penalty.
+- A8 **cultivar parameter layer as data** (SIMPLE 13-param template;
+  DSSAT `dssat-csm-data` + APSIM `Models/Resources` for published values).
+- A11 **calibration/validation/UQ** is entirely absent — even a lightweight
+  version (param ranges + Monte Carlo yield bands + FAO test cases) would
+  separate us from hobby sims; SALib/PEcAn are the workflow references.
+- Port references by license: AquaCrop-OSPy (Apache-2.0, port first), BioCro
+  (MIT, architecture), RothC_Py (Apache-2.0, soil-C port), DSSAT (BSD,
+  read-reference); PCSE is EUPL copyleft — reference only. Avoid Cycles
+  (CC BY-NC-ND) and ApsimX code (custom licence).
+- Top data integrations: NASA POWER → NWS alerts → USA-NPN phenology
+  validation → GBIF/iNaturalist pest-pollinator panel → Open-Meteo
+  CMIP6/Seasonal → QuickStats county-yield benchmarks → SDA depth series →
+  3DEP elevation → vendored cultivar params → Sentinel-2 NDVI per patch
+  (opt-in).
 ## Mission TWIN — Wave 2 (2026-09-03, branch `mission-twin`)
 
 **Real simulation engine (`lib/sim.ts`):** `runSimulation(farm, plan, crops,

@@ -37,9 +37,10 @@ export function buildWateringCan(): THREE.Group {
       if (rd() > 0.82) put(v, s * 2.56, y + 0.3, 0, sparkle, 0.3);
       if (rd() > 0.82) put(v, 0, y + 0.7, s * 2.56, sparkle, 0.3);
     }
-  // filler rim + dark throat
-  put(v, 0, 6.85, 0, iron, 2.7);
-  put(v, 0, 7.35, 0, PALETTE.charcoal, 1.55);
+  // filler rim + dark throat — kept slim so the can's top reads as an
+  // opening, not a heavy dark slab capping the silhouette
+  put(v, 0, 6.85, 0, iron, 2.1);
+  put(v, 0, 7.3, 0, PALETTE.charcoal, 0.95);
   // top bow handle with a turned-wood grip — posts rooted IN the throat rim,
   // every link overlapping the next (nothing floats)
   put(v, -1.15, 7.95, 0, iron, 0.62);
@@ -140,10 +141,10 @@ export function buildHoe(): THREE.Group {
   // hung vertical (face toward the viewer), dark cutting lip along the bottom
   put(v, 0, 2.3, 0, PALETTE.ironDark, 1.35); // socket collar
   for (const ax of [0.9, 1.9]) put(v, ax, 2.15, 0, PALETTE.metalDark, 1.05); // arm
-  for (let bx = 2.4; bx <= 5.4; bx += 1.0)
-    for (let by = 0.75; by <= 3.4; by += 1.05)
-      put(v, bx, by, 0, PALETTE.metal, 1.15); // blade plate, face-on to camera
-  for (let bx = 2.4; bx <= 5.4; bx += 1.0) put(v, bx, 0.62, 0, PALETTE.metalDark, 1.25); // cutting lip
+  for (let bx = 2.45; bx <= 6.1; bx += 0.9)
+    for (let by = 0.8; by <= 3.6; by += 0.95)
+      put(v, bx, by, 0, PALETTE.metal, 1.05); // blade plate, face-on to camera
+  for (let bx = 2.45; bx <= 6.1; bx += 0.9) put(v, bx, 0.58, 0, PALETTE.metalDark, 1.2); // cutting lip
   // a second clod and a tuft of grass keep the mound lively
   put(v, 2.4, 0.5, -1.5, PALETTE.gravel, 0.5);
   put(v, -1.4, 0.55, -2.1, PALETTE.grassLight, 0.42);
@@ -170,21 +171,22 @@ export function buildPitchfork(): THREE.Group {
   const rs = rng(151);
   for (let x = -3; x <= 3; x++)
     for (let z = -4; z <= 0; z++) if (rs() > 0.5) put(v, x, 1.8 + rs() * 0.3, z, PALETTE.mulch, 0.5);
-  // shaft welded up into the D-grip
-  fill(v, 0, 2, -2, 0, 20.8, -2, PALETTE.wood);
+  // shaft welded up into the D-grip, base buried in the bale top
+  fill(v, 0, 2, -0.3, 0, 20.8, -0.3, PALETTE.wood);
   mirr((s) => {
-    put(v, s * 0.72, 21.0, -2, PALETTE.woodDark, 0.75);
-    put(v, s * 0.78, 21.62, -2, PALETTE.woodDark, 0.72);
+    put(v, s * 0.72, 21.0, -0.3, PALETTE.woodDark, 0.75);
+    put(v, s * 0.78, 21.62, -0.3, PALETTE.woodDark, 0.72);
   });
-  put(v, 0, 22.2, -2, PALETTE.wood, 1.9);
-  // ferrule + slim crossbar + four clearly separated tines rising to iron tips
-  fill(v, -1, 3.2, -2, 1, 4.2, -2, PALETTE.metal);
-  put(v, -1.55, 4.95, -1.95, PALETTE.metalDark, 1.5); // crossbar left
-  put(v, 0, 4.95, -1.95, PALETTE.metalDark, 1.7); // crossbar mid
-  put(v, 1.55, 4.95, -1.95, PALETTE.metalDark, 1.5); // crossbar right
+  put(v, 0, 22.2, -0.3, PALETTE.wood, 1.9);
+  // ferrule bridging shaft to the head; crossbar proud of the bale face with
+  // four solid tines driving DOWN toward the ground — stabbed-in-the-bale read
+  fill(v, -1, 3.2, -0.5, 1, 4.4, 0.7, PALETTE.metal);
+  put(v, -1.55, 4.85, 0.75, PALETTE.metalDark, 1.5); // crossbar left
+  put(v, 0, 4.85, 0.75, PALETTE.metalDark, 1.7); // crossbar mid
+  put(v, 1.55, 4.85, 0.75, PALETTE.metalDark, 1.5); // crossbar right
   for (const tx of [-1.9, -0.65, 0.65, 1.9]) {
-    for (let ty = 5.15; ty <= 8.85; ty += 0.92) put(v, tx, ty, -1.7, PALETTE.metalDark, 0.62);
-    put(v, tx, 9.3, -1.6, PALETTE.iron, 0.56);
+    for (let ty = 4.45; ty >= 1.15; ty -= 0.55) put(v, tx, ty, 0.55, PALETTE.metalDark, 0.62);
+    put(v, tx, 0.62, 0.55, PALETTE.iron, 0.56);
   }
 
   return rootOf('pitchfork', meshOf(v));
@@ -210,8 +212,9 @@ export function buildSeedBag(): THREE.Group {
   fill(v, -1, 7.5, -1, 1, 8.1, 1, shade); // rolled fold
   put(v, 0, 8.85, 0, PALETTE.straw, 0.8); // tie band
   put(v, 0.45, 9.45, 0.2, PALETTE.straw, 0.5); // knot tail
-  // stitched label patch on the front face
-  for (let x = -1; x <= 1; x++) for (let y = 3; y <= 5; y++) put(v, x, y, 2.14, PALETTE.cream, 0.82);
+  // stitched label patch on the front face (overlapping voxels — gaps would
+  // read as a window lattice)
+  for (let x = -1; x <= 1; x++) for (let y = 3; y <= 5; y++) put(v, x, y, 2.14, PALETTE.cream, 1.05);
   for (const [sx, sy] of [[-1, 3], [1, 3], [-1, 5], [1, 5]] as Array<[number, number]>)
     put(v, sx, sy, 2.2, PALETTE.clay, 0.2);
   put(v, 0, 4, 2.24, PALETTE.stem, 0.34); // little seedling mark

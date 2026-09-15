@@ -105,6 +105,10 @@ export function AssetPalette({ editor }: { editor: PlanEditor }) {
           <Search className="absolute left-2 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
           <Input value={assetSearch} onChange={(e) => setAssetSearch(e.target.value)} placeholder="Search assets…" className="h-8 pl-7 text-sm" />
         </div>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          Animals ship with their structures — barn: cow · pig · sheep, coop: hens + rooster,
+          hive: bees, pond: ducks; planted beds draw butterflies.
+        </p>
         {ASSET_CATEGORIES.map((category) => {
           const entries = filteredAssets.filter((asset) => asset.category === category);
           if (entries.length === 0) return null;

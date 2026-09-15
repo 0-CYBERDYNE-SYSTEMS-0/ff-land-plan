@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FarmFriend QA Dashboard — pro-upgrade audit 2026-09-07</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#121a30; --panel2:#0e1526; --line:#23304f;
+    --text:#e8edf7; --dim:#94a3bd; --faint:#64748b;
+    --red:#f87171; --redbg:#2a1420; --amber:#fbbf24; --amberbg:#2a2110;
+    --green:#4ade80; --greenbg:#12271c; --blue:#60a5fa; --slate:#94a3bd;
+    --violet:#a78bfa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:32px 20px 80px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:22px;letter-spacing:-.02em}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:36px 0 12px;display:flex;align-items:center;gap:10px}
+  h2::after{content:"";flex:1;height:1px;background:var(--line)}
+  .sub{color:var(--dim);font-size:13px;margin-top:6px}
+  .banner{margin:20px 0 28px;padding:16px 20px;border-radius:12px;border:1px solid;display:flex;gap:14px;align-items:flex-start}
+  .banner.amber{background:var(--amberbg);border-color:#7a5b16}
+  .banner .big{font-size:16px;font-weight:700;color:var(--amber)}
+  a{color:var(--blue)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .stat .n{font-size:26px;font-weight:750;letter-spacing:-.02em}
+  .stat .l{color:var(--dim);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;margin-top:2px}
+  .n.p0{color:var(--red)} .n.p1{color:var(--red)} .n.p2{color:var(--amber)} .n.p3{color:var(--slate)} .n.ok{color:var(--green)} .n.info{color:var(--blue)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.p0,.pill.p1{background:#3d1620;color:var(--red);border:1px solid #7f2b3a}
+  .pill.p2{background:#2a2110;color:var(--amber);border:1px solid #7a5b16}
+  .pill.p3{background:#1a2334;color:var(--slate);border:1px solid #2e3d5c}
+  .pill.ok{background:var(--greenbg);color:var(--green);border:1px solid #2b5c40}
+  .pill.lane{background:#141d33;color:var(--blue);border:1px solid #27395e}
+  .pill.conf{background:#141d33;color:var(--violet);border:1px solid #3b3160}
+  code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12px;background:#0a0f1d;border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:#c9d6ee}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+  .chip{cursor:pointer;background:var(--panel);border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:5px 14px;font-size:12.5px;font-weight:600}
+  .chip.on{color:var(--text);border-color:var(--blue);background:#141d33}
+  tr.frow{cursor:pointer}
+  tr.frow:hover td{background:#161f38}
+  tr.drow td{background:var(--panel2);padding:14px 18px;color:var(--dim);font-size:12.5px}
+  tr.drow b{color:var(--text)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .card h3{font-size:14px;margin-bottom:8px}
+  .card .verdict{font-size:12.5px;color:var(--dim)}
+  .card .nums{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+  .check li{margin:5px 0 5px 18px;color:var(--dim);font-size:13px}
+  .check li b{color:var(--text)}
+  .okmark{color:var(--green);font-weight:700}
+  .foot{margin-top:36px;color:var(--faint);font-size:12px;border-top:1px solid var(--line);padding-top:16px}
+  .risk td:first-child{white-space:nowrap;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>🧪 FarmFriend — Full-App QA Audit Dashboard</h1>
+  <div class="sub">Branch <code>pro-upgrade</code> (uncommitted working tree) · Audit run 2026-09-07 · 3 parallel QA agents (editor / world / ops) + orchestrator validation · Audit only — <b>no fixes applied</b></div>
+
+  <div class="banner amber">
+    <div style="font-size:22px">⚠️</div>
+    <div>
+      <div class="big">Verdict: NOT commit-ready yet — 2 P1 blockers, both small fixes. Everything else is green.</div>
+      <div class="sub" style="margin-top:4px">Typecheck ✓ · Build ✓ (2.96 s, three.js correctly lazy) · 17/17 headless GATE+EXPECT runs passed with zero console errors · HUD spec walk 14/15 · All 6 P1/P2 findings independently re-verified by the orchestrator against source before publication.</div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="n info">23</div><div class="l">Findings</div></div>
+    <div class="stat"><div class="n p0">0</div><div class="l">P0 critical</div></div>
+    <div class="stat"><div class="n p1">2</div><div class="l">P1 blockers</div></div>
+    <div class="stat"><div class="n p2">4</div><div class="l">P2 should-fix</div></div>
+    <div class="stat"><div class="n p3">17</div><div class="l">P3 hygiene</div></div>
+    <div class="stat"><div class="n ok">17/17</div><div class="l">Gates passed</div></div>
+    <div class="stat"><div class="n ok">14/15</div><div class="l">HUD spec walk</div></div>
+  </div>
+
+  <h2>Baseline gates (orchestrator pre-flight)</h2>
+  <div class="panel"><table>
+    <tr><th>Gate</th><th>Result</th><th>Detail</th></tr>
+    <tr><td><code>npm run typecheck</code></td><td><span class="pill ok">PASS</span></td><td>Zero errors (TS strict + noUnusedLocals)</td></tr>
+    <tr><td><code>npm run build</code></td><td><span class="pill ok">PASS</span></td><td>2.96 s; <code>three-*.js</code> 782 kB isolated lazy chunk, absent from <code>index-*.js</code> (534 kB) — HANDOFF gate satisfied</td></tr>
+    <tr><td>Headless smoke (3 lanes)</td><td><span class="pill ok">PASS</span></td><td>17 appshot runs, all <code>GATE PASS</code> (no console errors / rejections) + <code>EXPECT PASS</code>; 1 live-clock shot (simulations/recharts). Evidence PNGs in <code>$TMPDIR/ffqa-editor|world|ops/</code></td></tr>
+  </table></div>
+
+  <h2>Lane scorecards</h2>
+  <div class="grid2">
+    <div class="card"><h3>QA-1 · Editor &amp; Persistence <span class="pill p1">P1×1</span> <span class="pill p2">P2×2</span> <span class="pill p3">P3×2</span></h3>
+      <div class="verdict">Fundamentally sound, near commit-ready. All 12 probes traced; single mutation seam (<code>usePlanEditor</code>) holds; undo/redo button-state suspect <b>disproved</b> (history pushes are paired with planVersion bumps in the same synchronous block). Blocker is the demo-reseed policy silently reverting user edits.</div>
+      <div class="nums"><span class="pill conf">3/8 appshots</span><span class="pill conf">12/12 probes</span></div></div>
+    <div class="card"><h3>QA-2 · World3D, HUD Spec &amp; Creative <span class="pill p1">P1×1</span> <span class="pill p3">P3×6</span></h3>
+      <div class="verdict">HUD restructure is ready to commit <i>except</i> seed data: spec walk 14/15 ✅ (dock, cluster, dim rule, drawer, cinema, keyframes, sr-only contract all pass); registry coverage 50/50 catalog crops; determinism clean (0 <code>Math.random</code> in builders). Blocker: farm 1 ships without <code>plantedAt</code> → spurious "Season complete".</div>
+      <div class="nums"><span class="pill conf">7/8 appshots</span><span class="pill conf">11 probes</span></div></div>
+    <div class="card"><h3>QA-3 · Ops Pages, Data &amp; Integrations <span class="pill p2">P2×2</span> <span class="pill p3">P3×9</span></h3>
+      <div class="verdict">READY — no P0/P1. All 7 gated shots pass, all 10 probes exercised. Soil SDA→SoilGrids fallback verified <i>live</i> ("Luvisols"); Weather page is <b>not</b> silently fake-good; seed farms confirmed ids 1–7; sim mock math per-preset and monotonic.</div>
+      <div class="nums"><span class="pill conf">7 shots (6 gated)</span><span class="pill conf">10/10 probes</span></div></div>
+    <div class="card"><h3>Orchestrator validation</h3>
+      <div class="verdict">Every P1 and P2 finding was personally re-verified against source before landing here — <span class="okmark">6/6 confirmed, 0 refuted</span>. Spot-checks on P3s (climate orphan via import grep, seed dead-ends, frost estimator mechanism) also confirmed. Agent accuracy: 100% on high-severity claims.</div>
+      <div class="nums"><span class="pill ok">validator: 6/6 confirmed</span></div></div>
+  </div>
+
+  <h2>Findings (click a row for evidence)</h2>
+  <div class="filters" id="filters"></div>
+  <div class="panel"><table>
+    <thead><tr><th style="width:64px">ID</th><th style="width:52px">Sev</th><th style="width:86px">Lane</th><th>Area</th><th>Finding</th><th style="width:110px">Confidence</th><th style="width:104px">Validated</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+
+  <h2>Risk coverage matrix — pre-audit suspect list → outcome</h2>
+  <div class="panel"><table class="risk">
+    <tr><th>#</th><th>Suspect (from pre-audit exploration)</th><th>Outcome</th></tr>
+    <tr><td>1</td><td>Season auto-pause on plans lacking <code>plantedAt</code></td><td><span class="pill p1">CONFIRMED P1 (WD-1)</span> but only seed farm 1 is affected — real user edits all stamp correctly</td></tr>
+    <tr><td>2</td><td>World3D never initializes when crop catalog empty</td><td><span class="pill p3">REAL, LOW REACH</span> requires empty catalog; traced, not user-reachable with seeded data (QA-2 probe 6)</td></tr>
+    <tr><td>3</td><td>Climate normals cache lost every Jan 1</td><td><span class="pill p3">MOOT (OP-4)</span> module has zero consumers — wired-data risk only</td></tr>
+    <tr><td>4</td><td>Offline weather silently fake-good</td><td><span class="pill ok">SPLIT</span> Weather page safe ("unavailable" state, OP-8 probe); DEFAULT_WEATHER fallback is World3D-only (subsumed by WD findings; chip shows cached badge)</td></tr>
+    <tr><td>5</td><td>Autosave vs farm-switch race / stuck save state</td><td><span class="pill p2">PARTIAL (ED-2, ED-3)</span> error state exists but badge mislabels it; stale-response clobber only under REST backend</td></tr>
+    <tr><td>6</td><td>Soil cache 2 dp collisions, Refresh no-op</td><td><span class="pill ok">OK</span> Refresh verified working (inflight delete + clearSoilCache); 1 km key granularity accepted as design (QA-3 live check)</td></tr>
+    <tr><td>7</td><td>Undo/redo edge cases + button state refresh</td><td><span class="pill ok">DISPROVED</span> buttons refresh via paired planVersion bumps (QA-1 traced all 5 push sites); settings changes undoable</td></tr>
+    <tr><td>8</td><td>Ground tiles fail silently</td><td><span class="pill p3">CONFIRMED P3 (WD-3)</span> silent <code>continue</code>, zero output</td></tr>
+    <tr><td>9</td><td>Crop-name registry misses</td><td><span class="pill ok">OK</span> 50/50 catalog names mapped; null fallback path exists (QA-2)</td></tr>
+    <tr><td>10</td><td>SimDrawer dead props + spec drift + cinema hides save badge</td><td><span class="pill p3">CONFIRMED P3×2 (WD-2, WD-5)</span> props spec-sanctioned; cinema hides error badge</td></tr>
+  </table></div>
+
+  <h2>Verified wired ✅ (highlights)</h2>
+  <ul class="check">
+    <li><b>Editor:</b> all 8 tools + shortcuts mutate through one seam with autosave→localStorage; overlays never leak into PNG export; zoom ladder/fit; templates apply with overwrite confirm; custom crop ids ≥1000 never renumbered; CSV export correctly gated on crops existing.</li>
+    <li><b>World/HUD:</b> SPEC-WORLD-HUD a–g all pass — fixed dock child set, top-left cluster, dim rule with hover restore, 320 px always-mounted SimDrawer (bottom sheet &lt; xl), <code>h</code> cinema, real <code>ff-toast-in</code> keyframes, sr-only contract line; <code>?fftime</code>/<code>?ffdebug</code> intact; all 5 spec-named appshot gates green; showcase lanes A/D render (<code>showcase-ready</code>).</li>
+    <li><b>Ops/data:</b> dashboard/weather/calendar/monitoring/crops/notfound/farm-6 gates green; live soil lookup resolved via real USDA SDA → SoilGrids fallback; farm CRUD + routing (all sidebar links, NotFound, first-load redirect); simulations run → per-preset plausible results; sensor/reading/alert flows traced end-to-end.</li>
+    <li><b>Hygiene:</b> zero TODO/FIXME in src; no orphan env keys; deleted <code>groundTexture.ts</code> has zero remaining references; <code>marketing/</code> is outside <code>src/</code> — build unaffected.</li>
+  </ul>
+
+  <h2>Honest scope limits</h2>
+  <ul class="check">
+    <li>Headless harness cannot click: pointer/drag/pinch feel, tour hover-undim, WASD flight, and 3-D paint+undo are <b>code-trace evidence</b> (high confidence), not live click-throughs.</li>
+    <li>ED-3 (autosave race) is untestable without a real remote backend; showcase lanes B/C skipped on shot budget; forced-offline cached-badge flows reasoned, not network-cut live.</li>
+    <li>Mutating store writes (creating farms/sims/sensors) were deliberately avoided during audit to keep the tree clean — those flows are trace-verified only.</li>
+  </ul>
+
+  <h2>Recommended fix order (upon approval — nothing done yet)</h2>
+  <div class="panel"><table>
+    <tr><th>#</th><th>Fix</th><th>Size</th><th>Why first</th></tr>
+    <tr><td>1</td><td><b>WD-1</b> — stamp <code>plantedAt</code> in <code>buildNorthMeadowPlan</code> (+ consider making missing <code>plantedAt</code> mean "not mature" in <code>growth.ts:121</code>)</td><td>~2 lines</td><td>Default demo farm's flagship feature misleads on first contact</td></tr>
+    <tr><td>2</td><td><b>ED-1</b> — demo-reseed policy: only re-seed unmodified seed plans (compare updatedAt/hash) or badge seed farms "Demo — resets on reload"</td><td>small</td><td>"Saved" badge is a false promise; data-loss perception</td></tr>
+    <tr><td>3</td><td><b>ED-2</b> + <b>WD-5</b> — <code>'error'</code> branch on the save badge label; keep error badge visible in cinema</td><td>~3 lines</td><td>Turns a lying UI state into an honest one</td></tr>
+    <tr><td>4</td><td><b>OP-1</b> — alerts banner across all farms (+ move markAll invalidation into onSuccess, OP-3)</td><td>small</td><td>Multi-farm users currently can't see or clear most alerts</td></tr>
+    <tr><td>5</td><td><b>OP-2</b> + <b>OP-4</b> — soften frost heuristic <i>and/or</i> wire the orphaned ERA5 <code>climate.ts</code> into FarmForm; label estimates as estimates</td><td>medium</td><td>Calendar "frost risk" flags are wrong for most temperate farms today</td></tr>
+    <tr><td>6</td><td><b>ED-3</b> — edit-sequence guard on autosave response (only matters once REST backend is used)</td><td>small</td><td>Future-proofing the data seam</td></tr>
+    <tr><td>7</td><td>P3 sweep as one batch (WD-3/4/6/7, OP-5…11, ED-4/5)</td><td>batch</td><td>Hygiene; none block release</td></tr>
+  </table></div>
+
+  <div class="foot">
+    Evidence: full per-lane reports + JSON at <code>quality/qa/findings-{editor,world,ops}.md/.json</code> · shared protocol at <code>quality/qa/BRIEF.md</code> · screenshots in <code>$TMPDIR/ffqa-editor|world|ops/</code> · dev server left running at <code>http://localhost:5173</code> for your own click-through.
+    <br><br><b>⛔ STATUS: Audit complete. No source changes made. Awaiting your approval to start the fix round.</b>
+  </div>
+</div>
+
+<script>
+const F=[
+ {id:"WD-1",sev:"P1",lane:"World",area:"world/season-sim",t:"Seed farm 1 (North Meadow) ships without plantedAt — Simulate reads every crop instantly mature and auto-pauses with a spurious amber 'Season complete' within 2–15 s; status chip never shows '· Day N'.",ev:"seed.ts:112-122 (no plantedAt key) vs farms 2–7 stamped at :518/:589/:625/:663/:702; growth.ts:121 `if (!plantedAt) return 1` → World3D.tsx:653-683 pause+banner chain. Repro: /?ffview=world#/farms/1/map → ▶",fix:"One stampPlantedAt() call in buildNorthMeadowPlan; optionally treat missing plantedAt as 'not mature'.",conf:"high",val:"confirmed (orchestrator re-read seed.ts + growth.ts + grep of all stamp sites)"},
+ {id:"ED-1",sev:"P1",lane:"Editor",area:"persistence/store",t:"Edits to ANY seed farm plan (ids 1–7, incl. farm 1) are silently reverted on every reload while the UI shows 'Saved 3:04 PM'.",ev:"store.ts:86-88 re-seeds all seed-farm plans each boot (comment :77-80 admits intent); autosave + 'Saved' badge at usePlanEditor.ts:524-536 / PlotDesigner.tsx:90-93 contradict it.",fix:"Re-seed only unmodified seed plans (updatedAt/hash check) or show a 'Demo — resets on reload' badge.",conf:"high",val:"confirmed (orchestrator re-read store.ts:70-98)"},
+ {id:"ED-2",sev:"P2",lane:"Editor",area:"designer/save-state",t:"Failed autosave renders a red (destructive) badge labeled 'Ready' — the label chain has no 'error' branch; no retry until next edit.",ev:"PlotDesigner.tsx:91 `saving?'Saving…':saved?'Saved…':dirty?'Unsaved':'Ready'` — 'error' falls into 'Ready' while :90 styles it destructive; set at usePlanEditor.ts:533.",fix:"Add `saveState==='error' ? 'Not saved'` branch.",conf:"high",val:"confirmed (orchestrator re-read PlotDesigner.tsx:84-94)"},
+ {id:"ED-3",sev:"P2",lane:"Editor",area:"designer/autosave-race",t:"Stale autosave response overwrites planRef without a version bump — edits made mid-save are dropped from state (real fetch latency only; benign with default localApi).",ev:"usePlanEditor.ts:527-528 `await savePlan; planRef.current = clonePlan(saved)` — no setPlanVersion; restApi latency window real, localApi resolves in a microtask.",fix:"Tag saves with an edit sequence number; ignore stale responses.",conf:"med",val:"confirmed mechanism (orchestrator re-read; live REST repro out of scope)"},
+ {id:"OP-1",sev:"P2",lane:"Ops",area:"dashboard/alerts",t:"ActiveAlertsBanner reads only farms[0]: alerts from farms 2–7 never surface; 'Mark all read' clears farm 1 only (verified: banner=1 alert while all 7 cards show alert badges).",ev:"Dashboard.tsx:213-217 `const first = farms[0]; useFarmAlerts(first?.id); markAllAlertsRead(first.id)`; renders only when farms[0] has unread (:224).",fix:"Aggregate alerts across farms; mark-all loop per farm.",conf:"high",val:"confirmed (orchestrator re-read Dashboard.tsx:213-225)"},
+ {id:"OP-2",sev:"P2",lane:"Ops",area:"farmform/frost",t:"Latitude frost estimate ~6–7 weeks wrong each end at mid latitudes (farm 1: '06-15 → 08-28' for Portland OR vs real ~mid-Apr→late-Oct); seeded onto every farm; calendar over-flags 'frost risk' on all actions.",ev:"frost.ts:46 `season = clamp(365 − 6.4·L, 30, 365)` → 74-day season at lat 45.5; store.ts:43-47 applies to all seed farms; verified live in calendar badge (calendar1.png).",fix:"Soften slope (~4.0–4.5) or wire orphaned ERA5 climate.ts (OP-4); label as rough estimate.",conf:"high",val:"confirmed (orchestrator traced applyFrostEstimate → estimateFrostDates; lane verified live)"},
+ {id:"ED-4",sev:"P3",lane:"Editor",area:"designer/routing",t:"'Farm not found.' / 'Plan not found.' plain-text dead ends — no link home; reachable via bad id or cross-tab farm delete.",ev:"PlotDesigner.tsx:68-70 early returns skip header/back arrow/panels.",fix:"Add a 'Back to dashboard' button in the not-found branches.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"ED-5",sev:"P3",lane:"Editor",area:"designer/toolbar",t:"Line+Erase payload silently uses the Erase tool's hidden layer selection (Plants vs Ground) — no visible indicator while erasing lines.",ev:"usePlanEditor.ts:671-674 maps to 'erase'; :578-591 reads hidden eraseLayer; layer Select only renders when tool==='erase' (DesignerToolbar.tsx:99-109).",fix:"Show the layer Select for line+erase, or force 'plants' in line erase mode.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"WD-2",sev:"P3",lane:"World",area:"world/SimDrawer",t:"SimDrawer props seasonDay & playing passed but never destructured — dead contract surface (explicitly sanctioned by SPEC §4b; logged as contract debt).",ev:"SimDrawer.tsx:22,:30 on interface; World3D.tsx:911/:921 pass; destructuring :46-66 omits both.",fix:"Render seasonDay (useful context) or drop both props in a follow-up cleanup.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"WD-3",sev:"P3",lane:"World",area:"three/ground",t:"Broken ground tile builder silently drops all its cells — zero console output; a future bad slug ships as an invisible hole no GATE run can catch.",ev:"ground.ts:216-220 `catch { continue; }` vs codebase norm of console.warn on fallback (World3D.tsx:203-205).",fix:"console.warn once inside the catch (dev-only if noisy).",conf:"high",val:"agent-verified (file:line)"},
+ {id:"WD-4",sev:"P3",lane:"World",area:"world/achievements",t:"First-ever achievement toast is swallowed (`unlockedCountRef > 0` guard); rAF-unlocked ones (dawn_patrol etc.) render only on the next unrelated re-render. Pre-existing.",ev:"World3D.tsx:721-730 guard + [lastAchievement]-only dep; unlocks happen inside rAF (:378-402) which touches no state.",fix:"Push unlock events via state/callback; drop the >0 guard.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"WD-5",sev:"P3",lane:"World",area:"designer/cinema",t:"Cinema mode hides the save badge including the error state — failed autosave invisible until cinema exit (autosave still runs; impact limited to storage failure).",ev:"PlotDesigner.tsx:89-94 badge renders only `!cinemaOn`; 3-D painting still mutates the plan.",fix:"Keep the Badge rendered in cinema when saveState==='error'.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"WD-6",sev:"P3",lane:"World",area:"world/a11y",t:"Closed SimDrawer is aria-hidden but its controls remain Tab-focusable (no inert) — focus vanishes off-screen; screen readers told it's hidden.",ev:"SimDrawer.tsx:84-90 aria-hidden + translate-x-full, visibility kept; always-mounted per spec (World3D.tsx:905).",fix:"`inert={!open}` or `invisible` after the 200 ms transition.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"WD-7",sev:"P3",lane:"World",area:"ui-primitives",t:"Dead animate-in/out classes in ui/select + ui/alert-dialog (tailwindcss-animate not installed) — dialog/select animations silently no-op; new HUD inherits the pop. Pre-existing.",ev:"No tailwindcss-animate in config; select.tsx:43, alert-dialog.tsx:16,:32 use animate-in/fade-in-0/zoom-in-95.",fix:"Install the plugin or strip the classes from the two primitives.",conf:"high",val:"agent-verified (grep + file:line)"},
+ {id:"OP-3",sev:"P3",lane:"Ops",area:"dashboard/alerts",t:"markAll mutation onSuccess is an empty stub with a false comment; refresh only works because the click handler invalidates. Works as shipped; a trap for future callers.",ev:"Dashboard.tsx:216-221 stub; :238-241 onClick does mutateAsync + invalidateQueries; contrast Monitoring.tsx:284-287 correct pattern. No double-invalidation (verified).",fix:"Move invalidation into onSuccess; delete the stub comment.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"OP-4",sev:"P3",lane:"Ops",area:"lib/climate",t:"src/lib/climate.ts (296 lines, ERA5 normals — would fix OP-2) is entirely orphaned: zero consumers. Its Jan-1 cache invalidation is moot while unwired.",ev:"No import of lib/climate anywhere in src (orchestrator re-grepped imports); SoilProfileCard uses soil.ts; FarmForm uses frost.ts.",fix:"Wire fetchClimateNormals into FarmForm as 'refine from climate normals', or delete the file.",conf:"high",val:"confirmed (orchestrator import grep)"},
+ {id:"OP-5",sev:"P3",lane:"Ops",area:"lib/api-seam",t:"Api.setCellCrop implemented in BOTH clients + documented in README, consumed nowhere — dead seam kept in sync in three places.",ev:"localApi.ts:81,:212-218; restApi.ts:113-122; README.md:73,:91; no page/hook caller.",fix:"Drop from Api+README or confirm a roadmap consumer.",conf:"high",val:"agent-verified (grep + file:line)"},
+ {id:"OP-6",sev:"P3",lane:"Ops",area:"weather/refresh",t:"Weather page Refresh is a no-op within the 15-minute memo window — spinner, byte-identical data, no signal (soil's Refresh works; weather has no bypass).",ev:"Weather.tsx:113-121 refetch → localApi.ts:42-52 memo hit returns same promise; soil.ts:177/:— clears properly.",fix:"Expose a memo bypass / force flag wired to Refresh.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"OP-7",sev:"P3",lane:"Ops",area:"monitoring/readings",t:"addReading labels every non-moisture reading '°C' (humidity shows '48 °C'; rainfall mm, NDVI unitless); range check covers only 2 of 5 sensor types so others can never warn.",ev:"Monitoring.tsx:84 ternary '%':'°C'; :130 lastUnit display; isInRange :40-44 partial.",fix:"Unit map per SensorType + per-type bounds (or explicit 'no range defined').",conf:"high",val:"agent-verified (file:line)"},
+ {id:"OP-8",sev:"P3",lane:"Ops",area:"dashboard/weather-pill",t:"FarmCard weather pill shows 'Loading weather…' forever when weather fails offline with no cache (no error branch). Weather PAGE itself is safe ('Weather data unavailable').",ev:"Dashboard.tsx:63-65 only a `!data` branch; weather.ts:103-108 rethrows with no cache; page-level states at Weather.tsx:96-100,:214-220 correct.",fix:"Add an isError branch mirroring the page's empty state.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"OP-9",sev:"P3",lane:"Ops",area:"calendar/timeline",t:"Windows crossing Dec 31 collapse to 1.5% slivers (no year wrap); Southern-hemisphere frost marker plots off-grid. Dates/tooltips stay correct.",ev:"calendar.ts:32-35 doy wrap; Calendar.tsx:149-151 width math goes negative→1.5%; frostDoy +365 → marker >100%.",fix:"Draw wrapped windows as two segments (Dec tail + Jan head).",conf:"high",val:"agent-verified (file:line)"},
+ {id:"OP-10",sev:"P3",lane:"Ops",area:"monitoring/ndvi",t:"NDVI panel shows a confident '0.00 / Bare' for unseeded farms (3–7) — empty grid rendered as a measurement; 'Modeled' badge partially mitigates.",ev:"localApi.ts:219-223 returns empty grid; seed covers farms 1–2 only (seed.ts:886-889); NdviPanel Monitoring.tsx:186 avg-of-empty.",fix:"Empty-state return when ndviGrid.length===0.",conf:"high",val:"agent-verified (file:line)"},
+ {id:"OP-11",sev:"P3",lane:"Ops",area:"farmform/validation",t:"Cleared lat/lng fields silently save as 0/0 (zod coerce of '' → 0 passes validation) — farm lands in the Gulf of Guinea; all weather/soil lookups then query the wrong point.",ev:"FarmForm.tsx:25-26 z.coerce.number().min/max; name/area properly protected.",fix:"Preprocess '' → undefined for lat/lng so 'Required' fires.",conf:"high",val:"agent-verified (file:line)"}
+];
+const lanes=["All","Editor","World","Ops"],sevs=["P1","P2","P3"];
+let fl="All",fs="All";
+const rowsEl=document.getElementById('rows'),fEl=document.getElementById('filters');
+const order={P0:0,P1:1,P2:2,P3:3};
+function render(){
+  const list=F.filter(f=>(fl==="All"||f.lane===fl)&&(fs==="All"||f.sev===fs)).sort((a,b)=>order[a.sev]-order[b.sev]||a.id.localeCompare(b.id));
+  rowsEl.innerHTML=list.map((f,i)=>`<tr class="frow" onclick="var d=document.getElementById('d${i}');d.style.display=d.style.display==='table-row'?'none':'table-row'">
+    <td><b>${f.id}</b></td><td><span class="pill ${f.sev.toLowerCase()}">${f.sev}</span></td>
+    <td><span class="pill lane">${f.lane}</span></td><td style="color:var(--dim);font-size:12px">${f.area}</td>
+    <td>${f.t}</td><td><span class="pill conf">${f.conf}</span></td>
+    <td style="color:var(--green);font-size:11.5px">✓ ${f.val}</td></tr>
+    <tr class="drow" id="d${i}" style="display:none"><td colspan="7"><b>Evidence:</b> <code style="white-space:normal">${f.ev}</code><br><br><b>Suggested fix:</b> ${f.fix}</td></tr>`).join('')
+    ||'<tr><td colspan="7" style="color:var(--dim)">No findings match this filter.</td></tr>';
+}
+function chips(){
+  fEl.innerHTML=['Sev:','All','P1','P2','P3','|','Lane:','All','Editor','World','Ops'].map(x=>{
+    if(x==='|')return'<span style="color:var(--line)">│</span>';
+    if(x==='Sev:'||x==='Lane:')return`<span style="color:var(--faint);font-size:12px;align-self:center">${x}</span>`;
+    const isSev=sevs.includes(x);
+    const cur=isSev?fs:fl, def=(x==='All');
+    const on=def?cur==='All':cur===x;
+    return`<button class="chip${on?' on':''}" onclick="${isSev?`fs='${x}'`:`fl='${x}'`};chips();render()">${x}</button>`;
+  }).join('');
+}
+chips();render();
+</script>
+</body>
+</html>

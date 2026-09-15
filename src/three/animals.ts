@@ -260,6 +260,50 @@ export function updateAnimals(system: AnimalSystem, dt: number): void {
   }
 }
 
+/**
+ * Pollinator flock presence fractions (0..1 each). Run mode wires
+ * SimState.creatures ÷ flowering capacity through here; full/legacy presence
+ * is `{ bees01: 1, butterflies01: 1 }` (what buildAnimals spawns by default).
+ */
+export interface FaunaPresence {
+  bees01: number;
+  butterflies01: number;
+}
+
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+
+/**
+ * Modulate pollinator flock presence WITHOUT rebuilding anything: of each
+ * flock's spawned members (stable spawn order), the first
+ * round(fraction × count) stay visible and the rest are hidden via
+ * `obj.visible` — the renderer skips hidden objects, so hiding REDUCES the
+ * draw count. Zero allocations, no geometry/material changes; safe to call
+ * per sim-day (day-keyed — never per frame). A 1-member flock degrades to
+ * on/off (any fraction ≥ 0.5 shows it). Hidden creatures keep ticking (≤16
+ * total) so re-showing them is seamless. Other species are untouched.
+ */
+export function setFaunaPresence(system: AnimalSystem, presence: FaunaPresence): void {
+  let beeTotal = 0;
+  let butterflyTotal = 0;
+  for (const c of system.creatures) {
+    if (c.kind === 'bee') beeTotal++;
+    else if (c.kind === 'butterfly') butterflyTotal++;
+  }
+  const beesVisible = Math.round(clamp01(presence.bees01) * beeTotal);
+  const butterfliesVisible = Math.round(clamp01(presence.butterflies01) * butterflyTotal);
+  let beeIdx = 0;
+  let butterflyIdx = 0;
+  for (const c of system.creatures) {
+    if (c.kind === 'bee') {
+      c.obj.visible = beeIdx < beesVisible;
+      beeIdx++;
+    } else if (c.kind === 'butterfly') {
+      c.obj.visible = butterflyIdx < butterfliesVisible;
+      butterflyIdx++;
+    }
+  }
+}
+
 export function disposeAnimals(system: AnimalSystem): void {
   // Each creature owns its geometry/materials (fresh builder instances),
   // so release GPU resources while detaching from the scene.

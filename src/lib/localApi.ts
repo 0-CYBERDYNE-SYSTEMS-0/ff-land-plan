@@ -14,7 +14,6 @@ import type {
   Sensor,
   SensorReading,
   Simulation,
-  SimulationResults,
   Weather,
   WeatherHistoryPoint,
 } from '@/types';
@@ -22,10 +21,11 @@ import { cropLibrary } from '@/data/crops';
 import { state, persist } from '@/lib/store';
 import { deriveAlerts, fetchFarmWeather, type FarmWeather } from '@/lib/weather';
 import { fetchClimateNormals } from '@/lib/climate';
-import { fetchSeasonEnsembles } from '@/lib/ensembles';
-import { fetchClimateProjection } from '@/lib/cmip6';
-import { runSimulation } from '@/lib/sim';
 import { fetchSoilProfile } from '@/lib/soil';
+import { SCENARIOS } from '@/lib/growth';
+import { buildEnvSeries, extractWeatherOverrides, meanDailyGddForRange } from '@/lib/sim/environment';
+import { simulateRun } from '@/lib/sim/engine';
+import type { CreateSimRunInput, RunConfig, RunRecord } from '@/lib/sim/types';
 
 function farmOrThrow(id: number): Farm {
   const f = state.farms.find((x) => x.id === id);
@@ -90,13 +90,16 @@ export interface Api {
   getPlan: (farmId: number) => Promise<PlanState | null>;
   savePlan: (plan: PlanState) => Promise<PlanState>;
 
-  // Simulations
+  // Simulations (legacy records only — the farm-blind creation arithmetic was
+  // deleted with the run manager; old stored sims stay readable/deletable)
   listSimulations: (farmId: number) => Promise<Simulation[]>;
-  createSimulation: (
-    farmId: number,
-    input: Omit<Simulation, 'id' | 'farmId' | 'status' | 'results' | 'createdAt'>,
-  ) => Promise<Simulation>;
   deleteSimulation: (id: number) => Promise<void>;
+
+  // Sim runs (deterministic engine runs — SPEC-SIM-ECOSYSTEM; the Simulations
+  // page is a run manager over these)
+  createSimRun: (input: CreateSimRunInput) => Promise<RunRecord>;
+  listSimRuns: (farmId: number) => Promise<RunRecord[]>;
+  deleteSimRun: (id: string) => Promise<void>;
 
   // Crops
   listCrops: () => Promise<Crop[]>;
@@ -127,6 +130,7 @@ export const localApi: Api = {
     state.farms = state.farms.filter((f) => f.id !== id);
     state.cells = state.cells.filter((c) => c.farmId !== id);
     state.simulations = state.simulations.filter((s) => s.farmId !== id);
+    state.simRuns = state.simRuns.filter((r) => r.farmId !== id);
     state.sensors = state.sensors.filter((s) => s.farmId !== id);
     delete state.plans[id];
     persist();
@@ -235,60 +239,81 @@ export const localApi: Api = {
     return state.plans[plan.farmId];
   },
 
-  // Simulations
+  // Simulations (legacy): list + delete only — see the Api interface note.
   listSimulations: async (farmId) => state.simulations.filter((s) => s.farmId === farmId),
-  createSimulation: async (farmId, input) => {
-    // Real plan-aware engine (lib/sim.ts): inventory from the actual plan,
-    // daily series from the live forecast + ERA5 normals, per-crop stress →
-    // outcomes. Every fetch is graceful: offline degrades to cached weather
-    // and/or the climate-derived series, never a rejection.
-    const farm = farmOrThrow(farmId);
-    let forecast;
-    try {
-      forecast = (await farmWeather(farm)).forecast;
-    } catch {
-      // offline → engine uses climate normals / documented fallback
-    }
-    const climate = await fetchClimateNormals(farm.lat, farm.lng);
-    // Season ensembles (cache-served after the first run) power the yield
-    // range; the CMIP6 projection is heavy + forever-cached, so only fetch it
-    // when the climate_change scenario will actually use it.
-    const ensembles = await fetchSeasonEnsembles(farm.lat, farm.lng);
-    // Ground-truth soil (USDA/SoilGrids) feeds AWC/pH/OM into the water,
-    // nutrient and carbon models; forever-cached, one localStorage read after
-    // the first fetch.
-    const soil = await fetchSoilProfile(farm.lat, farm.lng);
-    const projection =
-      input.scenarioType === 'climate_change'
-        ? await fetchClimateProjection(farm.lat, farm.lng)
-        : null;
-    const outcome = runSimulation({
-      farm,
-      plan: state.plans[farmId] ?? null,
-      crops: [...cropLibrary, ...state.customCrops],
-      input,
-      forecast,
-      climate,
-      ensembles,
-      projection,
-      soil,
-    });
-    const results: SimulationResults = outcome;
-
-    const sim: Simulation = {
-      id: state.counters.sim++,
-      farmId,
-      ...input,
-      status: 'complete',
-      results: JSON.stringify(results),
-      createdAt: new Date().toISOString(),
-    };
-    state.simulations = [sim, ...state.simulations];
-    persist();
-    return sim;
-  },
   deleteSimulation: async (id) => {
     state.simulations = state.simulations.filter((s) => s.id !== id);
+    persist();
+  },
+
+  // Sim runs: fork the plan, compose the frozen env series (real archive →
+  // ERA5 normals → defaults), replay the whole run synchronously for the
+  // summary, and persist config + envSeries + summary ONLY (replay is the
+  // storage — never per-tick state). Soil/climate fetches are forever-cached
+  // and never throw; offline runs fall back to documented defaults.
+  createSimRun: async (input) => {
+    const farm = farmOrThrow(input.farmId);
+    const plan = state.plans[input.farmId];
+    if (!plan) throw new Error(`Farm ${input.farmId} has no plan to simulate`);
+    const scenario = input.scenario ?? 'baseline';
+    const preset = SCENARIOS[scenario];
+    const config: RunConfig = {
+      farmId: input.farmId,
+      // Deep fork: a run never aliases the live plan (which keeps mutating).
+      basePlan: structuredClone(plan),
+      startDate: input.startDate ?? new Date().toISOString().slice(0, 10),
+      dayCount: Math.min(365, Math.max(1, Math.round(input.dayCount ?? 90))),
+      seed: input.seed ?? 1,
+      scenario,
+      tempDeltaC: input.tempDeltaC ?? preset.tempDeltaC,
+      precipMultiplier: input.precipMultiplier ?? preset.precipMultiplier,
+      interventions: input.interventions ?? [],
+      lat: farm.lat,
+      lng: farm.lng,
+    };
+    const [normals, soil] = await Promise.all([
+      fetchClimateNormals(farm.lat, farm.lng),
+      fetchSoilProfile(farm.lat, farm.lng),
+    ]);
+    const envSeries = await buildEnvSeries(config.startDate, config.dayCount, {
+      lat: farm.lat,
+      lng: farm.lng,
+      tempDeltaC: config.tempDeltaC,
+      precipMultiplier: config.precipMultiplier,
+      climateNormals: normals,
+      weatherOverrides: extractWeatherOverrides(config.interventions),
+    });
+    // Kill the invisible 20 °C default when real climate exists: the run's
+    // GDD pace comes from the normals over the actual window.
+    const meanDailyGddC = meanDailyGddForRange(normals, config.startDate, config.dayCount);
+    if (meanDailyGddC !== null) config.meanDailyGddC = meanDailyGddC;
+    const { summary } = simulateRun(
+      config,
+      envSeries,
+      { soil, crops: [...cropLibrary, ...state.customCrops] },
+    );
+    const record: RunRecord = {
+      id: `run:${input.farmId}:${Date.now().toString(36)}`,
+      farmId: input.farmId,
+      // Two identical-param creates must not share a label — the RunInspector
+      // reads "solid = X · ghost = X" when A/B-ing same-labeled runs.
+      label:
+        input.label?.trim() ||
+        `${preset.label} · ${config.startDate} · ${config.dayCount}d · ${Date.now().toString(36).slice(-4)}`,
+      createdAt: new Date().toISOString(),
+      config,
+      envSeries,
+      summary,
+      status: 'complete',
+    };
+    state.simRuns = [record, ...state.simRuns];
+    persist();
+    return record;
+  },
+  listSimRuns: async (farmId) =>
+    state.simRuns.filter((r) => r.farmId === farmId).map((r) => ({ ...r })),
+  deleteSimRun: async (id) => {
+    state.simRuns = state.simRuns.filter((r) => r.id !== id);
     persist();
   },
 

@@ -42,8 +42,8 @@ deliverable).
   Verification gate: `npm run typecheck` (`npx tsc --noEmit`).
 - Routing is hash-based: `#/` (dashboard), `#/crops`, `#/farms/1/map`,
   `#/farms/1/calendar`, `#/farms/1/weather`, `#/farms/1/simulations`,
-  `#/farms/1/monitoring`, `#/farms/new`. The seed data ships farms 1 (North
-  Meadow) and 2 (South Wheat Field) — there is no farm 3.
+  `#/farms/1/monitoring`, `#/farms/new`. The seed ships demo farms 1–7
+  (see `src/data/seed.ts`; demo-farms pass 2026-09-03).
 - Dev-only test hooks on the map page: `?ffview=world` opens the 3D World view
   directly, `?fftime=<0..1>` pins time of day, `?ffdebug=1` pre-opens the Perf
   HUD. Put these in the REAL query string, BEFORE the hash — params inside the
@@ -79,18 +79,27 @@ deliverable).
 - The REST client (`src/lib/restApi.ts`) ships type-checked against the `Api`
   interface but is **unexercised against a live server**. It activates only when
   `VITE_API_BASE_URL` is set (see `.env.example`); default behavior stays local-mock.
-- Performance on very large plans has **not yet been profiled**. The Perf HUD lives
-  behind Debug (`?ffdebug=1`) — capture frame-time numbers there if you see jank.
+- Performance **has been profiled** (2026-09-04, headless Chrome via the Perf
+  HUD at noon, 1440×900): farm 1 North Meadow 34 FPS / 273 draws / 2.3 M tris;
+  farm 6 Mushroom Warehouse 46 FPS / 82 draws / 1.6 M tris; farm 4 Market Field
+  (40×24 m, ~4,000 planted cells) 8 FPS / 665 draws / **18.6 M tris** — the
+  triangle count scales linearly with planted cells (~3.9 k tris/plant, no
+  pathological builder), so the real lever for very large outdoor plans is a
+  plant LOD/imposter system (project-scale, not yet scheduled). A real GPU
+  scores higher than headless SwiftShader. Perf HUD still lives behind
+  `?ffdebug=1`.
 - The single-sun night-lighting rework has a produced time-of-day matrix
   (night/dawn/noon/dusk) in `quality/shots/beta/lighting/` with quantitative
-  pixel-band signatures recorded in `quality/MISSION-BETA.md`; a human glance
-  for aesthetics is still worthwhile.
+  pixel-band signatures recorded in `quality/MISSION-BETA.md`. Aesthetic
+  glance done 2026-09-04: all four shots readable with believable sun
+  direction; minor nits only (dawn sky→ground transition slightly harsh, dusk
+  orange band reads slightly flat) — recorded, no action taken.
 - Offline weather fallback serves the **last-good cache only**; that behavior is
   documented here but not yet covered by an automated test.
-- Barn livestock spawn (cow/pig/sheep) and dressing-prop aesthetics are
-  **code-path verified only** — headless captures cannot arbitrate world-scene
-  content (structures build from plan data that arrives after virtual-time
-  capture); interactive QA pending.
+- Barn livestock spawn (cow/pig/sheep; coop→hens) is **interactively verified**
+  as of the 2026-08-25 browser QA pass (see `implementation-notes.md`): animals
+  spawn visibly in World view, the paint→save→3D pipeline works end to end, and
+  the Perf HUD stayed healthy.
 - Wide-spacing pairs (e.g. fruit trees, ≥4 m thresholds) are only flagged by the
   spacing overlay within its ±4-cell scan window (~1.41 m radius).
 
@@ -116,9 +125,10 @@ deliverable).
 | Beta hardening: live weather→3D plumbing, single-sun lighting, REST API seam (`VITE_API_BASE_URL`), automated smoke gate (`tools/appshot.mjs`) | ✅ `e6e4031` · `quality/MISSION-BETA.md` |
 | Blueprint power tools + full asset wiring: ghost/fill/line/pick/5×5, spacing & companion overlays, layer toggles, zoom cluster, starter templates, barn/livestock wake-up, region-merge structures, dressing props | ✅ `2c29eb9` · `quality/MISSION-BLUEPRINT.md` |
 
-Working tree is clean. Known dead code: `src/three/groundTexture.ts` (the baked
-ground-plane texture) — superseded by the creative voxel-tile ground
-(`src/three/ground.ts`); nothing imports it. Safe to delete in a cleanup pass.
+Working tree is clean. Dead code removed: `src/three/groundTexture.ts` (the
+baked ground-plane texture, superseded by the creative voxel-tile ground
+`src/three/ground.ts`) was deleted in the 2026-09-04 cleanup pass — build
+re-verified, three.js still its own lazy chunk.
 
 ## The 3D architecture (decided after Opus review — do not relitigate casually)
 
@@ -273,7 +283,7 @@ Monitoring and Dashboard. Don't migrate or delete; the designer uses
    way (`ghost`, `spacingViolations`, `companionHalos`, `layers`).
 9. **Query params go BEFORE the hash**: `?ffview=world#/farms/1/map`. Params
    inside the hash fragment break wouter matching (renders NotFound). The seed
-   ships farms 1–2 only — there is no farm 3.
+   ships demo farms 1–7 (see `src/data/seed.ts`; demo-farms pass 2026-09-03).
 10. **Headless world-route captures race plan loading**: structures may build
     from an empty ground map under virtual time, so world PNG bytes cannot
     arbitrate scene content — use GATE + Node-side runtime probes instead
@@ -282,7 +292,7 @@ Monitoring and Dashboard. Don't migrate or delete; the designer uses
 ## Verification gates (run before calling anything done)
 
 1. `npm run typecheck` — clean at handoff.
-2. `npm run build` — clean at handoff (main chunk ~515 kB / ~151 kB gzip;
+2. `npm run build` — clean as of 2026-09-04 (main chunk ~533 kB / ~157 kB gzip;
    the chunk-size warning is recharts and is expected — but three.js must
    land in its own lazy chunk, not here).
 3. Automated smoke (replaces ad-hoc Playwright): dev server up, then

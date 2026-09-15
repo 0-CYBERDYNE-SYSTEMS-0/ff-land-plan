@@ -32,7 +32,7 @@ live weather/frost risk without a backend.
 | `/farms/:id/map`         | `PlotDesigner` | Canvas plot designer with stats, pairings, export |
 | `/farms/:id/calendar`    | `Calendar`     | Crop calendar generated from the current plan    |
 | `/farms/:id/weather`     | `Weather`      | Live Open-Meteo weather + 7-day forecast         |
-| `/farms/:id/simulations` | `Simulations`  | What-if crop simulation runs                     |
+| `/farms/:id/simulations` | `Simulations`  | Simulation run manager (deterministic engine runs) |
 | `/farms/:id/monitoring`  | `Monitoring`   | Sensors, NDVI, alerts, legacy cells              |
 | `/crops`                 | `Crops`        | Crop library with agronomy filters               |
 | `*`                      | `NotFound`     | 404                                              |
@@ -49,9 +49,11 @@ by pages; it currently points at `src/lib/localApi.ts`, backed by:
 - `src/lib/weather.ts` — live Open-Meteo weather/forecast/history with local
   last-good fallback.
 
-Legacy cell, sensor, NDVI, and simulation APIs remain for Monitoring and
-Simulations. Plot Designer uses `getPlan`/`savePlan` and the sparse `PlanState`
-model instead of legacy `FarmCell`.
+Legacy cell, sensor, and NDVI APIs remain for Monitoring and Dashboard. The
+Simulations page is a run manager over the deterministic engine (`src/lib/sim/`):
+old slider-`Simulation` records stay readable/deletable, but creation is gone —
+new what-ifs are `createSimRun` runs. Plot Designer uses `getPlan`/`savePlan`
+and the sparse `PlanState` model instead of legacy `FarmCell`.
 
 The API seam mirrors these logical endpoints:
 
@@ -76,9 +78,11 @@ The API seam mirrors these logical endpoints:
 - `GET    /api/farms/:id/plan`
 - `POST   /api/farms/:id/plan`
 - `GET    /api/farms/:id/ndvi-estimate`
-- `GET    /api/farms/:id/simulations`
-- `POST   /api/farms/:id/simulations`
-- `DELETE /api/simulations/:id`
+- `GET    /api/farms/:id/simulations` (legacy records, read-only)
+- `DELETE /api/simulations/:id` (legacy records)
+- `GET    /api/farms/:id/sim-runs`
+- `POST   /api/farms/:id/sim-runs`
+- `DELETE /api/sim-runs/:id`
 - `GET    /api/crops`
 - `POST   /api/crops`
 
@@ -89,9 +93,14 @@ contract above — including its prefix, e.g. `http://localhost:8787/api` — an
 `src/lib/api.ts` swaps `apiFetch` to `createRestApi(base)` from
 `src/lib/restApi.ts`: a dependency-free `fetch` client covering every seam
 method (farms CRUD, weather/forecast/history, alerts, sensors + readings,
-legacy cells + NDVI, plans, simulations, crops). One mapping assumption:
-assigning a cell's crop posts to `/api/farms/:id/cells` with `{ id, cropId }`,
-since the table defines only GET/POST on that collection. Local-first remains
+legacy cells + NDVI, plans, simulations, sim runs, crops). One mapping
+assumption: assigning a cell's crop posts to `/api/farms/:id/cells` with
+`{ id, cropId }`, since the table defines only GET/POST on that collection.
+Sim runs (`src/lib/sim/`) are deterministic engine runs over a forked plan:
+`POST /sim-runs` takes a `CreateSimRunInput` (farm, dates, scenario,
+interventions — never a full plan) and the server composes + replays the run,
+returning a `RunRecord` (config + frozen daily env series + summary; per-tick
+state is never stored — replay rebuilds it). Local-first remains
 the default — with the variable unset or empty, the local store plus live
 Open-Meteo weather (`src/lib/localApi.ts`) stays exactly as before.
 

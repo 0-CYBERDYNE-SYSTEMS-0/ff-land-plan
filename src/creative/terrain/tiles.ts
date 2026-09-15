@@ -131,14 +131,18 @@ function makeTilled(seed: number, wet: boolean): THREE.Object3D {
   const rand = rng(seed);
   const vx: Voxel[] = [];
 
-  // gentle row undulation: ridge crests dip in a spot or two so the furrows
-  // never read as laser-straight extrusions
+  // gentle row undulation: each ridge column dips exactly once, well inside
+  // the tile, and neighbouring crest columns dip at disjoint depths so the
+  // break never spans two columns (an aligned pair read as a rectangular
+  // bite taken out of the ridge)
+  const dipBands: Array<[number, number]> = [[2, 4], [6, 8], [1, 3], [5, 7]];
   const dips = new Map<number, number[]>();
+  let dipBand = 0;
   for (let x = 0; x <= 9; x++)
     if (FURROW[x] === 4) {
-      const spots: number[] = [];
-      for (let k = 0; k < 1 + Math.floor(rand() * 2); k++) spots.push(Math.floor(rand() * 10));
-      dips.set(x, spots);
+      const [lo, hi] = dipBands[dipBand % dipBands.length];
+      dipBand++;
+      dips.set(x, [lo + Math.floor(rand() * (hi - lo + 1))]);
     }
   const rowHeight = (x: number, z: number): number =>
     dips.get(x)?.includes(z) ? 3 : FURROW[x];

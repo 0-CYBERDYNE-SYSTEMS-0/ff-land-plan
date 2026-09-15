@@ -257,12 +257,15 @@ export function makeIrrigationLine(): THREE.Object3D {
 export function makeBeehive(): THREE.Object3D {
   const rand = rng(4601);
   const solid: Voxel[] = [];
-  const boxTone = (): number =>
-    weighted([[PALETTE.cream, 0.6], [C.trimWhite, 0.25], [mixColor(PALETTE.cream, PALETTE.gravel, 0.3), 0.15]], rand());
 
-  // three solid supers stacked tight; dark seam band under each joint
-  const supers: Array<[number, number]> = [[0, 4], [4, 4], [8, 3]];
-  for (const [y0, h] of supers)
+  // three solid supers stacked tight, each box its own tone; dark seam band
+  // under each joint so the stack reads as separate boxes
+  const supers: Array<[number, number, number]> = [
+    [0, 4, mixColor(PALETTE.cream, PALETTE.gravel, 0.22)],
+    [4, 4, PALETTE.cream],
+    [8, 3, mixColor(PALETTE.cream, PALETTE.white, 0.35)],
+  ];
+  for (const [y0, h, base] of supers)
     for (let x = 0; x <= 9; x++)
       for (let z = 0; z <= 9; z++)
         for (let y = y0; y < y0 + h; y++) {
@@ -271,16 +274,25 @@ export function makeBeehive(): THREE.Object3D {
           const seam = y === y0 + h - 1 && y0 > 0;
           solid.push({
             x, y: y + 0.5, z, s: 0.99,
-            color: seam ? mixColor(boxTone(), PALETTE.gravelDark, 0.45) : boxTone(),
+            color: seam ? mixColor(base, PALETTE.gravelDark, 0.55) : rand() < 0.1 ? mixColor(base, PALETTE.gravel, 0.2) : base,
           });
         }
-  // telescoping metal cover: solid slab with darker rim
+  // wooden rim course under the cover separates roof from the top super
+  for (let x = 0; x <= 9; x++)
+    for (let z = 0; z <= 9; z++) {
+      const edge = x === 0 || x === 9 || z === 0 || z === 9;
+      if (!edge) continue;
+      solid.push({ x, y: 11.2, z, s: 1.02, color: C.postWood });
+    }
+  // telescoping galvanized cover: light metal field, dark rim
   for (let gx = -0.5; gx <= 10.5; gx++)
     for (let gz = -0.5; gz <= 10.5; gz++) {
       const rim = gx === -0.5 || gx === 10.5 || gz === -0.5 || gz === 10.5;
       solid.push({
         x: gx, y: 11.7, z: gz, s: 1.02,
-        color: rim ? PALETTE.metalDark : rand() < 0.12 ? PALETTE.metalDark : PALETTE.metal,
+        color: rim
+          ? PALETTE.metalDark
+          : rand() < 0.3 ? mixColor(PALETTE.metal, PALETTE.white, 0.28) : PALETTE.metal,
       });
     }
   // brick weight on the lid
@@ -316,28 +328,31 @@ export function makeHayBale(): THREE.Object3D {
   const H = 5;
   const D = 4;
 
-  const flakeTone = (fx: number): number => {
-    const base = fx % 3 === 0 ? PALETTE.hay : fx % 3 === 1 ? PALETTE.straw : mixColor(PALETTE.hay, PALETTE.straw, 0.5);
-    return base;
-  };
+  const flakeTone = (fx: number): number =>
+    fx % 2 === 0 ? PALETTE.hay : mixColor(PALETTE.hay, PALETTE.straw, 0.75);
   for (let x = 0; x < W; x++)
     for (let y = 0; y < H; y++)
       for (let z = 0; z < D; z++) {
         const shell = x === 0 || x === W - 1 || y === H - 1 || y === 0 || z === 0 || z === D - 1;
         if (!shell) continue;
-        let c = flakeTone(Math.floor(x / 2.5));
-        if (rand() < 0.14) c = mixColor(c, PALETTE.mulch, 0.3);
-        else if (rand() > 0.9) c = mixColor(c, PALETTE.cornGold, 0.4);
-        // twine bands squeeze two flakes together
-        if (Math.abs(x - 2.5) < 0.8 || Math.abs(x - 7.5) < 0.8) c = mixColor(c, C.strawDark, 0.55);
-        solid.push({ x: x + 0.5, y: y + 0.5, z: z + 0.5, s: 0.98, color: c });
+        const flake = Math.floor(x / 3);
+        const twine = x === 3 || x === 6; // straps sit in the flake grooves
+        let c = flakeTone(flake);
+        if (x % 3 === 2) c = mixColor(c, C.strawDark, 0.3); // flake-edge shadow groove
+        if (!twine) {
+          if (rand() < 0.12) c = mixColor(c, PALETTE.mulch, 0.3);
+          else if (rand() > 0.9) c = mixColor(c, PALETTE.cornGold, 0.4);
+        } else {
+          c = mixColor(C.strawDark, PALETTE.black, 0.12);
+        }
+        solid.push({ x: x + 0.5, y: y + 0.5, z: z + 0.5, s: twine ? 1.03 : 0.98, color: c });
       }
-  // uneven top: loose flakes + stray stalks
-  for (const [tx, tz] of [[2.2, 1.2], [5.4, 2.6], [7.6, 1]] as Array<[number, number]>) {
+  // uneven top: a couple of loose flakes + stray stalks
+  for (const [tx, tz] of [[1.8, 1.2], [7.6, 2.4]] as Array<[number, number]>) {
     solid.push({ x: tx, y: H + 0.35, z: tz, s: 0.7, color: PALETTE.straw });
     solid.push({ x: tx + 0.4, y: H + 0.9, z: tz + 0.2, s: 0.3, color: mixColor(PALETTE.straw, PALETTE.cornGold, 0.5) });
   }
-  for (let i = 0; i < 5; i++)
+  for (let i = 0; i < 3; i++)
     solid.push({
       x: rand() * W, y: H + 0.4 + rand() * 0.5, z: rand() * D, s: 0.22,
       color: rand() < 0.5 ? PALETTE.straw : PALETTE.hay,
@@ -536,39 +551,62 @@ export function makeFruitTree(): THREE.Object3D {
   const rand = rng(4501);
   const solid: Voxel[] = [];
 
-  // trunk + a couple of lower branches
-  for (let y = 0; y <= 8; y++)
-    solid.push({ x: 0, y, z: 0, s: 1.15, color: y % 3 === 0 ? PALETTE.woodDark : PALETTE.wood });
-  for (const [bx, bz, by] of [[1, 0, 6], [-1, 0, 5], [0, 1, 5], [0, -1, 6], [1, 1, 7], [-1, -1, 7]] as Array<[number, number, number]>)
-    solid.push({ x: bx, y: by, z: bz, s: 0.7, color: PALETTE.woodDark });
+  // flared trunk with root buttresses — kept short so the canopy dominates
+  for (let y = 0; y <= 6; y++) {
+    const s = y <= 1 ? 1.6 : y <= 3 ? 1.38 : 1.22;
+    solid.push({ x: 0, y: y + 0.35, z: 0, s, color: y % 3 === 0 ? PALETTE.woodDark : PALETTE.wood });
+  }
+  for (const [bx, bz] of [[0.9, 0.3], [-0.8, -0.5], [0.1, -1]] as Array<[number, number]>)
+    solid.push({ x: bx, y: 0.4, z: bz, s: 0.85, color: PALETTE.woodDark });
 
-  // canopy: rough sphere of leaves centered around y≈11
-  const canopyR = 4;
-  for (let x = -canopyR; x <= canopyR; x++)
-    for (let y = 8; y <= 8 + canopyR * 2; y++)
-      for (let z = -canopyR; z <= canopyR; z++) {
-        const dx = x, dy = y - 11, dz = z;
-        const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > canopyR * canopyR + 1) continue;
-        let c: number = rand() < 0.5 ? PALETTE.leaf : PALETTE.leafDark;
-        if (d2 > (canopyR - 1) * (canopyR - 1)) c = mixColor(c, PALETTE.leafLight, 0.35);
+  // three scaffold limbs climbing into the canopy lobes
+  for (const limb of [
+    [[1, 4.8, 0.4], [1.7, 5.9, 0.8], [2.3, 7.4, 1.1]],
+    [[-1, 5, -0.3], [-1.9, 6.2, -0.6], [-2.5, 7.8, -0.8]],
+    [[0.3, 5.2, -0.5], [0.8, 6.6, -1.7], [1.2, 8.2, -2.5]],
+  ] as Array<Array<[number, number, number]>>)
+    for (const [lx, ly, lz] of limb)
+      solid.push({ x: lx, y: ly, z: lz, s: 0.78, color: PALETTE.woodDark });
+
+  // canopy: five overlapping leaf lobes — orchard silhouette, wider than tall
+  const lobes: Array<[number, number, number, number]> = [
+    [0, 10, 0, 3.2],
+    [2.8, 11.4, 1.2, 2.4],
+    [-2.8, 10.6, -0.8, 2.5],
+    [1.2, 10.2, -2.8, 2.3],
+    [-1.3, 12, 2.3, 2.2],
+  ];
+  const lobeTone = (i: number): number =>
+    i % 2 === 0 ? mixColor(PALETTE.leaf, PALETTE.leafDark, 0.45) : PALETTE.leaf;
+  for (let x = -5; x <= 5; x++)
+    for (let y = 7; y <= 15; y++)
+      for (let z = -5; z <= 5; z++) {
+        let inLobe = -1;
+        let outer = false;
+        for (let i = 0; i < lobes.length; i++) {
+          const [cx, cy, cz, r] = lobes[i];
+          const d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy) + (z - cz) * (z - cz);
+          if (d2 > r * r) continue;
+          inLobe = i;
+          outer = d2 > (r - 0.95) * (r - 0.95);
+        }
+        if (inLobe < 0) continue;
+        let c = lobeTone(inLobe);
+        if (outer) c = mixColor(c, PALETTE.leafLight, 0.35);
+        if (rand() < 0.1) c = mixColor(c, PALETTE.leafDark, 0.4);
+        // ripe fruit sits ON the canopy surface where it can be seen
+        if (outer && rand() < 0.075) {
+          solid.push({ x, y, z, s: 0.78, color: PALETTE.fruitRed });
+          continue;
+        }
         solid.push({ x, y, z, color: c });
       }
 
-  // ripe fruit dots scattered through the canopy
-  for (let i = 0; i < 8; i++) {
-    const a = rand() * Math.PI * 2;
-    const r = 1 + rand() * (canopyR - 1);
-    solid.push({
-      x: Math.round(Math.cos(a) * r),
-      y: 9 + Math.round(rand() * 4),
-      z: Math.round(Math.sin(a) * r),
-      s: 0.6, color: PALETTE.fruitRed,
-    });
-  }
-
-  // grass tuft at the base
-  solid.push({ x: 0, y: 0.5, z: 0, s: 0.4, color: PALETTE.grass });
+  // fallen apple + turf at the base
+  solid.push({ x: 1.3, y: 0.45, z: 0.9, s: 0.62, color: PALETTE.fruitRed });
+  solid.push({ x: 1.3, y: 0.82, z: 0.9, s: 0.24, color: PALETTE.stem });
+  for (const [gx, gz] of [[0.6, -0.9], [-1.1, 0.7], [0.9, 1.1]] as Array<[number, number]>)
+    solid.push({ x: gx, y: 0.45, z: gz, s: 0.36, color: rand() < 0.5 ? PALETTE.grass : PALETTE.grassDark });
 
   return solidMesh(solid);
 }

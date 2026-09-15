@@ -1,6 +1,6 @@
 /**
  * Lane B — Crops & Growth Stages.
- * 17 procedural archetypes × 6 growth stages (`<arch>-s0…s5`) plus the
+ * 18 procedural archetypes × 6 growth stages (`<arch>-s0…s5`) plus the
  * canonical `growth-demo` row (tomato life cycle side by side).
  * Every builder is deterministic; foliage lives in child groups named 'sway'
  * for the future wind system.
