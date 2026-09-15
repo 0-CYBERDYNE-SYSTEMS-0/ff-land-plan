@@ -6,7 +6,7 @@
  */
 import { PALETTE, Voxel, rng } from '@/creative/voxel';
 import {
-  CropPalette, foliage, shade, put, vline, soilPad, soilPadEllipse, finishPlant,
+  CropPalette, STATE_TONES, foliage, shade, put, vline, soilPad, soilPadEllipse, finishPlant,
   sproutLoop, blade, tendril, flowerDot, pod, fivePetal, blob,
 } from './shared';
 
@@ -164,6 +164,21 @@ export const LEGUME_PAL: CropPalette = {
   unripe: 0x8fb464,
 };
 
+/**
+ * Fat ripe pod — full-ish voxels with a swollen seed bulge and a gloss
+ * catchlight so a heavy podset reads at game-camera distance even when the
+ * pod color sits close to the foliage (bean/pea greens).
+ */
+function fatPod(
+  out: Voxel[], x: number, y: number, z: number, c: number, len = 4,
+): void {
+  for (let k = 0; k < len; k++) {
+    put(out, x + (k === len - 1 ? 0.3 : 0), y - k * 0.8, z + (k % 2 ? 0.14 : 0), c, 0.84);
+  }
+  put(out, x + 0.44, y - 0.85, z, c, 0.46);                          // seed bulge
+  put(out, x - 0.22, y - 0.16, z + 0.32, shade(c, 0xffffff, 0.42), 0.24); // gloss
+}
+
 /** Pole/pea: posts + crossbar trellis, twining stem, flowers → hanging pods. */
 export function makeLegumeTrellis(stage: number, pal: CropPalette = LEGUME_PAL): ReturnType<typeof finishPlant> {
   const stat: Voxel[] = [];
@@ -206,10 +221,15 @@ export function makeLegumeTrellis(stage: number, pal: CropPalette = LEGUME_PAL):
       // paired leaflets hugging the weave
       if (y >= 2 && (y + strand) % 2 === 0) {
         const dirX = wx >= 0 ? 1 : -1;
-        put(sway, wx + dirX, y + 0.6, wz, f, 0.9);
-        put(sway, wx + dirX * 1.8, y + 0.9, wz, edge, 0.72);
-        put(sway, wx - dirX, y + 0.4, wz, shade(f, pal.dark, 0.15), 0.85);
-        put(sway, wx - dirX * 1.7, y + 0.7, wz, edge, 0.6);
+        // s5: heavy podset drags the vine mass — leaflets sag under the load
+        // and the lowest leaves yellow a touch while the pods carry the read
+        const droop = stage === 5 ? 0.5 : 0;
+        const yelK = stage === 5 ? (y <= 3 ? 0.5 : y <= 5 ? 0.3 : 0) : 0;
+        const lf = yelK ? shade(f, STATE_TONES.stress, yelK) : f;
+        put(sway, wx + dirX, y + 0.6 - droop, wz, lf, 0.9);
+        put(sway, wx + dirX * 1.8, y + 0.9 - droop * 1.3, wz, edge, 0.72);
+        put(sway, wx - dirX, y + 0.4 - droop, wz, shade(lf, pal.dark, 0.15), 0.85);
+        put(sway, wx - dirX * 1.7, y + 0.7 - droop * 1.3, wz, edge, 0.6);
         if (stage >= 3 && y % 4 === 0) tendril(sway, wx, y + 1.2, wz, dirX, 0, 2, vein);
       }
     }
@@ -223,13 +243,35 @@ export function makeLegumeTrellis(stage: number, pal: CropPalette = LEGUME_PAL):
       fivePetal(sway, fx, fy + 0.9, 1.1, pal.accent, 0xe8c8d8);
     }
   }
-  if (stage >= 4) {
-    const nPods = stage === 4 ? 4 : 7;
-    for (let i = 0; i < nPods; i++) {
-      const py = 3 + (i % 4) * 2;
+  if (stage === 4) {
+    // pods young & slim, hanging among the last blooms — ramp begins
+    for (let i = 0; i < 4; i++) {
+      const py = 3 + i * 2;
       const pxx = Math.round(Math.sin(py * 0.72) * 1.9) + (i % 2 ? 0.6 : -0.6);
-      pod(sway, pxx, py + 0.5, 1.15 + (i % 3) * 0.2, stage === 5 ? 3 : 2,
-        i % 3 === 2 ? shade(pal.fruit, pal.dark, 0.2) : shade(pal.fruit, pal.light, 0.15));
+      pod(sway, pxx, py + 0.5, (i % 2 ? 1 : -1) * (1.15 + (i % 3) * 0.2), 2,
+        shade(pal.fruit, pal.light, 0.18));
+    }
+    for (let i = 0; i < 3; i++) {
+      const fy = 4 + i * 2;
+      const fx = Math.round(Math.sin(fy * 0.72) * 1.9) - 0.7;
+      fivePetal(sway, fx, fy + 0.9, 1.05, pal.accent, 0xe8c8d8);
+    }
+  }
+  if (stage === 5) {
+    // HEAVY PODSET: fat pal.fruit pods hang in clusters down the column, on
+    // both faces of the trellis so the load reads from any angle. Tip growth
+    // has ceased — no bloom specks up top — and the vine sags under the
+    // weight (leaflet droop + yellowing base above).
+    const podLite = shade(pal.fruit, pal.light, 0.28);
+    const podDeep = shade(pal.fruit, pal.dark, 0.14);
+    for (let i = 0; i < 7; i++) {
+      const py = 2 + i;
+      const wx = Math.round(Math.sin(py * 0.72) * 1.9);
+      const side = i % 2 === 0 ? 1 : -1;
+      fatPod(sway, wx + 0.5, py + 0.6, side * (1.25 + (i % 3) * 0.16),
+        i % 3 === 2 ? podDeep : podLite, 4);
+      fatPod(sway, wx - 0.5, py + 0.25, side * (1.5 + (i % 2) * 0.14),
+        shade(pal.fruit, pal.light, 0.12), 3);
     }
   }
   return finishPlant(stat, sway);
@@ -278,13 +320,16 @@ export function makeBushBean(stage: number, pal: CropPalette = BUSHBEAN_PAL): Re
 
   const H = [0, 0, 3, 4, 4, 5][stage];
   const nStems = [0, 0, 4, 5, 6, 7][stage];
+  // s5: canopy deepens and thins (fewer mid-stem leaves) so it recedes behind
+  // the fat harvest pods instead of hiding them
+  const leafBase = stage === 5 ? shade(f, pal.dark, 0.22) : f;
   for (let i = 0; i < nStems; i++) {
     const [dx, dz] = R8[i % 8];
     const sh = H - (i % 2);
     vline(stat, dx * 0.4, 0, dz * 0.4, dx * 1.1, sh, dz * 1.1, pal.stem);
     // opposite oval leaves at the tip and mid-stem
-    blade(sway, Math.round(dx * 1.1), sh, Math.round(dz * 1.1), dx || 1, dz || 0, 2, 2, 0.5, 0.09, i % 2 ? f : shade(f, pal.light, 0.16), vein, edge, 150 + i * 7);
-    if (sh >= 3) blade(sway, Math.round(dx * 0.8), sh - 1, Math.round(dz * 0.8), -(dz || 1), -(dx || 0), 2, 2, 0.42, 0.08, shade(f, pal.dark, 0.14), vein, edge, 170 + i * 5);
+    blade(sway, Math.round(dx * 1.1), sh, Math.round(dz * 1.1), dx || 1, dz || 0, 2, 2, 0.5, 0.09, i % 2 ? leafBase : shade(leafBase, pal.light, 0.16), vein, edge, 150 + i * 7);
+    if (sh >= 3 && (stage < 5 || i % 2 === 0)) blade(sway, Math.round(dx * 0.8), sh - 1, Math.round(dz * 0.8), -(dz || 1), -(dx || 0), 2, 2, 0.42, 0.08, shade(leafBase, pal.dark, 0.14), vein, edge, 170 + i * 5);
   }
 
   if (stage === 3) {
@@ -293,13 +338,36 @@ export function makeBushBean(stage: number, pal: CropPalette = BUSHBEAN_PAL): Re
       flowerDot(sway, dx * 1.6, H + 0.4, dz * 1.6, pal.accent, 0.42);
     }
   }
-  if (stage >= 4) {
-    // pods dangle in open air below the canopy edge — never inside the bush
-    const nPods = stage === 4 ? 4 : 7;
-    for (let i = 0; i < nPods; i++) {
+  if (stage === 4) {
+    // slim young pods dangle at the canopy edge in open air — harvest starting
+    for (let i = 0; i < 4; i++) {
       const [dx, dz] = R8[(i * 5 + 2) % 8];
-      pod(sway, dx * 2.4, H + 0.3 - (i % 3) * 0.4, dz * 2.4, stage === 5 ? 3 : 2,
-        i % 3 === 1 ? shade(pal.fruit, pal.dark, 0.18) : shade(pal.fruit, pal.light, 0.22));
+      pod(sway, dx * 2.4, H + 0.3 - (i % 3) * 0.4, dz * 2.4, 2,
+        shade(pal.fruit, pal.light, 0.2));
+    }
+  }
+  if (stage === 5) {
+    // HARVEST: fat pal.fruit pods hang in the open gaps BELOW the leaf canopy —
+    // full-voxel mass, seed bulges and gloss catchlights make them pop against
+    // the deepened foliage at game-camera distance. A few blossoms linger.
+    const podLite = shade(pal.fruit, pal.light, 0.3);
+    const podDeep = shade(pal.fruit, pal.dark, 0.14);
+    for (let i = 0; i < 8; i++) {
+      const [dx, dz] = R8[(i * 5 + 2) % 8];
+      const px = dx * 2.3;
+      const pz = dz * 2.3;
+      const py = 3.6 - (i % 3) * 0.45;
+      const c = i % 4 === 1 ? podDeep : podLite;
+      const len = 3 + (i % 2); // fat 3–4 voxel pods
+      for (let k = 0; k < len; k++) {
+        put(sway, px + (k === len - 1 ? 0.3 : 0), py - k * 0.8, pz + (k % 2 ? 0.12 : 0), c, 0.88);
+      }
+      put(sway, px + 0.46, py - 0.9, pz, c, 0.48);                          // seed bulge
+      put(sway, px - 0.22, py - 0.15, pz + 0.3, shade(c, 0xffffff, 0.45), 0.26); // gloss
+    }
+    for (let i = 0; i < 3; i++) {
+      const [dx, dz] = R8[(i * 3 + 4) % 8];
+      flowerDot(sway, dx * 1.8, H + 0.5, dz * 1.8, pal.accent, 0.46);
     }
   }
   return finishPlant(stat, sway);

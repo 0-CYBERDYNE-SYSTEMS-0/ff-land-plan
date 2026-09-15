@@ -20,13 +20,16 @@ export interface ArchDef {
   id: string;
   name: string;
   build: (stage: number) => THREE.Object3D;
+  /** Authored keyframe count on the visual axis (SPEC-GROWTH-VISUAL §2.4);
+   *  default 6 = the engine axis. Keep in sync with view.ts stageCountFor. */
+  stages?: number;
 }
 
 export const ARCHETYPES: ArchDef[] = [
   { id: 'tomato', name: 'Tomato', build: (s) => makeTomato(s) },
   { id: 'leafy-head', name: 'Leafy Head', build: (s) => makeLeafyHead(s) },
   { id: 'wheat', name: 'Wheat', build: (s) => makeWheat(s) },
-  { id: 'corn', name: 'Sweet Corn', build: (s) => makeCorn(s) },
+  { id: 'corn', name: 'Sweet Corn', build: (s) => makeCorn(s), stages: 10 },
   { id: 'root-carrot', name: 'Root Crop', build: (s) => makeRootCarrot(s) },
   { id: 'allium', name: 'Allium', build: (s) => makeAllium(s) },
   { id: 'potato', name: 'Potato', build: (s) => makePotato(s) },
@@ -39,7 +42,7 @@ export const ARCHETYPES: ArchDef[] = [
   { id: 'herb-clump', name: 'Herb Clump', build: (s) => makeHerbClump(s) },
   { id: 'herb-shrub', name: 'Herb Shrub', build: (s) => makeHerbShrub(s) },
   { id: 'berry-bush', name: 'Berry Bush', build: (s) => makeBerryBush(s) },
-  { id: 'apple-tree', name: 'Apple Tree', build: (s) => makeAppleTree(s) },
+  { id: 'apple-tree', name: 'Apple Tree', build: (s) => makeAppleTree(s), stages: 10 },
   { id: 'mushroom', name: 'Mushroom', build: (s) => makeMushroom(s) },
 ];
 
@@ -58,7 +61,7 @@ export function makeGrowthDemo(): THREE.Object3D {
 export const entries: AssetEntry[] = [];
 
 for (const arch of ARCHETYPES) {
-  for (let s = 0; s < 6; s++) {
+  for (let s = 0; s < (arch.stages ?? 6); s++) {
     entries.push({
       id: `${arch.id}-s${s}`,
       label: `${arch.name} — stage ${s}`,

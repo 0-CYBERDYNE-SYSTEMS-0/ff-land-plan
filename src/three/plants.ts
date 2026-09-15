@@ -3,7 +3,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { PlanState, Crop, ScenarioType } from '@/types';
 import { parseKey } from '@/lib/plan';
 import { growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
-import { cropAssetMap, makeCropFor } from '@/creative/crops/map';
+import { cropAssetMap, hasVoxelPathFor, makeCropFor, makeCropForCustom } from '@/creative/crops/map';
+import { variationForCell, type PlantViewParams } from '@/lib/sim/view';
+import { STATE_HEIGHT_FACTOR, unitPadGeometry, type PlantStateVisual } from '@/creative/crops/shared';
+import { hasStateBuilder } from '@/creative/crops/states';
 
 /**
  * Plant rendering — one THREE.InstancedMesh per (crop, stage) template.
@@ -54,6 +57,12 @@ interface VoxelTemplate {
   geometry: THREE.BufferGeometry;
   /** Per-template material; stress tint is applied in place per update. */
   material: THREE.MeshLambertMaterial;
+  /** World-space pad radii split out of the template (wave 4): the baked pad
+   *  is stripped at build time and re-instanced per cell by reconcilePads so
+   *  pads can darken with per-cell moisture. Absent ⇒ template has no pad. */
+  padRx?: number;
+  padRz?: number;
+  padHilled?: boolean;
 }
 
 // Key: `${cropName}|${stage}|${templateHeight.toFixed(3)}`. Height (not
@@ -80,6 +89,8 @@ interface StageMesh {
 /** Per-cell reconcile record (assigned slot + placement + growth progress). */
 interface CellSlot {
   stage: number;
+  /** Lifecycle state template axis (undefined = alive stage geometry). */
+  state?: PlantStateVisual;
   /** Instance index inside the stage's InstancedMesh. */
   slot: number;
   x: number;
@@ -92,6 +103,12 @@ interface CellSlot {
   targetProgress: number;
   /** Progress 0..1 currently displayed (eased per frame; starts at target). */
   visualProgress: number;
+  /** Wilt channel 0..1 (droop lean + canopy squash); 0 ⇒ pre-channel matrix. */
+  wilt01: number;
+  /** Final per-instance color (condition tint × genetic variation). */
+  tintR: number;
+  tintG: number;
+  tintB: number;
 }
 
 /** Fallback (procedural clone) resources — owned by the batch, never cached. */
@@ -115,8 +132,8 @@ export interface PlantBatch {
   swayAmount: number;
   /** fullHeight this batch was built for (surface × crop table). */
   fullHeight: number;
-  /** Voxel-instanced path: stage → instanced mesh bookkeeping. */
-  stages: Map<number, StageMesh>;
+  /** Voxel-instanced path: stageKey → instanced mesh bookkeeping. */
+  stages: Map<string, StageMesh>;
   /** Voxel-instanced path: cellKey → placement/progress record. */
   cells: Map<string, CellSlot>;
   /** Set when the crop has no voxel asset (procedural clone path). */
@@ -132,17 +149,26 @@ export interface PlantUpdateOptions {
    */
   progressByCell?: Map<string, number>;
   /**
-   * Run-mode per-cell tint stress ("x,y" → effective stress 0..1). World3D
-   * computes each cell as `max(water, heat, cold, nitrogen)` — the same
-   * max-of-terms aggregation the RunInspector rows use — with pest pressure
-   * folded in at a documented 0.8 weight. When present, the batch tint is the
-   * MAX effective stress across the batch's live cells (one material per
-   * (crop,stage) template is shared by every instance, so per-instance tint
-   * would need instanceColor buffers per batch — too costly for the draw
-   * budget). When absent, the legacy scenarioGrowthMod().stress tint path
+   * Run-mode per-cell tint stress ("x,y" → effective stress 0..1) — LEGACY
+   * run coupling, superseded by viewByCell (which carries the tint per
+   * instance). Kept as the batch-MAX fallback: when present without
+   * viewByCell, the batch tint is the MAX effective stress across the batch's
+   * live cells. When absent, the legacy scenarioGrowthMod().stress tint path
    * applies unchanged.
    */
   stressByCell?: Map<string, number>;
+  /**
+   * Run-mode per-cell view projection ("x,y" → PlantViewParams from
+   * src/lib/sim/view.ts — the pure seam per SPEC-GROWTH-VISUAL §2.1). When
+   * present, per-cell growth (view.growth clamps against computed exactly
+   * like progressByCell), stage, the wilt matrix channel, and the per-instance
+   * tint (view.tint × seeded genetic variation) all come from the projection,
+   * and the batch material tint resets to white (per-instance color carries
+   * stress; applying both would compound). When absent, behavior is unchanged
+   * except the universal per-instance genetic variation (de-clone), which
+   * applies in every mode.
+   */
+  viewByCell?: Map<string, PlantViewParams>;
 }
 
 // Height ranges (meters) by crop category: [min, max] — scaled for world visibility
@@ -166,6 +192,11 @@ const DEFAULT_HEIGHT_RANGE: [number, number] = [0.7, 1.4];
 function templateScaleT(stage: number): number {
   return 0.15 + 0.85 * (stage / 5);
 }
+
+/** Stage-mesh key: stage number + lifecycle-state axis (SPEC-GROWTH-VISUAL
+ * §2.2 — state variants are separate templates, drawn only where present). */
+const stageKey = (stage: number, state?: PlantStateVisual): string =>
+  state ? `${stage}|${state}` : `${stage}`;
 
 /**
  * Vertical-growing ground slugs lift planted crops onto shelf decks (y in
@@ -348,9 +379,22 @@ function buildPlantGeometry(crop: Crop, height: number): THREE.BufferGeometry {
  * metres with its base resting at local y=0. Returns null when the crop has
  * no creative asset.
  */
-function buildNormalizedVoxelRoot(crop: Crop, stage: number, targetWorldHeight: number): THREE.Object3D | null {
-  const asset = makeCropFor(crop.name, stage);
+function buildNormalizedVoxelRoot(
+  crop: Crop,
+  stage: number,
+  targetWorldHeightParam: number,
+  state?: PlantStateVisual,
+): THREE.Object3D | null {
+  const asset = makeCropFor(crop.name, stage, state)
+    ?? makeCropForCustom(crop.name, crop.category, crop.colorHex, stage, state);
   if (!asset) return null;
+
+  // State templates scale by a per-state height factor (builder override via
+  // userData.heightFactor); alive stages use the passed ramp height directly.
+  const targetWorldHeight = state
+    ? targetWorldHeightParam *
+      ((asset.userData as { heightFactor?: number } | undefined)?.heightFactor ?? STATE_HEIGHT_FACTOR[state])
+    : targetWorldHeightParam;
 
   const bbox = new THREE.Box3().setFromObject(asset);
   const size = new THREE.Vector3();
@@ -362,11 +406,28 @@ function buildNormalizedVoxelRoot(crop: Crop, stage: number, targetWorldHeight: 
   }
 
   const holder = new THREE.Group();
-  holder.name = `voxel:${crop.name}:s${stage}`;
+  holder.name = state ? `voxel:${crop.name}:${state}` : `voxel:${crop.name}:s${stage}`;
   holder.add(asset);
   asset.scale.multiplyScalar(scaleFactor);
   // Shift so the (scaled) base of the plant rests at local y = 0.
   asset.position.y -= bbox.min.y * scaleFactor;
+
+  // Pad separation (SPEC-GROWTH-VISUAL wave 4): measure the named 'pad' child
+  // in world units, report it on userData, and strip it from the template —
+  // pads live in the shared instanced pad meshes with per-cell moisture tint.
+  const padChild = asset.children.find((c) => c.name === 'pad');
+  if (padChild) {
+    const padMesh = padChild as THREE.Mesh;
+    padMesh.geometry.computeBoundingBox();
+    const pb = padMesh.geometry.boundingBox;
+    const padHilled = pb ? pb.max.y - pb.min.y > 1.5 : false; // 2 voxel layers vs 1
+    holder.updateMatrixWorld(true);
+    const worldBox = new THREE.Box3().setFromObject(padChild);
+    const rx = Math.max(0.02, (worldBox.max.x - worldBox.min.x) / 2);
+    const rz = Math.max(0.02, (worldBox.max.z - worldBox.min.z) / 2);
+    (holder.userData as { pad?: { rx: number; rz: number; hilled: boolean } }).pad = { rx, rz, hilled: padHilled };
+    asset.remove(padChild);
+  }
 
   return holder;
 }
@@ -405,18 +466,28 @@ function mergeTemplateGeometry(root: THREE.Object3D): THREE.BufferGeometry | nul
  * + vertex-colored material, built once and reused across every rebuild for
  * the session (never disposed with batches — see header memory-bound note).
  */
-function getVoxelTemplate(crop: Crop, stage: number, templateHeight: number): VoxelTemplate | null {
-  const key = `${crop.name}|${stage}|${templateHeight.toFixed(3)}`;
+function getVoxelTemplate(
+  crop: Crop,
+  stage: number,
+  templateHeight: number,
+  state?: PlantStateVisual,
+): VoxelTemplate | null {
+  const key = `${crop.name}|${stage}|${state ?? 'alive'}|${templateHeight.toFixed(3)}`;
   const cached = voxelTemplateCache.get(key);
   if (cached) return cached;
 
-  const voxelRoot = buildNormalizedVoxelRoot(crop, stage, templateHeight);
+  const voxelRoot = buildNormalizedVoxelRoot(crop, stage, templateHeight, state);
   if (!voxelRoot) return null;
   const geometry = mergeTemplateGeometry(voxelRoot);
   if (!geometry) return null; // asset existed but had no mergeable static geometry
 
   const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const tpl: VoxelTemplate = { geometry, material };
+  const padMeta = (voxelRoot.userData as { pad?: { rx: number; rz: number; hilled: boolean } }).pad;
+  const tpl: VoxelTemplate = {
+    geometry,
+    material,
+    ...(padMeta ? { padRx: padMeta.rx, padRz: padMeta.rz, padHilled: padMeta.hilled } : {}),
+  };
   voxelTemplateCache.set(key, tpl);
   return tpl;
 }
@@ -479,11 +550,40 @@ const scratchMatrix = new THREE.Matrix4();
  */
 function writeCellMatrix(stageMesh: StageMesh, cell: CellSlot): void {
   const growthScale = (0.15 + 0.85 * cell.visualProgress) / templateScaleT(cell.stage);
+  // Wilt channel (SPEC-GROWTH-VISUAL §2.2 Tier 1): base-anchored lean + canopy
+  // squash folded into the same matrix write. wilt01 = 0 ⇒ bit-identical to
+  // the pre-channel matrix (rotation.set(0, rotY, 0), no Y squash).
+  const wilt = cell.wilt01;
+  const growthBase = growthScale * cell.baseScale;
   scratchObj.position.set(cell.x, cell.y, cell.z);
-  scratchObj.rotation.set(0, cell.rotY, 0);
-  scratchObj.scale.setScalar(growthScale * cell.baseScale);
+  scratchObj.rotation.set(wilt * 0.1, cell.rotY, wilt * 0.3);
+  scratchObj.scale.set(growthBase, growthBase * (1 - wilt * 0.18), growthBase);
   scratchObj.updateMatrix();
   stageMesh.mesh.setMatrixAt(cell.slot, scratchObj.matrix);
+}
+
+const scratchColor = new THREE.Color();
+
+/**
+ * Per-instance color = condition tint × seeded genetic variation
+ * (SPEC-GROWTH-VISUAL §2.2 Tier 1 — instanceColor multiplies the vertex
+ * colors in three r184; zero extra draw calls). Variation applies in every
+ * mode (de-clone); the tint multiplies in only when the projection provides
+ * one.
+ */
+function cellInstanceColor(key: string, view: PlantViewParams | undefined): { r: number; g: number; b: number } {
+  const v = variationForCell(key);
+  if (view?.tint) {
+    return { r: v.r * view.tint.r, g: v.g * view.tint.g, b: v.b * view.tint.b };
+  }
+  return v;
+}
+
+/** Write one cell's instance color buffer entry (lazily creates instanceColor). */
+function writeCellColor(stageMesh: StageMesh, cell: CellSlot): void {
+  scratchColor.setRGB(cell.tintR, cell.tintG, cell.tintB);
+  stageMesh.mesh.setColorAt(cell.slot, scratchColor);
+  if (stageMesh.mesh.instanceColor) stageMesh.mesh.instanceColor.needsUpdate = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -523,26 +623,36 @@ function createBatch(
     cropId,
     swayAmount: swayAmountFor(crop),
     fullHeight,
-    stages: new Map<number, StageMesh>(),
+    stages: new Map<string, StageMesh>(),
     cells: new Map<string, CellSlot>(),
   };
 
-  // Fallback probe: the creative library is keyed by NAME (cropAssetMap),
-  // so novel custom-crop names get the procedural clone path.
-  if (!(crop.name in cropAssetMap)) {
+  // Fallback probe: the creative library is keyed by NAME (cropAssetMap);
+  // unmapped names with a category fallback archetype (wave 5) still take
+  // the VOXEL template path via makeCropForCustom — only categories with no
+  // representative at all keep the procedural clone path.
+  if (!hasVoxelPathFor(crop)) {
     batch.fallback = { stages: new Map<number, FallbackStage>(), instances: new Map() };
   }
   return batch;
 }
 
 /** Allocate (or grow) the InstancedMesh for a stage, instancing a cached template. */
-function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: number): StageMesh {
-  let sm = batch.stages.get(stage);
+function ensureStageMesh(
+  batch: PlantBatch,
+  crop: Crop,
+  stage: number,
+  needed: number,
+  state?: PlantStateVisual,
+): StageMesh {
+  let sm = batch.stages.get(stageKey(stage, state));
   const capacity = Math.max(needed, 8);
 
   if (!sm) {
-    const templateHeight = batch.fullHeight * templateScaleT(stage);
-    const tpl = getVoxelTemplate(crop, stage, templateHeight);
+    // State templates pass the FULL batch height as the base; the per-state
+    // factor (builder override aware) is applied inside buildNormalizedVoxelRoot.
+    const templateHeight = state ? batch.fullHeight : batch.fullHeight * templateScaleT(stage);
+    const tpl = getVoxelTemplate(crop, stage, templateHeight, state);
     let geometry: THREE.BufferGeometry;
     let material: THREE.Material;
     let ownsGeometry = false;
@@ -565,7 +675,7 @@ function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: n
     mesh.frustumCulled = false; // instances span the whole plan
     batch.group.add(mesh);
     sm = { mesh, capacity, count: 0, slotKeys: new Array<string | undefined>(capacity), ...(ownsGeometry ? { ownsGeometry } : {}) };
-    batch.stages.set(stage, sm);
+    batch.stages.set(stageKey(stage, state), sm);
     return sm;
   }
 
@@ -583,6 +693,13 @@ function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: n
       (sm.mesh.instanceMatrix.array as Float32Array).subarray(0, sm.count * 16),
     );
     mesh.instanceMatrix.needsUpdate = true;
+    if (sm.mesh.instanceColor) {
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(newCap * 3).fill(1), 3);
+      (mesh.instanceColor.array as Float32Array).set(
+        (sm.mesh.instanceColor.array as Float32Array).subarray(0, sm.count * 3),
+      );
+      mesh.instanceColor.needsUpdate = true;
+    }
     sm.mesh.removeFromParent();
     sm.mesh.dispose(); // instance buffers only — geometry/material are cached
     batch.group.add(mesh);
@@ -600,13 +717,22 @@ function ensureStageMesh(batch: PlantBatch, crop: Crop, stage: number, needed: n
  * compaction is needed). Updates the moved occupant's slot in `batch.cells`.
  */
 function removeInstance(batch: PlantBatch, cell: CellSlot): void {
-  const sm = batch.stages.get(cell.stage);
+  const sm = batch.stages.get(stageKey(cell.stage, cell.state));
   if (!sm) return;
   const last = sm.count - 1;
   if (cell.slot < 0 || cell.slot > last) return;
   if (cell.slot !== last) {
     sm.mesh.getMatrixAt(last, scratchMatrix);
     sm.mesh.setMatrixAt(cell.slot, scratchMatrix);
+    const movedColor = sm.mesh.instanceColor;
+    if (movedColor) {
+      const from = last * 3;
+      const to = cell.slot * 3;
+      movedColor.array[to] = movedColor.array[from];
+      movedColor.array[to + 1] = movedColor.array[from + 1];
+      movedColor.array[to + 2] = movedColor.array[from + 2];
+      movedColor.needsUpdate = true;
+    }
     const movedKey = sm.slotKeys[last];
     sm.slotKeys[cell.slot] = movedKey;
     if (movedKey !== undefined) {
@@ -657,7 +783,7 @@ function reconcileFallbackBatch(
   const wanted = new Map<string, number>(); // key → stage
   for (const key of keys) {
     const computed = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
-    const override = opts?.progressByCell?.get(key);
+    const override = opts?.viewByCell?.get(key)?.growth ?? opts?.progressByCell?.get(key);
     const progress = override !== undefined ? Math.max(computed, override) : computed;
     wanted.set(key, stageForScale(progress));
   }
@@ -719,30 +845,57 @@ function reconcileVoxelBatch(
   // allocation is fine, only the per-frame path must be allocation-free).
   interface Desired {
     stage: number;
+    state?: PlantStateVisual;
     progress: number;
     x: number;
     y: number;
     z: number;
     rotY: number;
     baseScale: number;
+    wilt01: number;
+    tintR: number;
+    tintG: number;
+    tintB: number;
   }
+  const viewByCell = opts?.viewByCell;
+  const archOfCrop = cropAssetMap[crop.name]?.archetype;
   const desired = new Map<string, Desired>();
   for (const key of keys) {
     const [cellX, cellY] = parseKey(key);
+    const view = viewByCell?.get(key);
+    // Lifecycle state: dedicated geometry when the archetype authored it
+    // (SPEC §2.2 Tier 2); otherwise the Tier-1 tint+wilt channels carry it.
+    const lifecycle = view?.lifecycle;
+    const state =
+      lifecycle !== undefined && lifecycle !== 'alive' && hasStateBuilder(archOfCrop, lifecycle)
+        ? lifecycle
+        : undefined;
     const computed = currentDate ? growthProgress(crop, plantedAtMap[key], now, mod?.rate ?? 1) : 1;
-    const override = opts?.progressByCell?.get(key);
+    const override = view?.growth ?? opts?.progressByCell?.get(key);
     const progress = override !== undefined ? Math.max(computed, override) : computed;
+    const stage = view ? view.stage : stageForScale(progress);
+    // State geometry is a single authored pose: pin progress to the stage's
+    // ramp point so the instance scale resolves to exactly 1 (authored
+    // height), and suppress the Tier-1 tint/wilt channels — the pose and
+    // baked state palette carry the read.
+    const shownProgress = state ? stage / 5 : progress;
     const jitter = jitterForCell(cellX, cellY, plan.cellM);
     const liftSlugs = SHELF_LIFTS[plan.ground[key] ?? ''];
     const lift = liftSlugs ? liftSlugs[shelfForCell(cellX, cellY)]! : 0;
+    const tint = cellInstanceColor(key, state ? undefined : view);
     desired.set(key, {
-      stage: stageForScale(progress),
-      progress,
+      stage,
+      state,
+      progress: shownProgress,
       x: cellX * plan.cellM + plan.cellM / 2 + offsetX + jitter.offsetX,
       y: 0.01 + lift,
       z: cellY * plan.cellM + plan.cellM / 2 + offsetZ + jitter.offsetZ,
       rotY: jitter.rotY,
       baseScale: jitter.scaleY,
+      wilt01: state ? 0 : (view?.wilt ?? 0),
+      tintR: tint.r,
+      tintG: tint.g,
+      tintB: tint.b,
     });
   }
 
@@ -752,7 +905,7 @@ function reconcileVoxelBatch(
   const carriedVisual = new Map<string, number>();
   for (const [key, cell] of batch.cells) {
     const want = desired.get(key);
-    if (!want || want.stage !== cell.stage) {
+    if (!want || want.stage !== cell.stage || want.state !== cell.state) {
       carriedVisual.set(key, cell.visualProgress);
       removeInstance(batch, cell);
       batch.cells.delete(key);
@@ -763,26 +916,35 @@ function reconcileVoxelBatch(
   for (const [key, want] of desired) {
     const prev = batch.cells.get(key);
     if (prev) {
-      const sm = batch.stages.get(prev.stage)!;
+      const sm = batch.stages.get(stageKey(prev.stage, prev.state))!;
       prev.targetProgress = want.progress;
       if (
         prev.x !== want.x || prev.y !== want.y || prev.z !== want.z ||
-        prev.rotY !== want.rotY || prev.baseScale !== want.baseScale
+        prev.rotY !== want.rotY || prev.baseScale !== want.baseScale ||
+        prev.wilt01 !== want.wilt01
       ) {
         prev.x = want.x;
         prev.y = want.y;
         prev.z = want.z;
         prev.rotY = want.rotY;
         prev.baseScale = want.baseScale;
+        prev.wilt01 = want.wilt01;
         writeCellMatrix(sm, prev);
         sm.mesh.instanceMatrix.needsUpdate = true;
       }
+      if (prev.tintR !== want.tintR || prev.tintG !== want.tintG || prev.tintB !== want.tintB) {
+        prev.tintR = want.tintR;
+        prev.tintG = want.tintG;
+        prev.tintB = want.tintB;
+        writeCellColor(sm, prev);
+      }
       continue;
     }
-    const sm = ensureStageMesh(batch, crop, want.stage, (batch.stages.get(want.stage)?.count ?? 0) + 1);
+    const sm = ensureStageMesh(batch, crop, want.stage, (batch.stages.get(stageKey(want.stage, want.state))?.count ?? 0) + 1, want.state);
     const carried = carriedVisual.get(key);
     const cell: CellSlot = {
       stage: want.stage,
+      state: want.state,
       slot: sm.count,
       x: want.x,
       y: want.y,
@@ -793,8 +955,13 @@ function reconcileVoxelBatch(
       // Brand-new plants start AT their target (no grow-in); stage-changing
       // plants continue from their eased visual size.
       visualProgress: carried ?? want.progress,
+      wilt01: want.wilt01,
+      tintR: want.tintR,
+      tintG: want.tintG,
+      tintB: want.tintB,
     };
     writeCellMatrix(sm, cell);
+    writeCellColor(sm, cell);
     sm.slotKeys[sm.count] = key;
     sm.count++;
     sm.mesh.instanceMatrix.needsUpdate = true;
@@ -808,6 +975,241 @@ function reconcileVoxelBatch(
     sm.mesh.instanceMatrix.needsUpdate = true;
   }
   batch.count = keys.length;
+}
+
+// ---------------------------------------------------------------------------
+// Soil pads (SPEC-GROWTH-VISUAL wave 4)
+// ---------------------------------------------------------------------------
+
+/** Radius of the shared unit pad geometry, in geometry units (unitPadGeometry). */
+const PAD_UNIT_R = 3;
+
+interface PadMesh {
+  mesh: THREE.InstancedMesh;
+  capacity: number;
+  count: number;
+  /** Reverse index slot → cellKey, for swap-with-last removal. */
+  keys: (string | undefined)[];
+}
+
+interface PadState {
+  flat: PadMesh;
+  hilled: PadMesh;
+  /** cellKey → which mesh + slot. */
+  index: Map<string, { kind: 'flat' | 'hilled'; slot: number }>;
+  material: THREE.MeshLambertMaterial;
+}
+
+let padState: PadState | null = null;
+
+/** Unit pad geometries live for the session (mirrors voxelTemplateCache
+ *  semantics — built once, shared by every pad-state rebuild). */
+let padGeoCache: { flat: THREE.BufferGeometry; hilled: THREE.BufferGeometry } | null = null;
+function padGeometries(): { flat: THREE.BufferGeometry; hilled: THREE.BufferGeometry } {
+  if (!padGeoCache) padGeoCache = { flat: unitPadGeometry(false), hilled: unitPadGeometry(true) };
+  return padGeoCache;
+}
+
+/** Moisture → pad tint multiplier (instanceColor × baked soil vertex colors).
+ *  Bone-dry (m=0) lifts the pad toward pale dust, saturated (m=1) sinks it to
+ *  wet-dark — the range is wide enough to read at game-camera distance (the
+ *  first cut's ±20% was invisible under Lambert lighting; critic round 2).
+ *  Null moisture = untinted (baked colors). */
+function padMoistureTint(m: number | null | undefined): { r: number; g: number; b: number } {
+  if (m === null || m === undefined) return { r: 1, g: 1, b: 1 };
+  // Dusty-pale at m=0, wet-dark (slightly cool) at m=1 — ~2.9× end-to-end.
+  return { r: 1.45 - 0.95 * m, g: 1.42 - 0.96 * m, b: 1.38 - 0.94 * m };
+}
+
+function newPadMesh(geo: THREE.BufferGeometry, material: THREE.Material, name: string): PadMesh {
+  const mesh = new THREE.InstancedMesh(geo, material, 64);
+  mesh.name = name;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.count = 0;
+  mesh.frustumCulled = false; // instances span the whole plan
+  return { mesh, capacity: 64, count: 0, keys: new Array<string | undefined>(64) };
+}
+
+function ensurePadState(scene: THREE.Scene): PadState {
+  if (padState) return padState;
+  const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const geo = padGeometries();
+  padState = {
+    flat: newPadMesh(geo.flat, material, 'soil-pads:flat'),
+    hilled: newPadMesh(geo.hilled, material, 'soil-pads:hilled'),
+    index: new Map(),
+    material,
+  };
+  scene.add(padState.flat.mesh, padState.hilled.mesh);
+  return padState;
+}
+
+function growPadMesh(pm: PadMesh): void {
+  const parent = pm.mesh.parent;
+  const newCap = Math.ceil(pm.capacity * 1.5);
+  const mesh = new THREE.InstancedMesh(pm.mesh.geometry, pm.mesh.material, newCap);
+  mesh.name = pm.mesh.name;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.count = pm.count;
+  mesh.frustumCulled = false;
+  (mesh.instanceMatrix.array as Float32Array).set(
+    (pm.mesh.instanceMatrix.array as Float32Array).subarray(0, pm.count * 16),
+  );
+  mesh.instanceMatrix.needsUpdate = true;
+  if (pm.mesh.instanceColor) {
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(newCap * 3).fill(1), 3);
+    (mesh.instanceColor.array as Float32Array).set(
+      (pm.mesh.instanceColor.array as Float32Array).subarray(0, pm.count * 3),
+    );
+    mesh.instanceColor.needsUpdate = true;
+  }
+  pm.mesh.removeFromParent();
+  pm.mesh.dispose(); // instance buffers only — shared geometry/material survive
+  parent?.add(mesh);
+  pm.mesh = mesh;
+  pm.capacity = newCap;
+  pm.keys = pm.keys.slice();
+  pm.keys.length = newCap;
+}
+
+function writePadInstance(pm: PadMesh, slot: number, x: number, y: number, z: number, rx: number, rz: number, tint: { r: number; g: number; b: number }): void {
+  scratchObj.position.set(x, y, z);
+  scratchObj.rotation.set(0, 0, 0);
+  // Uniform Y scale by the SAME factor as X — geometry units are voxels, so a
+  // y-scale of 1 would leave the pad ~1 m tall (the wave-4 critic catch).
+  const sxz = rx / PAD_UNIT_R;
+  scratchObj.scale.set(sxz, sxz, rz / PAD_UNIT_R);
+  scratchObj.updateMatrix();
+  pm.mesh.setMatrixAt(slot, scratchObj.matrix);
+  scratchColor.setRGB(tint.r, tint.g, tint.b);
+  pm.mesh.setColorAt(slot, scratchColor);
+  pm.mesh.instanceMatrix.needsUpdate = true;
+  if (pm.mesh.instanceColor) pm.mesh.instanceColor.needsUpdate = true;
+}
+
+function removePadInstance(key: string): void {
+  const ps = padState;
+  if (!ps) return;
+  const entry = ps.index.get(key);
+  if (!entry) return;
+  const pm = ps[entry.kind];
+  const last = pm.count - 1;
+  if (entry.slot >= 0 && entry.slot <= last) {
+    if (entry.slot !== last) {
+      pm.mesh.getMatrixAt(last, scratchMatrix);
+      pm.mesh.setMatrixAt(entry.slot, scratchMatrix);
+      if (pm.mesh.instanceColor) {
+        const from = last * 3;
+        const to = entry.slot * 3;
+        pm.mesh.instanceColor.array[to] = pm.mesh.instanceColor.array[from];
+        pm.mesh.instanceColor.array[to + 1] = pm.mesh.instanceColor.array[from + 1];
+        pm.mesh.instanceColor.array[to + 2] = pm.mesh.instanceColor.array[from + 2];
+        pm.mesh.instanceColor.needsUpdate = true;
+      }
+      const movedKey = pm.keys[last];
+      pm.keys[entry.slot] = movedKey;
+      if (movedKey !== undefined) {
+        const moved = ps.index.get(movedKey);
+        if (moved) moved.slot = entry.slot;
+      }
+      pm.mesh.instanceMatrix.needsUpdate = true;
+    }
+    pm.keys[last] = undefined;
+    pm.count--;
+    pm.mesh.count = pm.count;
+  }
+  ps.index.delete(key);
+}
+
+/**
+ * Day-keyed reconcile of the shared pad instances against the live plan:
+ * one flat + one hilled InstancedMesh carry every template-path cell's pad
+ * (two extra draw calls worst case), tinted per cell by the projection's
+ * moisture passthrough. Fallback (procedural) cells never had baked pads and
+ * keep that behavior. Runs at updatePlants cadence — never per frame.
+ */
+function reconcilePads(
+  batches: PlantBatch[],
+  plan: PlanState,
+  cropById: Map<number, Crop>,
+  scene: THREE.Scene,
+  viewByCell: Map<string, PlantViewParams> | undefined,
+): void {
+  const ps = ensurePadState(scene);
+  const batchByCrop = new Map<number, PlantBatch>();
+  for (const batch of batches) batchByCrop.set(batch.cropId, batch);
+
+  interface DesiredPad { x: number; z: number; y: number; rx: number; rz: number; hilled: boolean; tint: { r: number; g: number; b: number } }
+  const desired = new Map<string, DesiredPad>();
+  let dbgNoBatch = 0; let dbgNoCell = 0; let dbgNoTpl = 0; let dbgNoPad = 0; let dbgOk = 0; let dbgMoist = 0;
+  for (const key of Object.keys(plan.planting)) {
+    const crop = cropById.get(plan.planting[key]!);
+    if (!crop) continue;
+    const batch = batchByCrop.get(crop.id);
+    if (!batch || batch.fallback) { dbgNoBatch++; continue; }
+    const cell = batch.cells.get(key);
+    if (!cell) { dbgNoCell++; continue; }
+    const templateHeight = cell.state ? batch.fullHeight : batch.fullHeight * templateScaleT(cell.stage);
+    const tpl = getVoxelTemplate(crop, cell.stage, templateHeight, cell.state);
+    if (!tpl) { dbgNoTpl++; continue; }
+    if (!tpl.padRx || !tpl.padRz) { dbgNoPad++; continue; }
+    dbgOk++;
+    if (viewByCell?.get(key)?.moisture != null) dbgMoist++;
+    desired.set(key, {
+      x: cell.x,
+      y: cell.y,
+      z: cell.z,
+      rx: tpl.padRx,
+      rz: tpl.padRz,
+      hilled: tpl.padHilled ?? false,
+      tint: padMoistureTint(viewByCell?.get(key)?.moisture),
+    });
+  }
+
+  // Remove pads whose cell vanished (or fell back / lost its template).
+  for (const key of [...ps.index.keys()]) {
+    if (!desired.has(key)) removePadInstance(key);
+  }
+
+  for (const [key, want] of desired) {
+    const prev = ps.index.get(key);
+    const kind: 'flat' | 'hilled' = want.hilled ? 'hilled' : 'flat';
+    if (prev && prev.kind === kind) {
+      writePadInstance(ps[prev.kind], prev.slot, want.x, want.y, want.z, want.rx, want.rz, want.tint);
+      continue;
+    }
+    if (prev) removePadInstance(key); // kind changed (e.g. stage move to a hilled state)
+    const pm = ps[kind];
+    if (pm.count >= pm.capacity) growPadMesh(pm); // mutates pm.mesh in place
+    const slot = pm.count;
+    writePadInstance(pm, slot, want.x, want.y, want.z, want.rx, want.rz, want.tint);
+    pm.keys[slot] = key;
+    pm.count++;
+    pm.mesh.count = pm.count;
+    ps.index.set(key, { kind, slot });
+  }
+
+  ps.flat.mesh.count = ps.flat.count;
+  ps.hilled.mesh.count = ps.hilled.count;
+  padDebugCounts = { ok: dbgOk, noBatch: dbgNoBatch, noCell: dbgNoCell, noTpl: dbgNoTpl, noPad: dbgNoPad, moist: dbgMoist };
+}
+
+let padDebugCounts = { ok: 0, noBatch: 0, noCell: 0, noTpl: 0, noPad: 0, moist: 0 };
+
+/** DEV-only introspection for the #ff-env-bridge probe (wave 4). */
+export function __padProbe(): { flat: number; hilled: number; sample: string; dbg: string } | null {
+  if (!padState) return null;
+  const sample: string[] = [];
+  padState.flat.mesh.instanceColor?.array?.slice?.(0, 9).forEach((v) => sample.push(v.toFixed(2)));
+  const c = padDebugCounts;
+  return {
+    flat: padState.flat.count,
+    hilled: padState.hilled.count,
+    sample: sample.join(','),
+    dbg: `ok=${c.ok} noBatch=${c.noBatch} noCell=${c.noCell} noTpl=${c.noTpl} noPad=${c.noPad} moist=${c.moist}`,
+  };
 }
 
 /**
@@ -842,11 +1244,15 @@ export function buildPlants(
       reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
     } else {
       reconcileVoxelBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
-      applyStressTint(batch, batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
+      // Run mode (viewByCell): per-instance color carries stress — reset the
+      // shared template material to white so batch + instance tints don't
+      // compound. Legacy paths keep the scenario / MAX-stress batch tint.
+      applyStressTint(batch, opts?.viewByCell ? 0 : batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
     }
     batches.push(batch);
   }
 
+  reconcilePads(batches, plan, cropById, scene, opts?.viewByCell);
   return batches;
 }
 
@@ -904,7 +1310,10 @@ export function updatePlants(
       reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
     } else {
       reconcileVoxelBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
-      applyStressTint(batch, batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
+      // Run mode (viewByCell): per-instance color carries stress — reset the
+      // shared template material to white so batch + instance tints don't
+      // compound. Legacy paths keep the scenario / MAX-stress batch tint.
+      applyStressTint(batch, opts?.viewByCell ? 0 : batchTintStress(batch, crop, plan, scenario, growthCtx, opts));
     }
     next.push(batch);
   }
@@ -915,6 +1324,7 @@ export function updatePlants(
 
   batches.length = 0;
   batches.push(...next);
+  reconcilePads(next, plan, cropById, scene, opts?.viewByCell);
   return batches;
 }
 
@@ -938,7 +1348,7 @@ export function advancePlantGrowth(batches: PlantBatch[], dt: number, easeRate =
         if (Math.abs(cell.targetProgress - cell.visualProgress) < 1e-4) {
           cell.visualProgress = cell.targetProgress;
         }
-        const sm = batch.stages.get(cell.stage);
+        const sm = batch.stages.get(stageKey(cell.stage, cell.state));
         if (!sm) continue;
         writeCellMatrix(sm, cell);
         sm.mesh.instanceMatrix.needsUpdate = true;
@@ -1002,4 +1412,12 @@ function disposeBatch(batch: PlantBatch): void {
 export function disposePlants(batches: PlantBatch[]): void {
   for (const batch of batches) disposeBatch(batch);
   batches.length = 0;
+  if (padState) {
+    padState.flat.mesh.removeFromParent();
+    padState.hilled.mesh.removeFromParent();
+    padState.flat.mesh.dispose();
+    padState.hilled.mesh.dispose();
+    padState.material.dispose();
+    padState = null; // unit geometry cache survives; instances rebuild on demand
+  }
 }

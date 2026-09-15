@@ -31,7 +31,62 @@ export interface CropPalette {
   fruit: number;
   /** unripe fruit / early head color */
   unripe: number;
+  /** OPTIONAL severe-stress foliage tone (STATE_TONES.stress fallback) */
+  stress?: number;
+  /** OPTIONAL desiccated/dead foliage tone (STATE_TONES.dead fallback) */
+  dead?: number;
+  /** OPTIONAL harvest stubble tone (STATE_TONES.stubble fallback) */
+  stubble?: number;
 }
+
+/* ------------------------------------------------------------------ */
+/* lifecycle state geometry (SPEC-GROWTH-VISUAL §2.2 Tier 2)            */
+/* ------------------------------------------------------------------ */
+
+/** Lifecycle states that may get dedicated geometry (single pose each). */
+export type PlantStateVisual = 'dead' | 'harvested' | 'overripe';
+
+/**
+ * State builder contract: one pose per state (no stage axis — a dead plant
+ * reads "finished" regardless of the stage it reached). Same rules as stage
+ * builders: deterministic (seeded rng only), soil pad optional, foliage in a
+ * 'sway' child, plan-view readable.
+ *
+ * Height: the renderer normalizes state geometry to
+ * `fullHeight × (group.userData.heightFactor ?? STATE_HEIGHT_FACTOR[state])` —
+ * set `userData.heightFactor` (0..1) on the returned group when the default
+ * factor is wrong for the crop (e.g. a fruit tree's "harvested" keeps the
+ * full canopy: heightFactor 1).
+ */
+export type StateBuilder = (pal: CropPalette) => THREE.Group;
+
+/** Per-archetype optional state builders (empty object = not authored yet). */
+export interface ArchetypeStates {
+  dead?: StateBuilder;
+  harvested?: StateBuilder;
+  overripe?: StateBuilder;
+}
+
+/**
+ * Canonical height factors for state templates — the renderer normalizes
+ * state geometry to `fullHeight × factor` so every crop's states read at
+ * consistent relative sizes (dead collapses, harvested is ground-hugging).
+ */
+export const STATE_HEIGHT_FACTOR: Record<PlantStateVisual, number> = {
+  dead: 0.55,
+  harvested: 0.3,
+  overripe: 0.95,
+};
+
+/** Fallback lifecycle tones for palettes without explicit slots. */
+export const STATE_TONES = {
+  /** severe-stress foliage: dry yellow-brown */
+  stress: 0xb39b4a,
+  /** desiccated dead foliage: grey-brown */
+  dead: 0x8d7a58,
+  /** cut stubble / harvest residue: straw tan */
+  stubble: 0xc4a86a,
+} as const;
 
 export const stageT = (s: number): number => Math.min(1, Math.max(0, s / 5));
 
@@ -251,8 +306,8 @@ export function soilPad(out: Voxel[], r: number, seed: number, raise = 0): void 
       const rim = d2 >= (r - 0.9) * (r - 0.9);
       let c: number = rnd() < 0.52 ? PALETTE.soil : PALETTE.soilDark;
       if (rim) c = mixColor(c, PALETTE.shadow, 0.22);
-      if (raise > 0 && d2 <= (r - 1.4) * (r - 1.4)) out.push({ x, y: 1, z, color: rnd() < 0.5 ? PALETTE.soilLight : PALETTE.soil });
-      out.push({ x, y: 0, z, color: c });
+      if (raise > 0 && d2 <= (r - 1.4) * (r - 1.4)) out.push({ x, y: 1, z, color: rnd() < 0.5 ? PALETTE.soilLight : PALETTE.soil, pad: true });
+      out.push({ x, y: 0, z, color: c, pad: true });
     }
 }
 
@@ -266,14 +321,32 @@ export function soilPadEllipse(out: Voxel[], rx: number, rz: number, seed: numbe
       const rim = d > 0.74;
       let c: number = rnd() < 0.52 ? PALETTE.soil : PALETTE.soilDark;
       if (rim) c = mixColor(c, PALETTE.shadow, 0.22);
-      out.push({ x, y: 0, z, color: c });
+      out.push({ x, y: 0, z, color: c, pad: true });
     }
 }
 
-/** Assemble a plant: static voxels + foliage group named 'sway'. */export function finishPlant(stat: Voxel[], sway: Voxel[]): THREE.Group {
+/**
+ * Assemble a plant: static voxels + foliage group named 'sway'. Pad-flagged
+ * static voxels assemble into a NAMED 'pad' child (SPEC-GROWTH-VISUAL wave 4)
+ * so the instanced renderer can strip them from plant templates and instance
+ * pads separately with per-cell moisture tinting; every other consumer
+ * (showcase, ghost overlays, direct makeCropFor use) renders them unchanged.
+ */
+export function finishPlant(stat: Voxel[], sway: Voxel[]): THREE.Group {
   const root = new THREE.Group();
   root.name = 'crop';
-  if (stat.length) root.add(voxelMesh(stat));
+  let solid: Voxel[] | null = null;
+  let pad: Voxel[] | null = null;
+  for (const v of stat) {
+    if (v.pad) (pad ??= []).push(v);
+    else (solid ??= []).push(v);
+  }
+  if (solid) root.add(voxelMesh(solid));
+  if (pad) {
+    const padMesh = voxelMesh(pad);
+    padMesh.name = 'pad';
+    root.add(padMesh);
+  }
   if (sway.length) {
     const g = new THREE.Group();
     g.name = 'sway';
@@ -281,6 +354,20 @@ export function soilPadEllipse(out: Voxel[], rx: number, rz: number, seed: numbe
     root.add(g);
   }
   return root;
+}
+
+/**
+ * Shared unit pad geometry (radius 3 voxel units) the renderer instances and
+ * scales per cell — flat disc, or hilled dome ring for raised crops (potato).
+ * Built with the same deterministic dither recipe as soilPad (seed 4242).
+ */
+export function unitPadGeometry(hilled: boolean): THREE.BufferGeometry {
+  const vox: Voxel[] = [];
+  soilPad(vox, 3, 4242, hilled ? 1 : 0);
+  const mesh = voxelMesh(vox);
+  const geo = mesh.geometry;
+  (mesh.material as THREE.Material).dispose(); // geometry is handed to the caller
+  return geo;
 }
 
 /** Standard sprout loop w/ seed-husk hint (s0 of most archetypes). */

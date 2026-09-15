@@ -7,7 +7,10 @@
  */
 import * as THREE from 'three';
 import { PALETTE } from '@/creative/voxel';
-import type { CropPalette } from './shared';
+import { stageCountFor } from '@/lib/sim/view';
+import type { CropPalette, PlantStateVisual } from './shared';
+import { STATE_BUILDERS } from './states';
+import { SPECIAL_BUILDERS } from './specials';
 import { makeTomato, TOMATO_PAL } from './tomato';
 import {
   makeLeafyHead, makeBrassica, makeGreensOpen,
@@ -161,12 +164,80 @@ export const cropAssetMap: Record<string, CropAssetMapping> = {
   'Shiitake': { archetype: 'mushroom', palette: { fruit: 0x8a5a33, unripe: 0x9c6b44, mature: 0x7a4f2c, dark: 0x543620, light: 0xb07a4a } },
 };
 
-/** Build the plant for a catalog crop name at a growth stage (null if unmapped). */
-export function makeCropFor(name: string, stage: number): THREE.Object3D | null {
+/**
+ * Build the plant for a catalog crop name at a growth stage (null if
+ * unmapped). With `state`, build the archetype's dedicated lifecycle-state
+ * geometry instead (SPEC-GROWTH-VISUAL §2.2 — single pose, stage ignored;
+ * null when the archetype has no builder for that state, so callers fall
+ * back to the Tier-1 tint + pose channels).
+ */
+export function makeCropFor(name: string, stage: number, state?: PlantStateVisual): THREE.Object3D | null {
   const m = cropAssetMap[name];
-  if (!m || stage < 0 || stage > 5) return null;
+  if (!m) return null;
+  return buildMapping(m, name, stage, state);
+}
+
+/** Shared build core of makeCropFor / makeCropForCustom. */
+function buildMapping(m: CropAssetMapping, name: string, stage: number, state?: PlantStateVisual): THREE.Object3D | null {
   const pal: CropPalette = { ...ARCHETYPE_DEFAULTS[m.archetype], ...m.palette };
-  const obj = BUILDERS[m.archetype](stage, pal, m.variant ? { variant: m.variant } : undefined);
+  let obj: THREE.Object3D;
+  if (state) {
+    const buildState = STATE_BUILDERS[m.archetype]?.[state];
+    if (!buildState) return null;
+    obj = buildState(pal);
+  } else {
+    // Visual keyframe axis: crops with authored extra keyframes accept stages
+    // past 5 (view.ts stageCountFor); everything else stays on the engine axis.
+    if (stage < 0 || stage > stageCountFor(name) - 1) return null;
+    // Tier-3 specials (de-cloned crops) win over the archetype dispatch.
+    const special = SPECIAL_BUILDERS[name] ?? null;
+    obj = special
+      ? special(stage, pal)
+      : BUILDERS[m.archetype](stage, pal, m.variant ? { variant: m.variant } : undefined);
+  }
   if (m.scale !== undefined && m.scale !== 1) obj.scale.setScalar(m.scale);
   return obj;
+}
+
+/**
+ * Category fallback for crops whose name is NOT in cropAssetMap (custom
+ * crops, ids ≥ 1000): a representative archetype per catalog category with
+ * the crop's own colorHex recoloring the fruit/flower slots, so a custom
+ * "Golden Beet" reads as a voxel plant in its own color instead of the
+ * pre-voxel primitive-blob fallback (SPEC-GROWTH-VISUAL wave 5).
+ */
+const CATEGORY_FALLBACK: Record<string, ArchetypeId> = {
+  vegetable: 'greens-open',
+  herb: 'herb-clump',
+  fruit: 'berry-bush',
+  grain: 'wheat',
+  flower: 'herb-clump',
+  cover_crop: 'greens-open',
+  fungus: 'mushroom',
+};
+
+/** True when a crop has a voxel template path — exact name mapping OR a
+ *  category fallback archetype (wave 5). plants.ts uses this to choose the
+ *  voxel batch over the legacy primitive-blob fallback. */
+export function hasVoxelPathFor(crop: { name: string; category: string }): boolean {
+  return crop.name in cropAssetMap || CATEGORY_FALLBACK[crop.category] !== undefined;
+}
+
+/** Build a custom (unmapped) crop through its category fallback archetype. */
+export function makeCropForCustom(
+  name: string,
+  category: string,
+  colorHex: string,
+  stage: number,
+  state?: PlantStateVisual,
+): THREE.Object3D | null {
+  const archetype = CATEGORY_FALLBACK[category];
+  if (!archetype) return null;
+  const accent = new THREE.Color(colorHex).getHex();
+  return buildMapping(
+    { archetype, palette: { accent, fruit: accent, unripe: accent } },
+    name,
+    stage,
+    state,
+  );
 }

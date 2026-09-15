@@ -33,6 +33,68 @@ Read in order: this file → `SPEC.md` (the "Amendments" section is binding for
 the 2D designer) → `implementation-notes.md` (keep appending; it's a
 deliverable).
 
+## Growth Visual Evolution mission milestones (branch `growth-visual-evolution`, 2026-09-12)
+
+Branch cut from `pro-upgrade@6e23a98`; binding spec
+`quality/SPEC-GROWTH-VISUAL.md`; one dated entry per wave in
+`implementation-notes.md`. Never merged by agents.
+
+- **Wave 0 — DONE (ec7c559).** Baseline verified (Draws 273), showcase scrub
+  tool (`#mode=scrub`), spec authored, ASSETS.md corrected (50 crops).
+- **Wave 1 — DONE (e81865d).** `src/lib/sim/view.ts` pure projection seam
+  (PlantViewParams); Tier-1 per-instance channels in plants.ts
+  (instanceColor stress tint + genetic variation, wilt matrix channel);
+  batch-MAX tint replaced in run mode; `?ffvis=stress` proof hook.
+- **Wave 2 — DONE (e5b6215).** Tier-2 lifecycle state geometry for all 18
+  archetypes (`src/creative/crops/states/`): dead/desiccated,
+  harvested/stubble, overripe (+ CropPalette stress/dead slots); state axis
+  in template keys; day-keyed reconcile; lettuce bolting pose.
+- **Wave 3 — DONE (ada50bd).** Tier-3: 7 de-cloned crop specials
+  (`src/creative/crops/specials/` — Pepper, Eggplant, Sunflower, Pumpkin,
+  Zucchini, Melon, Cucumber); 10-keyframe visual axes (mechanism in
+  view.ts `stageCountFor` + registry `Archetype.stages`; corn phenology +
+  apple age series opted in); allium tops-down; s5 "pick me" fixes across
+  every flagged archetype; leafy-head vs brassica silhouette split. Critic
+  27/27 PASS; Draws still 273; lane-B sheet now 117 assets.
+- **Wave 4 — DONE.** World coupling: run `envSeries` day drives weather FX /
+  sky mood (dome greys under overcast, sun/ambient dim) / sway via the pure
+  `envToWeatherCurrent` bridge (day-keyed cache — zero per-frame allocs);
+  soil pads separated into 2 shared instanced meshes with per-cell moisture
+  tint through `PlantViewParams.moisture` (Draws 273→274, +1 flat pad mesh);
+  ghost A/B growth easing (per-cell visualP carried across stage re-buckets);
+  `?ffvis=drought|rain` demos + `#ff-env-bridge` DOM probe for headless
+  proof. Critic round 4 ALL PASS; interactive real-run verification (drought
+  run to day 90, A/B ghost to day 19). Known follow-ups: stress-tint
+  strength backlog (wave 1/3), rain streaks subtle under headless.
+- **Wave 5 — DONE (2026-09-13).** 2D parity + docs. Blueprint sim overlays as
+  opt-in `RenderOptions` flags (`simMoisture` banded soil, `simStress` red
+  severity wash, `simReady` amber corner triangles) default OFF — fed by the
+  SAME projection layer (`projectPlant`/`effectiveStress`), day-keyed, pushed
+  by PlotDesigner only while a run is active (toolbar Moisture/Stress/Ready
+  toggles appear then; PNG export path untouched). Unmapped custom crops
+  (ids ≥ 1000) now render through `makeCropForCustom` (per-category archetype
+  recolored by the crop's own colorHex) in plants, ghosts AND the world — the
+  pre-voxel primitive fallback is gone for every catalog category. Showcase
+  scrub gained `custom:<Name>:<category>:<hex>` tokens to preview that path.
+  DEV `?ffvis2d=drought|baseline[&ffvis2dDay=N]` composes a REAL run (same
+  createSimRun path as the Simulations page) + seeks + enables overlays, with
+  a `#ff-plan-channels` DOM probe for headless gates; appshot grew a Chrome
+  `--timeout=25000` bound (sim-run pages never quiesce under virtual time).
+  Verified: typecheck/build green; plain blueprint GATE+EXPECT; drought DOM
+  gate (day 25, m=414 s=414 r=52) + baseline day 40 (s=79 r=24) — scenario
+  contrast machine-asserted; world GATE **Draws: 274**; lane-B sheet 117;
+  tomato scrub ×2 byte-identical; critic PASS on both overlay screenshots and
+  the custom-crop scrub sheet (18 cells). Known follow-ups recorded in the
+  notes: ready-marker window is only the 3-day standing-grace period (engine
+  auto-harvests); May-start baseline runs chronically kill the field (sim
+  tuning question, out of visual scope); stress-wash alpha subtle at low zoom
+  (wave-1/3 tint-strength backlog); interactive in-world custom-crop painting
+  left unverified (browser contention) — showcase + type coverage instead.
+
+**Mission complete (2026-09-13).** All six waves green. Merge-readiness
+summary at the end of `quality/SPEC-GROWTH-VISUAL.md`; per-wave verification
+logs in `implementation-notes.md`. Branch never merged by agents.
+
 ## Beta Notes (2026-08-25)
 
 ### How to run

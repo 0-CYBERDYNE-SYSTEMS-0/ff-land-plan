@@ -7,9 +7,13 @@ import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
 import { fetchClimateNormals } from '@/lib/climate';
 import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
-import { makeCropFor } from '@/creative/crops/map';
+import { makeCropFor, makeCropForCustom } from '@/creative/crops/map';
 import { parseKey } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
+import { projectPlant, stageCountFor, type PlantViewParams } from '@/lib/sim/view';
+import { envToWeatherCurrent } from '@/lib/sim/runWeather';
+import type { DailyEnvironment } from '@/lib/sim/types';
+import type { CellState } from '@/lib/sim/types';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
 import type { PlanState, PlanSurface, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
 import type { RunRecord, SimEvent, SimState } from '@/lib/sim';
@@ -30,7 +34,7 @@ import { createClouds, type Clouds } from '@/three/clouds';
 import { createEngine, setEngineOrbitEnabled, type Engine } from '@/three/engine';
 import { createFlightCamera, type FlightCamera } from '@/three/flight';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
-import { advancePlantGrowth, buildPlants, disposePlants, type PlantBatch, type PlantUpdateOptions, swayPlants, updatePlants } from '@/three/plants';
+import { __padProbe, advancePlantGrowth, buildPlants, disposePlants, type PlantBatch, type PlantUpdateOptions, swayPlants, updatePlants } from '@/three/plants';
 import { buildGround, disposeGround, updateGround, type GroundBatch } from '@/three/ground';
 import { buildShell, disposeShell, type ShellGroup } from '@/three/shell';
 import { createSky, type Sky } from '@/three/sky';
@@ -86,6 +90,40 @@ interface GhostRunBatch {
   key: string;
   mesh: THREE.InstancedMesh;
   capacity: number;
+  /** Per-cell render state; slot index == position in this array. */
+  entries: GhostCellEntry[];
+}
+
+/** One ghost cell's per-instance render data (wave 4 growth easing):
+ *  visualP eases toward targetP per frame (advanceGhostGrowth), carried
+ *  across stage re-buckets and rebuilds via ghostVisualPByCell so a day
+ *  tick never pops. */
+interface GhostCellEntry {
+  key: string;
+  px: number;
+  py: number;
+  pz: number;
+  rotY: number;
+  /** jitter.scaleY — per-cell genetic height multiplier. */
+  baseScale: number;
+  /** ghostTemplateScaleT(stage) — converts biomass→height within the stage. */
+  denom: number;
+  targetP: number;
+  visualP: number;
+}
+
+/** Last eased biomass per ghost cell — read at reconcile (carry), written by
+ *  advanceGhostGrowth (per frame). Cleared when ghosts are torn down. */
+const ghostVisualPByCell = new Map<string, number>();
+
+/** Scratch writer shared by reconcile + advanceGhostGrowth (no allocation). */
+const ghostDummy = new THREE.Object3D();
+function writeGhostEntry(mesh: THREE.InstancedMesh, slot: number, e: GhostCellEntry): void {
+  ghostDummy.position.set(e.px, e.py, e.pz);
+  ghostDummy.rotation.set(0, e.rotY, 0);
+  ghostDummy.scale.setScalar(((0.15 + 0.85 * e.visualP) / e.denom) * e.baseScale);
+  ghostDummy.updateMatrix();
+  mesh.setMatrixAt(slot, ghostDummy.matrix);
 }
 
 /** Session-lifetime ghost geometry cache (geometry only — materials are
@@ -146,7 +184,8 @@ function getGhostTemplate(crop: Crop, stage: number, height: number): THREE.Buff
   const hit = ghostTemplateCache.get(key);
   if (hit) return hit;
 
-  const asset = makeCropFor(crop.name, stage);
+  const asset = makeCropFor(crop.name, stage)
+    ?? makeCropForCustom(crop.name, crop.category, crop.colorHex, stage); // wave 5: custom crops get ghosts too
   if (!asset) return null;
   const bbox = new THREE.Box3().setFromObject(asset);
   const size = new THREE.Vector3();
@@ -269,7 +308,6 @@ function reconcileGhostRunBatches(
     }
   }
 
-  const dummy = new THREE.Object3D();
   for (const [groupKey, w] of wanted) {
     let b = batches.find((x) => x.key === groupKey);
     if (!b) {
@@ -280,7 +318,7 @@ function reconcileGhostRunBatches(
       mesh.frustumCulled = false; // instances span the whole plan
       mesh.count = 0;
       args.scene.add(mesh);
-      b = { key: groupKey, mesh, capacity: Math.max(w.keys.length, 8) };
+      b = { key: groupKey, mesh, capacity: Math.max(w.keys.length, 8), entries: [] };
       batches.push(b);
     } else if (b.capacity < w.keys.length) {
       // Grow: recreate instance buffers + the transparent clone; the cached
@@ -297,6 +335,7 @@ function reconcileGhostRunBatches(
     }
 
     const denom = ghostTemplateScaleT(w.stage);
+    const entries: GhostCellEntry[] = [];
     w.keys.forEach((key, i) => {
       const [cx, cy] = parseKey(key);
       const jitter = ghostJitterForCell(cx, cy, cellM);
@@ -304,19 +343,26 @@ function reconcileGhostRunBatches(
       const lift = liftSlugs ? liftSlugs[ghostShelfForCell(cx, cy)]! : 0;
       // Biomass → scale: the SAME template-scale math as plants.ts
       // writeCellMatrix, so a ghost that is "ahead" is visibly taller at the
-      // same stage boundary. Ghosts snap per-day (no easing) by design.
-      const p = Math.min(1, Math.max(0, args.state.cells[key]!.biomassFrac));
-      const scale = ((0.15 + 0.85 * p) / denom) * jitter.scaleY;
-      dummy.position.set(
-        cx * cellM + cellM / 2 + offsetX + jitter.offsetX,
-        0.02 + lift, // +0.01 over the real plants' y=0.01 — no z-fighting
-        cy * cellM + cellM / 2 + offsetZ + jitter.offsetZ,
-      );
-      dummy.rotation.set(0, jitter.rotY, 0);
-      dummy.scale.setScalar(scale);
-      dummy.updateMatrix();
-      b!.mesh.setMatrixAt(i, dummy.matrix);
+      // same stage boundary. visualP carries the eased biomass across day
+      // ticks (wave 4 ghost easing); cells new to the ghost start at target
+      // so nothing pops in mid-grow.
+      const targetP = Math.min(1, Math.max(0, args.state.cells[key]!.biomassFrac));
+      const entry: GhostCellEntry = {
+        key,
+        px: cx * cellM + cellM / 2 + offsetX + jitter.offsetX,
+        py: 0.02 + lift, // +0.01 over the real plants' y=0.01 — no z-fighting
+        pz: cy * cellM + cellM / 2 + offsetZ + jitter.offsetZ,
+        rotY: jitter.rotY,
+        baseScale: jitter.scaleY,
+        denom,
+        targetP,
+        visualP: ghostVisualPByCell.get(key) ?? targetP,
+      };
+      entries.push(entry);
+      ghostVisualPByCell.set(key, entry.visualP);
+      writeGhostEntry(b.mesh, i, entry);
     });
+    b.entries = entries;
     b.mesh.count = w.keys.length;
     b.mesh.instanceMatrix.needsUpdate = true;
   }
@@ -326,9 +372,37 @@ function reconcileGhostRunBatches(
 /** Dispose every ghost batch (ghost clear / world teardown): instance
  * buffers + the per-batch transparent material CLONE only — cached ghost
  * geometry persists for the session (plants.ts cache discipline). */
+/**
+ * Per-frame ghost growth easing (wave 4): each ghost cell's visual biomass
+ * eases toward the target captured by the last reconcile — the same contract
+ * as plants.ts advancePlantGrowth (allocation-free; instance matrices are
+ * rewritten only while a diff persists; zero extra draw calls). Called from
+ * the rAF loop only when ghost batches exist.
+ */
+function advanceGhostGrowth(batches: GhostRunBatch[], dt: number, easeRate = 4): void {
+  const step = Math.min(1, dt * easeRate);
+  if (step <= 0) return;
+  for (const batch of batches) {
+    if (batch.entries.length === 0) continue;
+    let touched = false;
+    batch.entries.forEach((e, slot) => {
+      const diff = e.targetP - e.visualP;
+      if (diff > 1e-4 || diff < -1e-4) {
+        e.visualP += diff * step;
+        if (Math.abs(e.targetP - e.visualP) < 1e-4) e.visualP = e.targetP;
+        ghostVisualPByCell.set(e.key, e.visualP);
+        writeGhostEntry(batch.mesh, slot, e);
+        touched = true;
+      }
+    });
+    if (touched) batch.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
 function disposeGhostRunBatches(batches: GhostRunBatch[]): void {
   for (const b of batches) disposeOneGhostBatch(b);
   batches.length = 0;
+  ghostVisualPByCell.clear(); // ghosts are gone — no carry state to preserve
 }
 
 /** Home camera framing — the load-in view and the dock's Reset target share
@@ -354,6 +428,20 @@ interface World3DProps {
   /** Outbound notable-event sink (harvest-ready → celebrate). PlotDesigner
    * owns the ref; useSimRun fires it per stepped day. */
   runEventsRef?: { current: ((events: SimEvent[], state: SimState) => void) | null };
+}
+
+/** DEV-only #ff-env-bridge DOM probe (created lazily in the rAF loop when a
+ * vis demo or the Perf HUD is active) — headless gates assert the bridged
+ * weather text (wave 4). */
+let bridgeProbeEl: HTMLElement | null = null;
+function ensureBridgeProbe(): HTMLElement {
+  if (!bridgeProbeEl) {
+    bridgeProbeEl = document.createElement('span');
+    bridgeProbeEl.id = 'ff-env-bridge';
+    bridgeProbeEl.style.display = 'none';
+    document.body.appendChild(bridgeProbeEl);
+  }
+  return bridgeProbeEl;
 }
 
 /** Weather used by the rAF loop until live data arrives (or when offline). */
@@ -446,6 +534,21 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
 
   // Live weather consumed by the rAF loop each frame (state below is only for the chip).
   const weatherRef = useRef<WeatherCurrent | null>(null);
+  // Run-env bridge (SPEC-GROWTH-VISUAL wave 4): when a sim run is active this
+  // holds the run's envSeries day; the rAF loop projects it onto the live-
+  // weather shape so clouds/rain/fog/wind/sun tell the run's story. Null ⇒ the
+  // live-weather path runs byte-identically.
+  const runEnvRef = useRef<DailyEnvironment | null>(null);
+  // Day-keyed bridge output (envToWeatherCurrent of runEnvRef) — the rAF loop
+  // reads this instead of projecting per frame, so the run-weather path stays
+  // allocation-free. Always written together with runEnvRef.
+  const runWeatherRef = useRef<WeatherCurrent | null>(null);
+  // Chip-level preview of the bridged run weather (day-keyed, not per-frame):
+  // when the live fetch is unavailable the weather chip shows the RUN's day
+  // instead of a blank — the HUD tells the same story as the sky (wave 4).
+  const [runWeatherPreview, setRunWeatherPreview] = useState<WeatherCurrent | null>(null);
+  // DEV-only: per-cell water/moisture ranges of the active vis demo (probe text).
+  const visStatsRef = useRef<{ n: number; wLo: number; wHi: number; mLo: number; mHi: number } | null>(null);
   // Growth-model climate context fed to buildPlants/updatePlants/HUD. Starts
   // empty (legacy 20 °C baseline) and gains live ambientTempC + farm
   // baselineTempC (ERA5 normals) + scrub-month DLI as their fetches land.
@@ -503,6 +606,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const [monthlyDli, setMonthlyDli] = useState<number[] | null>(null);
   const [showDebug, setShowDebug] = useState(() => readLaunchParams().get('ffdebug') === '1');
   const showDebugRef = useRef(showDebug); // mount-time value for the initial HUD state
+  showDebugRef.current = showDebug;
   const [audioOn, setAudioOn] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Run-mode UI state (moisture overlay is opt-in; drawer row selection).
@@ -540,6 +644,17 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const runActiveRef = useRef(runActive);
   runActiveRef.current = runActive;
 
+  // DEV-only Tier-1/2 proof hooks (SPEC-GROWTH-VISUAL §4): ?ffvis=stress
+  // paints a deterministic synthetic water-stress gradient; ?ffvis=lifecycle
+  // additionally drives the dead/harvested/overripe state geometry — both
+  // through the REAL projectPlant → viewByCell path (no sim run required).
+  // Same launch-param family as ffdebug.
+  const visDemo = import.meta.env.DEV ? readLaunchParams().get('ffvis') : null;
+  const visStressDemo = visDemo === 'stress';
+  const visLifecycleDemo = visDemo === 'lifecycle';
+  const visDroughtDemo = visDemo === 'drought';
+  const visRainDemo = visDemo === 'rain';
+
   /**
    * Run-mode plant reconcile: SimState biomass is the growth authority.
    * updatePlants clamps the per-cell override against the closed-form
@@ -558,18 +673,18 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const plantedAtShim: Record<string, string> = {};
     for (const key of Object.keys(plan.planting)) plantedAtShim[key] = FAR_FUTURE_ISO;
     const shimPlan: PlanState = { ...plan, plantedAt: plantedAtShim };
-    const progressByCell = new Map<string, number>();
-    const stressByCell = new Map<string, number>();
+    // View projection (SPEC-GROWTH-VISUAL §2.1): per-cell growth, stage, wilt
+    // and stress tint all derive from the pure seam — the aggregation (MAX of
+    // the four stress terms + pest × 0.8) lives in view.ts effectiveStress.
+    const viewByCell = new Map<string, PlantViewParams>();
     for (const [key, cell] of Object.entries(st.cells)) {
       if (plan.planting[key] === undefined) continue; // cell no longer in the live plan
-      progressByCell.set(key, cell.biomassFrac);
-      // Tint stress: MAX of the four stress terms — the same max-of-terms
-      // aggregation the RunInspector rows use (useSimRun.aggregateCells) —
-      // with pest pressure folded in at a documented 0.8 weight so outbreak
-      // days read on the crop (spec deliverable: pests tint, no pest models).
-      const terms = cell.stress;
-      const worst = Math.max(terms.water, terms.heat, terms.cold, terms.nitrogen);
-      stressByCell.set(key, Math.min(1, Math.max(worst, cell.pestPressure * 0.8)));
+      const crop = editor.cropById.get(cell.cropId);
+      if (!crop) continue;
+      viewByCell.set(
+        key,
+        projectPlant({ cell, crop, env: runDayEnv(record, st.dayIndex), dayIndex: st.dayIndex, cellKey: key, stageCount: stageCountFor(crop.name) }),
+      );
     }
     const runDate = new Date(`${runDateISO(record, st.dayIndex)}T00:00:00`);
     plantBatchesRef.current = updatePlants(
@@ -580,7 +695,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       runDate,
       undefined,
       growthCtxRef.current,
-      { progressByCell, stressByCell },
+      { viewByCell },
     );
   };
 
@@ -838,8 +953,26 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         timeRef.current = (timeRef.current + dt * 0.02) % 1;
       }
 
-      // Sky — use ref value for rAF, sync to state periodically
-      sky.update(timeRef.current);
+      // Sky — use ref value for rAF, sync to state periodically. Under an
+      // active sim run the env bridge also dims the sun/ambient with the run
+      // day's cloud cover; the live path passes 0 (byte-identical behavior).
+      // The bridged WeatherCurrent is cached day-keyed in runWeatherRef —
+      // recomputing it here would allocate a fresh object every frame.
+      const runWeather = runWeatherRef.current;
+      sky.update(timeRef.current, runWeather ? runWeather.cloudCover / 100 : 0);
+      // DEV-only env-bridge probe (?ffdebug=1): machine-assertable DOM text so
+      // headless gates can prove WHICH weather the world is rendering with.
+      if (import.meta.env.DEV && (visDemo !== null || showDebugRef.current)) {
+        // Written every frame (display:none span — no layout cost) so
+        // virtual-time headless captures can never miss it.
+        const el = ensureBridgeProbe();
+        const padInfo = __padProbe();
+        const padTxt = padInfo ? ` ff-pads flat=${padInfo.flat} hilled=${padInfo.hilled} c=[${padInfo.sample}] ${padInfo.dbg}` : ' ff-pads none';
+        const stats = visStatsRef.current;
+        el.textContent = runWeather
+          ? `ff-env-bridge ${runWeather.weatherDesc} c=${runWeather.cloudCover.toFixed(0)} h=${runWeather.humidity} w=${runWeather.windSpeedKmh.toFixed(1)}${stats ? ` ff-viscells n=${stats.n} wLo=${stats.wLo.toFixed(2)} wHi=${stats.wHi.toFixed(2)} mLo=${stats.mLo.toFixed(2)} mHi=${stats.mHi.toFixed(2)}` : ''}${padTxt}`
+          : `ff-env-bridge off (live)${stats ? ` ff-viscells n=${stats.n} wLo=${stats.wLo.toFixed(2)} wHi=${stats.wHi.toFixed(2)} mLo=${stats.mLo.toFixed(2)} mHi=${stats.mHi.toFixed(2)}` : ''}${padTxt}`;
+      }
       if (ambientLight) {
         // Sky owns the full lighting model: hue from the palette, strength
         // with a legible night floor. The single sun directional is driven
@@ -851,8 +984,9 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       }
 
       // Clouds / weather FX / audio — live weather via ref, defaults until it
-      // arrives (and forever when offline). No per-frame allocations.
-      const w = weatherRef.current ?? DEFAULT_WEATHER;
+      // arrives (and forever when offline); a run's env day OVERRIDES it. No
+      // per-frame allocations on either path.
+      const w = runWeather ?? weatherRef.current ?? DEFAULT_WEATHER;
       clouds.update(dt, w.windSpeedKmh, w.cloudCover);
 
       // Weather — rain/snow only outdoors; enclosed canvases are climate-controlled.
@@ -874,6 +1008,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       // target captured by the last reconcile (allocation-free, ref-reads
       // only, no scene rebuilds).
       advancePlantGrowth(plantBatchesRef.current, dt);
+      // Ghost-run plants ease under the same contract (wave 4) — no-op when
+      // no ghost is loaded.
+      if (ghostRunBatchesRef.current.length > 0) {
+        advanceGhostGrowth(ghostRunBatchesRef.current, dt);
+      }
 
       // Growth FX
       growthFXRef.current?.update(dt);
@@ -1107,6 +1246,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const plan = editor.planRef.current;
     if (!engine || !plan) return;
     if (runActiveRef.current) return;
+    // A DEV vis demo owns the plant reconcile while active: this effect's
+    // async deps (ambientTempC/climateBaseline landing late) would otherwise
+    // rewrite plants/pads untinted AFTER the demo applied its view — and
+    // under virtual-time headless captures the demo's re-apply would never
+    // get a rendered frame (the round-1/2 critic failures).
+    if (visStressDemo || visLifecycleDemo || visDroughtDemo || visRainDemo) return;
     const ctx: GrowthModCtx = {
       ambientTempC: ambientTempC ?? undefined,
       baselineTempC: climateBaseline.source === 'era5-normals' ? climateBaseline.tempC : undefined,
@@ -1153,17 +1298,149 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // sceneReady covers the case where the world initializes AFTER a run was
   // launched via ?ffrun. advancePlantGrowth (rAF) eases between sim days.
   useEffect(() => {
-    if (!runActive) return;
+    if (!runActive) {
+      runEnvRef.current = null; // run ended — live weather owns the sky again
+      runWeatherRef.current = null;
+      setRunWeatherPreview(null);
+      return;
+    }
+    const run = simRunRef.current;
+    const env = run?.record ? runDayEnv(run.record, run.simStateRef.current?.dayIndex ?? 0) : null;
+    runEnvRef.current = env;
+    const bridged = env ? envToWeatherCurrent(env, DEFAULT_WEATHER) : null;
+    runWeatherRef.current = bridged;
+    setRunWeatherPreview(bridged);
     applyRunGrowth();
   }, [runActive, runTickVersion, sceneReady, editor.cropById, editor.planVersion]);
+
+  // DEV-only (ffvis=stress|lifecycle|drought): deterministic synthetic cell
+  // states over the live plan → REAL projectPlant → viewByCell
+  // (SPEC-GROWTH-VISUAL §4 acceptance evidence). lifecycle mode drives the
+  // Tier-2 state geometry (dead / harvested / overripe zones toward the far
+  // corner); drought mode additionally sets runEnvRef to a scorcher env day so
+  // the REAL env→weather bridge paints the sky (wave 4). Suppressed whenever a
+  // real run is active.
+  useEffect(() => {
+    if ((!visStressDemo && !visLifecycleDemo && !visDroughtDemo && !visRainDemo) || runActive) return;
+    const engine = engineRef.current;
+    const plan = editor.planRef.current;
+    if (!engine || !plan) return;
+    const keys = Object.keys(plan.planting);
+    if (keys.length === 0) return;
+    if (visDroughtDemo || visRainDemo) {
+      runEnvRef.current = visRainDemo
+        ? {
+            date: '2026-06-05',
+            tMinC: 14,
+            tMaxC: 18,
+            precipMm: 12,
+            etoMm: 1.5,
+            gddBase10C: 8,
+            provenance: { tMinC: 'era5-normals', tMaxC: 'era5-normals', precipMm: 'era5-normals', etoMm: 'era5-normals' },
+          }
+        : {
+            date: '2026-07-15',
+            tMinC: 22,
+            tMaxC: 38,
+            precipMm: 0,
+            etoMm: 7.5,
+            gddBase10C: 28,
+            provenance: { tMinC: 'era5-normals', tMaxC: 'era5-normals', precipMm: 'era5-normals', etoMm: 'era5-normals' },
+          };
+      const demoBridged = envToWeatherCurrent(runEnvRef.current, DEFAULT_WEATHER);
+      runWeatherRef.current = demoBridged;
+      setRunWeatherPreview(demoBridged);
+    }
+    let span = 1;
+    for (const key of keys) {
+      const [, cy] = parseKey(key);
+      span = Math.max(span, cy);
+    }
+    const plantedAtShim: Record<string, string> = {};
+    const viewByCell = new Map<string, PlantViewParams>();
+    for (const key of keys) {
+      plantedAtShim[key] = FAR_FUTURE_ISO;
+      // Depth bands (cell row only, not the diagonal): the default camera
+      // looks across the field, so near→far rows read as the life story
+      // healthy → stressed → dead → overripe → harvested.
+      const [, cy] = parseKey(key);
+      const v = Math.min(1, cy / span);
+      const crop = editor.cropById.get(plan.planting[key]!);
+      if (!crop) continue;
+      let water = visStressDemo || visDroughtDemo ? v : visRainDemo ? 0.04 : v * 0.75;
+      const extra: Partial<CellState> = {};
+      if (visLifecycleDemo) {
+        if (v > 0.92) {
+          extra.harvested = true;
+          extra.readyAtDay = 45;
+          water = 0.2;
+        } else if (v > 0.84) {
+          extra.readyAtDay = 30; // day 60 > 30 + grace ⇒ overripe
+          water = 0.35;
+        } else if (v > 0.76) {
+          extra.stressDaysCount = 30;
+          water = 0.9;
+        }
+      }
+      const cell: CellState = {
+        cropId: crop.id,
+        plantedAtDay: 0,
+        moistureFrac: visRainDemo ? 0.95 : visDroughtDemo ? 1 - water : 1 - water * 0.8,
+        nitrogenKgHa: 120,
+        gddAccumC: 950,
+        biomassFrac: visLifecycleDemo ? 0.95 : 0.85,
+        stage: visLifecycleDemo ? 5 : 4,
+        floweringFrac: 0.2,
+        pestPressure: 0,
+        stress: { water, heat: 0, cold: 0, nitrogen: 0 },
+        ...extra,
+      };
+      viewByCell.set(key, projectPlant({ cell, crop, env: null, dayIndex: 60, cellKey: key, stageCount: stageCountFor(crop.name) }));
+    }
+    if (import.meta.env.DEV) {
+      let wLo = 1; let wHi = 0; let mLo = 1; let mHi = 0;
+      for (const p of viewByCell.values()) {
+        // stress demo cells: water = 1 - g of the tint (invert of stressTintMultiplier)
+        const water = 1 - (p.tint ? (1 - p.tint.g) / 0.35 : 0);
+        wLo = Math.min(wLo, water); wHi = Math.max(wHi, water);
+        const m = p.moisture ?? 0.5;
+        mLo = Math.min(mLo, m); mHi = Math.max(mHi, m);
+      }
+      visStatsRef.current = { n: viewByCell.size, wLo, wHi, mLo, mHi };
+    }
+    plantBatchesRef.current = updatePlants(
+      plantBatchesRef.current,
+      { ...plan, plantedAt: plantedAtShim },
+      editor.cropById,
+      engine.scene,
+      new Date(),
+      undefined,
+      growthCtxRef.current,
+      { viewByCell },
+    );
+    return () => {
+      if (visDroughtDemo || visRainDemo) {
+        runEnvRef.current = null;
+        runWeatherRef.current = null;
+        setRunWeatherPreview(null);
+      }
+      visStatsRef.current = null;
+    };
+    // scenario/ambientTempC/climateBaseline mirror the legacy scrub effect's
+    // async deps: those land AFTER this demo effect first ran and the legacy
+    // pass (declared above) would rewrite plants/pads untinted in the same
+    // commit — re-applying here (this effect runs last per commit) keeps the
+    // demo the final writer.
+  }, [visStressDemo, visLifecycleDemo, visDroughtDemo, visRainDemo, runActive, sceneReady, editor.planVersion, editor.cropById, scrubDate, scenario, ambientTempC, climateBaseline]);
 
   // Ghost-run reconcile (spec §3.5 Phase 4): reconciles the semi-transparent
   // second-run plants beside the solid primary. Day-keyed like the moisture
   // overlay — NOT tickVersion (~5 commits/s would churn GPU buffers for a
   // per-day change); runGhostVersion covers same-day ghost loads/clears/
   // refolds, and planVersion re-applies after whole-scene rebuilds. In-place
-  // batch reconcile: draw cost = distinct (crop,stage) in the ghost (≤60),
-  // zero per-frame work, materials are per-batch transparent clones.
+  // batch reconcile: draw cost = distinct (crop,stage) in the ghost (≤60);
+  // per-frame work is only the growth easing while diffs persist (wave 4);
+  // materials are per-batch transparent clones.
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -1739,7 +2016,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         scenario={scenario}
         onScenario={setScenario}
         scenarioLocked={runActive}
-        weather={weather}
+        weather={weather ?? runWeatherPreview}
         weatherCached={weatherCached}
         climateBaseline={climateBaseline}
         cropProgress={runActive ? runProgressRows : cropProgress}

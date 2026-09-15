@@ -87,6 +87,11 @@ function chromeRun(extraFlags, opts = {}) {
         // below is the expected terminator; we validate outputs afterwards.
         `--virtual-time-budget=${vtMs}`,
         '--enable-unsafe-swiftshader',
+        // Hard bound on Chrome's own wait-for-load: pages that stay busy
+        // (e.g. an active sim run) never let virtual time expire, so without
+        // this Chrome idles past the spawn kill and the shot is lost. 25 s is
+        // well above the normal <10 s action time, so quiet pages are immune.
+        '--timeout=25000',
         ...(process.env.FF_CHROME_FLAGS
           ? process.env.FF_CHROME_FLAGS.split(' ').filter(Boolean)
           : []),

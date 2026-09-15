@@ -61,7 +61,12 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
     applySettings,
     showSpacing, toggleSpacing,
     showCompanions, toggleCompanions,
+    showSimMoisture, toggleSimMoisture,
+    showSimStress, toggleSimStress,
+    showSimReady, toggleSimReady,
+    simChannels,
   } = editor;
+  const simActive = simChannels !== undefined;
   const undoRef = editor.undoRef;
   const redoRef = editor.redoRef;
 
@@ -144,6 +149,44 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
             <span className={cn('h-1.5 w-1.5 rounded-full', showCompanions ? 'bg-emerald-500' : 'bg-muted-foreground/30')} />
             Companions
           </Button>
+          {/* Sim-run overlays (wave 5): only while a run pushes channels in. */}
+          {simActive && (
+            <>
+              <Button
+                variant={showSimMoisture ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs"
+                aria-pressed={showSimMoisture}
+                title={showSimMoisture ? 'Hide soil-moisture bands (sim run)' : 'Show soil-moisture bands (sim run)'}
+                onClick={toggleSimMoisture}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', showSimMoisture ? 'bg-blue-500' : 'bg-muted-foreground/30')} />
+                Moisture
+              </Button>
+              <Button
+                variant={showSimStress ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs"
+                aria-pressed={showSimStress}
+                title={showSimStress ? 'Hide stress severity (sim run)' : 'Show stress severity (sim run)'}
+                onClick={toggleSimStress}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', showSimStress ? 'bg-red-500' : 'bg-muted-foreground/30')} />
+                Stress
+              </Button>
+              <Button
+                variant={showSimReady ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs"
+                aria-pressed={showSimReady}
+                title={showSimReady ? 'Hide harvest-ready markers (sim run)' : 'Show harvest-ready markers (sim run)'}
+                onClick={toggleSimReady}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', showSimReady ? 'bg-amber-500' : 'bg-muted-foreground/30')} />
+                Ready
+              </Button>
+            </>
+          )}
         </div>
         <div className="ml-auto flex items-center gap-1">
           <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={undo} disabled={undoRef.current.length === 0} title="Undo (Ctrl+Z)">

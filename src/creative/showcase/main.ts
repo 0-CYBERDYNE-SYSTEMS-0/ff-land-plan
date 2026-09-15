@@ -3,8 +3,11 @@
  *
  * URL options (hash params):
  *   #lane=a|b|c|d|e      only show one lane's registry
- *   #only=id1,id2        only show these entry ids
- *   #mode=sheet|big      sheet: 4-col contact grid; big: 2-col close-ups
+ *   #only=id1,id2        only show these entry ids (scrub mode: crop archetype ids)
+ *   #mode=sheet|big|scrub  sheet: 4-col contact grid; big: 2-col close-ups;
+ *                         scrub: per-archetype growth ramp (12 cells) + lifecycle
+ *                         state channels (see ./scrub.ts; sheet geometry applies,
+ *                         18 cells per archetype)
  *   #spin=0              freeze turntable (for perfectly deterministic shots)
  *
  * Screenshot geometry (must match --window-size):
@@ -18,6 +21,7 @@ import { entries as cropsEntries } from '@/creative/crops/registry';
 import { entries as structuresEntries } from '@/creative/structures/registry';
 import { entries as creaturesEntries } from '@/creative/creatures/registry';
 import { entries as environmentsEntries } from '@/creative/environments/registry';
+import { makeScrubEntries } from './scrub';
 
 const LANE_LABELS: Record<string, string> = {
   a: 'Terrain & Soil',
@@ -44,10 +48,16 @@ const laneFilter = params.get('lane');
 const onlyList = params.get('only')?.split(',').map((s) => s.trim()) ?? null;
 const mode = params.get('mode') ?? 'sheet';
 const spinEnabled = params.get('spin') !== '0';
+/** plan: top-down camera (the QUALITY_BAR plan-view clause needs evidence). */
+const planView = params.get('view') === 'plan';
 
 let visible = allEntries;
-if (laneFilter) visible = visible.filter((e) => e.lane === laneFilter);
-if (onlyList) visible = onlyList.map((id) => visible.find((e) => e.id === id)).filter((e): e is TaggedEntry => !!e);
+if (mode === 'scrub') {
+  visible = makeScrubEntries(onlyList ?? ['tomato']).map((e) => ({ ...e, lane: 'b' }));
+} else {
+  if (laneFilter) visible = visible.filter((e) => e.lane === laneFilter);
+  if (onlyList) visible = onlyList.map((id) => visible.find((e) => e.id === id)).filter((e): e is TaggedEntry => !!e);
+}
 
 // --- layout constants -------------------------------------------------------
 const SHEET = { cols: 4, cellW: 380, cellH: 300, gap: 16, pad: 8 };
@@ -142,8 +152,8 @@ function makeCell(entry: TaggedEntry, index: number): Cell {
   const vRadius = box.getBoundingSphere(new THREE.Sphere()).radius || 0.6;
   const dist = (vRadius / Math.sin((fov * Math.PI) / 360)) * 1.12;
   const camera = new THREE.PerspectiveCamera(fov, LAYOUT.cellW / LAYOUT.cellH, 0.01, Math.max(100, dist * 4));
-  const elev = (28 * Math.PI) / 180;
-  const azim = (33 * Math.PI) / 180;
+  const elev = planView ? (89 * Math.PI) / 180 : (28 * Math.PI) / 180;
+  const azim = planView ? 0 : (33 * Math.PI) / 180;
   camera.position.set(
     dist * Math.cos(elev) * Math.sin(azim),
     dist * Math.sin(elev) + vRadius * 0.15,

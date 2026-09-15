@@ -877,6 +877,434 @@ batch-level tint granularity (one stressed sowing yellows its crop's whole
 batch); creatures counts animate existing flocks only on coop-free seeded
 plans (16-creature budget); named experiment sets (grouping runs) deferred.
 
+## 2026-09-11 — Growth Visual Evolution wave 0: baseline, scrub tooling, spec
+
+Mission: make plant growth + sim condition readable from the world alone
+(quality/SPEC-GROWTH-VISUAL.md, now binding). Branch `growth-visual-evolution`
+cut from pro-upgrade@6e23a98 into a separate worktree (../ff-land-plan-gve) —
+pro-upgrade's uncommitted working tree untouched.
+
+- Baseline verified: typecheck + build green (three.js still its own lazy
+  chunk); appshot GATE/EXPECT on #/farms/1/map and ?ffview=world&ffdebug=1.
+  Perf HUD: Draws 273 — exactly the HANDOFF farm-1 baseline. Tris HUD read
+  23,723,912 vs HANDOFF's recorded 2.3 M (unexplained 10×; Draws treated as
+  authoritative; real-GPU re-measure queued for wave 1; headless FPS under
+  virtual time not meaningful, as documented).
+- New showcase tooling: `#mode=scrub&only=<archetypes>&spin=0` renders, per
+  archetype, a 12-cell continuous growth ramp (discrete stage swap + the
+  plants.ts linear height ramp, mirrored with file:line notes) plus 6
+  lifecycle state cells (healthy / stress tint / wilting / dead / harvested /
+  overripe as Tier-1 previews). All cells of an archetype share camera framing
+  via an invisible Box3 sizing helper (Box3.setFromObject ignores .visible).
+  New module src/creative/showcase/scrub.ts (pure, deterministic, no rng);
+  showcase/main.ts gains a scrub branch + header docs (surgical, ~10 lines).
+  Asserted via --expect "showcase-ready 18".
+- quality/ASSETS.md corrected: 50 (not 40) catalog crops mapped 1:1; real
+  per-archetype coverage recorded (pepper/eggplant→tomato, sunflower→corn,
+  nasturtium→cucurbit-vine, borage/crimson clover→greens-open,
+  mint/marigold→herb-clump, winter rye→wheat, 3 mushroom cultivars); 108
+  stage entries + growth-demo = 109 lane-B entries; scrub-tool pointer.
+- SPEC-GROWTH-VISUAL.md written: PlantViewParams contract (pure
+  src/lib/sim/view.ts, framework-free, FNV(cellKey)-seeded variation), Tier
+  1/2/3 cost model, derived state definitions (dead = hard frost OR chronic
+  stress floor; overripe = readyAtDay + grace; precedence
+  harvested>dead>overripe>alive), per-archetype keyframe targets (144 stages
+  vs 108 today), per-wave acceptance criteria, perf contract (plant-layer
+  draws ≤ 80 worst case; farm-1 total ≤ ~287).
+- Two critic rounds (scrub-tomato/corn + full lane-B sheet): tooling PASS —
+  framing consistent, zero artifacts, lane B regression clean (109/109 cells,
+  growth-demo continuous). Content REVISEs are precisely this mission's later
+  waves and are recorded as the binding backlog in SPEC §5: s5 "pick me" gaps
+  on ~9 archetypes, 6-step staircase growth (needs sub-stage morphs),
+  stress-0.55 and overripe legibility vs healthy, mature-silhouette confusion
+  groups (leafy-head/brassica; bush-bean/herb-clump/greens-open). Dead and
+  overripe placeholder previews strengthened after round 1 (browner dead,
+  unmistakable overripe lean+dulling) and re-verified on re-shot sheets.
+- Wave-0 verification evidence: GATE+EXPECT passes listed above; PNGs in
+  $TMPDIR/gve-wave0/ (farm1-blueprint, farm1-world, laneb-sheet,
+  scrub-tomato{,-r2}, scrub-corn{,-r2}); worktree dev server on :5199.
+
+## 2026-09-11 — Growth Visual Evolution wave 1: PlantViewParams projection + Tier-1 per-instance channels
+
+The pure projection seam + per-instance color/wilt channels, per
+SPEC-GROWTH-VISUAL §2/§4. Sim numerics untouched; every integration point
+listed.
+
+- **NEW src/lib/sim/view.ts** (pure, three-free, no Math.random): projectPlant
+  → PlantViewParams {growth, stage, stageCount, lifecycle, wilt, tint,
+  flowering, variation}; effectiveStress (max-of-4 + pest×0.8 — the
+  aggregation that lived in World3D, now single-sourced); stressTintMultiplier
+  (the old applyStressTint curve); wiltAmount (smoothstep 0.35→0.9 on water
+  + 0.5·heat); growthToStage(growth, stageCount) (count 6 ≡ engine
+  stageForBiomass; per-crop counts arrive with waves 2–3 keyframes);
+  variationForCell (FNV-1a(cellKey) → mulberry32; ±4% channel multipliers).
+  Lifecycle derivation: harvested > dead (cold ≥0.95 OR stressDaysCount ≥21 ∧
+  stress ≥0.85) > overripe (readyAtDay + category grace, fruit 21 d) > alive.
+- **plants.ts** (Tier 1): PlantUpdateOptions.viewByCell (Map cellKey →
+  PlantViewParams; when present it supplies growth override, stage, wilt and
+  tint per cell, and the batch material tint resets to white so tints don't
+  compound). CellSlot gains wilt01 + final tint; writeCellMatrix folds
+  base-anchored droop (rotZ ≤ ~17°, rotX ~⅓ of it) + canopy squash (≤0.18)
+  into the same matrix write — wilt01 0 ⇒ bit-identical matrix. Per-instance
+  color via setColorAt (instanceColor × vertexColors confirmed multiplying in
+  three r184): condition tint × seeded genetic variation; variation applies in
+  ALL modes (de-clone; deterministic per cellKey). Color bookkeeping:
+  removeInstance swap-with-last copies the color entry; capacity growth copies
+  the instanceColor array; survivors' colors diff-checked per reconcile.
+  stressByCell kept as documented legacy batch-MAX fallback. Fallback
+  (unmapped-name) crops read view.growth for progress; no instanceColor there
+  (clone-per-cell path unchanged).
+- **World3D.tsx**: applyRunGrowth now builds viewByCell via projectPlant
+  (env = runDayEnv(record, day)) and passes only that — the hand-rolled
+  progress/stress maps are gone (aggregation moved into view.ts). NEW DEV-only
+  proof hook: ?ffvis=stress (with ?ffview=world&ffdebug=1) paints a
+  deterministic synthetic water-stress gradient over the live plan through the
+  REAL projectPlant → viewByCell path — wave-1 acceptance evidence without a
+  sim run; suppressed when a run is active.
+- **showcase/scrub.ts**: stage selection + tint curves now import from
+  view.ts (tool previews the real pipeline); height ramp still mirrors
+  plants.ts (renderer-side); SCRUB_STAGE_COUNTS table ready for wave-2/3
+  per-archetype keyframe counts.
+
+Verified: typecheck + build green (three.js own chunk); world GATE+EXPECT
+with **Draws: 273 machine-asserted as a literal DOM substring on both the
+plain and ffvis=stress captures** (instanceColor adds zero draws; an initial
+vision read of "373" was a digit misread, settled by --expect); ffvis=stress
+screenshot shows the gradient legible in-world — lush green upright corner →
+yellow-brown drooping/squashed corner, per-cell (not per-bed), no artifacts
+(zoomed-neighbor caveat: immediate-neighbor Δstress is gradient-slope
+proportional; tint-strength tuning is a SPEC §5 backlog item); blueprint gate
+PASS; determinism probe: two independent scrub renders byte-identical
+(208016 bytes each, cmp). Known follow-ups: batch tint and instanceColor
+both write color state (batch=white in run mode — compounding documented);
+ghost overlay does not yet consume view params (wave 2/4); Tris HUD 10×
+discrepancy still queued for a real-GPU re-measure.
+
+## 2026-09-11 — Growth Visual Evolution wave 2: Tier-2 lifecycle geometry states
+
+Full story now legible in-world: every archetype has dedicated dead /
+harvested / overripe geometry (54 new deterministic voxel builds), projected
+purely from CellState through view.ts (lifecycle precedence
+harvested > dead > overripe > alive; dead = cold ≥0.95 OR stressDaysCount ≥21
+∧ stress ≥0.85; overripe = readyAtDay + category grace). Engine untouched.
+
+- **CropPalette** gains optional stress/dead/stubble slots + STATE_TONES
+  fallbacks; STATE_HEIGHT_FACTOR defaults (dead 0.55 / harvested 0.30 /
+  overripe 0.95) with per-builder userData.heightFactor override (apple keeps
+  its canopy in every state; tomato dead keeps the stake; trellis never
+  shrinks) — contract in shared.ts.
+- **NEW src/creative/crops/states/**: 18 per-archetype modules + index.ts
+  (STATE_BUILDERS + hasStateBuilder probe). Authored by 7 parallel builder
+  subs (families: tomato; leafy/brassica/greens; wheat/corn; root/allium/
+  potato; cucurbit/legume/bush-bean/strawberry; herbs/mushroom; berry/apple),
+  each self-verifying (typecheck + scrub shots + PNG self-review + own critic
+  loop). Highlights: wheat harvested = cut stubble + missed head; root
+  harvested = pulled-hollow with carrots on soil; apple harvested = picked-
+  clean canopy with scars/fallen fruit; strawberry overripe = blackened
+  berries; corn dead = lodged wreckage.
+- **Integration (leader)**: makeCropFor(name, stage, state?) dispatches state
+  builders (null → Tier-1 fallback); plants.ts template key gains the state
+  axis (`${crop}|${stage}|${state}|${h}`), stages Map keyed by stageKey
+  composite, reconcile pass-2 moves cells on state change (rides the existing
+  diff — day-keyed semantics preserved), state cells pin progress to the
+  stage ramp point (instance scale exactly 1) and suppress Tier-1 tint/wilt
+  (pose + baked palette carry the state). Scrub tool renders REAL state
+  geometry when authored (labels dropped "T2 pending"). Showcase gains
+  `#view=plan` (top-down camera) for the bar's plan-view clause.
+  ffvis=lifecycle demo now paints DEPTH BANDS (was diagonal) so near→far
+  reads as the life story from the default camera.
+- **Critic round 1: ITERATE** (dead/overripe corn confusable; apple harvested
+  too close to healthy; demo staging unreadable) → two fix subs (corn dead
+  rebuilt as collapsed/lodged with heightFactor 0.4 vs standing overripe;
+  apple harvested re-canopied 0.92 shell + gaps + scars + yellow-edge leaves +
+  ground fruit) + demo restage + plan-view tooling. Post-fix analyzer reads:
+  corn three-way silhouette split clear (standing-green / folded-brown /
+  standing-tan); apple harvested distinct-and-alive; demo bands legible
+  green → yellow-brown → collapsed → dark full-size → stubble.
+
+Verified: typecheck + build green; Math.random audit = comments only (law
+holds); plain-world Draws machine-asserted 273 (common case unchanged);
+lifecycle demo Draws 301 (+28 = bounded state batches for zones' crops —
+plant-layer ≤80 budget respected); determinism probe byte-identical on the
+72-cell 4-archetype sheet (two renders); blueprint GATE/EXPECT pass; lane-B
+growth rows regression-free per critic sweep. Known follow-ups: overripe-vs-
+healthy margin still hue/droop-led for tomato/wheat (critic caveat, wave-3
+polish list); ghost overlay does not yet consume states (wave 4); stress
+0.55 scrub cell still subtle (tint-strength tuning backlog); Tris HUD 10×
+read discrepancy still queued.
+
+## 2026-09-12 — Growth Visual Evolution wave 3: Tier-3 phenology + de-cloning + s5 pick-me
+
+The archetype map stops lying: 7 crops de-cloned into dedicated builders,
+corn/apple re-scripted on 10-keyframe phenology axes, allium tops-down lands,
+the §5.1 s5 "pick me" backlog cleared across every flagged archetype. Spec
+§2.5 table complete; §2.4 keyframe-count mechanism shipped end-to-end with
+corn+apple opting in (deviation below).
+
+- **NEW src/creative/crops/specials/** (7 builders + types/index):
+  Pepper/Eggplant (compact bush, pendant bell/oval fruit — no cordon stake,
+  no truss chains), Sunflower (stout stalk, heart leaves, nodding disc head —
+  no tassel/ear), Pumpkin/Zucchini/Melon/Cucumber (ground-sphere ribbed /
+  upright-bush cylinder / netted tan ground oval / climbing hanging cylinder —
+  four habits, not four palettes). SPECIAL_BUILDERS dispatch in makeCropFor
+  wins over archetype; palette/scale overrides still apply on top.
+- **10-keyframe axes** (mechanism + first two crops): view.ts gains
+  CROP_STAGE_COUNTS/ARCH_STAGE_COUNTS + stageCountFor() (single source);
+  makeCropFor clamp relaxed to the per-crop axis; World3D passes
+  stageCount into both projectPlant call sites; registry ArchDef.stages
+  drives lane-B entries (109 → 117). Corn: boot→tassel→silk(red)→blister→
+  milk→dough→ripe with OPEN husk + gold kernel patch at s9 (ear-emergence +
+  tassel pop-in cliffs killed). Apple: perennial AGE series whip→fork→
+  scaffold→blossom→bearing→red harvest (s9 reproduces states/apple-tree.ts
+  geometry so dead/harvested read as the same tree).
+- **Phenology**: allium tops-down (s4 kinks → s5 folded tops + swollen bulb
+  shoulders); leafy-head OVERRIPE re-authored as BOLTED (tall stalk, yellow
+  blooms — replaces the split-head pose); cilantro/lettuce bolting covered by
+  herb-clump/leafy-head overripe states (wave 2). Potato die-back = wave-2
+  dead state (unchanged).
+- **s5 pick-me fixes** (critic backlog §5.1, all palette-driven): tomato
+  (gloss + breaker orange + 4th truss + deepened canopy), greens-open
+  (harvest rosette + accent bud flag), bush-bean (fat pods in open gaps,
+  gloss, foliage recedes), legume-trellis (heavy paired fatPods, tip growth
+  ceases, base yellowing; Pea palette verified), carrot (3-voxel pal.fruit
+  crown + soil-crack crescent), potato (blooms + cracked-mound tuber peek),
+  herb-clump (harvest poms — marigold's flowers ARE the crop), herb-shrub
+  (woody base + tip pop, variants intact), leafy-head vs brassica silhouette
+  split (cannonball-in-collar vs beaded-crown-on-stalk; plan-view distinct).
+- **Scrub tool**: ids now case-insensitive (canonical map; 'sunflower' no
+  longer silently falls back to tomato) and previews crop NAMES through
+  makeCropFor so specials + state fallbacks render under their own palette.
+
+Integration points touched: makeCropFor dispatch + clamp (map.ts), registry
+entries loop, view.ts stage-count tables, World3D ×2 projectPlant sites,
+scrub.ts normalize/preview, 7 archetype builder files + states/leafy-head.ts
+(overripe only).
+
+Verified: typecheck + build green; Math.random audit clean (comments only);
+plain-world GATE + **Draws: 273 exact** (no-run path byte-identical — stage
+axes only widen in run mode / showcase); blueprint GATE PASS; ffvis=lifecycle
+GATE PASS (stageCountFor plumbed through the demo path too); lane-B full
+sheet "showcase-ready 117"; determinism probe (tomato+Pepper scrub ×2 renders
+byte-identical, cmp); acceptance critic: **27/27 PASS** (de-clone
+nameability, continuous story, s5 pick-me, state coherence, artifact sweep —
+melon needed a cropped-band retry after 4 empty vision results; verdict
+unchanged). Template memory: +8 merged geometries worst case (corn/apple
+6→10 templates, resident only as stages appear). NEW TRAP (hit twice, now
+documented): scrub sheets are ~1600px tall per crop — a 1050px viewport
+clips everything below the first row while `--expect "showcase-ready N"`
+still passes (the count is DOM-based, not framing-based). Always shoot
+single-crop scrub sheets at 1680x1800 and READ the PNG before judging.
+Deviations: §2.4 keyframe expansion ships for corn+apple only — the rest of
+the table stays 6 pending authored keyframes (recorded follow-up; Tier-1
+continuous channels carry the time-lapse feel meanwhile). Known follow-ups:
+tomato overripe-vs-healthy still hue/droop-led (wave-2 carryover); stress
+0.55 scrub cell subtle (tint-strength backlog); Tris HUD 10× read artifact
+queued.
+
+## 2026-09-12 — Growth Visual Evolution wave 4: world coupling (env bridge, soil pads, ghost easing)
+
+Run envSeries drives the world's weather presentation; soil pads became a
+per-cell-tintable instanced channel; ghost A/B growth now eases; the sky
+greys under overcast. Sim numerics untouched; no-run path behavior
+byte-identical (Draws 273 → 274, the +1 is the flat pad mesh).
+
+- **NEW src/lib/sim/runWeather.ts** — pure `envToWeatherCurrent(env, base)`:
+  projects one DailyEnvironment onto the WeatherCurrent shape the renderer
+  already consumes (aridity from ET₀−rain, cloud/humidity/wind derived,
+  WMO codes, snow below 2 °C). No clock, no rng. Only the run path calls it.
+- **World3D.tsx** — runEnvRef + runWeatherRef (day-keyed bridge cache; the
+  rAF reads the cached object instead of projecting per frame — zero
+  per-frame allocations); when a run is active clouds/weather-FX/ambient/
+  sway consume the bridged weather and sky.update gets cloudCover01; the
+  weather chip falls back to runWeatherPreview when the live fetch is
+  unavailable (HUD tells the same story as the sky). DEV `?ffvis=drought` /
+  `?ffvis=rain` demos drive the REAL bridge + projection path end to end;
+  `#ff-env-bridge` DOM probe (display:none span, written every frame under
+  ffdebug/ffvis) asserts which weather the world renders with, plus pad
+  counters (flat/hilled/instanceColor samples/moist hits) via plants.ts
+  `__padProbe`. **Two ownership fixes found the hard way** (critic rounds
+  1–2 failed): the legacy scrub effect re-runs when ambientTempC /
+  climateBaseline land asynchronously and rewrote plants untinted — under
+  virtual-time captures the demo's re-apply never got a rendered frame. Fix
+  A mirrors the async deps onto the vis effect; fix B (the load-bearing one)
+  makes the legacy scrub effect defer to an active vis demo entirely.
+- **Soil-pad separation (Tier-1 extension)** — `voxel.ts` Voxel gains a
+  `pad` flag; soilPad/soilPadEllipse flag their voxels; finishPlant splits
+  them into a NAMED 'pad' child (showcase/ghost/direct makeCropFor consumers
+  render unchanged; the ghost template merge already handles multi-mesh
+  assets). plants.ts strips the pad child at template build, reports world
+  radii + hilledness on the template, and reconciles TWO shared
+  InstancedMeshes (flat + hilled, unit geometries seeded 4242 via
+  unitPadGeometry) — +1 draw flat (+1 hilled only when hilled cells exist),
+  capacity grows ×1.5, swap-with-last removal, per-cell tint =
+  padMoistureTint(moistureFrac): dusty-pale (×~1.45) → wet-dark (×~0.5)
+  through PlantViewParams.moisture. reconcilePads runs at updatePlants
+  cadence (day-keyed), never per frame.
+- **sky.ts** — cloudCover01 dims sun (×0.55 at full cover) and ambient
+  (×0.22), and **greys the dome**: quadratic-weighted desaturation toward
+  luminance + slight dimming (c≈0.94 ⇒ ~0.88 grey blend; scattered c≈0.3
+  barely registers; 0 = byte-identical). This closed the "rain at a glance"
+  gap — light dimming alone didn't read.
+- **Ghost easing (wave-4 optional item, shipped)** — GhostRunBatch carries
+  per-cell entries {pos, rotY, baseScale, denom, targetP, visualP};
+  reconcile builds them carrying visualP across stage re-buckets via
+  ghostVisualPByCell (cleared on ghost teardown); advanceGhostGrowth eases
+  per frame in the rAF (same contract as advancePlantGrowth: allocation-
+  free, matrices rewritten only while diffs persist, zero extra draws).
+  New cells start at target so nothing pops in.
+
+Integration points touched: World3D rAF (sky/clouds/weather-FX/sway/ghost
+advance), run-growth + vis-demo + legacy-scrub effects (ownership), SimDrawer
+weather prop; plants.ts buildNormalizedVoxelRoot/getVoxelTemplate/
+buildPlants/updatePlants/disposePlants (+ new PadState module state); sky.ts
+update signature; shared.ts finishPlant/soilPad/soilPadEllipse + new
+unitPadGeometry; voxel.ts Voxel type; view.ts PlantViewParams.moisture.
+
+Verified: typecheck + build green; world GATE + **"Draws: 274" machine-
+asserted as a literal DOM substring** (baseline 273; +1 = flat pad mesh —
+an initial vision read of "374/13 FPS" was a digit misread of the tiny HUD
+font, settled by --expect; wave 1 hit the SAME misread, precedent noted);
+blueprint GATE PASS; ffvis=drought/rain/stress GATE+EXPECT (bridge text,
+viscells, pad moist counters); showcase lane-B "showcase-ready 117"
+regression PASS; tomato scrub ×2 byte-identical (determinism); Math.random
+audit clean in touched files (weather-fx rain particles are pre-existing
+live-weather cosmetic, outside the creative/sim determinism law). Critic
+rounds on drought/rain/stress/plain PNGs: **round 4 ALL PASS** (sky contrast
+strong, wet-dark vs dusty-tan pad flip strong, stress gradient strong and
+spatially coherent soil↔foliage, zero pad/z-fight artifacts) after rounds
+1–2 exposed the clobber race and the round-3 pixel-diff analysis confirmed
+the fixes landed. Interactive real-browser verification (throwaway Chrome
+profile): created a 90-day Drought Stress run + a Current Conditions run on
+farm 1, played the drought run to day 90 (field reads drought: browner
+patches, clear sky, HUD stress rows), and ran the A/B compare (solid=
+baseline, ghost=drought) to day 19 — ghost plants grow in lockstep with the
+solids, correctly seated, unmangled; ghost label + Clear control functional.
+
+Traps recorded: (1) HUD digit misreads — always --expect the literal;
+(2) legacy-scrub vs vis-demo ownership — any new plant-rewriting effect
+must defer to demos/runs or re-apply after them; (3) instanceColor changes
+are buffer-level until the next rendered frame — under virtual-time
+captures the LAST writer must be settled before frames stop; (4) weather-fx
+rain is subtle under headless SwiftShader (pre-existing; the overcast dome
+carries the rain read); (5) Tris HUD 10× artifact persists. Known follow-
+ups: stress-tint strength at mid levels remains the wave-1/3 backlog item;
+rain streak rendering could use a boost; drought demo plant gradient is
+carried mostly by pads+tint at near-camera scale (wilt reads best on the
+far rows); ghost overlay still does not consume view params/states (recorded
+since wave 2 — deferred by design).
+
+## 2026-09-13 — Growth Visual Evolution wave 5: 2D parity, custom-crop fallback, docs + mission close
+
+Blueprint gains sim-run overlays from the SAME projection layer as the world;
+unmapped custom crops stop regressing to the pre-voxel primitive look; the
+harness gained the hooks this wave's verification needed. Sim numerics
+untouched; no-run rendering paths byte-identical (Draws 274 held, PNG export
+never sees the new options).
+
+- **2D sim overlays (SPEC §wave 5)** — `src/lib/renderPlan.ts` grows three
+  opt-in `RenderOptions` flags, default OFF (the three-consumer rule holds:
+  only the interactive canvas passes them): `simMoisture` (banded soil fill
+  under the plant layer, band hexes mirror SimDrawer.MOISTURE_BANDS),`
+  `simStress` (per-cell red wash, alpha 0.10+0.38·stress, floor 0.15 = the 3D
+  tint gate), `simReady` (amber bottom-left corner triangle — third glyph
+  class; halos own the top corners). `usePlanEditor` holds transient toggle
+  state (NOT pref-backed: the channels only mean something while a run is
+  active) + `simChannels` pushed in via PlotDesigner; `DesignerToolbar` shows
+  Moisture/Stress/Ready toggles only when channels exist (`simActive`).
+- **Channel derivation (PlotDesigner)** — day-keyed useMemo over
+  `simRun.simStateRef` × plan × cropById through `projectPlant` /
+  `effectiveStress` / `stageCountFor` (view.ts is now the single projection
+  seam for BOTH frontends, spec §1 satisfied). READY semantics fixed during
+  verification: the engine sets `readyAtDay = crossDay+3` and auto-harvests
+  at `dayIndex >= readyAtDay` (engine.ts HARVEST_GRACE_DAYS), so "alive AND
+  readyAtDay set" is exactly the ~3-day standing-ripe window — an initial
+  `dayIndex >= readyAtDay` condition was provably empty (r=0 at every day).
+- **Custom-crop voxel fallback** — `crops/map.ts` gains
+  `makeCropForCustom(name, category, colorHex, stage, state)` (per-category
+  representative archetype, colorHex → accent/fruit/unripe slots; shares the
+  buildMapping core with makeCropFor) + `hasVoxelPathFor(crop)`;
+  `plants.ts` `createBatch` keeps the procedural-clone path ONLY for
+  categories with no representative, and `buildNormalizedVoxelRoot` +
+  World3D `getGhostTemplate` resolve custom names to voxel templates. The
+  pre-voxel primitive look is unreachable for every catalog category.
+- **Showcase scrub `custom:` tokens** — `#mode=scrub&only=custom:Name:category:hex`
+  renders 12 growth + 6 lifecycle cells through makeCropForCustom
+  (normalizeArchetypeIds passes the token past canon; builderFor routes it).
+- **`?ffvis2d=` DEV proof hook + `#ff-plan-channels` probe** — PlotDesigner
+  composes a REAL run via apiFetch.createSimRun (identical path to the
+  Simulations page; seed 7, startDate 2026-09-01 fixed), startRun → seekDay
+  (pendingSeek path is safe pre-context), then flips the three toggles; the
+  probe span reports `day/m/s/r` every re-derivation. `?ffvis2dDay=N` picks
+  the day. StrictMode double-create absorbed by mark-after-start (one orphan
+  record per cold profile is the accepted dev artifact).
+- **appshot `--timeout=25000`** — sim-run pages never let Chrome's virtual
+  time expire (pending work + throttled commits), so `--screenshot` idled
+  past the spawn kill with the PNG never written; Chrome's own load-timeout
+  bound fixes the harness for any busy page (quiet pages act in <10 s and
+  are immune).
+
+Integration points touched: renderPlan.ts (drawPlan overlay passes +
+SimOverlayChannels export); usePlanEditor (overlayOpts memo + toggle state +
+editor API additions); DesignerToolbar (three conditional toggles);
+PlotDesigner (vis2d/vis2dDay params, demo effect, channel memo, probe);
+crops/map.ts (buildMapping split + CATEGORY_FALLBACK + two new exports);
+plants.ts (createBatch fallback probe + buildNormalizedVoxelRoot resolution);
+World3D.tsx (ghost template fallback); showcase/scrub.ts (custom token);
+tools/appshot.mjs (--timeout flag); ASSETS.md/HANDOFF.md/SPEC refreshes.
+
+Verified: typecheck + build green; plain blueprint GATE+EXPECT (overlays-off
+path unchanged); ffvis2d=drought headless DOM gate `day=25 m=414 s=414 r=52`
++ ffvis2d=baseline&ffvis2dDay=40 `s=79 r=24` (scenario contrast is
+machine-asserted: drought stresses 414/414 cells, baseline 79/414), boot
+probe 0 errors on both; world GATE + **"Draws: 274"** literal (wave-4
+baseline held); lane-B sheet `showcase-ready 117`; tomato scrub ×2
+byte-identical (determinism); custom-crop scrub sheet `showcase-ready 18`.
+Real-browser verification (headed Chrome, isolated profile): the ffvis2d
+drought run rendered live with all three overlays ON — toolbar toggles
+active, moisture bands graded per bed (dry browns left → olive/blue right),
+stress wash strongest in open-field beds and lightest under
+greenhouse/polytunnel, ~52 ready triangles concentrated in the salad bed
+(vision-critic PASS); baseline day-40 shot shows ~24 amber triangles where
+expected and a sparse wash (PASS). Custom-crop sheet critic PASS (proper
+voxel rosette, gold accents at s3+, distinct lifecycle states; nit: late-
+stage gold reads uniform — fallback recolor puts colorHex in three slots).
+
+Traps recorded: (1) virtual-time captures RACE createSimRun's climate fetch —
+when the fetch loses, normals fall back to the flat 20 °C default and the run
+plays out completely differently (documented "invisible default"); headless
+DOM counts are structural evidence only, exact values need a real-time
+browser. (2) A May-start baseline run on farm 1 (Portland) chronically kills
+the whole field by ~day 48 (21+ days of ≥0.85 stress ⇒ view-layer chronic
+death) — September-start runs are living and productive; this is an engine/
+tuning question handed to the sim owner, NOT a visuals bug (sim numerics
+untouched per rule 6). (3) The ready-marker window is narrow by construction
+(3-day standing grace before auto-harvest) — if product wants a longer
+"pick me" phase in 2D, that's an engine parameter discussion. (4) Native
+color inputs ignore AXSetValue — form-driven custom-crop creation can't set
+the hue programmatically (default green used; the fallback path is
+color-agnostic). (5) Interactive in-world custom-crop painting was abandoned
+mid-proof: the desktop browser was being used concurrently by a human —
+don't fight for the pointer; the showcase sheet + type wiring carry the
+evidence instead. (6) The disk filled twice during this wave (ENOSPC wedges
+Chrome headless BEFORE any timeout fires — check df before blaming the
+harness; scratch profiles in $TMPDIR/appshot-profile-* pile up on kills).
+
+Known follow-ups: stress-wash alpha at low zoom reads subtle (wave-1/3
+tint-strength backlog, unchanged); engine tuning for summer-start baseline
+runs (mass chronic death) + possible longer standing-ripe window — both sim-
+side proposals, deliberately not touched here; custom-crop category coverage
+is English-category keyed (custom crops created via the UI always carry a
+valid category, so no gap in practice).
+
+## 2026-09-13 — Growth Visual Evolution: MISSION COMPLETE
+
+All six waves landed on `growth-visual-evolution` (cut from pro-upgrade@
+6e23a98; never merged by agents). Merge-readiness summary appended to
+quality/SPEC-GROWTH-VISUAL.md §7. Standing backlog for a future mission:
+stress-tint strength at mid levels; authored keyframes beyond corn/apple
+(spec §2.4); ghost overlay consuming view params/states (deferred since
+wave 2); plant LOD/imposter system for very large plans (project-scale,
+HANDOFF); sim-side tuning items above.
 ## Demo-video pipeline + Script Studio (2026-09-10)
 
 Built a HyperFrames (HTML→video) production pipeline and a 60s FarmFriend demo
