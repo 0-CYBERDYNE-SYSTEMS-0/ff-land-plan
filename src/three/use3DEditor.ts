@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import * as THREE from 'three';
 
-import type { PlanEditor } from '@/components/designer/usePlanEditor';
+import { bresenhamCells, type PlanEditor } from '@/components/designer/usePlanEditor';
 import type { PlanState } from '@/types';
 import { cellKey, planCols, planRows } from '@/lib/plan';
 
@@ -11,7 +11,18 @@ interface RaycastResult {
   key: string;
 }
 
-export function use3DEditor(editor: PlanEditor) {
+// Module-level scratch set: exactly one raycaster/ground-plane/NDC/hit point
+// reused by every pointer event (there is one 3D world per app), so the
+// hover + paint path allocates nothing per move.
+const sharedRaycaster = new THREE.Raycaster();
+const sharedGroundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const sharedNDC = new THREE.Vector2();
+const sharedHitPoint = new THREE.Vector3();
+
+export function use3DEditor(
+  editor: PlanEditor,
+  onHoverCell?: (cell: { x: number; y: number; key: string } | null) => void,
+) {
   const {
     planRef,
     tool,
@@ -35,25 +46,30 @@ export function use3DEditor(editor: PlanEditor) {
     lastY: number;
   }>({ kind: null, before: null, changed: false, startX: 0, startY: 0, lastX: 0, lastY: 0 });
 
+  // Latest hover callback behind a ref (mirrors the canvas handlersRef
+  // pattern) plus the last reported key so the callback fires once per cell
+  // change — and exactly one null when the pointer leaves the plan.
+  const onHoverCellRef = useRef(onHoverCell);
+  onHoverCellRef.current = onHoverCell;
+  const lastHoverKeyRef = useRef<string | null>(null);
+
   const getCellFromRaycast = useCallback((camera: THREE.Camera, _scene: THREE.Scene, ndcX: number, ndcY: number): RaycastResult | null => {
     const plan = planRef.current;
     if (!plan) return null;
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+    sharedRaycaster.setFromCamera(sharedNDC.set(ndcX, ndcY), camera);
 
-    // Create a virtual ground plane at y=0 for raycasting
-    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const intersectPoint = new THREE.Vector3();
-    raycaster.ray.intersectPlane(groundPlane, intersectPoint);
-    if (!intersectPoint) return null;
+    // Virtual ground plane at y=0 for raycasting. The shared hit point would
+    // hold a stale cell after a miss (parallel/away ray), so the null return
+    // is authoritative.
+    if (!sharedRaycaster.ray.intersectPlane(sharedGroundPlane, sharedHitPoint)) return null;
 
     // Convert world position to cell coordinates
     const offsetX = -(plan.widthM / 2);
     const offsetZ = -(plan.heightM / 2);
     const cellM = plan.cellM;
-    const x = Math.floor((intersectPoint.x - offsetX) / cellM);
-    const y = Math.floor((intersectPoint.z - offsetZ) / cellM);
+    const x = Math.floor((sharedHitPoint.x - offsetX) / cellM);
+    const y = Math.floor((sharedHitPoint.z - offsetZ) / cellM);
 
     const cols = planCols(plan);
     const rows = planRows(plan);
@@ -98,10 +114,25 @@ export function use3DEditor(editor: PlanEditor) {
       lastY: cell.y,
     };
 
+    // The stroke owns the pointer from here: clear any hover readout so it
+    // cannot freeze on the drag-start cell for the whole drag.
+    if (lastHoverKeyRef.current !== null) {
+      lastHoverKeyRef.current = null;
+      onHoverCellRef.current?.(null);
+    }
+
     if (tool === 'rect') {
-      setRectPreview({ x0: cell.x, y0: cell.y, x1: cell.x, y1: cell.y, color: rectPreviewColor() });
+      setRectPreview({ x0: cell.x, y0: cell.y, x1: cell.x, y1: cell.y, color: rectPreviewColor(), kind: 'rect' });
     } else if (tool === 'line') {
-      // No drag preview in 3D; the stroke commits on pointer-up.
+      setRectPreview({
+        x0: cell.x,
+        y0: cell.y,
+        x1: cell.x,
+        y1: cell.y,
+        color: rectPreviewColor(),
+        kind: 'line',
+        cells: bresenhamCells(cell.x, cell.y, cell.x, cell.y),
+      });
     } else {
       applyBrushAt(cell.x, cell.y);
       dragRef.current.changed = true;
@@ -110,7 +141,23 @@ export function use3DEditor(editor: PlanEditor) {
 
   const handlePointerMove = useCallback((camera: THREE.Camera, scene: THREE.Scene, ndcX: number, ndcY: number) => {
     const drag = dragRef.current;
-    if (!drag.kind) return;
+    if (!drag.kind) {
+      // Hover tracking (only outside drags): raycast + key-dedupe so the
+      // consumer sees one callback per cell change and one null on leave.
+      const hovered = getCellFromRaycast(camera, scene, ndcX, ndcY);
+      if (!hovered) {
+        if (lastHoverKeyRef.current !== null) {
+          lastHoverKeyRef.current = null;
+          onHoverCellRef.current?.(null);
+        }
+        return;
+      }
+      if (hovered.key !== lastHoverKeyRef.current) {
+        lastHoverKeyRef.current = hovered.key;
+        onHoverCellRef.current?.(hovered);
+      }
+      return;
+    }
     const cell = getCellFromRaycast(camera, scene, ndcX, ndcY);
     if (!cell) return;
 
@@ -122,14 +169,24 @@ export function use3DEditor(editor: PlanEditor) {
       drag.changed = true;
     }
     if (drag.kind === 'rect') {
-      setRectPreview({ x0: drag.startX, y0: drag.startY, x1: cell.x, y1: cell.y, color: rectPreviewColor() });
+      setRectPreview({ x0: drag.startX, y0: drag.startY, x1: cell.x, y1: cell.y, color: rectPreviewColor(), kind: 'rect' });
+    }
+    if (drag.kind === 'line') {
+      setRectPreview({
+        x0: drag.startX,
+        y0: drag.startY,
+        x1: cell.x,
+        y1: cell.y,
+        color: rectPreviewColor(),
+        kind: 'line',
+        cells: bresenhamCells(drag.startX, drag.startY, cell.x, cell.y),
+      });
     }
   }, [applyBrushAt, setRectPreview, editor.rectMode, editor.activeCrop, activeAsset, getCellFromRaycast]);
 
   const handlePointerUp = useCallback((camera: THREE.Camera, scene: THREE.Scene, ndcX?: number, ndcY?: number) => {
     const drag = dragRef.current;
     const plan = planRef.current;
-    if (!plan) return;
 
     if (drag.kind === 'rect' || drag.kind === 'line') {
       const released = ndcX !== undefined && ndcY !== undefined
@@ -143,20 +200,32 @@ export function use3DEditor(editor: PlanEditor) {
       } else {
         drag.changed = applyLineCells(drag.startX, drag.startY, endX, endY) || drag.changed;
       }
+      // Cleared unconditionally — rectPreview is shared editor state that
+      // outlives this view, and a stale 3D drag must never bleed into the
+      // 2D blueprint as a phantom rectangle.
       setRectPreview(null);
     }
 
-    if (drag.changed && drag.before) {
+    if (drag.changed && drag.before && plan) {
       replacePlan({ ...plan, planting: { ...plan.planting }, ground: { ...plan.ground } }, { save: true, recordHistory: drag.before });
     }
 
     dragRef.current = { kind: null, before: null, changed: false, startX: 0, startY: 0, lastX: 0, lastY: 0 };
   }, [planRef, applyRect, applyLineCells, replacePlan, setRectPreview, getCellFromRaycast]);
 
+  // Pointer left the canvas entirely — drop the hover readout and highlight.
+  const handlePointerLeave = useCallback(() => {
+    if (lastHoverKeyRef.current !== null) {
+      lastHoverKeyRef.current = null;
+      onHoverCellRef.current?.(null);
+    }
+  }, []);
+
   return {
     getCellFromRaycast,
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,
+    handlePointerLeave,
   };
 }
