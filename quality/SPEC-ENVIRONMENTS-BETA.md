@@ -94,9 +94,16 @@ rows, camera-inside wall fading, wiring dioramas into the designer palette.
 1. `tools/appshot.mjs`: `--gate` with missing probe → **exit 1** (fail closed);
    message points at dev-build requirement.
 2. `ci.yml`: three World-view smoke shots — `/?ffview=world#/farms/1/map`,
-   `#/farms/8/map`, `#/farms/9/map` — all `--gate --expect "Plot Designer"
-   --vt 25000` (SwiftShader ceiling; per HANDOFF trap 10, gate lines outrank
-   PNG). World3D finally ships green only when it renders clean.
+   `#/farms/8/map`, `#/farms/9/map` — all `--gate --expect "Plot Designer"`.
+   **Budget tuning (measured, 2026-09-15):** World3D renders continuously, so
+   a large virtual-time budget (`--vt 25000`) forces thousands of
+   software-GL frame sims before the DOM dump — 2-core CI runners starve
+   before it arrives and the gate fails open-looking. Final design:
+   `--vt 600` (~37 simulated frames, still covering the World3D init path
+   where its runtime errors live), `FF_SHOT_TIMEOUT_MS=90000` (lazy
+   three.js module graph load on slow runners), `FF_SHOT_SPAWN_MS=420000`
+   (hard SIGKILL + process-tree reaper). Per HANDOFF trap 10, gate lines
+   outrank PNG.
 3. ErrorBoundary around World3D's rendered tree + try/catch around shell build
    in both effects — a shell exception degrades to a visible panel, not a white
    screen.

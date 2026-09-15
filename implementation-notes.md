@@ -1640,3 +1640,29 @@ broken ESLint, test runner, husky pre-commit hooks — CI is the single gate.
 - Deferred (in spec): CEA setpoints (CO2/RH/photoperiod), passive-solar gain,
   LOD/quality tiers, quota-failure toast, restApi live parity smoke, dioramas
   in the designer palette.
+
+### CI world-gate calibration (same day, follow-up)
+
+First CI run of the new World3D shots failed: `GATE FAIL: boot probe missing`.
+Root cause chain: World3D renders continuously (rAF), so `--vt 25000` means
+~1,500 software-GL frame sims before Chrome dumps the DOM — 2-core CI runners
+starve before the dump; locally (real GPU or even forced SwiftShader on 10
+cores) it squeaks through at ~100 s. Also found a latent appshot hang: the
+spawn timeout SIGTERMs only the direct Chrome child, and surviving GPU/renderer
+grandchildren hold the stdio pipes open, so `spawnSync` never returns (a busy
+SwiftShader renderer ignores SIGTERM forever).
+
+appshot fixes: `--vt 0` (no virtual-time budget; dump on the real-time
+`--timeout` — turns out the dump fires at the load event, ~2 s, BEFORE React
+mounts: useless for gates), `FF_SHOT_TIMEOUT_MS` (env override for the
+`--timeout` load wait), `FF_SHOT_SPAWN_MS` (spawn-bound override), SIGKILL +
+a detached watchdog that reaps the Chrome tree via its unique
+`--user-data-dir` so pipes always close.
+
+Final CI design: world shots run `--gate --expect "Plot Designer" --vt 600`
+(~37 simulated frames — still covers the World3D init path where its runtime
+errors live) with `FF_SHOT_TIMEOUT_MS=90000 FF_SHOT_SPAWN_MS=420000`.
+Verified: GPU gates PASS world 1/8/9 + map + showcase; forced-SwiftShader
+world1 PASSES at vt 600 (826 KB PNG) and at vt 2000. LESSON: `--timeout` does
+not delay a dump (load event does); virtual-time budget is the only dump
+delay, and its wall cost = simulated frame count × per-frame GL cost.

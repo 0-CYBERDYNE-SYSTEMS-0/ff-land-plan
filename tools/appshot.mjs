@@ -15,7 +15,7 @@
  *
  * Requires the dev server (default :5177) started by the orchestrator.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -37,7 +37,12 @@ const gate = argv.includes('--gate');
 const expectIdx = argv.indexOf('--expect');
 const expectText = expectIdx !== -1 ? argv[expectIdx + 1] : null;
 const vtIdx = argv.indexOf('--vt');
-const vtMs = vtIdx !== -1 ? Number(argv[vtIdx + 1]) || 6000 : 6000;
+// --vt 0 = no virtual-time budget at all: the DOM dump then happens on the
+// real-time --timeout bound instead. Pages that render continuously (World3D's
+// rAF loop) make a virtual-time budget simulate thousands of software-GL
+// frames before the dump — 2-core CI runners starve before it arrives.
+const rawVt = vtIdx !== -1 ? Number(argv[vtIdx + 1]) : null;
+const vtMs = rawVt === 0 ? 0 : rawVt || 6000;
 // Drop --gate, and (only when --expect/--vt are actually present) flag + value.
 const skip = new Set([argv.indexOf('--gate')]);
 if (expectIdx !== -1) { skip.add(expectIdx); skip.add(expectIdx + 1); }
@@ -79,26 +84,37 @@ function chromeRun(extraFlags, opts = {}) {
         `--user-data-dir=${profileDir}`,
         `--window-size=${w},${h}`,
         // Budget: enough virtual time for the lazy three.js chunk + WebGL
-        // warm-up; `--vt <ms>` raises it for slow software-GL runners.
+        // warm-up; `--vt <ms>` raises it for slow software-GL runners and
+        // `--vt 0` switches to a real-time dump (see note above). In that mode
+        // --timeout is the dump trigger: 8 s real time covers app boot + the
+        // World3D init path, which is where its runtime errors live.
+        ...(vtMs > 0 ? [`--virtual-time-budget=${vtMs}`] : []),
         // --enable-unsafe-swiftshader: GPU-less CI runners need explicit
         // opt-in for software WebGL or three.js contexts never come up.
+        '--enable-unsafe-swiftshader',
         // NOTE: with a dev-server HMR socket open, Chrome performs
         // its actions quickly but never exits gracefully — the spawn timeout
         // below is the expected terminator; we validate outputs afterwards.
-        `--virtual-time-budget=${vtMs}`,
-        '--enable-unsafe-swiftshader',
-        // Hard bound on Chrome's own wait-for-load: pages that stay busy
-        // (e.g. an active sim run) never let virtual time expire, so without
-        // this Chrome idles past the spawn kill and the shot is lost. 25 s is
-        // well above the normal <10 s action time, so quiet pages are immune.
-        '--timeout=25000',
+        `--timeout=${process.env.FF_SHOT_TIMEOUT_MS || (vtMs > 0 ? 25000 : 8000)}`,
         ...(process.env.FF_CHROME_FLAGS
           ? process.env.FF_CHROME_FLAGS.split(' ').filter(Boolean)
           : []),
         ...extraFlags,
       ],
-      { timeout: Math.max(40_000, vtMs * 4), stdio: ['ignore', 'pipe', 'pipe'], ...opts },
+      { timeout: Number(process.env.FF_SHOT_SPAWN_MS) || Math.max(40_000, vtMs * 4), killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'], ...opts },
     );
+    // The spawn timeout SIGKILLs only the direct Chrome child; surviving
+    // GPU/renderer grandchildren keep the stdio pipes open and hang the call
+    // until they die (a busy SwiftShader renderer ignores SIGTERM forever).
+    // This detached watchdog fires independently of this blocked thread and
+    // reaps the whole tree by its unique --user-data-dir fingerprint, which
+    // closes the inherited pipes and lets spawnSync return (no-op otherwise).
+    const watchdog = spawn(
+      'sh',
+      ['-c', `sleep ${Math.ceil((Number(process.env.FF_SHOT_SPAWN_MS) || Math.max(40_000, vtMs * 4)) / 1000) + 5}; pkill -9 -f ${JSON.stringify(profileDir)}`],
+      { detached: true, stdio: 'ignore' },
+    );
+    watchdog.unref();
   } finally {
     rmSync(profileDir, { recursive: true, force: true });
   }

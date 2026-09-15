@@ -62,16 +62,24 @@ jobs:
           node tools/appshot.mjs "http://localhost:5177/#/farms/1/map" \
             smoke-shots/map.png 1440x900 --gate --expect "Plot Designer"
       # World captures race plan loading (HANDOFF trap 10 — gate lines outrank
-      # PNG content); --vt raises the SwiftShader spawn ceiling, mirroring the
-      # showcase step.
+      # PNG content). World3D renders continuously, so a large virtual-time
+      # budget forces thousands of software-GL frame sims before the DOM dump
+      # and 2-core runners starve before it arrives (measured 2026-09-15).
+      # --vt 600 keeps the simulated frame count small while still covering
+      # the World3D init path, where its runtime errors live;
+      # FF_SHOT_TIMEOUT_MS gives the lazy three.js module graph a full minute
+      # to load; FF_SHOT_SPAWN_MS bounds the whole shot (SIGKILL + reaper).
       - name: Shot — World3D view (runtime-error gate)
+        env:
+          FF_SHOT_TIMEOUT_MS: '90000'
+          FF_SHOT_SPAWN_MS: '420000'
         run: |
           node tools/appshot.mjs "http://localhost:5177/?ffview=world#/farms/1/map" \
-            smoke-shots/world1.png 1440x900 --gate --expect "Plot Designer" --vt 25000
+            smoke-shots/world1.png 1440x900 --gate --expect "Plot Designer" --vt 600
           node tools/appshot.mjs "http://localhost:5177/?ffview=world#/farms/8/map" \
-            smoke-shots/world8.png 1440x900 --gate --expect "Plot Designer" --vt 25000
+            smoke-shots/world8.png 1440x900 --gate --expect "Plot Designer" --vt 600
           node tools/appshot.mjs "http://localhost:5177/?ffview=world#/farms/9/map" \
-            smoke-shots/world9.png 1440x900 --gate --expect "Plot Designer" --vt 25000
+            smoke-shots/world9.png 1440x900 --gate --expect "Plot Designer" --vt 600
       # CI runners are GPU-less: --enable-unsafe-swiftshader (added in appshot)
       # opts into software WebGL so three.js contexts actually come up. The
       # showcase is scoped to two crop archetypes — the full 4-lane page takes
