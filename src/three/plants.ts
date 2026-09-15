@@ -207,6 +207,8 @@ const SHELF_LIFTS: Record<string, [number, number, number]> = {
   'plant-rack': [0.28, 0.68, 1.08],
   'hydro-channel': [0.32, 0.64, 0.96],
   'grow-bench': [0.58, 0.58, 0.58],
+  // Floating raft boards sit ~0.25 m above the pond floor (makeDwcRaft).
+  'hydro-raft': [0.26, 0.26, 0.26],
 };
 
 /** Deterministic shelf pick (0..2) for a cell. */

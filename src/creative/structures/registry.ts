@@ -15,6 +15,9 @@ import {
 import {
   makeGrowLight, makePlantRack, makeHydroChannel, makeClipFan, makeHvacUnit, makeGrowBench,
 } from './equipment';
+import {
+  makeFishTankAsset, makeHydroRaftAsset, makeDehumidifierAsset, makeSeedlingTrayAsset, makeCo2TankAsset,
+} from './envEquipment';
 
 /**
  * Lane C — Structures & infrastructure.
@@ -51,4 +54,10 @@ export const entries: AssetEntry[] = [
   { id: 'clip-fan', label: 'Clip Fan', make: makeClipFan },
   { id: 'hvac-unit', label: 'HVAC Unit', make: makeHvacUnit },
   { id: 'grow-bench', label: 'Potting Bench', make: makeGrowBench },
+  // Environment equipment — hydro / climate plan assets (research Part B).
+  { id: 'fish-tank', label: 'Round Fish Tank', make: makeFishTankAsset },
+  { id: 'hydro-raft', label: 'DWC Hydro Raft Pond', make: makeHydroRaftAsset },
+  { id: 'dehumidifier', label: 'Dehumidifier', make: makeDehumidifierAsset },
+  { id: 'seedling-tray', label: 'Seedling Tray + Dome', make: makeSeedlingTrayAsset },
+  { id: 'co2-tank', label: 'CO2 Tank + Regulator', make: makeCo2TankAsset },
 ];

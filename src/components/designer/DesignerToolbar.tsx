@@ -28,8 +28,10 @@ const { MIN_DIM_M, MAX_DIM_M } = DESIGNER_CONSTANTS;
 const SURFACE_OPTIONS: { value: PlanSurface; label: string }[] = [
   { value: 'outdoor', label: 'Outdoor Plot' },
   { value: 'greenhouse', label: 'Greenhouse' },
+  { value: 'hoophouse', label: 'Hoop House' },
   { value: 'tent', label: 'Grow Tent' },
-  { value: 'indoor', label: 'Indoor Warehouse' },
+  { value: 'indoor', label: 'Indoor grow room' },
+  { value: 'warehouse', label: 'Warehouse farm' },
 ];
 
 const TOOL_OPTIONS: { tool: Tool; label: string; key: string; icon: typeof MousePointer2 }[] = [

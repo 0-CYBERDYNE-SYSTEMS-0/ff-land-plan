@@ -6,12 +6,15 @@ import type { Crop, GardenAsset, PlanState, PlanSurface } from '@/types';
 import { assetBySlug } from '@/data/assets';
 import { cellKey, parseKey, planCols, planRows } from '@/lib/plan';
 
-/** Plan-canvas floor colors per surface (2D blueprint + PNG export). */
+/** Plan-canvas floor colors per surface (2D blueprint + PNG export). Hoophouse
+ * is a warm tan harmonized with tilled soil; warehouse a dark slate hall. */
 export const SURFACE_BG: Record<PlanSurface, { dark: string; light: string }> = {
   outdoor: { dark: '#1a2419', light: '#efe9df' },
   greenhouse: { dark: '#20302a', light: '#e8eee4' },
+  hoophouse: { dark: '#3a2f1e', light: '#8a6f4d' },
   tent: { dark: '#26232c', light: '#d4d0da' },
   indoor: { dark: '#282a2d', light: '#d8dadb' },
+  warehouse: { dark: '#191b1f', light: '#2a2d33' },
 };
 
 export interface RenderOptions {

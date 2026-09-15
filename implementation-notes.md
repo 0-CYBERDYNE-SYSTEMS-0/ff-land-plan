@@ -552,6 +552,26 @@ sheets + close-ups from the pass live in `$TMPDIR/ff-asset-qa/` (ephemeral;
 regenerate via the showcase URL formulas above). `quality/ASSETS.md` inventory
 updated: mushroom archetype + the 8 CE structures were missing from the tables.
 
+## 2026-09-14 — gallery.html remedied: missing module rebuilt (src/creative/showcase/gallery.ts)
+
+User-reported: `gallery.html` (untracked scratch page, "Asset Gallery v2")
+rendered blank — Vite log showed `Pre-transform error: Failed to load url
+/src/creative/showcase/gallery.ts`. The HTML ships a full error-throwing
+onerror + DOM but its module had never been committed and no copy existed
+anywhere (no git history, no stash, no scratch dir). Rebuilt
+`src/creative/showcase/gallery.ts` to the HTML's contract: all five registries
+tagged by lane, cells built once (185), tab/search/refined filters toggle DOM
+visibility only (no geometry rebuilds), scissor viewports with the scroll-
+offset fix from 2026-09-06, click-to-zoom modal with an "open in showcase ↗"
+deep link (`/showcase.html#lane=X&only=ID&mode=big`), Esc/backdrop close,
+`gallery-ready N` title for `appshot --expect`. The "✦ refined" badge is the
+Sep 2026 QA-pass set from this ledger (lane A 3 tiles; 16 crop archetypes by
+`<arch>-sN` prefix; 13 structures incl. the 8 CE; 9 creatures/tools).
+Sub-text updated "four lanes" → five (environments lane existed by then).
+Verified: typecheck green; headless `--expect "gallery-ready 185"` PASS; top
+and scrolled captures confirm lane-A/B cells, preset lighting cells (tune
+presets isolated per cell), and all 9 env dioramas render aligned.
+
 ## 2026-09-06 — Showcase gallery: scroll-offset fix (labels/images desync)
 
 User-reported: scrolling `showcase.html` made asset names sit under foreign
@@ -1357,6 +1377,46 @@ Key conclusions for Sim Core roadmap, in build order:
   CMIP6/Seasonal → QuickStats county-yield benchmarks → SDA depth series →
   3DEP elevation → vendored cultivar params → Sentinel-2 NDVI per patch
   (opt-in).
+
+## 2026-09-13 — Indoor growing environments: research → surfaces → creative kit (branch `indoor-environments`)
+
+- Research first: `quality/RESEARCH-CEA-ENVIRONMENTS.md` — 14 CEA archetypes
+  (footprints, equipment checklists, climate-vs-outdoor behavior, voxel-scale
+  visual signatures), 36-entry equipment glossary, planting-surface taxonomy.
+  Sources: Cornell CEA handbooks, Penn State Extension, NMSU CR680, Freight
+  Farms, AC Infinity catalogs.
+- `PlanSurface` grew to six (`+ hoophouse, warehouse`) — additive enum, old
+  plans/runs unaffected. Constants with research rationale: SHELTER 0.55/0.06,
+  PLANT_SCALE 0.85/0.35, AMBIENT 0.92/0.45, FLOOR `soil-tilled-dry`/
+  `floor-concrete`. Shelter ordering outdoor 1 > hoophouse .55 > greenhouse
+  .35 > warehouse .06 is monotone with the research climate profiles.
+- `src/three/shell.ts` is now a thin adapter over
+  `src/creative/environments/shells.ts` with a module-scope single-entry cache
+  keyed `(surface, widthM, heightM)`: the planVersion effect runs on every
+  brush dab, so a cache hit is detach/reattach, key change frees + rebuilds.
+  Shell makers return fresh-ownership geometry (no shared caches, no
+  InstancedMesh) to keep `disposeShell` sound.
+- Red-team catches that shaped the build (see mission doc amendments):
+  `SURFACE_AMBIENT` was untyped `Record<string, number>` with a `?? 1`
+  fallback (retyped `Record<PlanSurface, number>`); templates needed canvas
+  dims + surface or a tent template would wrap a 40 m canvas; existing
+  equipment `surfaces` arrays needed warehouse/hoophouse membership; the
+  weather-FX gate is a positive `=== 'outdoor'` test and needs no change.
+- New showcase lane E (9 environment dioramas) + 5 plan equipment slugs
+  (`fish-tank`, `hydro-raft`, `dehumidifier`, `seedling-tray`, `co2-tank`;
+  `hydro-raft` also gained a SHELF_LIFT of 0.26 m). Seed farms 8 "High Tunnel
+  Tomatoes" + 9 "Vertical Greens Warehouse"; 3 enclosed starter templates
+  (GardenTemplate gained optional `surface`/`widthM`/`heightM`).
+- Verification: typecheck + build clean; lane-e `--expect "showcase-ready 9"`
+  PASS; determinism double-shot byte-identical; world farms 8/9 + designer
+  GATE PASS; headless shell-adapter probe (cache reuse / key-change rebuild /
+  outdoor frees) PASS; shelter probe: a 30/40 °C heatwave lands as 25.5/35.5
+  in a hoophouse and 20.6/30.6 in a warehouse. Session image ingestion was
+  unavailable, so the visual pass ran on pixel statistics + code audit — a
+  human-eye pass over lane E and farms 8/9 is recommended before merging to
+  mainline.
+- Deliberately deferred: container/mushroom as surfaces, per-cell mixed
+  surfaces, real point lights, photoperiod/CO2 as sim state.
 ## Mission TWIN — Wave 2 (2026-09-03, branch `mission-twin`)
 
 **Real simulation engine (`lib/sim.ts`):** `runSimulation(farm, plan, crops,

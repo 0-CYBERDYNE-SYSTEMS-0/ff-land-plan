@@ -94,20 +94,27 @@ Frontends consuming those seams:
    sun). Time-of-day/date-scrub test hooks: `?ffview=world&fftime=<0..1>&ffdebug=1`
    placed BEFORE the hash (`/?params#/farms/1/map`) — params inside the hash
    fragment break wouter matching.
-3. **Creative asset library** (`src/creative/`, ~7.5k lines): 157 deterministic
-   voxel builders across four registries — terrain (14 tiles), crops (17
+3. **Creative asset library** (`src/creative/`): 170+ deterministic voxel
+   builders across five registries — terrain (14 tiles), crops (17
    archetypes × 6 growth stages covering ALL catalog crops via
-   `crops/map.ts`), structures (20), creatures/tools/atmosphere (20). Built on
+   `crops/map.ts`), structures (33), creatures/tools/atmosphere (20),
+   environments (9 indoor-farm dioramas + the parametric surface-shell kit
+   `environments/shells.ts` consumed by `src/three/shell.ts`). Built on
    `src/creative/voxel.ts` (palette, baked face shading, seeded PRNG — same
    seed ⇒ identical rebuilds; NEVER use `Math.random` there). Consumed by thin
    adapters: `src/three/plants.ts` (InstancedMesh per crop+stage,
    `makeCropFor(name, stage)`), `ground.ts` (tile builders by ground slug),
    `structures.ts` (one instance per contiguous region at size derived from
-   `assetLibrary` records; linear items per-cell), `animals.ts`
+   `assetLibrary` records; linear items per-cell), `shell.ts` (per-surface
+   enclosure shells, module-cached by `(surface,widthM,heightM)`), `animals.ts`
    (coop→hens+rooster, beehive→bees, pond→ducks, barn→cow+pig+sheep, planted
    cells→butterflies), `dressing.ts` (tool props near sheds/taps/bed edges).
    One voxel = 10 cm world scale. Preview surface: `showcase.html`
-   (`#lane=a|b|c|d`, `only=id`, `mode=sheet|big`).
+   (`#lane=a|b|c|d|e`, `only=id`, `mode=sheet|big`). Plan surfaces are
+   `outdoor | greenhouse | hoophouse | tent | indoor | warehouse`
+   (`PlanSurface`, per-canvas via Settings drawer); enclosed surfaces swap
+   shell/floor/ambient and shelter the sim (see `quality/MISSION-ENVIRONMENTS.md`
+   + `quality/RESEARCH-CEA-ENVIRONMENTS.md`).
 4. **Ops views**: Dashboard/Calendar/Weather/Simulations/Monitoring pages
    (TanStack Query v5, Wouter hash routing, shadcn-style local UI primitives).
 

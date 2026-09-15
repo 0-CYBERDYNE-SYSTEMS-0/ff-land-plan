@@ -85,6 +85,26 @@ export const seedFarms: Farm[] = [
     soilType: null,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 60).toISOString(),
   },
+  {
+    id: 8,
+    name: 'High Tunnel Tomatoes',
+    description: 'A 10×8 m passive poly high tunnel: trellised tomatoes and peppers in ground soil',
+    lat: 45.5281,
+    lng: -122.6815,
+    areHa: 0.008,
+    soilType: 'loam',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 25).toISOString(),
+  },
+  {
+    id: 9,
+    name: 'Vertical Greens Warehouse',
+    description: 'A sealed 12×10 m vertical-farm hall of glowing rack rows — lettuce and basil year-round',
+    lat: 45.5521,
+    lng: -122.6201,
+    areHa: 0.012,
+    soilType: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 40).toISOString(),
+  },
 ];
 
 // --- Plot plans (designer showcase) -----------------------------------------
@@ -706,6 +726,73 @@ function buildGreenhousePlan(): PlanState {
   return plan;
 }
 
+function buildHoophousePlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 8, widthM: 10, heightM: 8, cellM: 0.25, allowOutsideBeds: false,
+    surface: 'hoophouse',
+    planting: {}, ground: {}, updatedAt: new Date().toISOString(),
+  };
+
+  // High tunnel: crops grow in ground soil (no hydro, no benches) — three
+  // in-ground beds under trellis lines, drip irrigation down each bed, roll-up
+  // side aisles kept clear, seedling trays staging by the door.
+  fillGround(plan, 1, 2, 38, 8, 'inground-bed');
+  fillGround(plan, 1, 13, 38, 19, 'inground-bed');
+  fillGround(plan, 1, 24, 38, 30, 'inground-bed');
+  fillGround(plan, 1, 2, 38, 2, 'trellis');
+  fillGround(plan, 1, 13, 38, 13, 'trellis');
+  fillGround(plan, 1, 24, 38, 24, 'trellis');
+  fillGround(plan, 0, 4, 1, 7, 'irrigation-line');
+  fillGround(plan, 0, 15, 1, 18, 'irrigation-line');
+  fillGround(plan, 0, 26, 1, 29, 'irrigation-line');
+  fillGround(plan, 36, 0, 2, 1, 'seedling-tray');
+  fillGround(plan, 38, 30, 1, 1, 'water-tap');
+
+  // Bed 1 trellised tomatoes + basil understory; bed 2 peppers + salad; bed 3
+  // tomatoes + spinach (winter-hardy tunnel crop).
+  fillCrop(plan, 2, 3, 37, 3, TOMATO);
+  fillCrop(plan, 2, 6, 37, 7, BASIL);
+  fillCrop(plan, 2, 14, 37, 15, PEPPER);
+  fillCrop(plan, 2, 17, 37, 18, LETTUCE);
+  fillCrop(plan, 2, 25, 37, 26, TOMATO);
+  fillCrop(plan, 2, 28, 37, 29, SPINACH);
+
+  stampPlantedAt(plan, {
+    [TOMATO]: 60, [BASIL]: 30, [PEPPER]: 45, [LETTUCE]: 18, [SPINACH]: 22,
+  }, 25);
+  return plan;
+}
+
+function buildWarehousePlan(): PlanState {
+  const plan: PlanState = {
+    farmId: 9, widthM: 12, heightM: 10, cellM: 0.25, allowOutsideBeds: false,
+    surface: 'warehouse',
+    planting: {}, ground: {}, updatedAt: new Date().toISOString(),
+  };
+
+  // Sealed vertical-farm hall: glowing rack canyons with taped aisles, HVAC at
+  // the walls, CO2 enrichment, a DWC raft pond and a seedling nursery corner.
+  const rackRows = [2, 10, 18, 26, 34];
+  for (const ry of rackRows) fillGround(plan, 2, ry, 44, 2, 'plant-rack');
+  fillGround(plan, 0, 6, 1, 1, 'clip-fan');
+  fillGround(plan, 46, 14, 1, 1, 'clip-fan');
+  fillGround(plan, 0, 37, 4, 1, 'hvac-unit');
+  fillGround(plan, 43, 37, 4, 1, 'hvac-unit');
+  fillGround(plan, 46, 0, 1, 1, 'co2-tank');
+  fillGround(plan, 46, 30, 2, 2, 'seedling-tray');
+  fillGround(plan, 0, 28, 4, 6, 'hydro-raft');
+  fillGround(plan, 0, 0, 2, 2, 'crate-stack');
+
+  // Rack rows alternate lettuce and basil down the hall; rafts carry lettuce.
+  for (const [i, ry] of rackRows.entries()) {
+    fillCrop(plan, 2, ry, 44, 2, i % 2 === 0 ? LETTUCE : BASIL);
+  }
+  fillCrop(plan, 0, 29, 4, 4, LETTUCE);
+
+  stampPlantedAt(plan, { [LETTUCE]: 16, [BASIL]: 24 }, 18);
+  return plan;
+}
+
 export const seedPlans: Record<number, PlanState> = {
   1: buildNorthMeadowPlan(),
   2: buildSouthWheatPlan(),
@@ -714,6 +801,8 @@ export const seedPlans: Record<number, PlanState> = {
   5: buildGrowTentPlan(),
   6: buildMushroomPlan(),
   7: buildGreenhousePlan(),
+  8: buildHoophousePlan(),
+  9: buildWarehousePlan(),
 };
 
 // --- Cells (legacy voxel grid; Monitoring still reads these) --------------
