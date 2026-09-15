@@ -260,3 +260,41 @@ Do **not**:
 - Capture command: `node tools/appshot.mjs "<url>" <out.png> 1600x900 --expect "<text>"` against `npm run dev`; all five `EXPECT PASS`.
 
 *End of audit. No product code was modified on this branch.*
+
+---
+
+## Implementation addendum (2026-09-14, branch `feat/world3d-gameplay-now`)
+
+The six "Now" items were implemented and reviewed by a three-specialist pass
+(correctness-adversary review, 9 findings, all fixed pre-landing). Deviations
+and notes:
+
+- **E2 zoom-to-cursor is deliberately NOT shipped.** camera-controls 3.1.2's
+  `dollyToCursor` converges the orbit target onto ground/structures at grazing
+  angles — exactly the camera-inside-geometry regression the original comment
+  documents. Shipped instead: a per-frame controls-target clamp
+  (`Engine.setTargetBounds`, plan bbox + 2 m, y ≥ 0) as the guardrail, with the
+  orbit remap (right-drag orbits while paint tools own left-drag). Revisit
+  cursor-dolly only behind a custom cursor-ray dolly.
+- **camera-controls 3.1.2 has no writable public `controls.target`** — the
+  clamp goes through `getTarget`/`setTarget(…, false)` and is skipped while
+  flight owns the camera (`controls.enabled` false).
+- **Flight exits on pointer-lock loss** (the ESC keypress that leaves pointer
+  lock is consumed by the browser and never reaches a keydown handler), the
+  `requestPointerLock()` promise rejection is caught, and exit restores the
+  exact pre-flight orbit camera. Min speed 0 (full stop), soft horizontal
+  bounds from the live plan, and window-level editor/cinema hotkeys are
+  suppressed while flight owns input (`src/lib/inputArbiter.ts`).
+- **Hover/selection**: fixed-position readout chip above the dock (never
+  cursor-following), one reusable highlight slab, one selection ring
+  (mount-scoped creation, reposition-only on plan edits). Hover freezes during
+  flight/tour and clears on pointer-leave.
+- **Previews**: rect/line drag previews render as a single InstancedMesh keyed
+  on a content signature (never per-pointermove rebuilds); `RectPreview`
+  gained optional `kind`/`cells` so 2D is untouched.
+- **Missions**: `check()` returns the newly unlocked achievement; toasts fire
+  at call sites (the old count-watcher swallowed the first unlock of a
+  session); weather/flight badges persist silently; four new mastery missions
+  (`first_run`, `first_intervention`, `first_compare`, `moisture_lens`).
+- **Audit item C5 (perf/LOD) remains open** — it is Next-quarter scope and the
+  gating risk for field-scale plans.

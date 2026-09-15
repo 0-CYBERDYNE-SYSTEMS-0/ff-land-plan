@@ -21,6 +21,7 @@ import {
   type PlanStats,
 } from '@/lib/plan';
 import { drawPlan, renderPlanToPng, type RenderOptions, type SimOverlayChannels } from '@/lib/renderPlan';
+import { isInputCaptured } from '@/lib/inputArbiter';
 import { useFarm } from '@/hooks/useFarms';
 import { useTheme } from '@/hooks/useTheme';
 import type { Crop, GardenAsset, PlanState, PlanSurface } from '@/types';
@@ -43,6 +44,18 @@ export interface Viewport {
   offsetY: number;
   viewW: number;
   viewH: number;
+}
+
+// Ghost preview payload for rect drags; `kind`/`cells` are additive for the
+// line-tool variant (Bresenham cells precomputed at set time).
+export interface RectPreview {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  color: string;
+  kind?: 'rect' | 'line';
+  cells?: Array<[number, number]>;
 }
 
 interface DragState {
@@ -141,7 +154,7 @@ function sameCell(a: string | null, b: string | null) {
 }
 
 // P1-3: integer Bresenham walk, inclusive of both endpoints.
-function bresenhamCells(x0: number, y0: number, x1: number, y1: number): Array<[number, number]> {
+export function bresenhamCells(x0: number, y0: number, x1: number, y1: number): Array<[number, number]> {
   const cells: Array<[number, number]> = [];
   let cx = x0;
   let cy = y0;
@@ -272,7 +285,7 @@ export function usePlanEditor(farmId: number) {
   const [cropSearch, setCropSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
-  const [rectPreview, setRectPreview] = useState<{ x0: number; y0: number; x1: number; y1: number; color: string } | null>(null);
+  const [rectPreview, setRectPreview] = useState<RectPreview | null>(null);
   const [lineDraft, setLineDraft] = useState<{ x: number; y: number } | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -1163,6 +1176,8 @@ export function usePlanEditor(farmId: number) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
+      // Flight owns the keyboard (including Escape) while it has input captured.
+      if (isInputCaptured()) return;
       const mod = event.metaKey || event.ctrlKey;
       if (mod && event.key.toLowerCase() === 'z') {
         event.preventDefault();
