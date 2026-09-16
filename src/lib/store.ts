@@ -90,7 +90,15 @@ function load(): AppState {
       ...parsed.farms.filter((f) => !seedFarmIds.has(f.id)),
     ];
     for (const key of Object.keys(fresh.plans)) {
-      merged.plans[Number(key)] = fresh.plans[Number(key)]!;
+      const stored = parsed.plans?.[Number(key)];
+      // Demo plans are showcase content (re-seeded above), but keep the
+      // user's chosen surface: silently reverting an enclosure to the seed
+      // value swaps 3D shells/floor and sim shelter without warning (audit
+      // DES-005).
+      merged.plans[Number(key)] =
+        stored?.surface != null
+          ? { ...fresh.plans[Number(key)]!, surface: stored.surface }
+          : fresh.plans[Number(key)]!;
     }
 
     // Sim runs are additive user data (never seeded): keep the stored list
@@ -120,33 +128,48 @@ export const state: AppState = load();
 
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let warnedQuota = false;
+let dirty = false;
 
-export function persist(): void {
-  if (writeTimer) clearTimeout(writeTimer);
-  writeTimer = setTimeout(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (err) {
-      if (!warnedQuota) {
-        warnedQuota = true;
-        console.warn('FarmFriend: localStorage write failed; changes are in-memory only.', err);
-      }
-    }
-  }, 500);
-}
-
-export function persistNow(): void {
-  if (writeTimer) clearTimeout(writeTimer);
+function flush(): void {
+  if (writeTimer) {
+    clearTimeout(writeTimer);
+    writeTimer = null;
+  }
+  if (!dirty) return; // nothing changed since the last committed write
   try {
+    // ONE atomic setItem of ONE snapshot key — never clear+write or split
+    // across keys: a partially-applied commit is how storage ends up
+    // re-seeding over user data (dogfood CRIT-001 evidence).
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* see persist() */
+    dirty = false;
+  } catch (err) {
+    // Leave `dirty` set: a transient quota failure (e.g. a same-origin tab
+    // momentarily filling storage) gets retried on the next flush.
+    if (!warnedQuota) {
+      warnedQuota = true;
+      console.warn('FarmFriend: localStorage write failed; changes are in-memory only.', err);
+    }
   }
 }
 
-// Flush pending writes when the tab is hidden or closing.
+export function persist(): void {
+  dirty = true;
+  if (writeTimer) clearTimeout(writeTimer);
+  writeTimer = setTimeout(flush, 500);
+}
+
+export function persistNow(): void {
+  flush();
+}
+
+// Flush pending writes when the tab is hidden or closing. pagehide/beforeunload
+// cover actual document unloads, which visibilitychange alone misses.
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') persistNow();
   });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', persistNow);
+  window.addEventListener('beforeunload', persistNow);
 }

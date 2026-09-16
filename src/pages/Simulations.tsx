@@ -212,8 +212,11 @@ const COMPARE_METRICS: {
   {
     key: 'stress',
     label: 'Stress cell-days',
-    unit: 'Σ of the four terms',
-    get: (s) => s.stressDays.water + s.stressDays.heat + s.stressDays.cold + s.stressDays.nitrogen,
+    unit: 'cell-days',
+    // Same aggregation as the run card (max-of-4 per cell-day). Summing the
+    // four counters double-counts multi-stress cell-days and disagreed with
+    // the card (audit OPS-007: 15534 vs 16140).
+    get: (s) => s.stressCellDays,
     better: 'lower',
     digits: 0,
   },

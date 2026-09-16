@@ -43,13 +43,22 @@ const allEntries: TaggedEntry[] = [
   ...environmentsEntries.map((e) => ({ ...e, lane: 'e' })),
 ];
 
-const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+// Merge QUERY (?only=…&mode=big) and HASH (#lane=b) params — both styles are
+// documented; previously only the hash was parsed, so query-style variant URLs
+// were silently ignored (audit X-007).
+const rawParams = `${location.search.replace(/^\?/, '')}&${location.hash.replace(/^#/, '')}`;
+const params = new URLSearchParams(rawParams);
 const laneFilter = params.get('lane');
 const onlyList = params.get('only')?.split(',').map((s) => s.trim()) ?? null;
 const mode = params.get('mode') ?? 'sheet';
 const spinEnabled = params.get('spin') !== '0';
 /** plan: top-down camera (the QUALITY_BAR plan-view clause needs evidence). */
 const planView = params.get('view') === 'plan';
+
+// Same-document hash navigation (e.g. clicking a #lane=d link) can't re-run
+// this module — reload so the new params apply immediately instead of showing
+// the stale lane until a manual refresh (audit X-007's 3-6 s lag class).
+window.addEventListener('hashchange', () => window.location.reload());
 
 let visible = allEntries;
 if (mode === 'scrub') {

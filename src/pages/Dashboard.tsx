@@ -97,9 +97,11 @@ function FarmCard({ farm }: { farm: Farm }) {
   const legacyPlanted = cells.filter((c) => c.cropId).length;
   const plantedDisplay = planStats ? `≈${plannedPlants}` : String(legacyPlanted);
   const plantedLabel = planStats ? 'plants planned' : 'legacy planted';
+  // Clamped at 100 (audit OPS-002): coverage is planted area over canvas area
+  // and can never legitimately exceed it.
   const coverage = planStats && plan
-    ? Math.round((planStats.plantedAreaM2 / (plan.widthM * plan.heightM)) * 100)
-    : cells.length > 0 ? Math.round((legacyPlanted / cells.length) * 100) : 0;
+    ? Math.min(100, Math.round((planStats.plantedAreaM2 / (plan.widthM * plan.heightM)) * 100))
+    : cells.length > 0 ? Math.min(100, Math.round((legacyPlanted / cells.length) * 100)) : 0;
   const unread = alerts.filter((a) => !a.isRead).length;
   const critical = alerts.filter((a) => !a.isRead && a.severity === 'critical').length;
 
@@ -121,7 +123,7 @@ function FarmCard({ farm }: { farm: Farm }) {
             )}
             {unread > 0 && critical === 0 && (
               <Badge variant="secondary" className="text-xs px-1.5 h-5">
-                {unread} alerts
+                {unread} alert{unread !== 1 ? 's' : ''}
               </Badge>
             )}
           </div>
@@ -161,23 +163,35 @@ function FarmCard({ farm }: { farm: Farm }) {
             </Button>
           </Link>
           <Link href={`/farms/${farm.id}/weather`}>
-            <Button variant="outline" size="sm" className="text-xs px-2.5" data-testid={`btn-weather-${farm.id}`}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs px-2.5"
+              aria-label={`Weather for ${farm.name}`}
+              data-testid={`btn-weather-${farm.id}`}
+            >
               <CloudSun className="w-3.5 h-3.5" />
             </Button>
           </Link>
           <Link href={`/farms/${farm.id}/simulations`}>
-            <Button variant="outline" size="sm" className="text-xs px-2.5">
+            <Button variant="outline" size="sm" className="text-xs px-2.5" aria-label={`Simulations for ${farm.name}`}>
               <FlaskConical className="w-3.5 h-3.5" />
             </Button>
           </Link>
           <Link href={`/farms/${farm.id}/edit`}>
-            <Button variant="ghost" size="sm" className="text-xs px-2.5">
+            <Button variant="ghost" size="sm" className="text-xs px-2.5" aria-label={`Edit ${farm.name}`}>
               <Pencil className="w-3.5 h-3.5" />
             </Button>
           </Link>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-xs px-2.5 hover:text-destructive">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs px-2.5 hover:text-destructive"
+                aria-label={`Delete ${farm.name}`}
+                title="Delete farm"
+              >
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </AlertDialogTrigger>

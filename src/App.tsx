@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Route, Switch, Router, useLocation } from 'wouter';
 import { useHashLocation } from 'wouter/use-hash-location';
@@ -36,6 +37,20 @@ export default function App() {
   );
 }
 
+// Audit X-004: every route shares index.html's title otherwise. First match
+// wins; the fallback covers the 404 route.
+const ROUTE_TITLES: Array<[RegExp, string]> = [
+  [/^\/$/, 'Dashboard'],
+  [/^\/crops/, 'Crop Library'],
+  [/^\/farms\/new$/, 'Add a Farm'],
+  [/^\/farms\/\d+\/edit$/, 'Edit Farm'],
+  [/^\/farms\/\d+\/map$/, 'Plot Designer'],
+  [/^\/farms\/\d+\/calendar$/, 'Planting Calendar'],
+  [/^\/farms\/\d+\/weather$/, 'Weather'],
+  [/^\/farms\/\d+\/simulations$/, 'Simulations'],
+  [/^\/farms\/\d+\/monitoring$/, 'Monitoring'],
+];
+
 function Routes() {
   // Force the hash to "#/" on first load, matching the legacy build.
   const [location] = useLocation();
@@ -43,12 +58,20 @@ function Routes() {
     window.location.hash = '#/';
   }
 
+  useEffect(() => {
+    const title = ROUTE_TITLES.find(([re]) => re.test(location))?.[1] ?? 'Page Not Found';
+    document.title = `${title} — FarmFriend`;
+  }, [location]);
+
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/farms/new">{() => <FarmForm />}</Route>
+      {/* Keyed by mode/id (audit X-006): without it, client-side nav between
+          edit and create reuses the same FarmForm instance and leaks the
+          edited farm's values into the create form. */}
+      <Route path="/farms/new">{() => <FarmForm key="new" />}</Route>
       <Route path="/farms/:id/edit">
-        {(params) => <FarmForm farmId={Number(params.id)} />}
+        {(params) => <FarmForm key={params.id} farmId={Number(params.id)} />}
       </Route>
       <Route path="/farms/:id/map">
         {(params) => <PlotDesigner farmId={Number(params.id)} />}

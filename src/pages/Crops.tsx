@@ -167,12 +167,12 @@ function CropCard({ crop, cropBySlug }: { crop: Crop; cropBySlug: Map<string, Cr
 }
 
 const SCHEMA = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1, 'Required'),
   category: z.enum(['vegetable', 'grain', 'fruit', 'herb', 'cover_crop', 'flower', 'fungus']),
-  growthDays: z.coerce.number().min(1),
-  waterNeedMmDay: z.coerce.number().min(0),
-  yieldTonHa: z.coerce.number().min(0),
-  colorHex: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  growthDays: z.coerce.number().min(1, 'At least 1 day'),
+  waterNeedMmDay: z.coerce.number().min(0, 'Cannot be negative'),
+  yieldTonHa: z.coerce.number().min(0, 'Cannot be negative'),
+  colorHex: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a hex color like #4CAF50'),
 });
 type FormValues = z.infer<typeof SCHEMA>;
 
@@ -265,7 +265,17 @@ export function Crops() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Name</Label>
-                  <Input {...form.register('name')} className="h-8 text-sm" data-testid="input-crop-name" />
+                  <Input
+                    {...form.register('name')}
+                    className="h-8 text-sm"
+                    aria-invalid={form.formState.errors.name ? true : undefined}
+                    data-testid="input-crop-name"
+                  />
+                  {/* OPS-005: invalid input used to fail the resolver with zero
+                      feedback — the form just silently did nothing. */}
+                  {form.formState.errors.name && (
+                    <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Category</Label>
@@ -285,14 +295,23 @@ export function Crops() {
                 <div className="space-y-1.5">
                   <Label className="text-xs">Growth days</Label>
                   <Input type="number" {...form.register('growthDays', { valueAsNumber: true })} className="h-8 text-sm" />
+                  {form.formState.errors.growthDays && (
+                    <p className="text-xs text-destructive">{form.formState.errors.growthDays.message}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Yield (t/ha)</Label>
                   <Input type="number" step="0.1" {...form.register('yieldTonHa', { valueAsNumber: true })} className="h-8 text-sm" />
+                  {form.formState.errors.yieldTonHa && (
+                    <p className="text-xs text-destructive">{form.formState.errors.yieldTonHa.message}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Water (mm/day)</Label>
                   <Input type="number" step="0.5" {...form.register('waterNeedMmDay', { valueAsNumber: true })} className="h-8 text-sm" />
+                  {form.formState.errors.waterNeedMmDay && (
+                    <p className="text-xs text-destructive">{form.formState.errors.waterNeedMmDay.message}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Color</Label>
