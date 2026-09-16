@@ -16,6 +16,18 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* Skip link (audit X-002: 110 focusables before content). The click is
+          prevented — href would change the HASH ROUTE, not scroll. */}
+      <a
+        href="#main-content"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[60] focus:top-2 focus:left-2 focus:rounded-md focus:border focus:border-border focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:text-foreground"
+      >
+        Skip to main content
+      </a>
       <Sidebar />
 
       {mobileOpen && (
@@ -42,14 +54,14 @@ export function AppShell({ children }: AppShellProps) {
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </Button>
         </header>
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto focus:outline-none">{children}</main>
       </div>
     </div>
   );
 }
 
 import { Link, useLocation } from 'wouter';
-import { CalendarDays, CloudSun, FlaskConical, LayoutDashboard, Leaf, Map, Plus, Activity } from 'lucide-react';
+import { CalendarDays, ChevronRight, CloudSun, FlaskConical, LayoutDashboard, Leaf, Map, Plus, Activity } from 'lucide-react';
 import { useFarms } from '@/hooks/useFarms';
 import { cn } from '@/lib/utils';
 
@@ -57,6 +69,14 @@ const PRIMARY_LINKS = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/crops', icon: Leaf, label: 'Crop Library' },
 ] as const;
+
+const MOBILE_FARM_LINKS = (farmId: number) => [
+  { href: `/farms/${farmId}/map`, icon: Map, label: 'Plot Designer' },
+  { href: `/farms/${farmId}/calendar`, icon: CalendarDays, label: 'Calendar' },
+  { href: `/farms/${farmId}/weather`, icon: CloudSun, label: 'Weather' },
+  { href: `/farms/${farmId}/simulations`, icon: FlaskConical, label: 'Simulations' },
+  { href: `/farms/${farmId}/monitoring`, icon: Activity, label: 'Monitoring' },
+];
 
 function SidebarMobile({ onNavigate }: { onNavigate: () => void }) {
   const [location] = useLocation();
@@ -66,30 +86,49 @@ function SidebarMobile({ onNavigate }: { onNavigate: () => void }) {
       {PRIMARY_LINKS.map((link) => {
         const active = location === link.href;
         return (
-          <Link key={link.href} href={link.href} onClick={onNavigate} className={cn('flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm', active ? 'bg-primary/15 text-primary font-medium' : 'text-muted-foreground hover:bg-muted')}>
+          <Link
+            key={link.href}
+            href={link.href}
+            onClick={onNavigate}
+            aria-current={active ? 'page' : undefined}
+            className={cn('flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm', active ? 'bg-primary/15 text-primary font-medium' : 'text-muted-foreground hover:bg-muted')}
+          >
             <link.icon className="w-4 h-4" />
             {link.label}
           </Link>
         );
       })}
       <div className="mx-2 my-2 border-t border-border" />
-      {farms.map((farm) => (
-        <div key={farm.id} onClick={onNavigate}>
-          <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{farm.name}</div>
-          {[
-            { href: `/farms/${farm.id}/map`, icon: Map, label: 'Plot Designer' },
-            { href: `/farms/${farm.id}/calendar`, icon: CalendarDays, label: 'Calendar' },
-            { href: `/farms/${farm.id}/weather`, icon: CloudSun, label: 'Weather' },
-            { href: `/farms/${farm.id}/simulations`, icon: FlaskConical, label: 'Simulations' },
-            { href: `/farms/${farm.id}/monitoring`, icon: Activity, label: 'Monitoring' },
-          ].map((link) => (
-            <Link key={link.href} href={link.href} onClick={onNavigate} className="flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-muted">
-              <link.icon className="w-4 h-4" />
-              {link.label}
-            </Link>
-          ))}
-        </div>
-      ))}
+      {/* Same collapsible-per-farm treatment as the desktop FarmNav (audit
+          OPS-001); onNavigate stays on links only so toggling a farm group
+          does not close the drawer. */}
+      {farms.map((farm) => {
+        const links = MOBILE_FARM_LINKS(farm.id);
+        const farmActive = links.some((link) => link.href === location);
+        return (
+          <details key={farm.id} className="group" open={farmActive}>
+            <summary className="mx-2 px-3 py-1.5 flex items-center justify-between gap-2 rounded-md text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted list-none [&::-webkit-details-marker]:hidden">
+              <span className="truncate">{farm.name}</span>
+              <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60 transition-transform group-open:rotate-90" />
+            </summary>
+            {links.map((link) => {
+              const active = location === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={onNavigate}
+                  aria-current={active ? 'page' : undefined}
+                  className="flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-muted"
+                >
+                  <link.icon className="w-4 h-4" />
+                  {link.label}
+                </Link>
+              );
+            })}
+          </details>
+        );
+      })}
       <Link href="/farms/new" onClick={onNavigate} className="mx-2 mt-2 flex items-center gap-2 px-3 py-2 text-sm text-primary">
         <Plus className="w-4 h-4" /> New Farm
       </Link>

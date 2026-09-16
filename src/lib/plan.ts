@@ -94,8 +94,19 @@ export function plantsForArea(crop: Crop, cells: number): number {
 
 export function computeStats(plan: PlanState, crops: Crop[]): PlanStats {
   const byId = new Map(crops.map((c) => [c.id, c]));
+  // Historic seed data wrote a few out-of-grid keys (OPS-002's 153% coverage);
+  // stats only ever count cells the canvas can actually show.
+  const cols = planCols(plan);
+  const rows = planRows(plan);
+  const inBounds = (key: string) => {
+    const [x, y] = parseKey(key);
+    return x >= 0 && y >= 0 && x < cols && y < rows;
+  };
+  let plantedCells = 0;
   const cellCounts = new Map<number, number>();
   for (const key of Object.keys(plan.planting)) {
+    if (!inBounds(key)) continue;
+    plantedCells += 1;
     const id = plan.planting[key];
     cellCounts.set(id, (cellCounts.get(id) ?? 0) + 1);
   }
@@ -120,6 +131,7 @@ export function computeStats(plan: PlanState, crops: Crop[]): PlanStats {
   let bedAreaM2 = 0;
   let infrastructureAreaM2 = 0;
   for (const key of Object.keys(plan.ground)) {
+    if (!inBounds(key)) continue;
     const asset = assetBySlug(plan.ground[key]);
     if (!asset) continue;
     if (asset.plantable) bedAreaM2 += CELL_AREA_M2;
@@ -130,7 +142,7 @@ export function computeStats(plan: PlanState, crops: Crop[]): PlanStats {
 
   return {
     perCrop,
-    plantedAreaM2: Object.keys(plan.planting).length * CELL_AREA_M2,
+    plantedAreaM2: plantedCells * CELL_AREA_M2,
     bedAreaM2,
     infrastructureAreaM2,
     totalYieldKg: perCrop.reduce((s, c) => s + c.yieldKg, 0),

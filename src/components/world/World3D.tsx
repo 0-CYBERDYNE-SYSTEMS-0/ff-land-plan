@@ -1957,13 +1957,6 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const seen = new Set<string>();
     for (const [key, cropId] of Object.entries(plan.planting)) {
       const plantedAt = plan.plantedAt?.[key] ?? '';
-      const dedupeKey = `${cropId}|${plantedAt}`;
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-      const crop = editor.cropById.get(cropId);
-      if (!crop) continue;
-      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', ctx);
-      const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
       // plantedAt may be date-only ("YYYY-MM-DD", scrub input) or full ISO
       // (seed data stores toISOString()) — parse each correctly so labels
       // never read "Invalid Date".
@@ -1973,10 +1966,24 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
           ? new Date(`${plantedAt}T00:00:00`)
           : new Date(plantedAt);
       }
+      const plantedDayOk = planted !== null && !Number.isNaN(planted.getTime());
+      // Dedupe at LOCAL-day granularity (audit DES-008): brush-painted cells
+      // carry full ISO timestamps, so timestamp-level keys split one day's
+      // sowing into duplicate rows with identical "Name · Aug 6" labels. Local
+      // day — the same basis the label below formats.
+      const dedupeKey = plantedDayOk && planted
+        ? `${cropId}|${planted.getFullYear()}-${planted.getMonth()}-${planted.getDate()}`
+        : `${cropId}|`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      const crop = editor.cropById.get(cropId);
+      if (!crop) continue;
+      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', ctx);
+      const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
       rows.push({
         id: cropId,
         name: crop.name,
-        label: planted && !Number.isNaN(planted.getTime())
+        label: plantedDayOk && planted
           ? `${crop.name} · ${planted.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
           : undefined,
         plantedAt,

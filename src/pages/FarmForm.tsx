@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,10 +22,10 @@ const soilTypes: SoilType[] = ['loam', 'clay', 'sandy', 'silt', 'peat', 'chalky'
 const schema = z.object({
   name: z.string().min(1, 'Required'),
   description: z.string().optional().nullable(),
-  lat: z.coerce.number().min(-90).max(90),
-  lng: z.coerce.number().min(-180).max(180),
+  lat: z.coerce.number().min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90'),
+  lng: z.coerce.number().min(-180, 'Longitude must be between -180 and 180').max(180, 'Longitude must be between -180 and 180'),
   elevationM: z.coerce.number().optional().nullable(),
-  areHa: z.coerce.number().positive(),
+  areHa: z.coerce.number().positive('Area must be greater than 0'),
   soilType: z.enum(soilTypes as [SoilType, ...SoilType[]]).optional().nullable(),
   lastFrost: z
     .string()
@@ -68,16 +68,35 @@ export function FarmForm({ farmId }: { farmId?: number }) {
     },
   });
 
+  // CRIT-001 guards: a rapid re-Enter during the sub-second window after a
+  // valid submit (React's onSubmit already detached mid-unmount, the <form>
+  // still connected) fires a NATIVE submission that unloads the document
+  // mid-save — the proven trigger of the localStorage wipe. The capture-phase
+  // listener below lives exactly as long as the <form> element itself, so no
+  // implicit submission can ever navigate the tab; the ref guard stops the
+  // logical double-create while the handler is still armed.
+  const formRef = useRef<HTMLFormElement>(null);
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    const el = formRef.current;
+    if (!el) return;
+    const preventNativeSubmit = (e: SubmitEvent) => e.preventDefault();
+    el.addEventListener('submit', preventNativeSubmit, true);
+    return () => el.removeEventListener('submit', preventNativeSubmit, true);
+  }, []);
+
   useEffect(() => {
     if (farm) {
       const fallbackFrost = estimateFrostDates(farm.lat, farm.elevationM ?? 0);
       form.reset({
         name: farm.name,
         description: farm.description ?? '',
-        lat: farm.lat,
-        lng: farm.lng,
+        // Round for display: legacy stores hold Float32 artifacts like
+        // 45.523101806640625 (audit X-008).
+        lat: +farm.lat.toFixed(6),
+        lng: +farm.lng.toFixed(6),
         elevationM: farm.elevationM ?? 0,
-        areHa: farm.areHa,
+        areHa: +farm.areHa.toFixed(4),
         soilType: farm.soilType ?? 'loam',
         lastFrost: farm.lastFrost !== undefined ? farm.lastFrost ?? '' : fallbackFrost.lastFrost ?? '',
         firstFrost: farm.firstFrost !== undefined ? farm.firstFrost ?? '' : fallbackFrost.firstFrost ?? '',
@@ -120,6 +139,8 @@ export function FarmForm({ farmId }: { farmId?: number }) {
   };
 
   const submit = form.handleSubmit(async (values) => {
+    if (submittedRef.current) return; // rapid re-Enter double-submit guard
+    submittedRef.current = true;
     const payload = {
       name: values.name,
       description: values.description || null,
@@ -141,6 +162,7 @@ export function FarmForm({ farmId }: { farmId?: number }) {
       }
       navigate('/');
     } catch (e) {
+      submittedRef.current = false; // failed save: let the user retry
       toast.error((e as Error).message);
     }
   });
@@ -168,7 +190,7 @@ export function FarmForm({ farmId }: { farmId?: number }) {
         </div>
       </div>
 
-      <form onSubmit={submit} className="space-y-4">
+      <form ref={formRef} onSubmit={submit} className="space-y-4" noValidate>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Basics</CardTitle>
@@ -262,9 +284,13 @@ export function FarmForm({ farmId }: { farmId?: number }) {
                   type="number"
                   step="0.0001"
                   className="h-8 text-sm"
+                  aria-invalid={form.formState.errors.lat ? true : undefined}
                   data-testid="input-lat"
                   {...form.register('lat')}
                 />
+                {form.formState.errors.lat && (
+                  <p className="text-xs text-destructive">{form.formState.errors.lat.message}</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="lng" className="text-xs">
@@ -275,9 +301,13 @@ export function FarmForm({ farmId }: { farmId?: number }) {
                   type="number"
                   step="0.0001"
                   className="h-8 text-sm"
+                  aria-invalid={form.formState.errors.lng ? true : undefined}
                   data-testid="input-lng"
                   {...form.register('lng')}
                 />
+                {form.formState.errors.lng && (
+                  <p className="text-xs text-destructive">{form.formState.errors.lng.message}</p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -302,9 +332,13 @@ export function FarmForm({ farmId }: { farmId?: number }) {
                   type="number"
                   step="0.1"
                   className="h-8 text-sm"
+                  aria-invalid={form.formState.errors.areHa ? true : undefined}
                   data-testid="input-area"
                   {...form.register('areHa')}
                 />
+                {form.formState.errors.areHa && (
+                  <p className="text-xs text-destructive">{form.formState.errors.areHa.message}</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Soil type</Label>

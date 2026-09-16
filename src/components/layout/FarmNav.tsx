@@ -14,18 +14,24 @@ const farmLinks = (farmId: number) => [
 export function FarmNav({ farm }: { farm: Farm }) {
   const [location] = useLocation();
   const links = farmLinks(farm.id);
+  const farmActive = links.some((link) => link.href === location);
 
   return (
-    <div className="mt-1">
-      <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
-        {farm.name}
-      </div>
+    // Collapsible per farm (audit OPS-001: 9 seeded farms × 5 always-expanded
+    // links read as a rendering bug). The active farm starts expanded; the
+    // user's manual open/closed choice persists across re-renders.
+    <details className="mt-1 group" open={farmActive}>
+      <summary className="mx-2 px-3 py-1.5 flex items-center justify-between gap-2 rounded-md text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted list-none [&::-webkit-details-marker]:hidden">
+        <span className="truncate">{farm.name}</span>
+        <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60 transition-transform group-open:rotate-90" />
+      </summary>
       {links.map((link) => {
         const active = location === link.href;
         return (
           <Link
             key={link.href}
             href={link.href}
+            aria-current={active ? 'page' : undefined}
             className={cn(
               'flex items-center gap-2.5 mx-2 px-3 py-2 rounded-md text-sm transition-colors',
               active
@@ -39,6 +45,6 @@ export function FarmNav({ farm }: { farm: Farm }) {
           </Link>
         );
       })}
-    </div>
+    </details>
   );
 }

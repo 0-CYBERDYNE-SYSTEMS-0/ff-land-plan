@@ -87,7 +87,6 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
   // camera-inside-geometry regression; setTargetBounds + the per-frame clamp
   // below are the guardrail for truck/rotate instead.
   controls.dollyToCursor = false;
-  controls.dampingFactor = 0.08;
   controls.smoothTime = 0.25;
 
   // --- rAF loop -----------------------------------------------------------

@@ -22,7 +22,17 @@ import { SelectionPanel } from '@/components/designer/SelectionPanel';
 import { StatsPanel } from '@/components/designer/StatsPanel';
 import { TemplatesCard } from '@/components/designer/TemplatesCard';
 import { ViewToggle } from '@/components/designer/ViewToggle';
-import { usePlanEditor } from '@/components/designer/usePlanEditor';
+import { FILL_CONFIRM_THRESHOLD, usePlanEditor } from '@/components/designer/usePlanEditor';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const World3D = lazy(() => import('@/components/world/World3D'));
 
@@ -307,6 +317,31 @@ const [cinema, setCinema] = useState(false);
           </div>
         )}
       </div>
+
+      {/* DES-009: oversized fills confirm before committing, matching the
+          template-apply bar (a 400-cell fill is more destructive than a
+          24-cell template). */}
+      <AlertDialog
+        open={editor.pendingFill !== null}
+        onOpenChange={(open) => {
+          if (!open) editor.cancelFill();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fill {editor.pendingFill?.region.length ?? 0} cells?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The flood fill touched {editor.pendingFill?.region.length ?? 0} cells — above the
+              {' '}{FILL_CONFIRM_THRESHOLD}-cell confirm threshold. This replaces the whole connected
+              region; Undo (Ctrl/Cmd+Z) restores it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={editor.cancelFill}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={editor.confirmFill}>Fill region</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

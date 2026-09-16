@@ -173,6 +173,7 @@ export function deriveAlerts(
   farmId: number,
   forecast: ForecastDay[],
   isRead: (id: number) => boolean,
+  soilMoisturePct?: number | null,
 ): Alert[] {
   const alerts: Alert[] = [];
   const push = (
@@ -212,7 +213,15 @@ export function deriveAlerts(
   });
 
   const weekPrecip = forecast.reduce((s, d) => s + d.precipMm, 0);
-  if (forecast.length >= 6 && weekPrecip < 5) {
+  // Gate on current soil moisture when we have it (audit OPS-008): with wet
+  // soil the Weather page correctly says Irrigation Need "Low" — the dashboard
+  // must not contradict it with "plan irrigation". Same 40% threshold as the
+  // Weather indicator.
+  if (
+    forecast.length >= 6 &&
+    weekPrecip < 5 &&
+    (soilMoisturePct == null || soilMoisturePct <= 40)
+  ) {
     push('drought', 'info', `Dry week ahead: only ${weekPrecip.toFixed(1)} mm of rain forecast over ${forecast.length} days — plan irrigation.`, forecast[0].date);
   }
 

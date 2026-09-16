@@ -1666,3 +1666,60 @@ Verified: GPU gates PASS world 1/8/9 + map + showcase; forced-SwiftShader
 world1 PASSES at vt 600 (826 KB PNG) and at vt 2000. LESSON: `--timeout` does
 not delay a dump (load event does); virtual-time budget is the only dump
 delay, and its wall cost = simulated frame count × per-frame GL cost.
+
+## 2026-09-16 — Dogfood-audit hardening (`fix/dogfood-audit-hardening`)
+
+Fix pass over the 2026-09-15 integrated dogfood audit (`dogfood-output/report.md`,
+28 unique findings). Diagnosis was delegated to three parallel read-only
+specialists; patches landed as one PR. Notable decisions:
+
+- **CRIT-001 (total data wipe on rapid re-Enter in the farm form).** The
+  red-team's "non-atomic clear+write" theory was disproved by source — the
+  save was already a single `setItem` snapshot and NO code path deletes
+  `ff-pro:*` keys. Real chain: Enter #3 lands in the sub-second window where
+  React's onSubmit is detached mid-unmount but the `<form>` is still
+  connected → unprevented NATIVE submission → about:blank document unload →
+  Chromium drops/partially-applies recent localStorage commits for the torn-
+  down document (`ff-pro:v1` survives as `""`; fresh sibling keys vanish;
+  long-committed keys like the theme survive). Fix is three-layer: capture-
+  phase `submit` preventDefault listener living exactly as long as the form
+  element (FarmForm), a synchronous `submittedRef` double-submit guard, and
+  `pagehide`/`beforeunload` → `persistNow()` in store.ts (visibilitychange
+  alone misses real navigations). `flush()` is now dirty-flagged so unload
+  flushes are no-ops when nothing changed, and a failed write keeps `dirty`
+  set for retry.
+- **DES-001/002 (brush).** Clicks on non-plantable cells were always rejected
+  by `canPlantAt` while the ghost promised paint — ghost now filters the same
+  predicate. Drag loss had two causes: path cells rejected (same gate, honest
+  ghost now explains) and the autosave echo (`planRef.current = clonePlan(saved)`)
+  replacing the live plan mid-stroke — echo adoption is skipped while any
+  gesture is active. Strokes also interpolate between pointermove samples via
+  the existing `bresenhamCells` so fast drags paint a continuous path.
+- **OPS-002 (Coverage 153%).** Seed farm 8's `fillCrop/fillGround` calls were
+  written in corner-coordinate style but the helpers take width/height — crops
+  landed up to row 56 of a 32-row grid. Fixed geometry (three 7-row beds,
+  31% coverage, verified by OCR of the dashboard shot) + defensive bounds
+  filter in `computeStats` + 100% clamp in Dashboard.
+- **DES-005 (surface reset).** Demo-farm plans are intentionally re-seeded on
+  load, which silently reverted the user's chosen surface; the stored
+  `surface` now survives the re-seed (layout still resets — that's showcase
+  intent; full "user edits beat demo re-seed" is a flagged follow-up).
+- **DES-009.** Fills > `FILL_CONFIRM_THRESHOLD` (100) cells open the same
+  AlertDialog pattern templates use. Adversary review caught the pending region
+  leaking across farms via route reuse (Back while dialog open) — cleared on
+  farm re-init and in `replacePlan`.
+- **Review-hardening:** `deriveAlerts` gained optional soil-moisture gating
+  (OPS-008, same 40% threshold as the Weather page); World3D crop rows dedupe
+  on LOCAL day (label basis), not raw ISO timestamps (DES-008) or UTC slices.
+- **CI gate note:** per-route `document.title` made `--expect "Plot Designer"`
+  pass on Farm-not-found pages via `<title>` in dump-dom — designer shots now
+  expect `"25 cm cells"` (body-only, renders past the farm/plan guards;
+  negative control verified: `#/farms/999/map` EXPECT FAIL).
+- **Pre-existing appshot artifact (NOT fixed here):** the 2D blueprint canvas
+  paints nothing in appshot captures (border + overlays only) on main AND this
+  branch — byte-identical canvas regions. Real browsers and the WebGL world
+  shots paint fine. The map gate is therefore still text-only; a canvas-paint
+  probe for appshot is a follow-up.
+- Skipped as out-of-scope: OPS-009 frost-model recalibration, DES-010 3D
+  a11y tree, X-010 P2 feature gaps (backup export/import is the highest-value
+  CRIT-001 backstop and should be next).

@@ -736,26 +736,29 @@ function buildHoophousePlan(): PlanState {
   // High tunnel: crops grow in ground soil (no hydro, no benches) — three
   // in-ground beds under trellis lines, drip irrigation down each bed, roll-up
   // side aisles kept clear, seedling trays staging by the door.
-  fillGround(plan, 1, 2, 38, 8, 'inground-bed');
-  fillGround(plan, 1, 13, 38, 19, 'inground-bed');
-  fillGround(plan, 1, 24, 38, 30, 'inground-bed');
-  fillGround(plan, 1, 2, 38, 2, 'trellis');
-  fillGround(plan, 1, 13, 38, 13, 'trellis');
-  fillGround(plan, 1, 24, 38, 24, 'trellis');
-  fillGround(plan, 0, 4, 1, 7, 'irrigation-line');
-  fillGround(plan, 0, 15, 1, 18, 'irrigation-line');
-  fillGround(plan, 0, 26, 1, 29, 'irrigation-line');
+  // fillGround/fillCrop take (x, y, w, h) — these were originally written as
+  // corner coordinates, which pushed crops up to row 56 of a 32-row grid and
+  // produced the audit's impossible "Coverage 153%" (OPS-002).
+  fillGround(plan, 1, 2, 38, 7, 'inground-bed');
+  fillGround(plan, 1, 13, 38, 7, 'inground-bed');
+  fillGround(plan, 1, 24, 38, 7, 'inground-bed');
+  fillGround(plan, 1, 2, 38, 1, 'trellis');
+  fillGround(plan, 1, 13, 38, 1, 'trellis');
+  fillGround(plan, 1, 24, 38, 1, 'trellis');
+  fillGround(plan, 0, 4, 1, 4, 'irrigation-line');
+  fillGround(plan, 0, 15, 1, 4, 'irrigation-line');
+  fillGround(plan, 0, 26, 1, 4, 'irrigation-line');
   fillGround(plan, 36, 0, 2, 1, 'seedling-tray');
   fillGround(plan, 38, 30, 1, 1, 'water-tap');
 
   // Bed 1 trellised tomatoes + basil understory; bed 2 peppers + salad; bed 3
   // tomatoes + spinach (winter-hardy tunnel crop).
-  fillCrop(plan, 2, 3, 37, 3, TOMATO);
-  fillCrop(plan, 2, 6, 37, 7, BASIL);
-  fillCrop(plan, 2, 14, 37, 15, PEPPER);
-  fillCrop(plan, 2, 17, 37, 18, LETTUCE);
-  fillCrop(plan, 2, 25, 37, 26, TOMATO);
-  fillCrop(plan, 2, 28, 37, 29, SPINACH);
+  fillCrop(plan, 2, 3, 36, 1, TOMATO);
+  fillCrop(plan, 2, 6, 36, 2, BASIL);
+  fillCrop(plan, 2, 14, 36, 2, PEPPER);
+  fillCrop(plan, 2, 17, 36, 2, LETTUCE);
+  fillCrop(plan, 2, 25, 36, 2, TOMATO);
+  fillCrop(plan, 2, 28, 36, 2, SPINACH);
 
   stampPlantedAt(plan, {
     [TOMATO]: 60, [BASIL]: 30, [PEPPER]: 45, [LETTUCE]: 18, [SPINACH]: 22,

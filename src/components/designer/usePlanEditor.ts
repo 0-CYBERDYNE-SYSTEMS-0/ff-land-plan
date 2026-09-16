@@ -78,6 +78,10 @@ const MAX_DIM_M = 60;
 const AUTOSAVE_MS = 600;
 const HISTORY_LIMIT = 50;
 const FLOOD_CAP = 5000; // P1-2: fill tool safety ceiling
+/** Audit DES-009: fills larger than this ask for confirmation — replacing
+ * hundreds of cells on one unconfirmed click is more destructive than a
+ * template apply, which already confirms. */
+export const FILL_CONFIRM_THRESHOLD = 100;
 const BRUSH_SIZES: BrushSize[] = [1, 3, 5];
 const ERASE_GHOST_COLOR = '#ef4444';
 
@@ -267,6 +271,9 @@ export function usePlanEditor(farmId: number) {
     panOffsetY: 0,
   });
   const didInitialFitRef = useRef(false);
+  // Last cell a paint gesture stamped (audit DES-002): pointermove samples can
+  // skip cells at high zoom, so strokes interpolate between samples.
+  const lastPaintRef = useRef<{ x: number; y: number } | null>(null);
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchRef = useRef<{ distance: number; midX: number; midY: number } | null>(null);
   const autosaveRef = useRef<number | null>(null);
@@ -287,6 +294,8 @@ export function usePlanEditor(farmId: number) {
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [rectPreview, setRectPreview] = useState<RectPreview | null>(null);
   const [lineDraft, setLineDraft] = useState<{ x: number; y: number } | null>(null);
+  // DES-009: oversized fills wait here for the PlotDesigner confirm dialog.
+  const [pendingFill, setPendingFill] = useState<{ region: Array<[number, number]> } | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [stats, setStats] = useState<PlanStats | null>(null);
@@ -420,7 +429,12 @@ export function usePlanEditor(farmId: number) {
     };
 
     if (tool === 'brush' && activeCrop) {
-      return { cells: squareCells(brushSize), colorHex: activeCrop.colorHex };
+      // Truthful preview (audit DES-001): the mutation path silently rejects
+      // non-plantable cells (canPlantAt), so the ghost must not promise paint
+      // there — an empty ghost renders nothing and the no-op click is
+      // self-explanatory instead of a silent failure.
+      const cells = squareCells(brushSize).filter(([x, y]) => canPlantAt(plan, cellKey(x, y)));
+      return { cells, colorHex: activeCrop.colorHex };
     }
     if (tool === 'asset' && activeAsset) {
       const fp = footprintCells(activeAsset, plan);
@@ -550,7 +564,11 @@ export function usePlanEditor(farmId: number) {
       try {
         setSaveState('saving');
         const saved = await apiFetch.savePlan(nextPlan);
-        planRef.current = clonePlan(saved);
+        // Never adopt the echo mid-gesture (audit DES-002): swapping the live
+        // plan under an in-flight brush stroke discards every cell painted so
+        // far. The stroke's own finishStroke autosave lands the merged plan
+        // ~600 ms later and adopts cleanly.
+        if (!dragRef.current.kind) planRef.current = clonePlan(saved);
         setSavedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
         setSaveState('saved');
         queryClient.setQueryData(['plan', farmId], saved);
@@ -563,6 +581,9 @@ export function usePlanEditor(farmId: number) {
 
   const replacePlan = useCallback((nextPlan: PlanState, options: { save?: boolean; recordHistory?: PlanState } = {}) => {
     planRef.current = nextPlan;
+    // The plan under a pending fill confirm just changed (undo/redo/template)
+    // — a stale region must never commit onto it.
+    setPendingFill(null);
     updateStats(nextPlan);
     setPlanVersion((v) => v + 1);
     if (options.recordHistory) {
@@ -722,35 +743,9 @@ export function usePlanEditor(farmId: number) {
   // P1-2: flood fill — BFS over cells with an identical value WITHIN THE SAME
   // layer (planting id for plants mode, ground slug for asset mode), capped,
   // committed as ONE history snapshot + one debounced autosave.
-  const applyFillAt = useCallback((sx: number, sy: number) => {
+  const applyFillRegion = useCallback((region: Array<[number, number]>) => {
     const plan = planRef.current;
-    if (!plan) return;
-    const cols = planCols(plan);
-    const rows = planRows(plan);
-    if (sx < 0 || sy < 0 || sx >= cols || sy >= rows) return;
-    const layerValue = (x: number, y: number): string =>
-      rectMode === 'asset'
-        ? plan.ground[cellKey(x, y)] ?? ''
-        : String(plan.planting[cellKey(x, y)] ?? '');
-    const target = layerValue(sx, sy);
-    const seen = new Set<string>([cellKey(sx, sy)]);
-    const queue: Array<[number, number]> = [[sx, sy]];
-    const region: Array<[number, number]> = [];
-    let head = 0;
-    while (head < queue.length && region.length < FLOOD_CAP) {
-      const [cx, cy] = queue[head++];
-      region.push([cx, cy]);
-      const neighbors: Array<[number, number]> = [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]];
-      for (const [nx, ny] of neighbors) {
-        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-        const nk = cellKey(nx, ny);
-        if (seen.has(nk)) continue;
-        if (layerValue(nx, ny) !== target) continue;
-        seen.add(nk);
-        queue.push([nx, ny]);
-      }
-    }
-
+    if (!plan || region.length === 0) return;
     const before = clonePlan(plan); // ONE undo snapshot for the whole fill
     let changed = false;
     for (const [x, y] of region) {
@@ -780,6 +775,52 @@ export function usePlanEditor(farmId: number) {
     setPlanVersion((v) => v + 1);
     scheduleAutosave(clonePlan(plan)); // one autosave through the 600 ms debounce
   }, [activeAsset, mutateCell, rectMode, scheduleAutosave, updateStats]);
+
+  const applyFillAt = useCallback((sx: number, sy: number) => {
+    const plan = planRef.current;
+    if (!plan) return;
+    const cols = planCols(plan);
+    const rows = planRows(plan);
+    if (sx < 0 || sy < 0 || sx >= cols || sy >= rows) return;
+    const layerValue = (x: number, y: number): string =>
+      rectMode === 'asset'
+        ? plan.ground[cellKey(x, y)] ?? ''
+        : String(plan.planting[cellKey(x, y)] ?? '');
+    const target = layerValue(sx, sy);
+    const seen = new Set<string>([cellKey(sx, sy)]);
+    const queue: Array<[number, number]> = [[sx, sy]];
+    const region: Array<[number, number]> = [];
+    let head = 0;
+    while (head < queue.length && region.length < FLOOD_CAP) {
+      const [cx, cy] = queue[head++];
+      region.push([cx, cy]);
+      const neighbors: Array<[number, number]> = [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]];
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const nk = cellKey(nx, ny);
+        if (seen.has(nk)) continue;
+        if (layerValue(nx, ny) !== target) continue;
+        seen.add(nk);
+        queue.push([nx, ny]);
+      }
+    }
+
+    // DES-009: an oversized fill waits for the confirm dialog (rendered by
+    // PlotDesigner) — a single unconfirmed click must not silently replace
+    // hundreds of cells.
+    if (region.length > FILL_CONFIRM_THRESHOLD) {
+      setPendingFill({ region });
+      return;
+    }
+    applyFillRegion(region);
+  }, [applyFillRegion, rectMode]);
+
+  const confirmFill = useCallback(() => {
+    if (pendingFill) applyFillRegion(pendingFill.region);
+    setPendingFill(null);
+  }, [applyFillRegion, pendingFill]);
+
+  const cancelFill = useCallback(() => setPendingFill(null), []);
 
   // P0-4: Escape cancels any in-flight stroke (restoring its before-snapshot
   // without a history entry), clears the rect/line previews and the selection.
@@ -972,6 +1013,7 @@ export function usePlanEditor(farmId: number) {
     } else if (tool === 'line') {
       setLineDraft({ x: cell.x, y: cell.y });
     } else {
+      lastPaintRef.current = { x: cell.x, y: cell.y };
       applyBrushAt(cell.x, cell.y);
     }
   }, [activeAsset, activeCrop, applyBrushAt, applyFillAt, getCellFromEvent, pickAt, rectMode, tool, updateStats]);
@@ -1026,7 +1068,15 @@ export function usePlanEditor(farmId: number) {
       return;
     }
     if (!cell) return;
-    if (drag.kind === 'paint') applyBrushAt(cell.x, cell.y);
+    if (drag.kind === 'paint') {
+      // Interpolate between move samples (audit DES-002): sparse pointermove
+      // events at high zoom must still paint the swept path, not just the
+      // final stamp.
+      const last = lastPaintRef.current;
+      const segment = last ? bresenhamCells(last.x, last.y, cell.x, cell.y) : [[cell.x, cell.y] as [number, number]];
+      for (const [sx, sy] of last ? segment.slice(1) : segment) applyBrushAt(sx, sy);
+      lastPaintRef.current = { x: cell.x, y: cell.y };
+    }
     if (drag.kind === 'rect') {
       const color = rectMode === 'asset' && activeAsset ? activeAsset.colorHex : activeCrop?.colorHex ?? '#22c55e';
       setRectPreview({ x0: drag.startX, y0: drag.startY, x1: cell.x, y1: cell.y, color });
@@ -1069,7 +1119,10 @@ export function usePlanEditor(farmId: number) {
     if (!plan) return;
     try {
       const blob = await renderPlanToPng(plan, crops, `${farm?.name ?? 'Farm'} Plot Plan`);
-      downloadBlob(blob, `${(farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-plot.png`);
+      const filename = `${(farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-plot.png`;
+      downloadBlob(blob, filename);
+      // DES-006: the export used to give no feedback at all.
+      toast.success(`Exported ${filename}`);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -1101,6 +1154,10 @@ export function usePlanEditor(farmId: number) {
     if (initializedFarmRef.current === farmId) return;
     const plan = storedPlan ? clonePlan(storedPlan) : createDefaultPlan(farmId);
     initializedFarmRef.current = farmId;
+    // Route reuse (browser Back from farm A's map to farm B's) re-inits the
+    // plan under a still-open fill dialog — never let A's pending region
+    // commit onto B's plan.
+    setPendingFill(null);
     planRef.current = plan;
     setDraftWidth(plan.widthM);
     setDraftHeight(plan.heightM);
@@ -1356,6 +1413,9 @@ export function usePlanEditor(farmId: number) {
     applyRect,
     applyLineCells,
     applyFillAt,
+    pendingFill,
+    confirmFill,
+    cancelFill,
     pickAt,
     cancelStroke,
     finishStroke,

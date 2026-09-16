@@ -146,8 +146,8 @@ export const localApi: Api = {
   listAlerts: async (farmId) => {
     const farm = farmOrThrow(farmId);
     try {
-      const { forecast } = await farmWeather(farm);
-      return deriveAlerts(farmId, forecast, (id) => !!state.alertReads[id]);
+      const { forecast, weather } = await farmWeather(farm);
+      return deriveAlerts(farmId, forecast, (id) => !!state.alertReads[id], weather.current?.soilMoisture ?? null);
     } catch {
       return []; // offline with no cache → no alerts rather than an error wall
     }
@@ -163,8 +163,8 @@ export const localApi: Api = {
   },
   markAllAlertsRead: async (farmId) => {
     const farm = farmOrThrow(farmId);
-    const { forecast } = await farmWeather(farm);
-    const alerts = deriveAlerts(farmId, forecast, () => false);
+    const { forecast, weather } = await farmWeather(farm);
+    const alerts = deriveAlerts(farmId, forecast, () => false, weather.current?.soilMoisture ?? null);
     let updated = 0;
     for (const a of alerts) {
       if (!state.alertReads[a.id]) {
