@@ -57,7 +57,12 @@ export const T = {
 
 /** Opaque merged voxel mesh (lambert + vertex colors). Fresh per call. */
 export function solidMesh(voxels: Voxel[]): THREE.Mesh {
-  return new THREE.Mesh(buildVoxelGeometry(voxels), new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const mesh = new THREE.Mesh(buildVoxelGeometry(voxels), new THREE.MeshLambertMaterial({ vertexColors: true }));
+  // Opaque walls must shade interiors at low sun; paneMesh stays flag-free so
+  // transmissive panes never cast an opaque shadow.
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 /** Translucent panel mesh (glass / poly film / domes) — flat tint. */

@@ -173,6 +173,12 @@ function DiseasePressureCard({ lat, lng }: { lat: number; lng: number }) {
 export function Weather({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
   const { data: farm } = useFarm(farmId);
+  const { data: plan } = useQuery({
+    queryKey: ['plan', farmId],
+    queryFn: () => apiFetch.getPlan(farmId),
+  });
+  // Missing surface = 'outdoor' (PlanState contract).
+  const surface = plan?.surface ?? 'outdoor';
 
   const weather = useQuery({
     queryKey: ['weather', farmId],
@@ -257,6 +263,12 @@ export function Weather({ farmId }: { farmId: number }) {
           </Button>
         </div>
       </div>
+
+      {surface !== 'outdoor' && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+          Enclosed canvas — outdoor readings shown for context; simulation water balance is irrigation-driven.
+        </div>
+      )}
 
       {weather.isLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
