@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FarmFriend — User Guide</title>
+<style>
+  @page { size: letter; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  :root {
+    --paper: #FAF7EF;
+    --ink: #26301F;
+    --muted: #636B58;
+    --green: #2E6B3F;
+    --green-deep: #1C4527;
+    --green-bright: #3F9257;
+    --amber: #B45309;
+    --amber-bg: #FCF3E2;
+    --green-bg: #EAF2E6;
+    --line: #E5DFCE;
+    --card-line: #E3DCC9;
+  }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: #E8E4D8; }
+  .page {
+    position: relative;
+    width: 8.5in; height: 11in;
+    background: var(--paper);
+    overflow: hidden;
+    page-break-after: always;
+    padding: 52px 62px 58px;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  .display { font-family: "Futura", "Avenir Next", "Trebuchet MS", sans-serif; }
+  .mono { font-family: "Menlo", "SF Mono", ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase; }
+
+  /* running header / footer */
+  .runhead { display: flex; justify-content: space-between; align-items: baseline;
+    font-family: "Menlo", monospace; font-size: 8.5px; letter-spacing: .22em; color: var(--muted);
+    text-transform: uppercase; border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 22px; }
+  .runhead b { color: var(--green-deep); font-weight: 700; }
+  .runfoot { position: absolute; left: 62px; right: 62px; bottom: 26px; display: flex;
+    justify-content: space-between; align-items: center;
+    font-family: "Menlo", monospace; font-size: 8.5px; letter-spacing: .2em; color: var(--muted); text-transform: uppercase; }
+  .runfoot .pageno { color: var(--green-deep); font-weight: 700; }
+  .greenbar { height: 3px; background: linear-gradient(90deg, var(--green-deep), var(--green-bright)); margin-bottom: 20px; }
+
+  h2.title { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.08; margin-bottom: 8px; }
+  h2.title .grn { color: var(--green); }
+  p.lead { font-size: 12.5px; line-height: 1.65; color: var(--ink); margin-bottom: 16px; max-width: 640px; }
+  p.lead .soft { color: var(--muted); }
+
+  /* screenshot cards */
+  .shot { border: 1px solid var(--card-line); border-radius: 8px; overflow: hidden;
+    box-shadow: 0 10px 24px rgba(38,48,31,.10), 0 2px 6px rgba(38,48,31,.06); background: #101610; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .cap { font-family: "Menlo", monospace; font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin-top: 8px; line-height: 1.6; }
+  .cap b { color: var(--green-deep); }
+
+  /* steps */
+  .steps { display: flex; flex-direction: column; gap: 11px; }
+  .step { display: flex; gap: 11px; align-items: flex-start; }
+  .stepnum { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--green-deep); color: #fff;
+    font-family: "Menlo", monospace; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .step h4 { font-size: 12.5px; font-weight: 700; margin-bottom: 2px; }
+  .step p { font-size: 11px; line-height: 1.55; color: var(--muted); }
+
+  /* feature list with bold lead */
+  ul.feats { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  ul.feats li { font-size: 11.5px; line-height: 1.55; color: var(--muted); padding-left: 16px; position: relative; }
+  ul.feats li::before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; border-radius: 2px; background: var(--green-bright); }
+  ul.feats li b { color: var(--ink); }
+
+  /* boxes */
+  .box { border-radius: 8px; padding: 13px 16px; }
+  .box .lbl { font-family: "Menlo", monospace; font-size: 8.5px; letter-spacing: .24em; font-weight: 700; margin-bottom: 6px; }
+  .box p { font-size: 10.5px; line-height: 1.6; }
+  .box.tip { background: var(--amber-bg); border-left: 3px solid var(--amber); }
+  .box.tip .lbl { color: var(--amber); }
+  .box.note { background: var(--green-bg); border-left: 3px solid var(--green); }
+  .box.note .lbl { color: var(--green-deep); }
+
+  /* chips */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font-family: "Menlo", monospace; font-size: 8.5px; letter-spacing: .18em; text-transform: uppercase;
+    border: 1px solid var(--green-deep); color: var(--green-deep); border-radius: 3px; padding: 5px 9px; background: #fff; }
+
+  .kbd { font-family: "Menlo", monospace; font-size: 9.5px; background: #fff; border: 1px solid var(--card-line);
+    border-bottom-width: 2px; border-radius: 4px; padding: 2px 6px; color: var(--ink); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .grid2 > div { min-width: 0; }
+
+  /* cover */
+  .cover { padding: 0; display: flex; flex-direction: column; }
+  .cover-inner { padding: 58px 62px 0; }
+  .cover .brandline { display: flex; justify-content: space-between; align-items: center; margin-bottom: 44px; }
+  .cover .logo { font-size: 21px; font-weight: 800; letter-spacing: -0.3px; }
+  .cover .logo .leaf { color: var(--green); }
+  .cover .kicker { font-family: "Menlo", monospace; font-size: 9px; letter-spacing: .3em; color: var(--green-deep); text-transform: uppercase; }
+  .cover h1 { font-size: 57px; line-height: 1.02; letter-spacing: -1.5px; font-weight: 800; margin-bottom: 18px; }
+  .cover h1 .grn { color: var(--green); }
+  .cover .sub { font-size: 13.5px; line-height: 1.7; color: var(--muted); max-width: 560px; margin-bottom: 20px; }
+  .cover .sub b { color: var(--ink); }
+  .cover .crop-frame { width: 692px; height: 546px; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-line);
+    box-shadow: 0 18px 40px rgba(38,48,31,.16); }
+  .cover .crop { width: 692px; height: 546px;
+    background-image: url("shots/world.png"); background-repeat: no-repeat;
+    background-size: 1311px 819px; background-position: -256px -228px; }
+  .cover .cap { margin: 10px 4px 0; }
+  .cover-foot { position: absolute; left: 62px; right: 62px; bottom: 30px; display: flex; justify-content: space-between; align-items: center;
+    font-family: "Menlo", monospace; font-size: 8.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted);
+    border-top: 1px solid var(--line); padding-top: 14px; }
+  .cover-foot b { color: var(--green-deep); }
+
+  /* welcome cards */
+  .loop { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0 16px; }
+  .loopcard { background: #fff; border: 1px solid var(--card-line); border-radius: 8px; padding: 14px 15px; }
+  .loopcard .n { font-family: "Menlo", monospace; font-size: 9px; letter-spacing: .22em; color: var(--green-bright); font-weight: 700; margin-bottom: 6px; }
+  .loopcard h4 { font-size: 13.5px; font-weight: 800; margin-bottom: 4px; }
+  .loopcard p { font-size: 10.5px; line-height: 1.55; color: var(--muted); }
+
+  /* shortcuts strip */
+  .keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+  .keys span.k { font-size: 10px; color: var(--muted); margin-right: 4px; }
+
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+</style>
+</head>
+<body>
+
+<!-- ============ PAGE 1 · COVER ============ -->
+<section class="page cover">
+  <div class="cover-inner">
+    <div class="brandline">
+      <div class="logo display">Farm<span class="leaf">Friend</span></div>
+      <div class="kicker">User Guide</div>
+    </div>
+    <h1 class="display">Plan the bed.<br><span class="grn">Walk the farm.</span></h1>
+    <p class="sub">FarmFriend is a <b>voxel digital twin for real gardens and small farms</b>. Draw a
+      scale-true blueprint of your plot, watch it stand up as a living 3D world, rehearse the season
+      before you plant — then head outside and grow the real thing.</p>
+    <div class="chips" style="margin-bottom:22px;">
+      <span class="chip">Blueprint 2D</span>
+      <span class="chip">World 3D</span>
+      <span class="chip">Season simulations</span>
+      <span class="chip">Live weather</span>
+      <span class="chip">Planting calendar</span>
+    </div>
+    <div class="crop-frame"><div class="crop"></div></div>
+    <p class="cap"><b>YOUR PLAN, STANDING UP</b> — a drawing in the Blueprint becomes a walkable farm in World view. Every bed, plant, pond and barn comes from you.</p>
+  </div>
+  <div class="cover-foot">
+    <span><b>Free &amp; open source</b> · MIT licence</span>
+    <span>Runs in your browser · Works offline</span>
+    <span>2026 edition</span>
+  </div>
+</section>
+
+<!-- ============ PAGE 2 · WELCOME ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>01 · The big picture</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Welcome to <span class="grn">FarmFriend</span></h2>
+  <p class="lead">Most garden planning happens in a spreadsheet — or in your head. FarmFriend gives your
+    garden a <b>twin</b>: a living model of your beds, crops and season that you can walk through and
+    experiment on <span class="soft">before a single seed goes in the ground.</span></p>
+
+  <div class="grid2" style="align-items:center;">
+    <div>
+      <div class="loop" style="grid-template-columns: 1fr; gap:10px; margin:0;">
+        <div class="loopcard">
+          <div class="n">STEP 1 — DRAW IT</div>
+          <h4>The Blueprint</h4>
+          <p>A scale-true map of your plot where every cell is 25&nbsp;cm. Spacing mistakes happen on screen — not in soil.</p>
+        </div>
+        <div class="loopcard">
+          <div class="n">STEP 2 — WALK IT</div>
+          <h4>The 3D World</h4>
+          <p>One toggle and your plan stands up as a voxel farm — beds, greenhouses, ponds, animals, sky and weather.</p>
+        </div>
+        <div class="loopcard">
+          <div class="n">STEP 3 — REHEARSE IT</div>
+          <h4>Season simulations</h4>
+          <p>Run the season before it happens. Drought year? Heatwave? Extra fertilizer? Compare, then choose.</p>
+        </div>
+        <div class="loopcard">
+          <div class="n">STEP 4 — GROW IT</div>
+          <h4>The real thing</h4>
+          <p>Print the plan, export the seed list, follow the frost-safe calendar — and plant with confidence.</p>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="shot"><img src="shots/world-square.png" alt="A farm plan standing up in 3D"></div>
+      <p class="cap"><b>SAME PLAN, STANDING UP</b> — beds, greenhouse, pond and crops, straight from the drawing.</p>
+    </div>
+  </div>
+
+  <div class="box note" style="margin-top:14px;">
+    <div class="lbl">Good to know</div>
+    <p>Your plans save automatically in your browser — no account, no cloud, no setup. FarmFriend works
+    offline and your data stays on your device. It's free and open source, and it runs on anything with
+    a modern browser — laptop or tablet.</p>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">02</span></div>
+</section>
+
+<!-- ============ PAGE 3 · START HERE ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>02 · Set up your farm</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Start here: <span class="grn">create your farm</span></h2>
+  <p class="lead">A farm is your home base — it holds the plan, the weather station and the calendar.
+    You can keep as many as you like: a backyard, an allotment, a field.</p>
+
+  <div class="grid2">
+    <div class="steps">
+      <div class="step"><div class="stepnum">1</div><div>
+        <h4>Add your farm</h4>
+        <p>From the Dashboard, click <b>Add&nbsp;Farm</b> and give it a name you'll recognise.</p>
+      </div></div>
+      <div class="step"><div class="stepnum">2</div><div>
+        <h4>Find your spot on the map</h4>
+        <p>Type your town or village — FarmFriend fills in the location, which drives your live weather.</p>
+      </div></div>
+      <div class="step"><div class="stepnum">3</div><div>
+        <h4>Check your frost dates</h4>
+        <p>Last and first frost are estimated from your latitude and elevation. They shape your whole
+        planting calendar — adjust them if you know your microclimate better.</p>
+      </div></div>
+      <div class="step"><div class="stepnum">4</div><div>
+        <h4>Set the plot size</h4>
+        <p>From a 4×3&nbsp;m backyard bed up to a 60×60&nbsp;m field. You can change it any time in Settings.</p>
+      </div></div>
+    </div>
+    <div>
+      <div class="shot"><img src="shots/dashboard.png" alt="Dashboard with Add Farm button"></div>
+      <p class="cap"><b>ADD FARM</b> — top right of the Dashboard. Each farm card already estimates plants, yield and soil from your plan.</p>
+    </div>
+  </div>
+
+  <div class="box tip" style="margin-top:16px;">
+    <div class="lbl">Tip</div>
+    <p>Not sure where to start? Apply a <b>starter template</b> in the Plot Designer — Salad Garden,
+    Salsa Bed, Pollinator Strip, Four-Bed Rotation or Three Sisters Field — then rearrange freely.
+    One click of Undo restores the previous plan.</p>
+  </div>
+
+  <div class="box note" style="margin-top:10px;">
+    <div class="lbl">Good to know</div>
+    <p>FarmFriend ships with a handful of <b>demo farms</b> — a market field, a greenhouse range, even a
+    mushroom warehouse. Poke around in them as much as you like; when you add your own farm it keeps its
+    own plan, weather and calendar.</p>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">03</span></div>
+</section>
+
+<!-- ============ PAGE 4 · BLUEPRINT ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>03 · The Blueprint</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Draw your plan <span class="grn">in the Blueprint</span></h2>
+  <p class="lead">The Plot Designer is where your farm takes shape: a canvas of 25&nbsp;cm cells with real
+    crops, real structures and real spacing math — <span class="soft">so what you draw is what you can plant.</span></p>
+
+  <div class="shot"><img src="shots/blueprint.png" alt="Plot Designer in Blueprint mode"></div>
+  <p class="cap"><b>THE PLOT DESIGNER</b> — tools up top, starter templates and palettes on the right. Spacing and companion checks run live while you draw.</p>
+
+  <div class="grid2" style="margin-top:16px;">
+    <ul class="feats">
+      <li><b>Paint the ground first.</b> Raised beds, paths, sheds, greenhouses, fences, ponds and water taps — every structure has its true footprint.</li>
+      <li><b>Plant on top.</b> Pick crops from the palette and paint them in — brush sizes 1×1, 3×3 and 5×5, plus Line and Rectangle for quick beds.</li>
+      <li><b>Let it catch mistakes.</b> Crowded plants are flagged for spacing; crops that dislike each other are outlined; good neighbours get a green halo.</li>
+    </ul>
+    <ul class="feats">
+      <li><b>Watch the numbers.</b> Plant counts, estimated yield and daily water demand update as you draw.</li>
+      <li><b>Scrub with confidence.</b> Layer toggles hide plants or ground, zoom controls keep you oriented, and Undo/Redo remembers every stroke.</li>
+      <li><b>Take it with you.</b> Export a print-ready PNG of the plan, or a CSV seed-shopping list with quantities and sowing windows.</li>
+    </ul>
+  </div>
+
+  <div class="keys">
+    <span class="k">Shortcuts</span>
+    <span class="kbd">V</span><span class="k">select</span>
+    <span class="kbd">B</span><span class="k">brush</span>
+    <span class="kbd">R</span><span class="k">rectangle</span>
+    <span class="kbd">A</span><span class="k">asset</span>
+    <span class="kbd">E</span><span class="k">erase</span>
+    <span class="kbd">I</span><span class="k">pick</span>
+    <span class="kbd">G</span><span class="k">fill</span>
+    <span class="kbd">L</span><span class="k">line</span>
+    <span class="kbd">⌘Z</span><span class="k">undo</span>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">04</span></div>
+</section>
+
+<!-- ============ PAGE 5 · WORLD 3D ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>04 · The 3D World</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Walk your farm <span class="grn">in 3D</span></h2>
+  <p class="lead">Flip from Blueprint to <b>World</b> and your drawing stands up. Orbit around it, zoom in
+    to a single bed, and watch the season move. <span class="soft">It's the same plan — just alive.</span></p>
+
+  <div class="shot"><img src="shots/world.png" alt="Plot Designer in World 3D mode"></div>
+  <p class="cap"><b>WORLD VIEW</b> — the North Meadow plan standing up at midday. The date chip and playback controls live along the bottom edge; orbit, zoom and fly with the mouse.</p>
+
+  <div class="grid2" style="margin-top:16px;">
+    <ul class="feats">
+      <li><b>Scrub the date</b> and every crop grows through six stages — seedling to harvest. Plan the harvest, not just the planting.</li>
+      <li><b>Drag the time of day.</b> Dawn, noon, golden hour, night — the sun, shadows and sky follow the real clock and weather.</li>
+      <li><b>Paint a barn, get livestock.</b> Cows, pigs and sheep arrive around a barn; hens scratch by the coop; bees and butterflies visit flowers in bloom.</li>
+    </ul>
+    <ul class="feats">
+      <li><b>Take the guided tour</b> for a smooth cinematic fly-over of your plan — great for showing off.</li>
+      <li><b>Or fly it yourself.</b> Flight mode lets you soar over your own farm like a hawk.</li>
+      <li><b>Live weather, indoors and out.</b> If it's overcast at your farm, the world is overcast too. Rain falls. Plants sway.</li>
+    </ul>
+  </div>
+
+  <div class="box tip" style="margin-top:14px;">
+    <div class="lbl">Tip</div>
+    <p>Hit <b>Cinema</b> to hide every panel for a full-screen walkthrough — and Show History to see ghost
+    echoes of what you've changed. You can even plant and erase right in the 3D world; your edits flow
+    straight back into the Blueprint.</p>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">05</span></div>
+</section>
+
+<!-- ============ PAGE 6 · SIMULATIONS: RUN ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>05 · Simulations</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Rehearse the season <span class="grn">before it happens</span></h2>
+  <p class="lead">February is for simulations. A <b>run</b> plays your farm through a whole season —
+    day by day, using your plan, your weather and your soil — so you can test ideas while they're still cheap.</p>
+
+  <div class="grid2">
+    <div class="steps">
+      <div class="step"><div class="stepnum">1</div><div>
+        <h4>Open Simulations → New Run</h4>
+        <p>Pick a scenario: <b>Current Conditions</b>, <b>Drought Stress</b>, <b>Heat Stress</b> or <b>Optimal Input</b>.</p>
+      </div></div>
+      <div class="step"><div class="stepnum">2</div><div>
+        <h4>Fine-tune the weather</h4>
+        <p>Slide temperature (−10 to +10&nbsp;°C) and rainfall (0–300&nbsp;%) to build exactly the year you're worried about — or curious about.</p>
+      </div></div>
+      <div class="step"><div class="stepnum">3</div><div>
+        <h4>Create the run</h4>
+        <p>Choose a start date and a length of 60–365 days. Each run is recorded so you can come back to it.</p>
+      </div></div>
+      <div class="step"><div class="stepnum">4</div><div>
+        <h4>Press Play in the world</h4>
+        <p>Watch the season unfold at a week per second — crops grow, weather rolls in, and struggling plants visibly yellow under stress.</p>
+      </div></div>
+    </div>
+    <div>
+      <div class="shot"><img src="shots/world-run.png" alt="A simulation run playing in the world"></div>
+      <p class="cap"><b>MID-SEASON, DAY 41</b> — the drawer tracks the day, weather and stress. Add irrigation or fertilizer as interventions and watch what changes.</p>
+    </div>
+  </div>
+
+  <ul class="feats" style="margin-top:14px;">
+    <li><b>Interventions rewrite history — on purpose.</b> Add water or fertilizer on any date, past or future, and the run refolds to show the difference. That's the point of a twin.</li>
+    <li><b>See the soil.</b> The moisture overlay shows ground drying out; the timeline marks stress and pest pressure day by day.</li>
+  </ul>
+
+  <div class="chips" style="margin-top:12px;">
+    <span class="chip">Day timeline</span>
+    <span class="chip">Play &amp; speed</span>
+    <span class="chip">Moisture overlay</span>
+    <span class="chip">Interventions</span>
+    <span class="chip">Compare against…</span>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">06</span></div>
+</section>
+
+<!-- ============ PAGE 7 · SIMULATIONS: COMPARE ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>06 · Compare runs</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Compare the seasons, <span class="grn">pick your plan</span></h2>
+  <p class="lead">Every run keeps its scorecard — yield, rain, irrigation, plant stress. Compare them and
+    the better choice usually picks itself.</p>
+
+  <div class="shot"><img src="shots/simulations-compare.png" alt="Comparing two simulation runs"></div>
+  <p class="cap"><b>TWO 90-DAY RUNS, SIDE BY SIDE</b> — deltas are colour-coded: green means better (more yield, less water or stress), red means worse. Open both in the world to watch them play together.</p>
+
+  <div class="grid2" style="margin-top:16px;">
+    <ul class="feats">
+      <li><b>Tick any two runs</b> — up to six — and the comparison table shows exactly what changed and by how much.</li>
+      <li><b>A/B them in the world.</b> A translucent ghost of the second run grows alongside yours, so you can see the difference, not just read it.</li>
+    </ul>
+    <ul class="feats">
+      <li><b>Every number is explained.</b> Click into a run for a day-by-day breakdown of water, heat, cold, nitrogen and pest pressure — per bed.</li>
+      <li><b>Same inputs, same result.</b> Runs replay deterministically, so an experiment from last month still means what it meant then.</li>
+    </ul>
+  </div>
+
+  <div class="box note" style="margin-top:14px;">
+    <div class="lbl">A twin, not a crystal ball</div>
+    <p>Simulations are careful what-if estimates built on real crop data and historic weather patterns —
+    brilliant for <b>comparing plans</b>, not a guarantee of harvest. Use them to choose between options,
+    then let the season have the final word.</p>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">07</span></div>
+</section>
+
+<!-- ============ PAGE 8 · WEATHER ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>07 · Weather &amp; soil</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Read the sky <span class="grn">before you sow</span></h2>
+  <p class="lead">Each farm gets its own live weather station — real conditions and a 7-day forecast for
+    your exact location, translated into terms a gardener can act on.</p>
+
+  <div class="shot"><img src="shots/weather.png" alt="Live weather page"></div>
+  <p class="cap"><b>LIVE WEATHER</b> — current conditions, soil temperature and moisture, agricultural indicators and the soil profile for your spot on the map.</p>
+
+  <div class="grid2" style="margin-top:16px;">
+    <ul class="feats">
+      <li><b>Soil first.</b> Soil temperature and moisture at surface level — the two numbers that tell you whether it's actually time to sow.</li>
+      <li><b>Alerts before they bite.</b> Frost, heatwaves, heavy rain and dry spells are flagged from the real forecast, per farm.</li>
+    </ul>
+    <ul class="feats">
+      <li><b>Know your ground.</b> The soil profile shows the classification and qualities of the earth under your farm.</li>
+      <li><b>Offline-friendly.</b> No internet? The world keeps going on the last known weather, clearly marked as cached.</li>
+    </ul>
+  </div>
+
+  <div class="box tip" style="margin-top:14px;">
+    <div class="lbl">Tip</div>
+    <p>The Dashboard collects alerts for <b>all</b> your farms in one banner — a dry week ahead, a cold
+    snap coming — so one glance is enough before you head out.</p>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">08</span></div>
+</section>
+
+<!-- ============ PAGE 9 · CALENDAR ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>08 · The calendar</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Stay ahead <span class="grn">of the frost</span></h2>
+  <p class="lead">Your frost dates plus each crop's real needs become a year-round schedule: sow indoors,
+    transplant out, direct sow and harvest — computed for every crop in your plan.</p>
+
+  <div class="shot"><img src="shots/calendar.png" alt="Planting calendar"></div>
+  <p class="cap"><b>THE PLANTING CALENDAR</b> — “This week” tells you what to do right now; the year timeline lays out every crop's windows between last and first frost.</p>
+
+  <div class="grid2" style="margin-top:16px;">
+    <ul class="feats">
+      <li><b>“This week” is your to-do list.</b> What to sow, plant out and harvest right now — with frost-risk warnings on tender crops.</li>
+      <li><b>Every crop gets a bar.</b> Follow each variety across the year: indoor sowing, transplant, direct-sow window, harvest season.</li>
+    </ul>
+    <ul class="feats">
+      <li><b>Built from your plan.</b> Change what you plant and the calendar updates itself — no double bookkeeping.</li>
+      <li><b>Frost markers included.</b> Last and first frost dates are drawn on the timeline so risk is visible at a glance.</li>
+    </ul>
+  </div>
+
+  <div class="box tip" style="margin-top:14px;">
+    <div class="lbl">Tip</div>
+    <p>Frost dates are estimated from your location — if your garden runs warm or cold, override them in
+    your farm settings and every window shifts to match.</p>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">09</span></div>
+</section>
+
+<!-- ============ PAGE 10 · LIBRARY & GOOD TO KNOW ============ -->
+<section class="page">
+  <div class="runhead"><span><b>FarmFriend</b> · User Guide</span><span>09 · Library &amp; good to know</span></div>
+  <div class="greenbar"></div>
+  <h2 class="title display">Everything else <span class="grn">you'll reach for</span></h2>
+
+  <div class="duo">
+    <div>
+      <div class="shot"><img src="shots/crops.png" alt="Crop library"></div>
+      <p class="cap"><b>CROP LIBRARY</b> — 50 crops with the numbers that matter.</p>
+    </div>
+    <div>
+      <div class="shot"><img src="shots/monitoring.png" alt="Monitoring"></div>
+      <p class="cap"><b>MONITORING</b> — a health snapshot for every farm.</p>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:16px;">
+    <ul class="feats">
+      <li><b>A crop library with real data.</b> 50 crops with spacing, frost tolerance, companion pairings and yield estimates — searchable and filtered by family.</li>
+      <li><b>Monitoring.</b> A per-farm health view that gathers condition readouts in one place.</li>
+      <li><b>Yours to keep.</b> Export the plan as PNG, the seed list as CSV — and your work stays saved in your browser automatically.</li>
+    </ul>
+    <div>
+      <div class="box note" style="margin-bottom:10px;">
+        <div class="lbl">Questions people ask</div>
+        <p><b>Where does my data live?</b> In your browser, on this device. Nothing is uploaded.<br>
+        <b>Does it cost anything?</b> No — FarmFriend is free and open source (MIT).<br>
+        <b>Tablet?</b> Yes — draw with touch, pinch to zoom.<br>
+        <b>Is it a game?</b> It looks like one. The numbers underneath are real horticulture.</p>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center; margin-top:26px;">
+    <div class="display" style="font-size:24px; font-weight:800;">Plan the bed. <span style="color:var(--green)">Walk the farm.</span> 🌱</div>
+    <p class="cap" style="margin-top:8px;">HAPPY GROWING — FROM THE FARMFRIEND TEAM</p>
+  </div>
+
+  <div class="runfoot"><span>FarmFriend · User Guide</span><span class="pageno">10</span></div>
+</section>
+
+</body>
+</html>

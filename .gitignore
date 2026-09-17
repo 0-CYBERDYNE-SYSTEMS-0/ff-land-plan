@@ -47,3 +47,11 @@ AGENTS.local.md
 # Agent tool state (local preferences/plans only — never commit)
 .commandcode/
 .code-review-graph/
+.zcode/
+
+# Local media/agent tool preferences
+.media/
+
+# Local working outputs — kept on disk, never committed (heavy binaries)
+dogfood-output/
+videos/
