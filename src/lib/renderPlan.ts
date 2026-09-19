@@ -55,6 +55,13 @@ export interface RenderOptions {
   simStress?: Map<string, number> | null;
   /** Harvest-ready cellKeys: amber corner triangle over the plant layer. */
   simReady?: Set<string> | null;
+  // --- Advice overlay (SPEC-JEV-ADVICE, opt-in, default OFF) ------------------
+  // Fed by src/lib/advice (heuristic/mock/Jev scan, aggregated per cell);
+  // only the interactive canvas passes it, only while "Show on map" is on.
+  /** cellKey → advice mark: 3px corner dot (top-left); hollow when
+   *  confidence < 0.75. Opt-in, default OFF; only the interactive canvas
+   *  may pass it (never PNG export, never the 3D ground path). */
+  adviceDots?: Map<string, { level: 'ok' | 'warn' | 'bad'; hollow: boolean }> | null;
 }
 
 /** 2D moisture band fills — mirror SimDrawer.MOISTURE_BANDS (keep in sync). */
@@ -345,6 +352,34 @@ export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: R
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
     ctx.strokeRect(px, py, pw, ph);
+    ctx.restore();
+  }
+
+  // Advice dots (opt-in, SPEC-JEV-ADVICE): the LAST overlay layer — top-left
+  // corner dot in the shared palette (green/amber/red), ring instead of disc
+  // when the deciding confidence is low. Deliberately still UNDER the ghost
+  // preview below so an in-flight placement always reads.
+  const adviceDots = opts.adviceDots;
+  if (adviceDots && adviceDots.size > 0) {
+    const r = cellPx >= 12 ? 3 : 2;
+    const dotColor = { ok: '#16a34a', warn: '#f59e0b', bad: '#dc2626' } as const;
+    ctx.save();
+    for (const [key, dot] of adviceDots) {
+      const [x, y] = parseKey(key);
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const cx = offsetX + x * cellPx + r + 1;
+      const cy = offsetY + y * cellPx + r + 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      if (dot.hollow) {
+        ctx.strokeStyle = dotColor[dot.level];
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = dotColor[dot.level];
+        ctx.fill();
+      }
+    }
     ctx.restore();
   }
 

@@ -1723,3 +1723,42 @@ specialists; patches landed as one PR. Notable decisions:
 - Skipped as out-of-scope: OPS-009 frost-model recalibration, DES-010 3D
   a11y tree, X-010 P2 feature gaps (backup export/import is the highest-value
   CRIT-001 backstop and should be next).
+
+## 2026-09-18 — Jev advice seam (`feat/jev-advice-seam`, SPEC-JEV-ADVICE)
+
+Opt-in, env-gated "plan advice" seam: per-cell typed verdicts (seasonFit /
+spacingRisk / companion) from pluggable providers — deterministic heuristic +
+FNV-1a mock locally, or one batched POST to `VITE_ADVICE_URL` (Jev, TypeSafe
+AI). Decision highlights:
+
+- **Flag-off = byte-identical to main.** With `VITE_ADVICE_URL` and
+  `VITE_ADVICE_MOCK` unset, `resolveAdviceConfig().enabled` is false,
+  `AdvicePanel` returns `null` (after inert hooks — the manual-scan query
+  never fetches), and the pushed `adviceDots` state stays `null` so drawPlan
+  skips the new layer. No autosave/query coupling: even a live key cannot
+  incur cost without an explicit "Scan plan" click (TanStack Query
+  `enabled: false` + `refetch`, key `['advice-scan', farmId]` — explicit
+  queryFn so the QueryClient's hostile default fetch never fires).
+- **Overlay pipe mirrors simChannels exactly** (the established push-in
+  seam): `usePlanEditor` gained only `adviceDots` state next to
+  `simChannels`, one `overlayOpts` memo field + dep, and a `setAdviceDots`
+  setter; PlotDesigner holds the panel's dots and relays them via an effect,
+  same shape as the sim-channel relay. Mutations/undo/autosave untouched.
+- **RenderOptions stays opt-in:** `adviceDots` is one new field, default
+  OFF; dots draw top-left corner discs (green/amber/red shared palette),
+  ring when the deciding confidence < 0.75, as the last overlay layer but
+  still UNDER the ghost preview. PNG export (`renderPlanToPng`) and the 3D
+  ground path never pass it; only warn/bad cells get dots so a clean plan
+  isn't blanketed in green.
+- **lib rules:** heuristic reuses `spacingViolationSet`/`findPairings` from
+  plan.ts (no catalog logic duplicated; seasonFit is an honest flat 'fair'
+  placeholder at 0.55), mock is a pure hash of cellKey (no Math.random), and
+  the live provider validates schema + coverage strictly — any failure falls
+  back to heuristic marked `source: 'fallback'` and never throws to the UI.
+- **Rollback path:** delete `src/lib/advice/` + `AdvicePanel.tsx`; revert
+  the four small diffs (renderPlan.ts, usePlanEditor.ts, PlotDesigner.tsx,
+  docs). Flag-off means the merge itself is zero-risk.
+- Left for the human reviewer: the live Jev endpoint cannot be
+  integration-tested until early access lands (spec-documented contract in
+  README); flag-on smoke (Scan → verdicts → overlay dots) and the flag-off
+  appshot visual check.

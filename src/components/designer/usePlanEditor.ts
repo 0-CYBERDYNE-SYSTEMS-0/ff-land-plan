@@ -323,6 +323,10 @@ export function usePlanEditor(farmId: number) {
   const [showSimStress, setShowSimStress] = useState(false);
   const [showSimReady, setShowSimReady] = useState(false);
   const [simChannels, setSimChannels] = useState<SimOverlayChannels | undefined>(undefined);
+  // Advice overlay (SPEC-JEV-ADVICE): pushed in by PlotDesigner (which owns
+  // the AdvicePanel) the same way sim channels arrive — transient, not
+  // pref-backed; arrives pre-gated by the panel's "Show on map" toggle.
+  const [adviceDots, setAdviceDots] = useState<RenderOptions['adviceDots']>(null);
 
   const cropById = useMemo(() => new Map(crops.map((crop) => [crop.id, crop])), [crops]);
   const activeCrop = activeCropId ? cropById.get(activeCropId) ?? null : null;
@@ -467,8 +471,10 @@ export function usePlanEditor(farmId: number) {
       simMoisture: showSimMoisture ? simChannels?.moisture ?? null : null,
       simStress: showSimStress ? simChannels?.stress ?? null : null,
       simReady: showSimReady ? simChannels?.ready ?? null : null,
+      // Advice dots stay OFF until a scan is pushed in (null ⇒ drawPlan skips).
+      adviceDots: adviceDots ?? null,
     }),
-    [companionHalos, ghost, showGround, showPlants, spacingViolations, showSimMoisture, showSimStress, showSimReady, simChannels],
+    [adviceDots, companionHalos, ghost, showGround, showPlants, spacingViolations, showSimMoisture, showSimStress, showSimReady, simChannels],
   );
 
   const redraw = useCallback(() => {
@@ -1395,6 +1401,9 @@ export function usePlanEditor(farmId: number) {
     toggleSimStress,
     showSimReady,
     toggleSimReady,
+
+    // advice overlay (SPEC-JEV-ADVICE) — pushed in by PlotDesigner/AdvicePanel
+    setAdviceDots,
 
     // derived
     cropById,

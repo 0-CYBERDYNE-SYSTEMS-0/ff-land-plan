@@ -104,6 +104,51 @@ state is never stored — replay rebuilds it). Local-first remains
 the default — with the variable unset or empty, the local store plus live
 Open-Meteo weather (`src/lib/localApi.ts`) stays exactly as before.
 
+### Optional (experimental): Jev advice endpoint
+
+Plot Designer has an opt-in, env-gated "plan advice" seam (`src/lib/advice/`,
+SPEC-JEV-ADVICE): per-cell typed verdicts (season fit, spacing risk, companion)
+shown in an Advice panel with an optional corner-dot overlay on the blueprint.
+Advice is read-only and advisory — it never blocks or gates an edit.
+
+- `VITE_ADVICE_MOCK=1` — deterministic mock provider (FNV-1a hash of each
+  cellKey; no network). Wins over the URL for testing.
+- `VITE_ADVICE_URL=<base>` — live "Jev" provider: one batched `POST` per scan,
+  4 s `AbortController` timeout. On any failure (network, timeout, non-2xx,
+  schema/coverage mismatch) the scan falls back to the local heuristic
+  provider and is marked `source: 'fallback'`; errors never reach the UI.
+- Both unset — the feature is fully invisible (Advice panel renders `null`,
+  no overlay, no fetches).
+
+Request (one cell per planted cell, all sent in one batch):
+
+```json
+{
+  "schema": "ff.cellAdvice.v0",
+  "cells": [{ "cellKey": "4,7", "x": 4, "y": 7, "crop": "tomato" }],
+  "context": { "surface": "outdoor", "cellM": 0.25, "widthM": 20, "heightM": 12 }
+}
+```
+
+Response (must cover every requested `cellKey`; confidences in 0..1;
+otherwise the scan is treated as a schema mismatch and falls back):
+
+```json
+{
+  "decisions": [{
+    "cellKey": "4,7",
+    "outputs": {
+      "seasonFit":   { "verdict": "good", "confidence": 0.9 },
+      "spacingRisk": { "verdict": "ok", "confidence": 0.85 },
+      "companion":   { "verdict": "neutral", "confidence": 0.8 }
+    }
+  }]
+}
+```
+
+Verdict unions: `seasonFit` = `good | fair | poor`, `spacingRisk` =
+`ok | tight | violation`, `companion` = `ally | neutral | conflict`.
+
 ## Develop
 
 Requires Node 20+.

@@ -17,11 +17,13 @@ import { AssetPalette } from '@/components/designer/AssetPalette';
 import { BlueprintCanvas } from '@/components/designer/BlueprintCanvas';
 import { CropPalette } from '@/components/designer/CropPalette';
 import { DesignerToolbar } from '@/components/designer/DesignerToolbar';
+import { AdvicePanel } from '@/components/designer/AdvicePanel';
 import { PairingsPanel } from '@/components/designer/PairingsPanel';
 import { SelectionPanel } from '@/components/designer/SelectionPanel';
 import { StatsPanel } from '@/components/designer/StatsPanel';
 import { TemplatesCard } from '@/components/designer/TemplatesCard';
 import { ViewToggle } from '@/components/designer/ViewToggle';
+import type { AdviceDot } from '@/lib/advice';
 import { FILL_CONFIRM_THRESHOLD, usePlanEditor } from '@/components/designer/usePlanEditor';
 import {
   AlertDialog,
@@ -120,6 +122,15 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
       ? `ff-plan-channels day=${simRun.dayIndex} m=${simChannels.moisture?.size ?? 0} s=${simChannels.stress?.size ?? 0} r=${simChannels.ready?.size ?? 0}`
       : 'ff-plan-channels off';
   }, [simChannels, editor.setSimChannels, vis2d, simRun.dayIndex]);
+
+  // Advice overlay dots (SPEC-JEV-ADVICE): AdvicePanel owns the scan; this
+  // page just relays its "Show on map" result into the editor's overlay pipe
+  // (same setSimChannels-shaped seam). Null unless the panel pushes a scan,
+  // so flag-off behaviour is byte-identical to main.
+  const [adviceDots, setAdviceDots] = useState<Map<string, AdviceDot> | null>(null);
+  useEffect(() => {
+    editor.setAdviceDots(adviceDots);
+  }, [adviceDots, editor.setAdviceDots]);
 
   // ?ffrun=<id> launch param (BEFORE the hash, like ?ffview): load the
   // RunRecord once per mount and hand it to the run controller. The attempt
@@ -314,6 +325,7 @@ const [cinema, setCinema] = useState(false);
             <SelectionPanel editor={editor} />
             <StatsPanel editor={editor} />
             <PairingsPanel editor={editor} />
+            <AdvicePanel editor={editor} onAdviceDotsChange={setAdviceDots} />
           </div>
         )}
       </div>
