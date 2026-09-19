@@ -144,3 +144,16 @@ mount `<AdvicePanel … />` after `<PairingsPanel />` in the right rail.
 Delete `src/lib/advice/` + `AdvicePanel.tsx`; revert four small diffs
 (`renderPlan.ts`, `usePlanEditor.ts`, `PlotDesigner.tsx`, docs). Flag-off
 means the merge itself is zero-risk.
+
+## Amendment 1 (2026-09-18, binding): OpenRouter transport
+
+Jev is served via OpenRouter as `typesafe/jev-1.13` (modality `text->decisions`,
+32k context, `supported_parameters: []` — no `response_format`). The live
+provider gains a second transport: `VITE_OPENROUTER_API_KEY` (optional
+`VITE_ADVICE_MODEL`) sends the ff.cellAdvice.v0 batch in 120-cell chunks as
+OpenAI-compatible chat completions with the schema in the system prompt;
+replies are parsed with the same strict validation. Precedence: mock >
+`VITE_ADVICE_URL` > OpenRouter > disabled. All fallback and flag-off
+guarantees are unchanged. The key stays in gitignored `.env.local` — `VITE_`
+vars are bundled into the client, so this transport is local-dev-only until
+proxied server-side.

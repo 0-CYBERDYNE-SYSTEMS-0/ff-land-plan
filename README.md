@@ -112,12 +112,24 @@ shown in an Advice panel with an optional corner-dot overlay on the blueprint.
 Advice is read-only and advisory — it never blocks or gates an edit.
 
 - `VITE_ADVICE_MOCK=1` — deterministic mock provider (FNV-1a hash of each
-  cellKey; no network). Wins over the URL for testing.
-- `VITE_ADVICE_URL=<base>` — live "Jev" provider: one batched `POST` per scan,
-  4 s `AbortController` timeout. On any failure (network, timeout, non-2xx,
-  schema/coverage mismatch) the scan falls back to the local heuristic
-  provider and is marked `source: 'fallback'`; errors never reach the UI.
-- Both unset — the feature is fully invisible (Advice panel renders `null`,
+  cellKey; no network). Wins over everything for testing.
+- `VITE_OPENROUTER_API_KEY=<key>` — live "Jev" via OpenRouter
+  (`typesafe/jev-1.13`, the same ff.cellAdvice.v0 contract wrapped in an
+  OpenAI-compatible chat call; schema rides in the system prompt — the model
+  declares no `response_format` support). Cells are chunked at 120/call to
+  stay well under the 32k context; 30 s per-call timeout; the scan's `note`
+  records the call count. Put the key in `.env.local` (gitignored) — `VITE_`
+  vars are bundled into the client, so treat this as local-dev-only and route
+  through a server-side proxy before ever hosting it publicly.
+- `VITE_ADVICE_MODEL=<id>` — optional OpenRouter model override; defaults to
+  `typesafe/jev-1.13`.
+- `VITE_ADVICE_URL=<base>` — raw custom endpoint speaking the contract below
+  directly (one batched `POST` per scan, 4 s timeout). Takes precedence over
+  OpenRouter when both are set.
+- On any live failure (network, timeout, non-2xx, auth, schema/coverage
+  mismatch) the scan falls back to the local heuristic provider and is marked
+  `source: 'fallback'`; errors never reach the UI as failures.
+- All unset — the feature is fully invisible (Advice panel renders `null`,
   no overlay, no fetches).
 
 Request (one cell per planted cell, all sent in one batch):

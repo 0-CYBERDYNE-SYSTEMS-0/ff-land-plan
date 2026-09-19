@@ -1762,3 +1762,17 @@ AI). Decision highlights:
   integration-tested until early access lands (spec-documented contract in
   README); flag-on smoke (Scan → verdicts → overlay dots) and the flag-off
   appshot visual check.
+
+### Jev advice seam amendment — OpenRouter transport (2026-09-18, same day)
+
+Jev ships on OpenRouter as `typesafe/jev-1.13` (probed: modality
+`text->decisions`, 32k ctx, `supported_parameters: []`, unlisted in the public
+catalog but its `/endpoints` answers 200). Wired as a second live transport in
+`src/lib/advice/jev.ts` (`createOpenRouterProvider`): 120-cell chunks as
+OpenAI-compatible chat completions, schema in the system prompt (no
+`response_format` support declared), same strict parse, 30 s per-chunk timeout,
+all-or-nothing fallback. Precedence in `resolveAdviceConfig`: mock >
+`VITE_ADVICE_URL` > `VITE_OPENROUTER_API_KEY` > disabled; `VITE_ADVICE_MODEL`
+overrides the model id. Key belongs in `.env.local` only — VITE_ vars are
+bundled into the client, so this is local-dev-only until a server-side proxy
+exists. Flag-off behaviour is untouched (both new vars unset ⇒ disabled).

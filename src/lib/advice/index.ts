@@ -5,7 +5,7 @@
 // activates — the seam is invisible.
 
 import { heuristicProvider } from './heuristic';
-import { createJevProvider } from './jev';
+import { createJevProvider, createOpenRouterProvider, DEFAULT_JEV_MODEL } from './jev';
 import { mockProvider } from './mock';
 import type { AdviceProvider, AdviceScan, CellAdvice } from './types';
 
@@ -17,8 +17,10 @@ export interface AdviceConfig {
   mode: 'mock' | 'live' | null;
 }
 
-/** VITE_ADVICE_MOCK=1 wins over the URL (cheap flag-on testing); empty string
- *  counts as unset so a copied .env.example never half-enables the seam. */
+/** VITE_ADVICE_MOCK=1 wins over everything (cheap flag-on testing); empty
+ *  string counts as unset so a copied .env.example never half-enables the
+ *  seam. Live resolves in order: raw VITE_ADVICE_URL, then the OpenRouter
+ *  transport (VITE_OPENROUTER_API_KEY, model typesafe/jev-1.13). */
 export function resolveAdviceConfig(): AdviceConfig {
   const mockFlag = import.meta.env.VITE_ADVICE_MOCK;
   if (typeof mockFlag === 'string' && mockFlag !== '' && mockFlag !== '0') {
@@ -28,6 +30,10 @@ export function resolveAdviceConfig(): AdviceConfig {
   if (typeof url === 'string' && url.trim() !== '') {
     return { enabled: true, mode: 'live' };
   }
+  const orKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+  if (typeof orKey === 'string' && orKey.trim() !== '') {
+    return { enabled: true, mode: 'live' };
+  }
   return { enabled: false, mode: null };
 }
 
@@ -35,7 +41,15 @@ export function getAdviceProvider(config: AdviceConfig): AdviceProvider | null {
   if (!config.enabled || config.mode === null) return null;
   if (config.mode === 'mock') return mockProvider;
   const url = import.meta.env.VITE_ADVICE_URL;
-  if (typeof url === 'string' && url.trim() !== '') return createJevProvider(url);
+  if (typeof url === 'string' && url.trim() !== '') return createJevProvider(url.trim());
+  const orKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+  if (typeof orKey === 'string' && orKey.trim() !== '') {
+    const model = import.meta.env.VITE_ADVICE_MODEL;
+    return createOpenRouterProvider(
+      orKey.trim(),
+      typeof model === 'string' && model.trim() !== '' ? model.trim() : DEFAULT_JEV_MODEL,
+    );
+  }
   return heuristicProvider;
 }
 
