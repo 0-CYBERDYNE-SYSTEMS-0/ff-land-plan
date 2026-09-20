@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FarmFriend: LandPlan — Announcement · v1.0 MVP · 2026-09-20</title>
+<meta name="description" content="FarmFriend: LandPlan is a voxel digital twin of your farm. Draw the plan on a 25 cm blueprint, then walk it in 3D." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23F4F3EE'/%3E%3Cpath d='M5 14V2' stroke='%231B2A32' stroke-width='1.4'/%3E%3Cpath d='M5 3h7l-2.2 2.5L12 8H5z' fill='%23D8481F'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..600;1,8..60,400..600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --vellum:#F4F3EE;
+    --surface:#EAE9E1;
+    --ink:#1B2A32;
+    --ink-70:rgba(27,42,50,.7);
+    --ink-55:rgba(27,42,50,.55);
+    --hair:rgba(27,42,50,.18);
+    --hair-soft:rgba(27,42,50,.10);
+    --flag:#D8481F;
+    --stand:#3E6B3A;
+    --amber:#B7791F;
+    --sans:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --ease:cubic-bezier(.2,0,0,1);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    overflow-x:clip;
+    background-color:var(--vellum);
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.028'/%3E%3C/svg%3E");
+    color:var(--ink);
+    font-family:var(--serif);
+    font-size:17px;
+    line-height:1.65;
+  }
+  ::selection{background:rgba(216,72,31,.22)}
+
+  .ruler-top,.ruler-left{position:fixed;z-index:40;pointer-events:none}
+  .ruler-top{top:0;left:0;right:0;height:14px;
+    background:
+      repeating-linear-gradient(90deg,var(--hair) 0 1px,transparent 1px 10px) top/100% 4px no-repeat,
+      repeating-linear-gradient(90deg,rgba(27,42,50,.32) 0 1px,transparent 1px 50px) top/100% 9px no-repeat;
+    border-bottom:1px solid var(--hair-soft)}
+  .ruler-left{top:0;left:0;bottom:0;width:14px;
+    background:
+      repeating-linear-gradient(180deg,var(--hair) 0 1px,transparent 1px 10px) left/4px 100% no-repeat,
+      repeating-linear-gradient(180deg,rgba(27,42,50,.32) 0 1px,transparent 1px 50px) left/9px 100% no-repeat;
+    border-right:1px solid var(--hair-soft)}
+  @media (max-width:960px){.ruler-top,.ruler-left{display:none}}
+
+  .wrap{max-width:1128px;margin:0 auto;padding:0 28px}
+  @media (max-width:960px){.wrap{padding:0 20px}}
+
+  .titlebar{position:sticky;top:0;z-index:50;background:var(--vellum);border-bottom:1px solid var(--hair)}
+  .titlebar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:13px;padding-bottom:13px}
+  .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}
+  .brand-flag{width:11px;height:14px;flex:none}
+  .brand-name{font-family:var(--sans);font-weight:640;font-stretch:120%;text-transform:uppercase;letter-spacing:.08em;font-size:15px;line-height:1;white-space:nowrap}
+  .brand-name .lp{color:var(--flag)}
+  .brand-sub{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--ink-55);text-transform:uppercase;white-space:nowrap}
+  .titleblock-strip{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-70);display:flex;align-items:center;gap:10px;white-space:nowrap}
+  .rev-chip{display:inline-flex;align-items:center;gap:5px;color:var(--ink)}
+  .rev-chip::before{content:"";width:7px;height:7px;background:var(--flag);display:inline-block}
+  @media (max-width:720px){.titleblock-strip .opt{display:none}}
+  @media (max-width:560px){
+    .brand-sub{display:none}
+    .titlebar-in{flex-wrap:wrap;row-gap:6px}
+    .titleblock-strip{font-size:10px}
+    .tb .v{overflow-wrap:anywhere}
+  }
+
+  .plabel{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-70);display:flex;align-items:center;gap:10px;margin:0 0 18px}
+  .plabel::after{content:"";flex:1;height:1px;background:var(--hair-soft)}
+  .plabel .tick{color:var(--flag);font-weight:500}
+  h1,h2,h3{font-family:var(--sans);font-weight:640;font-stretch:115%;text-transform:uppercase;line-height:1.02;margin:0}
+  section{border-top:1px solid var(--hair)}
+  .sec-pad{padding:56px 0 64px}
+  .mono{font-family:var(--mono)}
+  .binom{font-style:italic} /* italics are reserved for Latin binomials */
+  a{color:inherit}
+
+  .hero{padding:72px 0 64px}
+  .hero h1{font-size:clamp(2.1rem,8.4vw,5rem);letter-spacing:.005em;max-width:20ch}
+  .lede{max-width:64ch;font-size:19px;margin:26px 0 0}
+  .lede .name{font-weight:600}
+
+  .proof{margin-top:30px;border:1px solid var(--hair);border-left:3px solid var(--flag);background:var(--vellum);box-shadow:0 1px 2px rgba(27,42,50,.06);padding:14px 18px;max-width:820px}
+  .proof .fig{font-family:var(--mono);font-size:15px;letter-spacing:.02em}
+  .proof .src{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--ink-55);text-transform:uppercase;margin-top:6px}
+
+  .cta-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:28px}
+  .btn{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;text-decoration:none;padding:11px 18px;border-radius:2px;border:1px solid var(--ink);display:inline-block;transition:background-color 160ms var(--ease),color 160ms var(--ease),border-color 160ms var(--ease)}
+  .btn-primary{background:var(--flag);border-color:var(--flag);color:#FDFCF7}
+  .btn-primary:hover{background:#C13E19;border-color:#C13E19}
+  .btn-ghost{background:transparent;color:var(--ink)}
+  .btn-ghost:hover{background:var(--surface)}
+  a.mono-link{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-70);text-decoration:underline;text-underline-offset:3px}
+  a.mono-link:hover{color:var(--flag)}
+  :focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+  .offline-note{margin-top:16px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-55)}
+
+  figure.plate{margin:48px 0 0}
+  figure.plate .sheet{background:var(--vellum);border:1.5px solid var(--ink);box-shadow:0 1px 2px rgba(27,42,50,.08);padding:10px}
+  figure.plate img{display:block;width:100%;height:auto}
+  figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-70);margin-top:10px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+  @media (prefers-reduced-motion:no-preference){
+    html.js [data-reveal].armed{opacity:0;transition:opacity 200ms var(--ease)}
+    html.js [data-reveal].armed.in{opacity:1}
+  }
+
+  .ledger{border:1px solid var(--hair)}
+  .ledger-row{display:grid;grid-template-columns:230px 1fr;border-top:1px solid var(--hair)}
+  .ledger-row:first-child{border-top:0}
+  .ledger-row>div{padding:14px 18px}
+  .ledger-row>div+div{border-left:1px solid var(--hair-soft)}
+  .ledger-key{font-family:var(--sans);font-weight:640;font-stretch:118%;text-transform:uppercase;font-size:13.5px;letter-spacing:.04em}
+  .ledger-key .n{font-family:var(--mono);color:var(--flag);font-weight:500}
+  .ledger-body{font-size:15.5px;line-height:1.6}
+  .ledger-body .mono,.ledger-key .mono{font-size:12.5px}
+  .ledger-body .src{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-55);margin-top:4px}
+  @media (max-width:820px){.ledger-row{grid-template-columns:1fr}.ledger-row>div+div{border-left:0;border-top:1px solid var(--hair-soft)}}
+
+  .pillar{border-top:1px solid var(--hair);padding:52px 0}
+  .pillar:nth-of-type(even){background:var(--surface)}
+  .pillar-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:48px;align-items:start}
+  .pillar-grid.flip>*:first-child{order:2}
+  @media (max-width:880px){.pillar-grid{grid-template-columns:1fr;gap:28px}.pillar-grid.flip>*:first-child{order:0}}
+  .pillar h2{font-size:clamp(1.4rem,2.6vw,2rem);margin-bottom:14px}
+  .pillar p{margin:0 0 14px;max-width:60ch}
+  .proof-line{font-family:var(--mono);font-size:13px;letter-spacing:.02em;border-top:1px solid var(--hair);padding-top:12px;margin-top:18px}
+  .proof-line .src{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-55);margin-top:5px}
+  .pillar figure.plate{margin:0}
+
+  .toggle-chips{display:inline-flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:14px}
+  .toggle-chips span{padding:7px 14px}
+  .toggle-chips span+span{border-left:1px solid var(--ink)}
+  .toggle-chips .on{background:var(--ink);color:var(--vellum)}
+  .toggle-chips .on2{background:var(--stand);color:var(--vellum)}
+
+  .chip-cached{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;border:1px solid var(--ink);border-radius:2px;padding:3px 8px;background:var(--surface)}
+  .margin-notes{border:1px solid var(--hair);background:var(--vellum);padding:6px 20px 14px;box-shadow:0 1px 2px rgba(27,42,50,.06)}
+  .margin-note{padding:14px 0;border-top:1px solid var(--hair-soft);font-family:var(--mono);font-size:12.5px;line-height:1.55}
+  .margin-note:first-child{border-top:0}
+  .margin-note .who{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-55);display:flex;align-items:center;gap:7px}
+  .cdot{width:7px;height:7px;border-radius:50%;background:var(--ink);display:inline-block;flex:none}
+  .margin-note .src{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-55);margin-top:4px}
+
+  footer{border-top:1.5px solid var(--ink);margin-top:8px;padding:40px 0 56px}
+  .tb{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--ink)}
+  .tb>div{border-left:1px solid var(--hair);padding:10px 14px 12px}
+  .tb>div:first-child{border-left:0}
+  .tb .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55);display:block}
+  .tb .v{font-family:var(--mono);font-size:12px;letter-spacing:.02em;margin-top:3px;display:block}
+  .tb .v .rev{color:var(--flag);font-weight:500}
+  @media (max-width:820px){.tb{grid-template-columns:repeat(2,1fr)}.tb>div{border-top:1px solid var(--hair-soft)}.tb>div:nth-child(-n+2){border-top:0}.tb>div:nth-child(odd){border-left:0}.tb>div:nth-child(even){border-left:1px solid var(--hair)}}
+  .foot-links{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:22px}
+  .foot-legal{margin-top:22px;font-size:14.5px;color:var(--ink-70);max-width:72ch}
+</style>
+</head>
+<body>
+
+<div class="ruler-top" aria-hidden="true"></div>
+<div class="ruler-left" aria-hidden="true"></div>
+
+<header class="titlebar">
+  <div class="wrap titlebar-in">
+    <a class="brand" href="#top">
+      <svg class="brand-flag" viewBox="0 0 11 14" aria-hidden="true"><path d="M1.5 1v12.5" stroke="#1B2A32" stroke-width="1.4"/><path d="M1.5 2h8.5L7.6 4.7 10 7.4H1.5z" fill="#D8481F"/></svg>
+      <span class="brand-name">FarmFriend<span class="lp">:</span> LandPlan</span>
+      <span class="brand-sub">Digital twin</span>
+    </a>
+    <div class="titleblock-strip" aria-label="Sheet title block">
+      <span class="rev-chip">V1.0 MVP</span>
+      <span class="opt">2026-09-20</span>
+      <span class="opt">SCALE 1:1</span>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap">
+      <p class="plabel"><span class="tick">■</span> Product announcement · 2026-09-20 · Rev&nbsp;1.0</p>
+
+      <h1>Draw the plan.<br />Walk the farm.</h1>
+
+      <p class="lede">
+        <span class="name">FarmFriend: LandPlan</span> is a voxel digital twin of your farm.
+        Sketch beds on a 25-centimetre blueprint, then step into a 3D world where every crop,
+        path, and hoophouse is built from what you drew. Live weather, deterministic
+        simulations, and exports that leave the browser. No account, no server required.
+      </p>
+
+      <div class="proof" role="figure" aria-label="Proof figures">
+        <div class="fig">50 crops · 9 seeded farms · 6 surfaces · 170+ voxel builders · 25 cm grid</div>
+        <div class="src">Src: src/data/crops.ts · src/data/seed.ts · src/creative/ — every figure from the shipped code</div>
+      </div>
+
+      <div class="cta-row">
+        <a class="btn btn-primary" href="../index.html#/farms/1/map">Open LandPlan</a>
+        <a class="btn btn-ghost" href="../showcase.html#lane=a">Voxel asset showcase</a>
+        <a class="mono-link" href="../README.md">Endpoint contract</a>
+        <a class="mono-link" href="../SPEC.md">SPEC.md</a>
+      </div>
+
+      <p class="offline-note">Local-first: farms persist in the browser and keep working offline. Weather is the only live input, and its absence is handled.</p>
+
+      <figure class="plate">
+        <div class="sheet" data-reveal>
+          <img src="landplan-announcement-assets/world.jpg" alt="North Meadow rendered in the 3D World view: voxel beds of tomatoes and flowers, a hoophouse, a barn, gravel paths, and the live weather chip reading Sep 20, 08:23, 13 degrees" width="1440" height="1292" />
+        </div>
+        <figcaption>
+          <span>Plate 1 — North Meadow, World view · 18 × 12 m at 25 cm cells</span>
+          <span>Sep 20 · 08:23 · 13 °C · live from Open-Meteo</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= WHAT'S IN THE BUILD ================= -->
+  <section class="sec-pad">
+    <div class="wrap">
+      <p class="plabel"><span class="tick">■</span> What's in the build — v1.0 MVP · 2026-09-20</p>
+      <div class="ledger">
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">50</span> crops</div>
+          <div class="ledger-body">A catalog with real agronomy: spacing, companions, frost windows, scientific names. Six voxel growth stages for every crop, from seed to harvest.<span class="src">Src: src/data/crops.ts · src/creative/crops/</span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">9</span> seeded farms</div>
+          <div class="ledger-body">North Meadow to a Vertical Greens Warehouse — outdoor fields, a grow tent, a mushroom warehouse, a greenhouse range, a high tunnel. Open any of them and it is already planted.<span class="src">Src: src/data/seed.ts</span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">6</span> surfaces</div>
+          <div class="ledger-body">Outdoor, greenhouse, hoophouse, tent, indoor, warehouse. Enclosed surfaces swap in their shell, floor, and light, and the simulation treats them as sheltered.<span class="src">Src: PlanSurface · src/three/shell.ts</span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">170+</span> voxel builders</div>
+          <div class="ledger-body">14 terrain tiles, 17 crop archetypes × 6 growth stages, 33 structures, 20 creatures and tools, 9 indoor-farm dioramas, plus a parametric shell kit. Same seed, identical rebuild — determinism is a feature.<span class="src">Src: src/creative/ — seeded PRNG, no Math.random</span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">Live</span> weather</div>
+          <div class="ledger-body">Real forecasts from Open-Meteo, rendered into the scene and the ops views, with derived frost, heat, rain, and dry alerts. Offline, the last good data is kept and labeled cached.<span class="src">Src: src/lib/weather.ts</span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">Deterministic</span> sims</div>
+          <div class="ledger-body">What-if runs on a forked plan: same inputs, same run, every time. Per-tick state is never stored; it is rebuilt by replay.<span class="src">Src: simulation engine · quality/ verification logs</span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">Out</span> easily</div>
+          <div class="ledger-body">The plan exports as a PNG sheet with legend and scale bar; beds and seed lists as CSV; the whole plan as JSON. A typed REST seam can take over storage via one environment variable.<span class="src">Src: export module · src/lib/api.ts · README contract</span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">Opt-in</span> advice</div>
+          <div class="ledger-body">Jev, the advisory engine, reads the plan, the catalog, and the forecast and returns three typed verdicts per planted cell — season fit, spacing risk, companion — each with a confidence. Read-only by contract; it never gates an edit.<span class="src">Src: src/lib/advice/ · contract ff.cellAdvice.v0</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= TWO VIEWS ================= -->
+  <section>
+    <article class="pillar">
+      <div class="wrap pillar-grid">
+        <div>
+          <p class="plabel"><span class="tick">■</span> One plan, two views</p>
+          <h2>Blueprint first.<br />World on top.</h2>
+          <p>
+            The Plot Designer is a drafting tool: Select, Brush, Line, Rectangle, Fill, Pick,
+            Asset, Erase, with 1×1, 3×3, and 5×5 brushes and undo all the way back. Eight starter
+            templates — Salad Garden to Tent Starters — seed a plan in one click.
+            Every cell is 25 cm, so a bed is as long as it actually is.
+          </p>
+          <p>
+            The overlays carry the agronomy: spacing violations outline in amber where a stand
+            sits tighter than its catalog row allows, companion halos in green where the
+            catalog endorses a pairing.
+          </p>
+          <div class="toggle-chips" aria-label="View toggle">
+            <span class="on">Blueprint</span><span class="on2">World</span>
+          </div>
+          <div class="proof-line">
+            18 × 12 m · 25 cm cells · 8 px/cell at 67 %
+            <span class="src">Src: Plot Designer header, North Meadow</span>
+          </div>
+        </div>
+        <figure class="plate">
+          <div class="sheet" data-reveal>
+            <img src="landplan-announcement-assets/editor.jpg" alt="The Plot Designer toolbar: Select, Brush, Line, Rectangle, Fill, Pick, Asset, Erase; 1x1, 3x3 and 5x5 brushes; spacing and companion overlay toggles; undo, redo, fit, PNG and CSV export" width="759" height="148" />
+          </div>
+          <figcaption>
+            <span>Plate 2 — Plot Designer toolbar · tools, brushes, overlays, exports</span>
+            <span>North Meadow · 18 × 12 m · 25 cm cells</span>
+          </figcaption>
+        </figure>
+      </div>
+    </article>
+
+    <article class="pillar">
+      <div class="wrap pillar-grid flip">
+        <div>
+          <p class="plabel"><span class="tick">■</span> Built from the plan</p>
+          <h2>The world is the plan, stood up in voxels.</h2>
+          <p>
+            Nothing in the 3D world is decorative filler. Crops grow through six stages from
+            instanced voxel builders; hoophouses and greenhouses get their shells from the same
+            plan records; a coop brings hens, a hive brings bees, a pond brings ducks.
+          </p>
+          <p>
+            Every builder is deterministic — same seed, identical rebuild — so the twin is an
+            honest model of the plan, and the asset showcase prints the whole library like a
+            specimen sheet.
+          </p>
+          <div class="proof-line">
+            14 terrain · 17 crop archetypes × 6 stages · 33 structures · 9 dioramas
+            <span class="src">Src: src/creative/ registries · showcase.html</span>
+          </div>
+        </div>
+        <figure class="plate">
+          <div class="sheet" data-reveal>
+            <img src="landplan-announcement-assets/showcase.jpg" alt="The voxel farm asset showcase header and first row of the terrain sheet: four meadow grass tiles — Classic, Tufty, Stoney, and Flowering Meadow Patch — each drawn as a complete voxel block with its asset id" width="1712" height="375" />
+          </div>
+          <figcaption>
+            <span>Plate 3 — Asset showcase, terrain and soil · 14 assets</span>
+            <span>showcase.html · lane a</span>
+          </figcaption>
+        </figure>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= WEATHER + SIMS + YOURS + JEV ================= -->
+  <section class="sec-pad">
+    <div class="wrap">
+      <p class="plabel"><span class="tick">■</span> Weather, rehearsal, ownership, advice</p>
+
+      <div class="pillar-grid" style="margin-bottom:52px">
+        <div>
+          <h2 style="font-size:clamp(1.3rem,2.4vw,1.8rem)">Weather is in the scene, not a sidebar footnote.</h2>
+          <p>
+            LandPlan pulls real forecasts from Open-Meteo and renders them into the world and
+            the ops views. Frost, heat, rain, and dry alerts are derived from thresholds, and
+            the thresholds are shown. Offline, the last good forecast stays and is labeled
+            <span class="chip-cached">CACHED</span> rather than quietly aging.
+          </p>
+        </div>
+        <div>
+          <h2 style="font-size:clamp(1.3rem,2.4vw,1.8rem)">Rehearse the season before it costs you.</h2>
+          <p>
+            Simulate forks the plan and runs it: growth, water, stress, harvest windows.
+            Runs are deterministic, so a run can be replayed and checked against itself.
+            The Calendar is generated from frost dates, and the Dashboard answers what is
+            ready this week.
+          </p>
+        </div>
+      </div>
+
+      <div class="pillar-grid" style="margin-bottom:52px">
+        <div>
+          <h2 style="font-size:clamp(1.3rem,2.4vw,1.8rem)">Your data is yours, locally.</h2>
+          <p>
+            Farms persist in the browser. The plan exports as a PNG sheet with legend and
+            scale bar, seed lists as CSV, the whole plan as JSON. A typed REST seam mirrors the
+            README endpoint contract, so a backend can take over storage without changing a page.
+          </p>
+        </div>
+        <div>
+          <h2 style="font-size:clamp(1.3rem,2.4vw,1.8rem)">Advice advises. You decide.</h2>
+          <p>
+            Jev is opt-in, per cell, and read-only by contract. If a live call fails, the scan
+            falls back to local heuristics and is labeled as such. It reads the plan, the
+            catalog, and the forecast; the verdicts carry a source and a confidence.
+          </p>
+          <div class="margin-notes" style="margin-top:16px" aria-label="Example Jev margin notes">
+            <div class="margin-note">
+              <span class="who"><span class="cdot"></span> Jev · margin note</span>
+              Jev reads bed A as tight (0.85).
+              <span class="src">Src plan · catalog · forecast</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= KNOWN LIMITS ================= -->
+  <section class="sec-pad">
+    <div class="wrap">
+      <p class="plabel"><span class="tick">■</span> Known limits — stated plainly · 2026-09-20</p>
+      <div class="ledger">
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">No</span> hosted backend</div>
+          <div class="ledger-body">Storage, planning, simulation, and export all run in the browser, so there is no uptime or SLA claim to make. Hosted advice will require a server-side proxy; provider keys do not ship client-side.<span class="src">Src: README — backend swap via VITE_API_BASE_URL</span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-key"><span class="n">Not</span> built yet</div>
+          <div class="ledger-body">Multi-user editing, rotation history across seasons, and live sensor integrations at scale. When one of these lands, it ships under a revision number, not a footnote.<span class="src">As of Rev 1.0 · 2026-09-20</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FOOTER TITLE BLOCK ================= -->
+  <footer>
+    <div class="wrap">
+      <div class="tb" aria-label="Title block">
+        <div><span class="k">Product</span><span class="v">FarmFriend: LandPlan</span></div>
+        <div><span class="k">Kind</span><span class="v">Voxel digital twin · local-first</span></div>
+        <div><span class="k">Version</span><span class="v">1.0 MVP · ff-voxel-twin</span></div>
+        <div><span class="k">Rev / Date</span><span class="v"><span class="rev">Rev 1.0</span> · 2026-09-20</span></div>
+      </div>
+      <div class="foot-links">
+        <a class="mono-link" href="../index.html#/farms/1/map">Open LandPlan — North Meadow</a>
+        <a class="mono-link" href="../showcase.html#lane=a">Asset showcase</a>
+        <a class="mono-link" href="../README.md">README — endpoint contract</a>
+        <a class="mono-link" href="../SPEC.md">SPEC.md</a>
+        <a class="mono-link" href="../HANDOFF.md">HANDOFF.md</a>
+      </div>
+      <p class="foot-legal">
+        All figures on this page come from the shipped code: catalog and seed data, the creative
+        registries, and the modules named in each source stamp. Weather figures are attributed
+        to Open-Meteo. Advice is advisory, not directive.
+      </p>
+    </div>
+  </footer>
+
+</main>
+
+<script>
+  (function () {
+    document.documentElement.classList.add('js');
+    var els = Array.prototype.slice.call(document.querySelectorAll('[data-reveal]'));
+    if (!els.length) return;
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || !('IntersectionObserver' in window)) return;
+    els.forEach(function (el) { el.classList.add('armed'); });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1 });
+    els.forEach(function (el) { io.observe(el); });
+  })();
+</script>
+
+</body>
+</html>
