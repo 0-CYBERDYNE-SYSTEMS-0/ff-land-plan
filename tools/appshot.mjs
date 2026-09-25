@@ -6,14 +6,14 @@
  *   node tools/appshot.mjs <url> <outPath> [WxH] [--gate]
  *
  * Examples:
- *   node tools/appshot.mjs "http://localhost:5177/#/farms/3/map?ffview=world&fftime=0.05" quality/shots/beta/lighting/night.png 1440x900 --gate
- *   node tools/appshot.mjs "http://localhost:5177/#/crops" quality/shots/beta/routes/crops.png 1440x900
+ *   node tools/appshot.mjs "http://localhost:5173/?ffview=world&fftime=0.05#/farms/3/map" quality/shots/beta/lighting/night.png 1440x900 --gate
+ *   node tools/appshot.mjs "http://localhost:5173/#/crops" quality/shots/beta/routes/crops.png 1440x900
  *
  * With --gate, the serialized DOM is inspected for the boot probe (#ff-probe,
  * installed by src/dev/bootProbe.ts in dev builds). Any window.onerror, unhandled
  * rejection, or console.error recorded there fails the run with a non-zero exit.
  *
- * Requires the dev server (default :5177) started by the orchestrator.
+ * Requires the dev server (default :5173) started via `npm run dev`.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';

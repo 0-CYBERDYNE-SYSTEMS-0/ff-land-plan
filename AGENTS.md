@@ -34,14 +34,13 @@ an auto-created GitHub Release. Dependabot opens weekly npm/Actions bump PRs
 (react/react-dom/@types/* bump as one unit). `tools/appshot.mjs` resolves
 Chrome via `FF_CHROME_BIN`, then macOS paths, then Linux paths; it passes
 `--enable-unsafe-swiftshader` for GPU-less machines and accepts `--vt <ms>`
-and `FF_CHROME_FLAGS`. Branch protection is plan-gated, so `main-guard.yml`
+and `FF_CHROME_FLAGS`. Branch protection is plan-gated, so `guard-main.yml`
 is the enforcement: any non-merge commit landing on `main` without an
 associated PR turns that run red — land ALL changes via green PRs.
 
 Caveats:
 
-- `npm run lint` is defined but broken — ESLint is not installed and there is
-  no config. Use `npm run typecheck` instead. TS strict +
+- No linter configured; `npm run typecheck` is the gate. TS strict +
   `noUnusedLocals`/`noUnusedParameters`: an unused import fails the build.
 - There are no tests and no test runner. Verification = typecheck + build +
   the headless screenshot harness below.

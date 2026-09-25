@@ -23,8 +23,7 @@ npm run check:private  # filename guard against committing env/keys/data exports
 
 Caveats:
 
-- `npm run lint` is defined but broken — ESLint is not installed and there is
-  no config. Use `npm run typecheck` instead. TS strict +
+- No linter configured; `npm run typecheck` is the gate. TS strict +
   `noUnusedLocals`/`noUnusedParameters`: an unused import fails the build.
 - There are no tests and no test runner. Verification = typecheck + build +
   the headless screenshot harness: `node tools/appshot.mjs "<url>" <out.png>
@@ -39,7 +38,7 @@ Caveats:
 
 `.github/workflows/ci.yml` runs on every PR/push to `main`: typecheck+build
 and gitleaks + `check-private-files.mjs` (no screenshot job — run appshot
-locally when needed). `main-guard.yml` turns red for any non-merge commit on
+locally when needed). `guard-main.yml` turns red for any non-merge commit on
 `main` without a PR — land ALL changes via PRs. `v*` tags trigger
 `release.yml`.
 

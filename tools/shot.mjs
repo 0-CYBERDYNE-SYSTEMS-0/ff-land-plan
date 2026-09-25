@@ -9,7 +9,7 @@
  *   node tools/shot.mjs quality/shots/b-sheet-r1.png "lane=b&mode=sheet" 1600x2200
  *   node tools/shot.mjs quality/shots/tomato-r1.png "lane=b&only=tomato-s5&mode=big" 1440x548
  *
- * Requires the dev server on :5177 (started by the orchestrator).
+ * Requires the dev server on :5173 (started via `npm run dev`).
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, statSync, mkdtempSync } from 'node:fs';
@@ -32,7 +32,7 @@ if (!chrome) {
   process.exit(2);
 }
 const [w = '1600', h = '1200'] = geom.split('x');
-const url = `http://localhost:5177/showcase.html${hash ? `#${hash}` : ''}`;
+const url = `http://localhost:5173/showcase.html${hash ? `#${hash}` : ''}`;
 const absOut = resolve(out);
 const profileDir = mkdtempSync(join(tmpdir(), 'shot-profile-'));
 
