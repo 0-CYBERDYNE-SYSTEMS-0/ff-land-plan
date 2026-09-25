@@ -37,11 +37,11 @@ Caveats:
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR/push to `main`: typecheck+build,
-headless smoke (appshot on `#/farms/1/map`, World3D on farms 1/8/9, showcase),
-and gitleaks + `check-private-files.mjs`. `main-guard.yml` turns red for any
-non-merge commit on `main` without a PR — land ALL changes via PRs. `v*` tags
-trigger `release.yml`.
+`.github/workflows/ci.yml` runs on every PR/push to `main`: typecheck+build
+and gitleaks + `check-private-files.mjs` (no screenshot job — run appshot
+locally when needed). `main-guard.yml` turns red for any non-merge commit on
+`main` without a PR — land ALL changes via PRs. `v*` tags trigger
+`release.yml`.
 
 ## Architecture
 
