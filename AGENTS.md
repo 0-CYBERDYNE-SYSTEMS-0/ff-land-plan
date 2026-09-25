@@ -1,8 +1,8 @@
 # AGENTS.md
 
 This file provides guidance to AI coding agents (Codex / Claude Code / ZCode)
-when working with code in this repository. Last refreshed 2026-08-25 against
-`2c29eb9`.
+when working with code in this repository. Last refreshed 2026-09-25 against
+`112eda9`.
 
 ## Project
 
@@ -18,6 +18,7 @@ npm run dev        # Vite dev server on http://localhost:5173
 npm run build      # tsc -b && vite build → dist/
 npm run preview    # serve the production build on port 4173
 npm run typecheck  # tsc --noEmit — the primary verification gate
+npm run check:private  # filename guard against committing env/keys/data exports
 ```
 
 ## CI/CD
@@ -55,6 +56,12 @@ Caveats:
   pass silently. On `showcase.html` there is no boot probe — assert
   `--expect "showcase-ready N"` instead. Scratch PNGs go in `$TMPDIR/<dir>/`
   (create it first; Chrome won't mkdir), never `/tmp` root.
+  Continuously rendering pages (World3D, sim runs) never quiesce under
+  virtual time; appshot then dumps on its Chrome `--timeout` (25 s with
+  `--vt`, 8 s with `--vt 0` = real-time dump; override via
+  `FF_SHOT_TIMEOUT_MS`). DEV `?ffvis2d=drought|baseline[&ffvis2dDay=N]` loads
+  a real sim run into the Blueprint (with a `#ff-plan-channels` DOM probe) for
+  headless gates.
 
 ## Architecture
 
@@ -83,7 +90,8 @@ Frontends consuming those seams:
    **`drawPlan` (`src/lib/renderPlan.ts`) has three consumers** (interactive
    canvas, PNG export, 3D ground tiles) — any new visual layer MUST be an
    opt-in `RenderOptions` flag defaulting OFF (`ghost`, `spacingViolations`,
-   `companionHalos`, `layers` are shipped examples). Keep renderPlan free of
+   `companionHalos`, `layers`, and the sim overlays `simMoisture`/`simStress`/
+   `simReady` are shipped examples). Keep renderPlan free of
    remote `drawImage` (export taint).
 2. **World3D** (lazy island, vanilla three.js — NOT react-three-fiber; React 18
    constraint): init effect runs ONCE per mount/farm (deps `[sceneReady,
@@ -93,7 +101,9 @@ Frontends consuming those seams:
    directional sun + moon fill (engine adds ambient only — never add a second
    sun). Time-of-day/date-scrub test hooks: `?ffview=world&fftime=<0..1>&ffdebug=1`
    placed BEFORE the hash (`/?params#/farms/1/map`) — params inside the hash
-   fragment break wouter matching.
+   fragment break wouter matching. Seed ships farms 1–9 (`src/data/seed.ts`;
+   8 = hoophouse, 9 = warehouse), but a browser with an older localStorage
+   store may lack the newer ones.
 3. **Creative asset library** (`src/creative/`): 170+ deterministic voxel
    builders across five registries — terrain (14 tiles), crops (17
    archetypes × 6 growth stages covering ALL catalog crops via
@@ -118,6 +128,13 @@ Frontends consuming those seams:
 4. **Ops views**: Dashboard/Calendar/Weather/Simulations/Monitoring pages
    (TanStack Query v5, Wouter hash routing, shadcn-style local UI primitives).
 
+**Sim engine** (`src/lib/sim/`, spec `quality/SPEC-SIM-ECOSYSTEM.md`): pure
+daily-tick reducer (`createRun` / `stepDay` / `simulateRun`). Replay is the
+storage, so every outcome must be a function of (config, envSeries) — no
+`Math.random`; stochastic bites are keyed draws via `rng.ts`. `sim/view.ts` is
+the projection seam to 2D overlays and 3D. `simLegacy.ts` still feeds the
+legacy simulations list.
+
 Layout invariants of PlotDesigner (don't regress): page root `xl:h-full` flex
 column; canvas card `flex min-h-0 flex-col` absorbing toolbar wrap; below xl
 canvas is `h-[60dvh]` with panels on page scroll; canvas sizing effect keyed on
@@ -128,8 +145,9 @@ canvas is `h-[60dvh]` with panels on page scroll; canvas sizing effect keyed on
 - `HANDOFF.md` — current status, code map, traps, verification gates.
 - `README.md` — REST endpoint contract + backend swap instructions.
 - `SPEC.md` — product spec/scope (Amendments section binding for the designer).
-- `quality/MISSION-BETA.md`, `quality/MISSION-BLUEPRINT.md` — mission
-  contracts + verification logs for the last two merged efforts.
+- `quality/SPEC-*.md` + `quality/MISSION-*.md` — specs, mission contracts
+  and verification logs (e.g. `MISSION-ENVIRONMENTS.md`,
+  `SPEC-SIM-ECOSYSTEM.md`, `SPEC-GROWTH-VISUAL.md`).
 - `quality/ASSETS.md` + `quality/QUALITY_BAR.md` — asset inventory and the
   builder↔critic quality bar ("best Minecraft farm build" standard).
 - `implementation-notes.md` — incremental decisions ledger; keep appending.
