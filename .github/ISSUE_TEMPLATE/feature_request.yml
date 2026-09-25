@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest an idea for FarmFriend
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the feature idea! Describe what you'd like to see added.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this solve, or what use case does it enable?
+      placeholder: |
+        I'm trying to [goal], but currently [limitation]. It would help if FarmFriend could [feature].
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should this feature work?
+      placeholder: |
+        - Add a button or menu option to...
+        - Display [data] in a new view...
+        - Import/export [format]...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Are there other ways to solve this?
+      placeholder: |
+        - We could use [existing feature] to...
+        - Or we could add...
+    validations:
+      required: false

@@ -180,6 +180,22 @@ ff-voxel-twin/
                             #   (showcase) · update-progress.mjs (dashboard)
 ```
 
+## Contributing
+
+FarmFriend welcomes contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, setup, and verification steps. Our community is governed by the [Contributor Covenant](CODE_OF_CONDUCT.md). Report security vulnerabilities via [SECURITY.md](SECURITY.md).
+
+## Data sources & attribution
+
+FarmFriend integrates several free, public data sources:
+
+- **Weather, forecast, soil moisture, UV, and climate data**: [Open-Meteo](https://open-meteo.com) (CC BY 4.0)
+  - The Open-Meteo free API is for non-commercial use only. Commercial deployments require an [Open-Meteo API plan](https://open-meteo.com/en/pricing).
+- **Soil properties**: [ISRIC SoilGrids](https://soilgrids.org) (CC BY 4.0)
+- **NASA meteorological data**: [NASA POWER](https://power.larc.nasa.gov) (public domain)
+- **Soil data lookups**: [USDA NRCS Soil Data Access](https://sdmdataaccess.nrcs.usda.gov)
+
+All APIs are keyless and accessible from the browser. Data is fetched directly in the client; no data is sent to our servers.
+
 ## License
 
 MIT — see `LICENSE`.
