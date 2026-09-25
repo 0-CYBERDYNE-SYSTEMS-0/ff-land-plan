@@ -5,6 +5,14 @@
   "private": true,
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan.git"
+  },
+  "homepage": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan#readme",
+  "bugs": {
+    "url": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/issues"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
@@ -13,8 +21,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "check:private": "node tools/check-private-files.mjs",
-    "lint": "eslint . --ext .ts,.tsx --max-warnings 0"
+    "check:private": "node tools/check-private-files.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
