@@ -1,0 +1,76 @@
+name: Data source proposal
+description: Propose a new real-world data source for the digital twin
+title: "[Data] "
+labels: ["data-source"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest a new real-world data source (weather, soil, crops, market data, etc.) for FarmFriend to integrate.
+  - type: input
+    id: source-name
+    attributes:
+      label: Data source name
+      description: Name and organization (e.g., "USDA NASS", "Copernicus Climate")
+      placeholder: "Source Name (Organization)"
+    validations:
+      required: true
+  - type: input
+    id: source-url
+    attributes:
+      label: URL
+      description: Link to the data provider or API documentation
+      placeholder: "https://example.com/api"
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: License and terms
+      description: License type and any restrictions (commercial use, attribution, etc.)
+      placeholder: "CC BY 4.0, free for non-commercial use"
+    validations:
+      required: true
+  - type: dropdown
+    id: keyless
+    attributes:
+      label: Keyless API?
+      description: Can this API be accessed without authentication?
+      options:
+        - "Yes, public and keyless"
+        - "No, requires API key/authentication"
+        - "Unsure"
+    validations:
+      required: true
+  - type: dropdown
+    id: cors
+    attributes:
+      label: CORS enabled?
+      description: Can it be called directly from a browser?
+      options:
+        - "Yes"
+        - "No"
+        - "Unsure"
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What model input does it feed?
+      description: |
+        How would FarmFriend use this data?
+        Examples: weather forecasts, soil properties, crop yields, market prices, pest risk models, etc.
+      placeholder: |
+        - Would feed into: [model/view]
+        - Currently: [gap in data]
+        - Expected impact: [benefit]
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Any other relevant information?
+      placeholder: Data format, geographic coverage, update frequency, known issues, etc.
+    validations:
+      required: false

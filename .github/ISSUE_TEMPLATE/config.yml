@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discussions
+    url: https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/discussions
+    about: Ask questions and share ideas
+  - name: Security
+    url: https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/security
+    about: Report security vulnerabilities privately

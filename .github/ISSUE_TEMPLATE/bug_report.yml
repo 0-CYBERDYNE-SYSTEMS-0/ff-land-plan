@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a bug to help us improve
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill in as much detail as possible.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is the bug? What did you expect to happen?
+      placeholder: |
+        When I [action], I expected [behavior], but [actual behavior] happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce the bug?
+      placeholder: |
+        1. Go to...
+        2. Click on...
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, OS, and Node version (if developing locally)
+      placeholder: |
+        - Browser: Chrome 120 on macOS 14.2
+        - Node: 20.10.0 (if developing locally)
+    validations:
+      required: false
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshots or logs
+      description: Paste any relevant console errors or screenshots
+      placeholder: Console errors, stack traces, or screenshots that show the issue
+    validations:
+      required: false
