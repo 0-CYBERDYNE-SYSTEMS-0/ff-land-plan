@@ -182,7 +182,7 @@ ff-voxel-twin/
 
 ## Contributing
 
-FarmFriend welcomes contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, setup, and verification steps. Our community is governed by the [Contributor Covenant](CODE_OF_CONDUCT.md). Report security vulnerabilities via [SECURITY.md](SECURITY.md).
+FarmFriend welcomes contributions! See [ROADMAP.md](ROADMAP.md) for priorities and open gaps, and [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, setup, and verification steps. Our community is governed by the [Contributor Covenant](CODE_OF_CONDUCT.md). Report security vulnerabilities via [SECURITY.md](SECURITY.md).
 
 ## Data sources & attribution
 

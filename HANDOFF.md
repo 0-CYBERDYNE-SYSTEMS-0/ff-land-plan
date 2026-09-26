@@ -1,5 +1,8 @@
 # HANDOFF — FarmFriend voxel-3D upgrade (`pro-upgrade` branch)
 
+> **Current priorities and open gaps (2026-09-25): see [`ROADMAP.md`](ROADMAP.md).**
+> This file is the historical build log.
+
 **Status at handoff (2026-08-25): pro-upgrade phases 1–7 and all 3D phases 0–5 are
 complete; the fun-UX/game layer is shipped; the `src/creative/` voxel asset library
 is wired into the live World3D renderer AND fully paintable; beta hardening and
