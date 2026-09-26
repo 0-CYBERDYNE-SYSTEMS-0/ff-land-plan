@@ -1776,3 +1776,21 @@ all-or-nothing fallback. Precedence in `resolveAdviceConfig`: mock >
 overrides the model id. Key belongs in `.env.local` only — VITE_ vars are
 bundled into the client, so this is local-dev-only until a server-side proxy
 exists. Flag-off behaviour is untouched (both new vars unset ⇒ disabled).
+
+### LandPlan announcement deliverable — name ruling + proof audit (2026-09-20)
+
+The v1.0 MVP announcement ships as `marketing/landplan-announcement.html`
+(FarmFriend: LandPlan, Rev 1.0) with three real plates in
+`marketing/landplan-announcement-assets/` (World view, Designer toolbar, asset
+showcase). Name ruling recorded in `quality/COSTUME-BIBLE.md` §Amendments:
+the pro line ships house-attached as FarmFriend: LandPlan; "Groundwork" stays
+the costume codename and the superseded 2026-09-19 Rev A draft moved to
+`marketing/archive/groundwork-announcement-rev-a.html`. Proof audit against
+shipped code before finalizing: catalog is exactly 50 crops
+(`src/data/crops.ts`), 9 seeded farms (`src/data/seed.ts`), 8 starter
+templates (`src/data/templates.ts` — copy previously said six), brush sizes
+1×1/3×3/5×5 (`usePlanEditor.ts` BRUSH_SIZES). Added a "Known limits" ledger
+section (no hosted backend → no uptime/SLA claims; multi-user, rotation
+history, sensors-at-scale labeled not built) per the costume claims policy.
+Note: the announcement's Jev claims ride on this branch — it must merge after
+the advice seam, so the PR stacks on feat/jev-advice-seam with base main.
