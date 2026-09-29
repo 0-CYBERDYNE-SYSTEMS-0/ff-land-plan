@@ -1,15 +1,54 @@
-# FarmFriend — Land & Garden Planner
+<p align="center">
+  <img src="docs/readme/north-meadow.png" alt="North Meadow, drawn to scale. The gray strip is the path. The red crop is tomato. One cell is 25 cm." width="100%">
+</p>
 
-[![CI](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/workflows/ci.yml/badge.svg)](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/workflows/ci.yml)
+# FarmFriend Land Plan
 
-FarmFriend is a local-first land and garden planning SPA. Design scale-accurate
-plots, plan crops with real spacing data, generate planting calendars, and check
-live weather/frost risk without a backend.
+Draw the beds the way they sit on the ground. The plan stays on your computer.
 
-> Garden planning meets a lightweight digital twin: real crop data, live
-> Open-Meteo weather, persistent local plans, and exportable plot maps.
+![Plot Designer, with North Meadow open. The header says 18 m by 12 m, 25 cm cells.](docs/readme/plot-designer.png)
+
+You paint a bed, a path, and the crop. One cell is 25 cm on the ground, not a sticker. Open the same farm tomorrow and it is still there.
+
+## What you can do
+
+- Start from a salsa bed, a salad garden, or a tunnel of tomatoes. The sample farms are already loaded.
+- See which plants are too close, and which ones grow well side by side.
+- Keep a planting calendar and the frost dates for that place.
+- Check the weather over the farm. It comes from [Open-Meteo](https://open-meteo.com). If the network is down, the last good reading stays.
+
+## What it will not do
+
+- It will not water, dose, or switch a pump.
+- It does not need an account. Your plan is not sent to us.
+
+## Run it
+
+You need [Node.js](https://nodejs.org) 20 or newer.
+
+```sh
+git clone https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan.git
+cd ff-land-plan
+npm install
+npm run dev
+```
+
+Open the address it prints. North Meadow is the farm in the picture.
+
+## License
+
+[MIT](LICENSE).
+
+Weather, soil, and climate readings come from Open-Meteo, ISRIC SoilGrids, NASA POWER, and USDA soil data. Open-Meteo's free API is for non-commercial use. A farm business that ships this should read [their pricing](https://open-meteo.com/en/pricing) before relying on it.
+
+## For people changing the code
+
+Setup and community rules: [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md).
+
+The notes below are the developer contract. They are not the farmer guide.
 
 ## Stack
+
 
 - **React 18** + **TypeScript** + **Vite 5**
 - **Tailwind CSS 3** (Plus Jakarta Sans + JetBrains Mono)
