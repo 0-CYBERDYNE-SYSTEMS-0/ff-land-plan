@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository. Last refreshed 2026-09-25 against `112eda9` — kept in
+code in this repository. Last refreshed 2026-09-30 against `7a7640d` — kept in
 sync with `AGENTS.md` (which has the fuller version).
 
 ## Project
@@ -85,6 +85,17 @@ daily-tick reducer (`createRun` / `stepDay` / `simulateRun`); replay is the
 storage, so every outcome must be a function of (config, envSeries) — no
 `Math.random`, keyed draws via `rng.ts`. `sim/view.ts` is the projection seam
 to 2D/3D. `simLegacy.ts` still feeds the old simulations list.
+
+**Sim tests and model changes**: `src/lib/sim/*.test.ts` (Vitest) pin the
+engine: golden snapshots for baseline/drought/greenhouse/cold-window on
+synthetic weather, a cold-window finiteness test, and a spacing-yield test.
+Any retuning must update `__snapshots__/` as a deliberate, reviewed diff
+(`npx vitest run -u`). Yield is `yieldKgPerPlant × plantsForArea` spread over
+occupied cells and rounded only in aggregate. `src/data/cropThermalParams.ts`
+is a cited Tbase/GDD reference table that the sim does **not** consume yet
+(`gddRequiredC` is still catalog days × mean GDD; see ROADMAP #52). Sim mode
+(planning/what-if) exists; twin mode (observations correcting model state) is
+planned, not built — see ROADMAP "Sim mode and twin mode".
 
 **Plan surfaces**: `outdoor | greenhouse | hoophouse | tent | indoor |
 warehouse` (`PlanSurface`, per canvas via Settings drawer). Enclosed surfaces

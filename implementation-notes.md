@@ -1738,3 +1738,19 @@ specialists; patches landed as one PR. Notable decisions:
   threshold method/upper cutoff, preserve the source's sowing or transplant
   start event, and keep units in °C·days. Calibrate against the sim golden
   tests before switching behavior.
+
+## 2026-09-30 — P0/P1 landed; sim mode vs twin mode
+
+- P0 fixes merged (#59 spacing yield, #61 cold-window NaN) and Vitest added
+  with golden sim tests (#61). Yield rounds only in aggregate because
+  per-cell `r2()` turned 0.585 kg/cell into 0.59 (100 cells: 59 vs 58.5 kg).
+  The earlier note that the repo "deliberately has no test runner" is
+  superseded.
+- Decision: the digital twin is an observation layer on the existing
+  deterministic engine, not a second engine. Sim mode stays for what-if
+  planning; twin mode adds observations that correct state. Field logs map to
+  the existing `Intervention` events; state correction (soil moisture, crop
+  stage) needs a new event kind and must keep replay determinism (observations
+  are stored inputs). P2 model credibility (#52–#54) precedes P3 assimilation.
+- The roadmap's garlic example was wrong: the catalog spacing is 10×25 cm
+  (~2.5× undercount), not 5×18 cm (~7×).

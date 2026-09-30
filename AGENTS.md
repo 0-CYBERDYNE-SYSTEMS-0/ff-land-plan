@@ -134,6 +134,17 @@ storage, so every outcome must be a function of (config, envSeries) — no
 the projection seam to 2D overlays and 3D. `simLegacy.ts` still feeds the
 legacy simulations list.
 
+**Sim tests and model changes**: `src/lib/sim/*.test.ts` (Vitest) pin the
+engine: golden snapshots for baseline/drought/greenhouse/cold-window on
+synthetic weather, a cold-window finiteness test, and a spacing-yield test.
+Any retuning must update `__snapshots__/` as a deliberate, reviewed diff
+(`npx vitest run -u`). Yield is `yieldKgPerPlant × plantsForArea` spread over
+occupied cells and rounded only in aggregate. `src/data/cropThermalParams.ts`
+is a cited Tbase/GDD reference table that the sim does **not** consume yet
+(`gddRequiredC` is still catalog days × mean GDD; see ROADMAP #52). Sim mode
+(planning/what-if) exists; twin mode (observations correcting model state) is
+planned, not built — see ROADMAP "Sim mode and twin mode".
+
 Layout invariants of PlotDesigner (don't regress): page root `xl:h-full` flex
 column; canvas card `flex min-h-0 flex-col` absorbing toolbar wrap; below xl
 canvas is `h-[60dvh]` with panels on page scroll; canvas sizing effect keyed on
