@@ -35,7 +35,8 @@ public weather/climate/soil APIs.
    `yieldKgPerPlant` once per 25 cm cell. `plantsForArea`
    (`src/lib/plan.ts:86`) already converts area → plant count by spacing but
    the sim doesn't use it. Tomato (50×90 cm) is overcounted ~7×; garlic
-   (5×18 cm) undercounted ~7×. Yield is the headline number.
+   (10×25 cm, per the crop catalog) is undercounted ~2.5×. Yield is the headline
+   number.
 2. **NaN on cold-window runs — fixed 2026-09-30.** `gddRequiredC`
    (`src/lib/sim/drivers.ts`) now floors required GDD at 1 °C·day when the
    window's climatological mean is 0. A synthetic cold-window regression
