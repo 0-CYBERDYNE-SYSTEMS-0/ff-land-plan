@@ -309,12 +309,11 @@ export function stepDay(
           if (c.biomassFrac >= MIN_MANUAL_HARVEST_BIOMASS) {
             const seasonMean =
               (c.stressDaysCount ?? 0) > 0 ? (c.stressSum ?? 0) / c.stressDaysCount! : meanStress(c.stress);
-            const kg = r2(
+            const kg =
               (crop?.yieldKgPerPlant ?? 0) *
-                plantsPerCell(c.cropId) *
-                (1 - 0.5 * seasonMean) *
-                (1 - 0.3 * (c.peakPestPressure ?? c.pestPressure)),
-            );
+              plantsPerCell(c.cropId) *
+              (1 - 0.5 * seasonMean) *
+              (1 - 0.3 * (c.peakPestPressure ?? c.pestPressure));
             ownCells();
             cells[iv.cell] = { ...c, harvested: true };
             events.push({
@@ -510,12 +509,11 @@ export function stepDay(
       }
       if (readyAtDay !== undefined && dayIndex >= readyAtDay) {
         harvested = true;
-        const kg = r2(
+        const kg =
           (crop?.yieldKgPerPlant ?? 0) *
-            plantsPerCell(prev.cropId) *
-            (1 - 0.5 * seasonMeanStress) *
-            (1 - 0.3 * peakPestPressure),
-        );
+          plantsPerCell(prev.cropId) *
+          (1 - 0.5 * seasonMeanStress) *
+          (1 - 0.3 * peakPestPressure);
         events.push({
           dayIndex,
           date,
