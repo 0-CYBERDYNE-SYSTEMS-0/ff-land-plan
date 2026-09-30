@@ -1,0 +1,272 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`simulateRun golden outputs > matches the baseline scenario > baseline 1`] = `
+{
+  "cell": {
+    "biomassFrac": 0.4322,
+    "floweringFrac": 0,
+    "gddAccumC": 275.5,
+    "harvested": false,
+    "moistureFrac": 0.9553,
+    "nitrogenKgHa": 450.13,
+    "peakPestPressure": 0.1864,
+    "pestPressure": 0.186415076340204,
+    "readyAtDay": null,
+    "stage": 2,
+    "stress": {
+      "cold": 0,
+      "heat": 0,
+      "nitrogen": 0,
+      "water": 0,
+    },
+    "stressDaysCount": 30,
+    "stressSum": 0,
+  },
+  "events": [
+    {
+      "data": {
+        "biomass": 0.102,
+        "stage": 1,
+      },
+      "dayIndex": 6,
+      "kind": "stage",
+    },
+    {
+      "data": {
+        "biomass": 0.3059,
+        "stage": 2,
+      },
+      "dayIndex": 20,
+      "kind": "stage",
+    },
+  ],
+  "summary": {
+    "cellCount": 1,
+    "daysSimulated": 30,
+    "etoMmTotal": 75.2,
+    "eventCounts": {
+      "stage": 2,
+    },
+    "harvestReadyDay": null,
+    "irrigatedMm": 0,
+    "matureCells": 0,
+    "meanNitrogenKgHa": 450.1,
+    "outbreakDays": 0,
+    "rainMm": 60,
+    "stressCellDays": 0,
+    "stressDays": {
+      "cold": 0,
+      "heat": 0,
+      "nitrogen": 0,
+      "water": 0,
+    },
+    "totalYieldKg": 0,
+    "waterUseMm": 33.2,
+    "yieldKgByCrop": {},
+  },
+  "surface": "outdoor",
+}
+`;
+
+exports[`simulateRun golden outputs > matches the cold-window scenario > cold-window 1`] = `
+{
+  "cell": {
+    "biomassFrac": 0,
+    "floweringFrac": 0,
+    "gddAccumC": 0,
+    "harvested": false,
+    "moistureFrac": 0.6868,
+    "nitrogenKgHa": 500.68,
+    "peakPestPressure": 0,
+    "pestPressure": 0,
+    "readyAtDay": null,
+    "stage": 0,
+    "stress": {
+      "cold": 0.8,
+      "heat": 0,
+      "nitrogen": 0,
+      "water": 0,
+    },
+    "stressDaysCount": 4,
+    "stressSum": 0.8,
+  },
+  "events": [
+    {
+      "data": {
+        "value": 0.8,
+      },
+      "dayIndex": 0,
+      "kind": "stress-onset",
+    },
+  ],
+  "summary": {
+    "cellCount": 1,
+    "daysSimulated": 4,
+    "etoMmTotal": 2,
+    "eventCounts": {
+      "stress-onset": 1,
+    },
+    "harvestReadyDay": null,
+    "irrigatedMm": 0,
+    "matureCells": 0,
+    "meanNitrogenKgHa": 500.7,
+    "outbreakDays": 0,
+    "rainMm": 0,
+    "stressCellDays": 4,
+    "stressDays": {
+      "cold": 4,
+      "heat": 0,
+      "nitrogen": 0,
+      "water": 0,
+    },
+    "totalYieldKg": 0,
+    "waterUseMm": 0.6,
+    "yieldKgByCrop": {},
+  },
+  "surface": "outdoor",
+}
+`;
+
+exports[`simulateRun golden outputs > matches the drought scenario > drought 1`] = `
+{
+  "cell": {
+    "biomassFrac": 0.284,
+    "floweringFrac": 0,
+    "gddAccumC": 181.05,
+    "harvested": false,
+    "moistureFrac": 0,
+    "nitrogenKgHa": 450.13,
+    "peakPestPressure": 0,
+    "pestPressure": 0,
+    "readyAtDay": null,
+    "stage": 1,
+    "stress": {
+      "cold": 0,
+      "heat": 0,
+      "nitrogen": 0,
+      "water": 1,
+    },
+    "stressDaysCount": 30,
+    "stressSum": 4.2941,
+  },
+  "events": [
+    {
+      "data": {
+        "biomass": 0.1018,
+        "stage": 1,
+      },
+      "dayIndex": 6,
+      "kind": "stage",
+    },
+    {
+      "data": {
+        "value": 0.48,
+      },
+      "dayIndex": 12,
+      "kind": "stress-onset",
+    },
+  ],
+  "summary": {
+    "cellCount": 1,
+    "daysSimulated": 30,
+    "etoMmTotal": 135,
+    "eventCounts": {
+      "stage": 1,
+      "stress-onset": 1,
+    },
+    "harvestReadyDay": null,
+    "irrigatedMm": 0,
+    "matureCells": 0,
+    "meanNitrogenKgHa": 450.1,
+    "outbreakDays": 0,
+    "rainMm": 0,
+    "stressCellDays": 18,
+    "stressDays": {
+      "cold": 0,
+      "heat": 0,
+      "nitrogen": 0,
+      "water": 18,
+    },
+    "totalYieldKg": 0,
+    "waterUseMm": 42.4,
+    "yieldKgByCrop": {},
+  },
+  "surface": "outdoor",
+}
+`;
+
+exports[`simulateRun golden outputs > matches the greenhouse scenario > greenhouse 1`] = `
+{
+  "cell": {
+    "biomassFrac": 0.4207,
+    "floweringFrac": 0,
+    "gddAccumC": 268.17,
+    "harvested": false,
+    "moistureFrac": 0.0505,
+    "nitrogenKgHa": 439.73,
+    "peakPestPressure": 0,
+    "pestPressure": 0,
+    "readyAtDay": null,
+    "stage": 2,
+    "stress": {
+      "cold": 0,
+      "heat": 0,
+      "nitrogen": 0,
+      "water": 1,
+    },
+    "stressDaysCount": 30,
+    "stressSum": 1.9769,
+  },
+  "events": [
+    {
+      "data": {
+        "biomass": 0.1026,
+        "stage": 1,
+      },
+      "dayIndex": 5,
+      "kind": "stage",
+    },
+    {
+      "data": {
+        "biomass": 0.3142,
+        "stage": 2,
+      },
+      "dayIndex": 18,
+      "kind": "stage",
+    },
+    {
+      "data": {
+        "value": 0.41,
+      },
+      "dayIndex": 21,
+      "kind": "stress-onset",
+    },
+  ],
+  "summary": {
+    "cellCount": 1,
+    "daysSimulated": 30,
+    "etoMmTotal": 64,
+    "eventCounts": {
+      "stage": 2,
+      "stress-onset": 1,
+    },
+    "harvestReadyDay": null,
+    "irrigatedMm": 0,
+    "matureCells": 0,
+    "meanNitrogenKgHa": 439.7,
+    "outbreakDays": 0,
+    "rainMm": 0,
+    "stressCellDays": 9,
+    "stressDays": {
+      "cold": 0,
+      "heat": 0,
+      "nitrogen": 0,
+      "water": 9,
+    },
+    "totalYieldKg": 0,
+    "waterUseMm": 30.5,
+    "yieldKgByCrop": {},
+  },
+  "surface": "greenhouse",
+}
+`;
