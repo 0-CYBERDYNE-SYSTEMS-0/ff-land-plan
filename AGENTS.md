@@ -15,6 +15,7 @@ voxel 3D world. The directory is `ff-land-plan` but the package name is
 
 ```bash
 npm run dev        # Vite dev server on http://localhost:5173
+npm test           # Vitest unit tests
 npm run build      # tsc -b && vite build → dist/
 npm run preview    # serve the production build on port 4173
 npm run typecheck  # tsc --noEmit — the primary verification gate
@@ -24,7 +25,7 @@ npm run check:private  # filename guard against committing env/keys/data exports
 ## CI/CD
 
 GitHub Actions (`.github/workflows/`) gates every PR to `main` and every push
-to `main` with two parallel jobs: `typecheck + build` (uploads `dist/` as an
+to `main` with two parallel jobs: `test + typecheck + build` (uploads `dist/` as an
 artifact) and `secret + private-file scan` (gitleaks over full git history,
 pinned binary, plus `tools/check-private-files.mjs` — locally:
 `npm run check:private`). There is no headless screenshot job in CI (removed
@@ -42,8 +43,8 @@ Caveats:
 
 - No linter configured; `npm run typecheck` is the gate. TS strict +
   `noUnusedLocals`/`noUnusedParameters`: an unused import fails the build.
-- There are no tests and no test runner. Verification = typecheck + build +
-  the headless screenshot harness below.
+- `npm test` runs the Vitest unit suite. Verification = tests + typecheck +
+  build; use the headless screenshot harness below for UI smoke checks.
 - Headless smoke: start the dev server, then
   `node tools/appshot.mjs "<url>" <out.png> [WxH] [--gate] [--expect "<text>"]`
   (~40 s/shot; Chrome is killed on a timeout BY DESIGN after the page settles —

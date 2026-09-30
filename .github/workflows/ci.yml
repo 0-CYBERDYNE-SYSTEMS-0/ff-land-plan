@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    name: typecheck + build
+    name: test + typecheck + build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -26,6 +26,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run test
       - run: npm run build
       - name: Upload dist artifact
         uses: actions/upload-artifact@v7

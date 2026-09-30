@@ -23,11 +23,11 @@ export const STRESS_ONSET = 0.4;
 export const STRESS_RELIEF = 0.2;
 
 /** GDD needed for full biomass: catalog growthDays × climatological mean
- * daily GDD over the run window. Deviation of actual weather (or stress-
- * slowed accumulation) from that pace shows up as schedule delay. */
+ * daily GDD over the run window, floored at 1 °C·day so cold windows keep
+ * downstream growth and nitrogen calculations finite. */
 export function gddRequiredC(crop: Crop, meanDailyGddC: number | undefined): number {
   const pace = meanDailyGddC ?? FALLBACK_MEAN_DAILY_GDD_C;
-  return Math.max(1, crop.growthDays) * pace;
+  return Math.max(1, Math.max(1, crop.growthDays) * pace);
 }
 
 /**
