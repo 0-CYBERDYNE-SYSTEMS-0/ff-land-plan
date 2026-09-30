@@ -13,6 +13,7 @@
 //   - Water bucket + GDD are the living memory: droughts and heat carry over.
 
 import { cropLibrary } from '@/data/crops';
+import { plantsForArea } from '@/lib/plan';
 import type { SoilProfile } from '@/lib/soil';
 import type { Crop } from '@/types';
 import type {
@@ -246,6 +247,17 @@ export function stepDay(
     : EMPTY_TODAY;
 
   let cells = state.cells;
+  // Harvest events are per sim cell, so spread each crop's whole-area plant
+  // count over its occupied cells to keep payouts aligned with plan stats.
+  const cellsPerCrop = new Map<number, number>();
+  for (const cell of Object.values(cells)) {
+    cellsPerCrop.set(cell.cropId, (cellsPerCrop.get(cell.cropId) ?? 0) + 1);
+  }
+  const plantsPerCell = (cropId: number): number => {
+    const count = cellsPerCrop.get(cropId) ?? 0;
+    const crop = crops.get(cropId);
+    return crop && count > 0 ? plantsForArea(crop, count) / count : 0;
+  };
   let cellsOwned = false;
   const ownCells = () => {
     if (!cellsOwned) {
@@ -267,8 +279,13 @@ export function stepDay(
   for (const iv of todays) {
     switch (iv.kind) {
       case 'plant': {
+        const existing = cells[iv.cell];
+        if (existing) {
+          cellsPerCrop.set(existing.cropId, (cellsPerCrop.get(existing.cropId) ?? 1) - 1);
+        }
         ownCells();
         cells[iv.cell] = initialCell(iv.cropId, dayIndex, ctx);
+        cellsPerCrop.set(iv.cropId, (cellsPerCrop.get(iv.cropId) ?? 0) + 1);
         neighbors = buildNeighborCache(cells, cropGet);
         events.push({
           dayIndex,
@@ -294,6 +311,7 @@ export function stepDay(
               (c.stressDaysCount ?? 0) > 0 ? (c.stressSum ?? 0) / c.stressDaysCount! : meanStress(c.stress);
             const kg = r2(
               (crop?.yieldKgPerPlant ?? 0) *
+                plantsPerCell(c.cropId) *
                 (1 - 0.5 * seasonMean) *
                 (1 - 0.3 * (c.peakPestPressure ?? c.pestPressure)),
             );
@@ -494,6 +512,7 @@ export function stepDay(
         harvested = true;
         const kg = r2(
           (crop?.yieldKgPerPlant ?? 0) *
+            plantsPerCell(prev.cropId) *
             (1 - 0.5 * seasonMeanStress) *
             (1 - 0.3 * peakPestPressure),
         );
