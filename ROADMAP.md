@@ -37,18 +37,17 @@ public weather/climate/soil APIs.
    the sim doesn't use it. Tomato (50×90 cm) is overcounted ~7×; garlic
    (10×25 cm, per the crop catalog) is undercounted ~2.5×. Yield is the headline
    number.
-2. **NaN on cold-window runs.** `gddRequiredC` (`src/lib/sim/drivers.ts`)
-   returns `growthDays × meanDailyGddC`; a run window whose climatological
-   mean GDD rounds to 0 (winter, cold site) gives `required = 0` → biomass
-   `0/0 = NaN`. No guard at `src/lib/localApi.ts:289`. (Found by reading the
-   code; add a failing test first to confirm.)
+2. **NaN on cold-window runs — fixed 2026-09-30.** `gddRequiredC`
+   (`src/lib/sim/drivers.ts`) now floors required GDD at 1 °C·day when the
+   window's climatological mean is 0. A synthetic cold-window regression
+   covers biomass, nitrogen, and water-use outputs.
 
-### P1 — Test harness · `help wanted`
+### P1 — Test harness · complete
 
-3. **No tests exist.** Add Vitest and golden-output tests for the sim engine
-   (baseline, drought, greenhouse, cold-window scenarios). The reducer is pure,
-   so this is cheap — and it must land before any model retuning so changes
-   are measurable.
+3. **Sim test harness — added 2026-09-30.** Vitest and fixed-output tests now
+   cover the sim engine's baseline, drought, greenhouse, and cold-window
+   scenarios using synthetic environment series. Keep these outputs current
+   before model retuning so changes remain measurable.
 
 ### P2 — Model credibility · `help wanted: model`
 
