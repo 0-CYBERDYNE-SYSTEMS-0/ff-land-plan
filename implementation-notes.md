@@ -1723,3 +1723,18 @@ specialists; patches landed as one PR. Notable decisions:
 - Skipped as out-of-scope: OPS-009 frost-model recalibration, DES-010 3D
   a11y tree, X-010 P2 feature gaps (backup export/import is the highest-value
   CRIT-001 backstop and should be next).
+
+## 2026-09-30 — Crop-specific thermal targets (prep for GDD retuning)
+
+- Added a reference-only table of literature Tbase and GDD-to-harvest targets
+  for nine catalog crops. These totals retain each source's accumulation
+  method, starting event, maturity endpoint, and cultivar range; they are not
+  yet wired into the sim because golden-output tests must land first.
+- When retuning, replace the circular `growthDays × meanDailyGddC` target in
+  `gddRequiredC` with the crop's fixed GDD target. Since catalog entries do not
+  identify cultivars, use the midpoint of a cited cultivar range as the initial
+  representative target; keep legacy fallback behavior for crops without a
+  row. Daily accumulation must use that crop's Tbase and source-compatible
+  threshold method/upper cutoff, preserve the source's sowing or transplant
+  start event, and keep units in °C·days. Calibrate against the sim golden
+  tests before switching behavior.
