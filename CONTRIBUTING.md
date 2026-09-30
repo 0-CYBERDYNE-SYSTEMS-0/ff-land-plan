@@ -25,12 +25,13 @@ Thank you for your interest in contributing! FarmFriend is a collaborative proje
 Before submitting a pull request, ensure:
 
 ```bash
+npm test             # Vitest unit tests — must pass
 npm run typecheck   # TypeScript strict mode — must pass
 npm run build       # Production build — must pass
 npm run check:private  # Checks for accidental secrets/exports
 ```
 
-**Note:** There is no test runner or working linter yet. Verification gates are typecheck and build, plus the headless screenshot harness:
+**Note:** There is no linter configured yet. Verification includes the Vitest unit tests, typecheck, and build. For a UI smoke check, use the headless screenshot harness:
 
 ```bash
 node tools/appshot.mjs "http://localhost:5173/#/farms/1/map" out.png 1440x900 --gate --expect "Plot Designer"
@@ -41,7 +42,7 @@ See [CLAUDE.md](./CLAUDE.md) for full `appshot` usage.
 ## Code contributions
 
 All changes land via pull requests to `main`. CI runs:
-- TypeScript typecheck + build
+- Vitest unit tests, TypeScript typecheck, and build
 - Gitleaks (secrets scan)
 - Private-file guard (`npm run check:private`)
 

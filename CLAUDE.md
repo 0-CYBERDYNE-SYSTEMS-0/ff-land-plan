@@ -15,6 +15,7 @@ voxel 3D world. The directory is `ff-land-plan` but the package name is
 
 ```bash
 npm run dev            # Vite dev server on http://localhost:5173
+npm test               # Vitest unit tests
 npm run build          # tsc -b && vite build → dist/
 npm run preview        # serve the production build on port 4173
 npm run typecheck      # tsc --noEmit — the primary verification gate
@@ -25,8 +26,9 @@ Caveats:
 
 - No linter configured; `npm run typecheck` is the gate. TS strict +
   `noUnusedLocals`/`noUnusedParameters`: an unused import fails the build.
-- There are no tests and no test runner. Verification = typecheck + build +
-  the headless screenshot harness: `node tools/appshot.mjs "<url>" <out.png>
+- `npm test` runs the Vitest unit suite. Verification = tests + typecheck +
+  build; use the headless screenshot harness for UI smoke checks:
+  `node tools/appshot.mjs "<url>" <out.png>
   [WxH] [--gate] [--expect "<text>"] [--vt <ms>]` (~40 s/shot; Chrome killed
   on timeout BY DESIGN — trust GATE/EXPECT lines, not exit codes; scratch PNGs
   in `$TMPDIR/<dir>/`, create dirs first). `--gate` fails on console errors
@@ -36,7 +38,7 @@ Caveats:
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR/push to `main`: typecheck+build
+`.github/workflows/ci.yml` runs on every PR/push to `main`: tests+typecheck+build
 and gitleaks + `check-private-files.mjs` (no screenshot job — run appshot
 locally when needed). `guard-main.yml` turns red for any non-merge commit on
 `main` without a PR — land ALL changes via PRs. `v*` tags trigger

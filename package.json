@@ -20,6 +20,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check:private": "node tools/check-private-files.mjs"
   },
@@ -57,6 +58,7 @@
     "postcss": "^8.5.28",
     "tailwindcss": "^3.4.13",
     "typescript": "^7.0.2",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vitest": "3.2.4"
   }
 }
