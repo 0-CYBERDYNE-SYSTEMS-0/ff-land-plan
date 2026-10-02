@@ -34,10 +34,17 @@ npm run check:private  # Checks for accidental secrets/exports
 **Note:** There is no linter configured yet. Verification includes the Vitest unit tests, typecheck, and build. For a UI smoke check, use the headless screenshot harness:
 
 ```bash
-node tools/appshot.mjs "http://localhost:5173/#/farms/1/map" out.png 1440x900 --gate --expect "Plot Designer"
+node tools/appshot.mjs "http://localhost:5173/#/farms/1/map" out.png 1440x900 --gate --expect "25 cm cells"
 ```
 
-See [CLAUDE.md](./CLAUDE.md) for full `appshot` usage.
+Use `"25 cm cells"` for the designer: `"Plot Designer"` also appears in the
+page title of a Farm-not-found page, so it can pass falsely. See
+[CLAUDE.md](./CLAUDE.md) for full `appshot` usage. `appshot` needs a local
+Chrome/Chromium; CI does not run it.
+
+**Changing the sim model?** The golden snapshots in `src/lib/sim/__snapshots__/`
+are the contract. Update them only with `npx vitest run -u` and explain the
+diff in the PR; an unexplained snapshot change is a bug.
 
 ## Code contributions
 
