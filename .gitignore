@@ -55,3 +55,4 @@ AGENTS.local.md
 # Local working outputs — kept on disk, never committed (heavy binaries)
 dogfood-output/
 videos/
+.claude/
