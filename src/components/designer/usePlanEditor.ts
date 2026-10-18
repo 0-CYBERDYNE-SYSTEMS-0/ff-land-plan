@@ -21,6 +21,7 @@ import {
   type PlanStats,
 } from '@/lib/plan';
 import { drawPlan, renderPlanToPng, type RenderOptions, type SimOverlayChannels } from '@/lib/renderPlan';
+import { parsePlanJson, serializePlanJson } from '@/lib/planTransfer';
 import { isInputCaptured } from '@/lib/inputArbiter';
 import { useFarm } from '@/hooks/useFarms';
 import { useTheme } from '@/hooks/useTheme';
@@ -1147,6 +1148,37 @@ export function usePlanEditor(farmId: number) {
     downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${fileBase}-shopping-list.csv`);
   }, [farm?.name, stats]);
 
+  const exportJson = useCallback(() => {
+    const plan = planRef.current;
+    if (!plan) return;
+    const filename = `${(farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-plan.json`;
+    downloadBlob(
+      new Blob([serializePlanJson(plan)], { type: 'application/json;charset=utf-8' }),
+      filename,
+    );
+    toast.success(`Exported ${filename}`);
+  }, [farm?.name]);
+
+  const importJson = useCallback(async (file: File) => {
+    try {
+      const imported = parsePlanJson(await file.text(), farmId);
+      const previous = planRef.current;
+      replacePlan(imported, {
+        save: true,
+        ...(previous ? { recordHistory: clonePlan(previous) } : {}),
+      });
+      setDraftWidth(imported.widthM);
+      setDraftHeight(imported.heightM);
+      setDraftAllowOutsideBeds(imported.allowOutsideBeds);
+      setDraftSurface(imported.surface ?? 'outdoor');
+      setSettingsOpen(false);
+      fitToView();
+      toast.success('Plan imported and saved locally.');
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }, [farmId, fitToView, replacePlan]);
+
   const isLoading = farmLoading || cropsLoading || planLoading || !planRef.current;
 
   useEffect(() => {
@@ -1435,6 +1467,8 @@ export function usePlanEditor(farmId: number) {
     getCellFromEvent,
     exportPng,
     exportCsv,
+    exportJson,
+    importJson,
     updateStats,
   };
 }

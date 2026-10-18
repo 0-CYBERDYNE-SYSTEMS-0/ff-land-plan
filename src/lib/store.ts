@@ -26,6 +26,7 @@ import {
 import { estimateFrostDates } from '@/lib/frost';
 
 const STORAGE_KEY = 'ff-pro:v1';
+const DEMO_SEEDS_VERSION = 1;
 
 export interface AppState {
   farms: Farm[];
@@ -41,6 +42,8 @@ export interface AppState {
    * config + frozen envSeries + summary only — state is rebuilt by replay,
    * never stored per-tick. Not seeded, not re-seeded with demo content. */
   simRuns: RunRecord[];
+  /** Version of the one-time demo farm/plan seed migration applied to this store. */
+  demoSeedsVersion: number;
   counters: { farm: number; crop: number; sensor: number; reading: number; sim: number };
 }
 
@@ -61,6 +64,7 @@ function seedState(): AppState {
     plans: { ...seedPlans },
     alertReads: {},
     simRuns: [],
+    demoSeedsVersion: DEMO_SEEDS_VERSION,
     counters: {
       farm: farms.length + 1,
       crop: 1000, // custom crops start above the static library range
@@ -80,25 +84,24 @@ function load(): AppState {
     // Forward-compat: merge over a fresh seed shape so missing keys get defaults.
     const merged = { ...fresh, ...parsed };
 
-    // Demo farms (ids shipped in seedFarms) are SHOWCASE content: re-seed their
-    // records and plans on every load so demos always render their intended
-    // layout, and deleting/messing up one is fixed by a reload. User-created
-    // farms and plans (ids above the seed range) always win untouched.
+    // Seed demo farms/plans only when initializing this version of the store.
+    // Existing records always win, including demo farms/plans edited by users;
+    // later launches must not restore a deleted demo or overwrite its changes.
+    const storedFarms = Array.isArray(parsed.farms) ? parsed.farms : fresh.farms;
+    const storedPlans =
+      typeof parsed.plans === 'object' && parsed.plans !== null ? parsed.plans : fresh.plans;
     const seedFarmIds = new Set(fresh.farms.map((f) => f.id));
-    merged.farms = [
-      ...fresh.farms,
-      ...parsed.farms.filter((f) => !seedFarmIds.has(f.id)),
-    ];
-    for (const key of Object.keys(fresh.plans)) {
-      const stored = parsed.plans?.[Number(key)];
-      // Demo plans are showcase content (re-seeded above), but keep the
-      // user's chosen surface: silently reverting an enclosure to the seed
-      // value swaps 3D shells/floor and sim shelter without warning (audit
-      // DES-005).
-      merged.plans[Number(key)] =
-        stored?.surface != null
-          ? { ...fresh.plans[Number(key)]!, surface: stored.surface }
-          : fresh.plans[Number(key)]!;
+    const storedFarmById = new Map(storedFarms.map((farm) => [farm.id, farm]));
+    if ((parsed.demoSeedsVersion ?? 0) < DEMO_SEEDS_VERSION) {
+      merged.farms = [
+        ...fresh.farms.map((farm) => storedFarmById.get(farm.id) ?? farm),
+        ...storedFarms.filter((farm) => !seedFarmIds.has(farm.id)),
+      ];
+      merged.plans = { ...fresh.plans, ...storedPlans };
+      merged.demoSeedsVersion = DEMO_SEEDS_VERSION;
+    } else {
+      merged.farms = storedFarms;
+      merged.plans = storedPlans;
     }
 
     // Sim runs are additive user data (never seeded): keep the stored list

@@ -1,7 +1,35 @@
-# HANDOFF — FarmFriend voxel-3D upgrade (`pro-upgrade` branch)
+# HANDOFF — FarmFriend Land Plan
 
-> **Current priorities and open gaps (2026-09-25): see [`ROADMAP.md`](ROADMAP.md).**
-> This file is the historical build log.
+> Current checkout (2026-10-17): FarmFriend is a local-first farm planner and
+> simulator built with React 19, TypeScript, and Vite 8. This document preserves
+> dated implementation logs; where their dependency or CI notes conflict with
+> the current checkout, use `package.json` and `README.md` as the source of truth.
+> Current priorities and open gaps: see [`ROADMAP.md`](ROADMAP.md).
+
+## Open-source quickstart
+
+Requires Node.js 20 or newer.
+
+```sh
+git clone https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan.git
+cd ff-land-plan
+npm ci
+npm run dev
+```
+
+Verify changes with `npm test`, `npm run typecheck`, and `npm run build`. The
+GitHub Pages production build uses `npm run build:pages`; `npm run test:e2e`
+checks the build under `/ff-land-plan/`. Pages deployment is manual and requires
+an approved workflow run after Pages is enabled separately in repository settings.
+
+Weather, soil, and climate data come from public providers. Open-Meteo's free API
+is for non-commercial use; commercial deployments need an appropriate
+[Open-Meteo plan](https://open-meteo.com/en/pricing).
+
+## Historical handoff (2026-08-25)
+
+> The notes below document the historical voxel-3D upgrade and later missions;
+> dates and branch names in this section are archival, not the current checkout.
 
 **Status at handoff (2026-08-25): pro-upgrade phases 1–7 and all 3D phases 0–5 are
 complete; the fun-UX/game layer is shipped; the `src/creative/` voxel asset library
@@ -102,7 +130,7 @@ logs in `implementation-notes.md`. Branch never merged by agents.
 
 ### How to run
 
-- `npm install`, then `npm run dev`. Vite's default URL is
+- `npm ci`, then `npm run dev`. Vite's default URL is
   http://localhost:5173 (the current beta session runs at http://localhost:5177).
   Verification gate: `npm run typecheck` (`npx tsc --noEmit`).
 - Routing is hash-based: `#/` (dashboard), `#/crops`, `#/farms/1/map`,
@@ -212,12 +240,13 @@ re-verified, three.js still its own lazy chunk.
 
 Full reasoning lives in this branch's planning session; the decisions:
 
-1. **Vanilla three.js in a React island — NOT react-three-fiber.** The app is
-   React 18; R3F v9+ requires React 19, so R3F would pin us to its legacy v8
-   maintenance branch. One `<World3D>` component owns a canvas, builds the
-   scene imperatively in an effect, runs its own rAF loop, and receives plain
-   props (`PlanState`, date, weather, lat/lng). Only revisit if React 19
-   upgrade happens first. Use `camera-controls` (yomotsu) for orbit/pinch.
+1. **Vanilla three.js in a React island — not react-three-fiber.** The current
+   application uses React 19. Keeping the existing imperative three.js island is
+   an architectural choice, not a React-version constraint. One `<World3D>`
+   component owns a canvas, builds the scene imperatively in an effect, runs its
+   own rAF loop, and receives plain props (`PlanState`, date, weather, lat/lng).
+   Only revisit if a new design decision calls for it. Use `camera-controls`
+   (yomotsu) for orbit/pinch.
 2. **Draw-call budget < 80 worst case.** Ground layer = ONE plane with a baked
    `CanvasTexture` (reuse `renderPlan.drawPlan` onto an offscreen canvas —
    do not write a second ground renderer). Plants = one `InstancedMesh` per
@@ -353,8 +382,9 @@ Monitoring and Dashboard. Don't migrate or delete; the designer uses
 6. **TS strict + noUnusedLocals/noUnusedParameters**: unused imports fail the
    build. `npm run lint` is broken repo-wide (no ESLint installed);
    `npm run typecheck` is the gate.
-7. **React 18, not 19** — this is why R3F is off the table (decision 1).
-   A React 19 bump is a separate, deliberate project.
+7. **React 19** — this is the current dependency version (see `package.json`).
+   The 3D renderer remains vanilla three.js by architectural choice, not because
+   of a React compatibility restriction.
 8. **`drawPlan` has three consumers** (interactive canvas, PNG export, 3D
    ground tiles path): any new visual layer MUST be an opt-in `RenderOptions`
    flag defaulting OFF or it leaks into exports/world. Overlays shipped this
@@ -369,18 +399,17 @@ Monitoring and Dashboard. Don't migrate or delete; the designer uses
 
 ## Verification gates (run before calling anything done)
 
-1. `npm run typecheck` — clean at handoff.
-2. `npm run build` — clean as of 2026-09-04 (main chunk ~533 kB / ~157 kB gzip;
-   the chunk-size warning is recharts and is expected — but three.js must
-   land in its own lazy chunk, not here).
-3. Automated smoke (replaces ad-hoc Playwright): dev server up, then
-   `node tools/appshot.mjs "<url>" <out.png> [WxH] --gate [--expect "<text>"]`
-   per route (~40 s/shot; Chrome killed on timeout BY DESIGN — trust the
-   GATE/EXPECT lines + PNG bytes, not exit codes). Showcase pages assert
-   `--expect "showcase-ready N"` (boot probe not mounted there). Scratch
-   PNGs go in `$TMPDIR/<dir>/` (never `/tmp`, never the repo unless archiving
-   evidence); create target dirs first — Chrome won't mkdir.
-4. Dashboard network tab must show NO three.js chunk until the World toggle
+1. `npm test`, `npm run typecheck`, and `npm run build` — unit tests, type check,
+   and the standard production build.
+2. `npm run build:pages` — production static build with `/ff-land-plan/` as the
+   Vite base path.
+3. `npm run test:e2e` — Playwright smoke against that Pages-path production
+   build; this check also runs in GitHub Actions CI.
+4. For other local route checks, use
+   `node tools/appshot.mjs "<url>" <out.png> [WxH] --gate [--expect "<text>"]`.
+   Showcase pages assert `--expect "showcase-ready N"` (boot probe not mounted
+   there). Scratch PNGs go in `$TMPDIR/<dir>/`; create target dirs first.
+5. Dashboard network tab should show NO three.js chunk until the World toggle
    is clicked.
 
 ## Suggested skills for the next session

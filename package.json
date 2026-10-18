@@ -1,7 +1,7 @@
 {
   "name": "ff-voxel-twin",
   "version": "1.0.0",
-  "description": "FarmFriend — Voxel Digital Twin Platform for farms and gardens",
+  "description": "FarmFriend — farm planner and simulator for gardens and small farms",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -19,8 +19,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:pages": "tsc -b && vite build --base=/ff-land-plan/",
     "preview": "vite preview",
+    "preview:pages": "node tools/preview-pages.mjs",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "check:private": "node tools/check-private-files.mjs"
   },
@@ -49,6 +52,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
