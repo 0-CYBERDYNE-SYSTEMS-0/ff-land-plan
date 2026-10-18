@@ -36,6 +36,28 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  playwright-smoke:
+    name: Playwright production Pages-path smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Save smoke screenshot and trace
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pages-smoke
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
   secrets:
     name: secret + private-file scan
     runs-on: ubuntu-latest

@@ -6,7 +6,7 @@ when working with code in this repository. Last refreshed 2026-09-25 against
 
 ## Project
 
-FarmFriend Voxel Digital Twin — a React 18 + TypeScript + Vite SPA for farm
+FarmFriend — a React 19 + TypeScript + Vite 8 SPA for farm
 planning (voxel crop map, weather, sensors, simulations) with a procedural
 voxel 3D world. The directory is `ff-land-plan` but the package name is
 `ff-voxel-twin`; both refer to this project.
@@ -16,7 +16,10 @@ voxel 3D world. The directory is `ff-land-plan` but the package name is
 ```bash
 npm run dev        # Vite dev server on http://localhost:5173
 npm test           # Vitest unit tests
+npm run test:e2e   # Playwright production smoke at /ff-land-plan/
 npm run build      # tsc -b && vite build → dist/
+npm run build:pages   # static build with /ff-land-plan/ base path
+npm run preview:pages # serve the Pages-path build locally
 npm run preview    # serve the production build on port 4173
 npm run typecheck  # tsc --noEmit — the primary verification gate
 npm run check:private  # filename guard against committing env/keys/data exports
@@ -25,11 +28,16 @@ npm run check:private  # filename guard against committing env/keys/data exports
 ## CI/CD
 
 GitHub Actions (`.github/workflows/`) gates every PR to `main` and every push
-to `main` with two parallel jobs: `test + typecheck + build` (uploads `dist/` as an
-artifact) and `secret + private-file scan` (gitleaks over full git history,
-pinned binary, plus `tools/check-private-files.mjs` — locally:
-`npm run check:private`). There is no headless screenshot job in CI (removed
-2026-09-25 to save runner time) — run appshot locally when a change needs it.
+to `main` with three parallel jobs: `test + typecheck + build` (uploads `dist/`
+as an artifact), the Playwright production Pages-path smoke (`npm run test:e2e`),
+and `secret + private-file scan` (gitleaks over full git history, pinned binary,
+plus `tools/check-private-files.mjs` — locally: `npm run check:private`). The
+Playwright job validates the static build under `/ff-land-plan/` and uploads its
+smoke screenshot/trace artifacts. Use `tools/appshot.mjs` locally for additional
+route-specific screenshots. `.github/workflows/pages.yml` is manually dispatched;
+its `deploy_to_pages` boolean defaults to false and the deploy job runs only when
+it is explicitly true. Pages must be enabled separately in repository settings;
+do not enable Pages or deploy without approval.
 Pushing a `v*` tag triggers `release.yml` → typed + built tarball attached to
 an auto-created GitHub Release. Dependabot opens weekly npm/Actions bump PRs
 (react/react-dom/@types/* bump as one unit). `tools/appshot.mjs` resolves
@@ -43,8 +51,9 @@ Caveats:
 
 - No linter configured; `npm run typecheck` is the gate. TS strict +
   `noUnusedLocals`/`noUnusedParameters`: an unused import fails the build.
-- `npm test` runs the Vitest unit suite. Verification = tests + typecheck +
-  build; use the headless screenshot harness below for UI smoke checks.
+- `npm test` runs the Vitest unit suite. `npm run test:e2e` runs the Playwright
+  production Pages-path smoke. Verification = tests + typecheck + build; use the
+  headless screenshot harness below for additional UI route checks.
 - Headless smoke: start the dev server, then
   `node tools/appshot.mjs "<url>" <out.png> [WxH] [--gate] [--expect "<text>"]`
   (~40 s/shot; Chrome is killed on a timeout BY DESIGN after the page settles —
@@ -92,8 +101,8 @@ Frontends consuming those seams:
    `companionHalos`, `layers`, and the sim overlays `simMoisture`/`simStress`/
    `simReady` are shipped examples). Keep renderPlan free of
    remote `drawImage` (export taint).
-2. **World3D** (lazy island, vanilla three.js — NOT react-three-fiber; React 18
-   constraint): init effect runs ONCE per mount/farm (deps `[sceneReady,
+2. **World3D** (lazy island, vanilla three.js — NOT react-three-fiber): init
+   effect runs ONCE per mount/farm (deps `[sceneReady,
    farmId]`; everything else flows through refs or the incremental-update
    effect keyed on `planVersion`). Live weather reaches the rAF loop through a
    ref (graceful offline fallback + "cached" chip). `src/three/sky.ts` owns THE

@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import {
   BoxSelect,
   Brush,
@@ -13,6 +14,7 @@ import {
   Settings,
   Slash,
   Undo2,
+  Upload,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -46,12 +48,13 @@ const TOOL_OPTIONS: { tool: Tool; label: string; key: string; icon: typeof Mouse
 ];
 
 export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
+  const importInputRef = useRef<HTMLInputElement>(null);
   const {
     tool, setTool,
     brushSize, setBrushSize,
     eraseLayer, setEraseLayer,
     rectMode, setRectMode,
-    undo, redo, fitToView, exportPng, exportCsv,
+    undo, redo, fitToView, exportPng, exportCsv, exportJson, importJson,
     settingsOpen, setSettingsOpen,
     stats,
     draftWidth, setDraftWidth,
@@ -204,6 +207,27 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
           <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={exportCsv} disabled={!stats || stats.perCrop.length === 0} title="Export CSV">
             <FileSpreadsheet className="w-3.5 h-3.5" /> <span className="hidden sm:inline">CSV</span>
           </Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={exportJson} title="Export plan JSON">
+            <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">JSON</span>
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={() => importInputRef.current?.click()} title="Import plan JSON">
+            <Upload className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Import</span>
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="sr-only"
+            tabIndex={-1}
+            aria-label="Choose a FarmFriend plan JSON file"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = '';
+              if (file && window.confirm('Replace this farm’s current plan with the imported plan?')) {
+                void importJson(file);
+              }
+            }}
+          />
           <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={() => setSettingsOpen((o) => !o)} title="Settings">
             <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Settings</span>
           </Button>

@@ -307,7 +307,7 @@ export function Dashboard() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {farms.length === 0
               ? 'Add your first farm to get started'
-              : `${farms.length} farm${farms.length !== 1 ? 's' : ''} in your digital twin`}
+              : `${farms.length} farm${farms.length !== 1 ? 's' : ''} in your planner`}
           </p>
         </div>
         <Link href="/farms/new">
@@ -326,13 +326,13 @@ export function Dashboard() {
               <Sprout className="w-8 h-8 text-primary" />
             </div>
             <div>
-              <h2 className="font-semibold">Your digital farm starts here</h2>
+              <h2 className="font-semibold">Start planning your farm</h2>
               <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-                Import GPS coordinates to generate a real 3D terrain replica. Plant crops, simulate seasons, and monitor everything in one place.
+                Map beds, paths, and crops; check weather and frost dates; and explore seasonal what-if scenarios before planting.
               </p>
             </div>
             <div className="flex gap-3 justify-center flex-wrap">
-              {['Live weather data', 'Plot designer', 'Yield simulations', 'IoT sensor support'].map((tag) => (
+              {['Live weather', 'Plot designer', 'Yield simulations', 'Frost dates'].map((tag) => (
                 <Badge key={tag} variant="secondary" className="text-xs">
                   {tag}
                 </Badge>

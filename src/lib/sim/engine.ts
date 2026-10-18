@@ -403,6 +403,21 @@ export function stepDay(
   // Shelter at ingestion: one effective env per day feeds every consumer in
   // the pass below (outdoor passes through by reference).
   const env2 = effectiveEnvironmentForSurface(env, surface);
+  // The drought preset includes a +2 °C scenario delta. Without a guard, that
+  // extra warmth can accelerate a crop past its harvest threshold before the
+  // rainfall deficit becomes limiting, producing more yield than baseline.
+  // Keep drought growth's thermal pace no faster than the same day's raw
+  // climate; drought/water/heat stress can still reduce it below baseline.
+  const growthEnv =
+    config.scenario === 'drought' && env.raw
+      ? {
+          ...env2,
+          gddBase10C: Math.min(
+            env2.gddBase10C,
+            Math.max(0, (env.raw.tMinC + env.raw.tMaxC) / 2 - 10),
+          ),
+        }
+      : env2;
 
   for (const key of Object.keys(cells)) {
     const prev = cells[key]!;
@@ -468,7 +483,7 @@ export function stepDay(
         1,
         Math.max(water, heat, cold, nitrogen) + antagonistStressAdd(nb),
       );
-      gddAccumC = r2(prev.gddAccumC + gddGain(env2, maxStress, companionRateBonus(nb)));
+      gddAccumC = r2(prev.gddAccumC + gddGain(growthEnv, maxStress, companionRateBonus(nb)));
       biomassFrac = r4(biomassFromGdd(gddAccumC, required));
       stage = stageForBiomass(biomassFrac);
       floweringFrac = r4(floweringForBiomass(biomassFrac));
