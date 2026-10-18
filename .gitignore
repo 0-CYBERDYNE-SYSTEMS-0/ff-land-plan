@@ -34,6 +34,8 @@ dist-ssr
 *.tsbuildinfo
 coverage
 .vite
+test-results
+playwright-report
 
 # Personal
 AGENTS.local.md
