@@ -7,7 +7,7 @@
  * showcase cell grounds without a ceiling).
  */
 import * as THREE from 'three';
-import { PALETTE, Voxel, mixColor, rng } from '@/creative/voxel';
+import { PALETTE, Voxel, buildVoxelGeometry, group, mixColor, rng } from '@/creative/voxel';
 import { C, plankTone, solidMesh, weighted } from './shared';
 
 // --- precomputed accent tones (module-load mixes are deterministic) ----------
@@ -27,42 +27,61 @@ const LED_GREEN = mixColor(PALETTE.leafLight, PALETTE.white, 0.35);
 export function makeGrowLight(): THREE.Object3D {
   const rand = rng(6101);
   const solid: Voxel[] = [];
+  const glow: Voxel[] = [];
+  const LEFT = 0.6;
+  const RIGHT = 12.4;
 
-  // two slim floor stands: T-feet + vertical posts + head fittings
-  for (const px of [0.3, 12.7]) {
-    for (const fz of [-0.55, 0.55])
-      solid.push({ x: px, y: 0.22, z: fz, s: 1.1, color: PALETTE.metalDark });
-    solid.push({ x: px, y: 0.72, z: 0, s: 0.9, color: PALETTE.metalDark });
-    for (let y = 1.4; y <= 6.4; y += 0.5)
-      solid.push({ x: px, y, z: 0, s: 0.55, color: rand() < 0.25 ? PALETTE.ironDark : PALETTE.metal });
-    solid.push({ x: px, y: 6.85, z: 0, s: 0.8, color: PALETTE.metalDark });
+  // two floor stands: splayed T-feet, square uprights on flared collars, yoke
+  for (const px of [LEFT, RIGHT]) {
+    // foot bar lying on the floor, black pads at both splayed tips
+    for (let fz = -2.2; fz <= 2.2; fz += 0.55)
+      solid.push({ x: px, y: 0.3, z: fz, s: 0.6, color: PALETTE.metalDark });
+    for (const fz of [-2.2, 2.2])
+      solid.push({ x: px, y: 0.12, z: fz, s: 0.5, color: PALETTE.black });
+    // upright on a flared collar, rising to a yoke that cradles the bar
+    solid.push({ x: px, y: 0.9, z: 0, s: 1.2, color: PALETTE.metalDark });
+    for (let y = 1.6; y <= 6.4; y += 0.5)
+      solid.push({ x: px, y, z: 0, s: 0.75, color: rand() < 0.25 ? PALETTE.ironDark : PALETTE.metal });
+    solid.push({ x: px, y: 6.9, z: 0, s: 1.0, color: PALETTE.metalDark });
   }
 
-  // slender extrusion: two charcoal rails + dark spine, LED strip underneath
+  // slender extrusion: two charcoal rails + dark spine; LED strip is unlit glow
   for (let x = 0; x <= 13; x++) {
     for (const z of [-0.5, 0.5])
       solid.push({ x, y: 7.1, z, s: 0.95, color: rand() < 0.2 ? HOUSING_DARK : HOUSING });
     solid.push({ x, y: 7.1, z: 0, s: 0.7, color: HOUSING_DARK });
-    // bright emissive-LOOKING underside strip (vertex colors only)
-    solid.push({ x, y: 6.55, z: 0, s: 0.85, color: x % 4 === 2 ? LED_HOT : LED_GLOW });
+    glow.push({ x, y: 6.55, z: 0, s: 0.85, color: x % 4 === 2 ? LED_HOT : LED_GLOW });
     // glow slivers proud under the rails so the lit face reads from the side
     for (const z of [-0.62, 0.62])
-      solid.push({ x, y: 6.6, z, s: 0.5, color: x % 4 === 2 ? LED_HOT : LED_GLOW });
+      glow.push({ x, y: 6.6, z, s: 0.5, color: x % 4 === 2 ? LED_HOT : LED_GLOW });
   }
   // end caps close the extrusion
   for (const x of [-0.12, 13.12])
     for (const z of [-0.5, 0, 0.5])
       solid.push({ x, y: 7.1, z, s: 0.9, color: HOUSING_DARK });
 
-  // tiny driver box on top of the bar
-  solid.push({ x: 6.5, y: 7.75, z: 0, s: 1.25, color: HOUSING });
-  solid.push({ x: 6.5, y: 8.45, z: 0, s: 0.5, color: HOUSING_DARK });
-  // power cable strapped down the leg to a floor plug
-  for (let y = 7.3; y >= 1.2; y -= 0.55)
-    solid.push({ x: 12.32, y, z: 0.3, s: 0.26, color: PALETTE.black });
-  solid.push({ x: 12.2, y: 0.4, z: 0.85, s: 0.5, color: PALETTE.charcoal });
+  // light spill on the floor under the bar
+  for (let x = 1.5; x <= 11.5; x += 1)
+    for (let z = -0.8; z <= 0.8; z += 0.8)
+      glow.push({ x, y: 0.1, z, s: 0.6, color: mixColor(LED_GLOW, PALETTE.white, 0.3) });
 
-  return solidMesh(solid);
+  // driver box strapped to the left upright, front face toward the viewer
+  solid.push({ x: LEFT, y: 3.3, z: 0.9, s: 1.2, color: HOUSING });
+  solid.push({ x: LEFT, y: 3.9, z: 1.55, s: 0.4, color: HOUSING_DARK });
+  for (const sy of [2.85, 3.65])
+    for (const sx of [LEFT - 0.5, LEFT, LEFT + 0.5])
+      solid.push({ x: sx, y: sy, z: 1.55, s: 0.22, color: PALETTE.black }); // strap bands
+  // power cable down the post to a floor run and a plug on the floor
+  for (let y = 2.6; y >= 0.9; y -= 0.5)
+    solid.push({ x: LEFT, y, z: 0.9, s: 0.26, color: PALETTE.black });
+  for (let z = 1.1; z <= 2.7; z += 0.4)
+    solid.push({ x: LEFT, y: 0.72, z, s: 0.26, color: PALETTE.black });
+  solid.push({ x: LEFT, y: 0.3, z: 2.95, s: 0.6, color: PALETTE.charcoal });
+
+  return group([
+    solidMesh(solid),
+    new THREE.Mesh(buildVoxelGeometry(glow), new THREE.MeshBasicMaterial({ vertexColors: true })),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
