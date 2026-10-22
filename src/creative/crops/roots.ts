@@ -6,7 +6,7 @@
 import { PALETTE, Voxel } from '@/creative/voxel';
 import {
   CropPalette, foliage, shade, put, vline, soilPad, finishPlant,
-  sproutLoop, frond, tubeLeaf, flowerDot, blob, umbel,
+  sproutLoop, frond, flowerDot, blob, umbel,
 } from './shared';
 
 const R8: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
@@ -60,19 +60,23 @@ export function makeRootCarrot(stage: number, pal: CropPalette = CARROT_PAL): Re
     umbel(sway, 0, 6.6, 0, 1, pal.accent);
   }
 
-  // root telegraphing: colored shoulder pushing at the soil
-  if (stage === 4) {
-    blob(stat, 0, 0.75, 0, 1.6, 0.7, 1.6, mixShoulder(pal), shade(mixShoulder(pal), PALETTE.soilDark, 0.35), { seed: 44 });
-    put(stat, 0, 1.5, 0, shade(mixShoulder(pal), 0xffffff, 0.25), 0.55);
+  // root shoulders: s4 three roots colouring just under the crust; s5 four roots
+  // lifted 2–3 voxels proud of the soil line and at full girth, green crown on each
+  if (stage >= 4) {
+    const roots: Array<[number, number]> = stage === 5
+      ? [[1.8, 0.3], [-0.4, 1.8], [-1.6, -0.9], [0.9, -1.7]]
+      : [[1.7, 0.4], [-0.5, 1.6], [-1.5, -0.8]];
+    const lift = stage === 5 ? 2.2 : 0.9;
+    const rad = stage === 5 ? 1.05 : 0.85;
+    const c = stage === 5 ? pal.fruit : mixShoulder(pal);
+    const earthy = shade(c, PALETTE.soilDark, 0.35);
+    roots.forEach(([x, z], i) => {
+      blob(stat, x, lift, z, rad, rad, rad, c, earthy, { seed: 44 + i });
+      put(stat, x, lift + rad + 0.5, z, shade(pal.stem, pal.light, 0.3), 0.6);
+    });
   }
   if (stage === 5) {
-    // harvest-ready: the root has heaved the crust open — 2–3 voxels of fat
-    // pal.fruit crown stand clear of the crack, showing the root's girth
-    blob(stat, 0, 1.0, 0, 1.85, 1.05, 1.85, pal.fruit, shade(pal.fruit, PALETTE.shadow, 0.25), { seed: 45 });
-    put(stat, 0, 2.15, 0, shade(pal.fruit, 0xffffff, 0.3), 0.65);    // glossy crown
-    put(stat, 1.3, 1.8, 0.3, shade(pal.fruit, 0xffffff, 0.18), 0.5); // shoulder glints
-    put(stat, -1.1, 1.75, -0.9, shade(pal.fruit, 0xffffff, 0.14), 0.45);
-    // the pulled-aside crack: a wet dark crescent arcs around the crown
+    // harvest-ready: the pulled-aside crack, a wet dark crescent on the soil
     const crack: Array<[number, number]> = [[2.3, 0.6], [1.7, 1.7], [0.5, 2.3], [-1.2, 2.0], [-2.2, 0.9]];
     for (let i = 0; i < crack.length; i++) {
       put(stat, crack[i][0], 0.4, crack[i][1], i % 2 ? PALETTE.soilWet : PALETTE.soilDark, 0.75);
@@ -114,6 +118,47 @@ export const ALLIUM_PAL: CropPalette = {
   unripe: 0xe3dcc2,
 };
 
+/* allium tubes: plus-shaped half-voxel section sampled every third step, so a fan reads as one rounded surface */
+const TUBE_CELLS: Array<[number, number]> = [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]];
+
+/** Tube leaf along a polyline: cells every third step, tip cell in `tip`. */
+function tubePath(out: Voxel[], pts: Array<[number, number, number]>, body: number, tip: number): void {
+  for (let s = 0; s < pts.length - 1; s++) {
+    const [ax, ay, az] = pts[s];
+    const [bx, by, bz] = pts[s + 1];
+    const steps = Math.max(1, Math.round(Math.max(Math.abs(bx - ax), Math.abs(by - ay), Math.abs(bz - az)) * 3));
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t;
+      for (const [ox, oz] of TUBE_CELLS) put(out, x + ox, y, z + oz, body, 0.5);
+    }
+  }
+  const [tx, ty, tz] = pts[pts.length - 1];
+  for (const [ox, oz] of TUBE_CELLS) put(out, tx + ox, ty, tz + oz, tip, 0.5);
+}
+
+/** One upright tube leaf: leans out from the neck at angle `a`, bending toward its tip. */
+function fanTube(out: Voxel[], a: number, h: number, lean: number, body: number, tip: number): void {
+  const ux = Math.cos(a), uz = Math.sin(a);
+  tubePath(out, [
+    [0, 0.3, 0],
+    [ux * lean * 0.2, h * 0.5, uz * lean * 0.2],
+    [ux * lean * 0.7, h * 0.85, uz * lean * 0.7],
+    [ux * lean, h, uz * lean],
+  ], body, tip);
+}
+
+/** Round seed head of half-voxel cells, two tones checkered like papery florets. */
+function seedHead(out: Voxel[], x: number, y: number, z: number, r: number, cA: number, cB: number): void {
+  const n = Math.ceil(r * 2);
+  for (let i = -n; i <= n; i++)
+    for (let j = -n; j <= n; j++)
+      for (let k = -n; k <= n; k++) {
+        if ((i * i + j * j + k * k) * 0.25 > r * r) continue;
+        put(out, x + i * 0.5, y + j * 0.5, z + k * 0.5, (i + j + k) % 2 ? cA : cB, 0.5);
+      }
+}
+
 /** Onion/garlic/leek: tube leaves → scape & bud → first kinks → swollen bulb, tops down. */
 export function makeAllium(stage: number, pal: CropPalette = ALLIUM_PAL): ReturnType<typeof finishPlant> {
   const stat: Voxel[] = [];
@@ -126,69 +171,60 @@ export function makeAllium(stage: number, pal: CropPalette = ALLIUM_PAL): Return
   const tip = shade(body, pal.dark, 0.45);   // tube openings read darker
 
   if (stage === 1) {
-    tubeLeaf(sway, 0, 0, 0, 2, 0.6, 0, body, tip);
-    tubeLeaf(sway, 1, 0, 0, 2, -0.5, 0.5, body, tip);
+    for (let i = 0; i < 3; i++) fanTube(sway, i * 2.1, 2.5, 0.6, i % 2 ? body : shade(body, pal.light, 0.2), tip);
     return finishPlant(stat, sway);
   }
 
-  const nTubes = [0, 0, 5, 6, 7, 7][stage];
+  const nTubes = [0, 0, 6, 8, 9, 9][stage];
   const h = [0, 0, 4, 7, 8, 8][stage];
 
   if (stage <= 4) {
-    // tube bases spread on distinct cells so each column stays readable
-    const bases: Array<[number, number]> = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]];
+    // tubes fan evenly round the neck at varied heights
     for (let i = 0; i < nTubes; i++) {
-      const [bx, bz] = bases[i % bases.length];
-      const a = (i / nTubes) * Math.PI * 2;
-      const leanX = Math.cos(a) * 0.5, leanZ = Math.sin(a) * 0.5;
+      const a = (i / nTubes) * Math.PI * 2 + 0.4;
       const c = i % 2 ? body : shade(body, pal.light, 0.2);
       if (stage === 4 && i >= nTubes - 2) {
         // first weakness: the last two tubes kink past mid-height and sag
         // outward — the fold that says the bulb underneath is nearly ripe
-        const ux = Math.sign(bx), uz = Math.sign(bz);
-        const kH = i === nTubes - 2 ? h - 2 : h - 3;
-        vline(sway, bx, 0, bz, bx + ux, kH, bz + uz, c);
-        vline(sway, bx + ux, kH, bz + uz, bx + ux * 2.8, kH - 2.5, bz + uz * 2.8, shade(c, pal.dark, 0.12));
-        vline(sway, bx + ux * 2.8, kH - 2.5, bz + uz * 2.8, bx + ux * 3.8, kH - 3.6, bz + uz * 3.8, shade(c, PALETTE.straw, 0.4));
+        const ux = Math.cos(a), uz = Math.sin(a);
+        tubePath(sway, [[0, 0.3, 0], [ux * 0.5, h - 2, uz * 0.5], [ux * 2.6, h - 4.5, uz * 2.6]], c, tip);
       } else {
-        tubeLeaf(sway, bx, 0, bz, h - (i % 3 === 2 ? 1 : 0), leanX, leanZ, c, tip);
+        fanTube(sway, a, h - (i % 3 === 2 ? 1.5 : 0), 0.9 + (i % 2) * 0.35, c, tip);
       }
     }
     if (stage === 3 || stage === 4) {
-      // central scape with bud / opening bloom
-      vline(sway, 0, 0, 0, 0, h + 1, 0, shade(body, pal.stem, 0.4));
+      // central scape with bud / seed head
+      const scape = shade(body, pal.stem, 0.4);
+      tubePath(sway, [[0, 0.3, 0], [0, h + 1, 0]], scape, scape);
       if (stage === 3) flowerDot(sway, 0, h + 1.8, 0, shade(pal.accent, pal.dark, 0.2), 0.6);
-      else umbel(sway, 0, h + 2, 0, 1, pal.accent);
+      else seedHead(sway, 0, h + 2.2, 0, 1.2, pal.accent, shade(pal.accent, PALETTE.straw, 0.25));
     }
   }
 
+  if (stage === 4) {
+    // bulb swelling under the tubes: a smaller pale mass on the soil
+    blob(stat, 0, 1.6, 0, 1.9, 1.2, 1.9, shade(pal.fruit, PALETTE.white, 0.5), shade(pal.fruit, PALETTE.soilDark, 0.25), { seed: 54 });
+  }
   if (stage === 5) {
-    // HARVEST-READY — the allium read: bulb swollen with shoulders proud of
-    // the soil line, and MOST tops kinked at mid-height, pouring out and down
-    blob(stat, 0, 1.1, 0, 2.0, 1.3, 2.0, pal.fruit, shade(pal.fruit, pal.dark, 0.22), { seed: 55 });
-    blob(stat, 0, 2.4, 0, 0.95, 0.5, 0.95, shade(pal.fruit, 0xffffff, 0.32), null); // taut shoulder sheen
-    put(stat, 0, 2.95, 0, shade(body, pal.dark, 0.2), 0.7); // neck
+    // HARVEST-READY — one wide, pale, round bulb is the first read: sitting on
+    // the soil, darker lower band for the shoulder line, then five straight
+    // tube leaves rising from its neck and a seed head on top
+    const bulb = shade(pal.fruit, PALETTE.white, 0.5);
+    const band = shade(pal.fruit, PALETTE.soilDark, 0.25);
+    blob(stat, 0, 2.0, 0, 2.7, 1.9, 2.7, bulb, band, { seed: 55 });
+    put(stat, 0, 3.9, 0, shade(body, pal.dark, 0.2), 0.8); // neck
     put(stat, 2.3, 0.35, 0.7, PALETTE.soilDark, 0.6);       // crust heaved aside by the swell
     put(stat, -0.8, 0.35, -2.3, PALETTE.soilDark, 0.6);
-    // six tubes fold: rise off the neck, kink at mid-height, pour to the pad
-    const arcs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1]];
-    for (let i = 0; i < arcs.length; i++) {
-      const [dx, dz] = arcs[i];
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.4;
+      const ux = Math.cos(a), uz = Math.sin(a);
       const c = i % 2 ? body : shade(body, pal.light, 0.18);
-      const kY = 4.9 - (i % 3) * 0.55;             // kinks fan over a band, not one point
-      const r1 = 1.1 + (i % 2) * 0.25, r2 = 3.2 - (i % 3) * 0.2;
-      vline(sway, 0, 2.95, 0, dx * r1, kY, dz * r1, c);                                        // rise to the kink
-      vline(sway, dx * r1, kY, dz * r1, dx * r2, kY - 2.4, dz * r2, shade(c, pal.dark, 0.12)); // the pour
-      vline(sway, dx * r2, kY - 2.4, dz * r2, dx * 4.1, 0.9, dz * 4.1, shade(body, pal.dark, 0.28));
-      if (i >= arcs.length - 2) {
-        // a couple of tips have browned off — harvest day is here
-        vline(sway, dx * 4.1, 0.9, dz * 4.1, dx * 4.85, 0.45, dz * 4.85, shade(body, PALETTE.straw, 0.62));
-      } else {
-        vline(sway, dx * 4.1, 0.9, dz * 4.1, dx * 4.75, 0.5, dz * 4.75, tip); // dark tube opening
-      }
+      tubePath(sway, [[0, 3.6, 0], [ux * 0.5, 5.2, uz * 0.5], [ux * 1.2, 6.6, uz * 1.2]], c, tip);
     }
-    // one late tube still reaching — not every top folds the same week
-    tubeLeaf(sway, 0, 3.4, 0, 4, 0.5, -0.35, shade(body, pal.light, 0.12), tip);
+    // one scape bolted to seed — dry parchment head on top
+    const scape = shade(body, PALETTE.straw, 0.35);
+    tubePath(sway, [[0, 3.6, 0], [0.25, 5.4, -0.15], [0.5, 7.0, -0.35]], scape, scape);
+    seedHead(sway, 0.5, 7.6, -0.35, 1.1, shade(pal.accent, PALETTE.straw, 0.45), shade(pal.accent, PALETTE.straw, 0.25));
   }
   return finishPlant(stat, sway);
 }
@@ -245,7 +281,7 @@ function potatoLeaf(
 export function makePotato(stage: number, pal: CropPalette = POTATO_PAL): ReturnType<typeof finishPlant> {
   const stat: Voxel[] = [];
   const sway: Voxel[] = [];
-  soilPad(stat, 3, 909, stage >= 3 ? 1 : 0);
+  soilPad(stat, 3, 909);
 
   if (stage === 0) { sproutLoop(stat, sway, pal, 19); return finishPlant(stat, sway); }
 
@@ -257,12 +293,23 @@ export function makePotato(stage: number, pal: CropPalette = POTATO_PAL): Return
     return finishPlant(stat, sway);
   }
 
-  const H = [0, 0, 3, 4, 5, 4][stage];   // s5 settles slightly — vines stay green, energy in the tubers
+  // hilled mound from s3: low hill forming → cracked hill → heaped, lighter hill
+  const ry = [0, 0, 0, 1.2, 1.8, 2.6][stage];
+  const hillR = 2.1;
+  if (stage >= 3) {
+    const dome: Voxel[] = [];
+    blob(dome, 0, 0, 0, hillR, ry, hillR, stage === 5 ? PALETTE.soilLight : PALETTE.soil, PALETTE.soilDark, { seed: 909 + stage });
+    for (const v of dome) if (v.y >= 1) stat.push(v);
+  }
+
+  const H = [0, 0, 3, 4, 4, 2][stage];   // s5 vines flatten over the hill — energy in the tubers, crowns in view
   const nStems = [0, 0, 5, 6, 7, 7][stage];
   for (let i = 0; i < nStems; i++) {
     const [dx, dz] = R8[i % 8];
     const sh = H - (i % 2);
-    const sx = dx * (i > 3 ? 0.8 : 0.4), sz = dz * (i > 3 ? 0.8 : 0.4);
+    // s4+: stems rise off the hill flanks so the summit and tuber crowns stay open
+    const sr = stage >= 4 ? 1.3 : (i > 3 ? 0.8 : 0.4);
+    const sx = dx * sr, sz = dz * sr;
     const tipX = sx * (1 + sh * 0.2), tipZ = sz * (1 + sh * 0.2);
     vline(stat, sx * 0.4, 0.8, sz * 0.4, tipX, 1 + sh, tipZ, pal.stem);
 
@@ -297,15 +344,22 @@ export function makePotato(stage: number, pal: CropPalette = POTATO_PAL): Return
       flowerDot(sway, bx, 1 + H + 0.5, bz, pal.accent, 0.45);
       flowerDot(sway, bx, 1 + H + 0.85, bz, 0xf7e27a, 0.22); // yellow eye
     }
-    // the pick-me: the hilled mound has cracked — one or two pale tuber
-    // crowns peek through, still planted, ready to dig
-    put(stat, 1, 1.5, -1, pal.fruit, 0.9);
-    put(stat, 1, 2.0, -1, shade(pal.fruit, 0xffffff, 0.18), 0.5);  // crown glint
-    put(stat, 0, 1.18, -1, PALETTE.soilDark, 0.65);               // crack lips
-    put(stat, 1, 1.18, 0, PALETTE.soilDark, 0.6);
-    put(stat, 2, 0.7, -1.2, PALETTE.soilDark, 0.6);
-    put(stat, -1, 1.45, 1, shade(pal.fruit, PALETTE.soilDark, 0.1), 0.65); // second peek
-    put(stat, -2, 0.65, 1.2, PALETTE.soilDark, 0.5);
+  }
+
+  // pale tuber crowns pushed proud of the dome: s4 one peeks through a crack,
+  // s5 three crowns read clearly against the dark soil, each with a crack lip
+  if (stage >= 4) {
+    const pale = shade(pal.fruit, 0xffffff, 0.45);
+    // crowns sit between the stem directions (22.5° gaps) so the vines don't cover them
+    const crowns: Array<[number, number]> = stage === 5
+      ? [[1.57, -0.65], [-0.65, 1.57], [-0.65, -1.57]]
+      : [[1.57, -0.65]];
+    for (const [x, z] of crowns) {
+      const y = ry * Math.sqrt(Math.max(0, 1 - (x * x + z * z) / (hillR * hillR))) + 0.5; // sits on the dome flank
+      put(stat, x, y, z, pale, 1.2);
+      put(stat, x + 0.35, y + 0.7, z + 0.2, shade(pal.fruit, 0xffffff, 0.7), 0.5); // crown glint
+      put(stat, x - 0.9, y - 0.2, z + 0.6, PALETTE.soilDark, 0.6);                 // crack lip
+    }
   }
   return finishPlant(stat, sway);
 }

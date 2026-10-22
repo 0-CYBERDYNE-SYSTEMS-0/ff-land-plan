@@ -299,6 +299,37 @@ export const BUSHBEAN_PAL: CropPalette = {
   unripe: 0x89b564,
 };
 
+/** One hanging pod: sub-voxel cells down a slight curve, seed bulge and gloss. */
+function hangPod(out: Voxel[], px: number, py: number, pz: number, len: number, c: number): void {
+  for (let k = 0; k < len; k++) put(out, px + (k === len - 1 ? 0.3 : 0), py - k * 0.8, pz + (k % 2 ? 0.12 : 0), c, 0.88);
+  put(out, px + 0.46, py - 0.9, pz, c, 0.48);                              // seed bulge
+  put(out, px - 0.22, py - 0.15, pz + 0.3, shade(c, 0xffffff, 0.45), 0.26); // gloss
+}
+
+/** Pod cluster hanging off the canopy edge: three pods fanned around one spoke. */
+function podCluster(out: Voxel[], spoke: number, reach: number, top: number, len: number, c: number): void {
+  for (let j = 0; j < 3; j++) {
+    const a = spoke + (j - 1) * 0.42;
+    hangPod(out, Math.cos(a) * reach, top - j * 0.35, Math.sin(a) * reach, len, c);
+  }
+}
+
+/** Trifoliate bean leaf: a broad terminal leaflet and two side leaflets fanning from the stem tip. */
+function trifoliate(out: Voxel[], x: number, y: number, z: number, dx: number, dz: number, base: number, edge: number, vein: number, seed: number): void {
+  blade(out, x, y, z, dx, dz, 3, 3, 0.25, 0.08, base, vein, edge, seed);
+  blade(out, x, y, z, dz, dx, 2, 3, 0.35, 0.1, base, vein, edge, seed + 1);
+  blade(out, x, y, z, -dz, -dx, 2, 3, 0.35, 0.1, base, vein, edge, seed + 2);
+}
+
+/** Harvest pod: bright cells down a slight curve, with a dark shadow line down its far side. */
+function harvestPod(out: Voxel[], px: number, py: number, pz: number, len: number, c: number, shadowC: number): void {
+  for (let k = 0; k < len; k++) {
+    const z = pz + (k % 2 ? 0.12 : 0);
+    put(out, px + (k === len - 1 ? 0.3 : 0), py - k * 0.9, z, c, 0.9);
+    put(out, px - 0.55, py - k * 0.9, z, shadowC, 0.9);
+  }
+}
+
 /** Bush bean: low mound, white-pink blooms, curved pods dangling at harvest. */
 export function makeBushBean(stage: number, pal: CropPalette = BUSHBEAN_PAL): ReturnType<typeof finishPlant> {
   const stat: Voxel[] = [];
@@ -319,55 +350,44 @@ export function makeBushBean(stage: number, pal: CropPalette = BUSHBEAN_PAL): Re
   }
 
   const H = [0, 0, 3, 4, 4, 5][stage];
-  const nStems = [0, 0, 4, 5, 6, 7][stage];
-  // s5: canopy deepens and thins (fewer mid-stem leaves) so it recedes behind
-  // the fat harvest pods instead of hiding them
-  const leafBase = stage === 5 ? shade(f, pal.dark, 0.22) : f;
+  const nStems = [0, 0, 4, 5, 6, 4][stage];
+  // s5: four cardinal stems, each carrying one large trifoliate leaf — lighter
+  // top faces, staggered heights and dark gaps between leaves break the mass
+  const CARD: Array<[number, number]> = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  const leafBase = stage === 5 ? shade(f, pal.light, 0.3) : f;
   for (let i = 0; i < nStems; i++) {
-    const [dx, dz] = R8[i % 8];
+    const [dx, dz] = stage === 5 ? CARD[i] : R8[i % 8];
     const sh = H - (i % 2);
-    vline(stat, dx * 0.4, 0, dz * 0.4, dx * 1.1, sh, dz * 1.1, pal.stem);
+    const reach = stage === 5 ? 3 : 1.1;
+    vline(stat, dx * 0.4, 0, dz * 0.4, dx * reach, sh, dz * reach, pal.stem);
+    if (stage === 5) {
+      trifoliate(sway, Math.round(dx * reach), sh, Math.round(dz * reach), dx, dz, leafBase, edge, vein, 150 + i * 7);
+      continue;
+    }
     // opposite oval leaves at the tip and mid-stem
     blade(sway, Math.round(dx * 1.1), sh, Math.round(dz * 1.1), dx || 1, dz || 0, 2, 2, 0.5, 0.09, i % 2 ? leafBase : shade(leafBase, pal.light, 0.16), vein, edge, 150 + i * 7);
-    if (sh >= 3 && (stage < 5 || i % 2 === 0)) blade(sway, Math.round(dx * 0.8), sh - 1, Math.round(dz * 0.8), -(dz || 1), -(dx || 0), 2, 2, 0.42, 0.08, shade(leafBase, pal.dark, 0.14), vein, edge, 170 + i * 5);
+    if (sh >= 3) blade(sway, Math.round(dx * 0.8), sh - 1, Math.round(dz * 0.8), -(dz || 1), -(dx || 0), 2, 2, 0.42, 0.08, shade(leafBase, pal.dark, 0.14), vein, edge, 170 + i * 5);
   }
 
   if (stage === 3) {
+    // pale blooms open over the low mound
     for (let i = 0; i < 4; i++) {
       const [dx, dz] = R8[(i * 2 + 1) % 8];
-      flowerDot(sway, dx * 1.6, H + 0.4, dz * 1.6, pal.accent, 0.42);
+      fivePetal(sway, dx * 1.8, H + 0.6, dz * 1.8, pal.accent, PALETTE.flowerYellow);
     }
   }
   if (stage === 4) {
-    // slim young pods dangle at the canopy edge in open air — harvest starting
-    for (let i = 0; i < 4; i++) {
-      const [dx, dz] = R8[(i * 5 + 2) % 8];
-      pod(sway, dx * 2.4, H + 0.3 - (i % 3) * 0.4, dz * 2.4, 2,
-        shade(pal.fruit, pal.light, 0.2));
-    }
+    // slim young pods hang in clusters at the canopy edge — harvest starting
+    for (const spoke of [0.5, 2.6, 4.4]) podCluster(sway, spoke, 2.4, H - 0.2, 2, shade(pal.fruit, pal.light, 0.2));
   }
   if (stage === 5) {
-    // HARVEST: fat pal.fruit pods hang in the open gaps BELOW the leaf canopy —
-    // full-voxel mass, seed bulges and gloss catchlights make them pop against
-    // the deepened foliage at game-camera distance. A few blossoms linger.
-    const podLite = shade(pal.fruit, pal.light, 0.3);
-    const podDeep = shade(pal.fruit, pal.dark, 0.14);
-    for (let i = 0; i < 8; i++) {
-      const [dx, dz] = R8[(i * 5 + 2) % 8];
-      const px = dx * 2.3;
-      const pz = dz * 2.3;
-      const py = 3.6 - (i % 3) * 0.45;
-      const c = i % 4 === 1 ? podDeep : podLite;
-      const len = 3 + (i % 2); // fat 3–4 voxel pods
-      for (let k = 0; k < len; k++) {
-        put(sway, px + (k === len - 1 ? 0.3 : 0), py - k * 0.8, pz + (k % 2 ? 0.12 : 0), c, 0.88);
-      }
-      put(sway, px + 0.46, py - 0.9, pz, c, 0.48);                          // seed bulge
-      put(sway, px - 0.22, py - 0.15, pz + 0.3, shade(c, 0xffffff, 0.45), 0.26); // gloss
-    }
-    for (let i = 0; i < 3; i++) {
-      const [dx, dz] = R8[(i * 3 + 4) % 8];
-      flowerDot(sway, dx * 1.8, H + 0.5, dz * 1.8, pal.accent, 0.46);
+    // HARVEST: four bright pods hang from stalks in the open corners between the
+    // leaf clusters, out past the leaf mass on the canopy edge
+    const pod = shade(PALETTE.leafYoung, PALETTE.straw, 0.4);
+    const podShadow = shade(pod, PALETTE.shadow, 0.6);
+    for (const [dx, dz] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
+      vline(sway, dx * 0.4, H, dz * 0.4, dx * 4, H - 1, dz * 4, pal.stem);
+      harvestPod(sway, dx * 4, H - 1, dz * 4, 5, pod, podShadow);
     }
   }
   return finishPlant(stat, sway);

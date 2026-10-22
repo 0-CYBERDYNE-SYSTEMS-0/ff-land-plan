@@ -630,29 +630,53 @@ export function makeGrowTent(): THREE.Object3D {
   const rand = rng(3701);
   const solid: Voxel[] = [];
   const W = 20; // x: 0..19
-  const D = 20; // z: 0..19, open front at z = D-1
+  const D = 20; // z: 0..19, fabric front at z = D-1 with a zippered doorway
   const H = 23;
+  // doorway: x DX0..DX1 from the floor up to DH; the flap hangs over its left part
+  const DX0 = 7;
+  const DX1 = 12;
+  const DH = 16;
+  const inDoor = (x: number, y: number): boolean => x >= DX0 && x <= DX1 && y <= DH;
+  // duct port: a square hole in the right-hand side wall
+  const inPort = (x: number, y: number, z: number): boolean =>
+    x === W - 1 && y >= 14 && y <= 16 && z >= 8 && z <= 10;
 
   const shell = mixColor(PALETTE.charcoal, PALETTE.black, 0.35);
   const shellLight = mixColor(shell, PALETTE.metalDark, 0.3);
-  // fabric reads as horizontal panel bands with a rare lighter weave fleck
+  const seam = mixColor(shell, PALETTE.metal, 0.3); // taped seam band
+  const glow = mixColor(PALETTE.flowerYellow, PALETTE.white, 0.55);
+  // fabric reads as horizontal panel bands: a taped seam every 6 rows, rare weave fleck
   const wall = (y: number): number => {
+    if (y % 6 === 0) return seam;
     const band = Math.floor(y / 3) % 2 === 0 ? shell : shellLight;
     return rand() < 0.05 ? mixColor(band, PALETTE.metalDark, 0.2) : band;
   };
+  // grow-light spill: fabric around the doorway picks up a warm tint, fading out
+  const spill = (x: number, y: number, base: number): number => {
+    const dx = Math.max(DX0 - x, 0, x - DX1);
+    const dy = Math.max(0, y - DH);
+    const k = Math.max(0, 1 - (dx + dy) / 5);
+    return k > 0 ? mixColor(base, PALETTE.flowerYellow, 0.3 * k) : base;
+  };
 
-  // reflective white floor tray
+  // reflective white floor tray, with light spilling out across the floor at the door
   for (let x = 0; x < W; x++)
     for (let z = 0; z < D; z++)
       solid.push({ x, y: 0, z, s: 0.98, color: rand() < 0.18 ? mixColor(C.frameWhite, PALETTE.gravel, 0.18) : C.frameWhite });
+  for (let x = DX0 - 1; x <= DX1 + 1; x++)
+    for (const z of [D, D + 1])
+      solid.push({ x, y: 0, z, s: 0.98, color: mixColor(C.frameWhite, glow, 0.45) });
 
-  // black shell: back wall, both side walls, ceiling (front left open)
+  // back wall, both side walls (duct port cut out of the right one), ceiling
   for (let z = 0; z < 1; z++)
     for (let x = 0; x < W; x++)
       for (let y = 1; y <= H - 1; y++) solid.push({ x, y, z, color: wall(y) });
   for (const x of [0, W - 1])
-    for (let z = 1; z < D; z++)
-      for (let y = 1; y <= H - 1; y++) solid.push({ x, y, z, color: wall(y) });
+    for (let z = 1; z < D - 1; z++)
+      for (let y = 1; y <= H - 1; y++) {
+        if (inPort(x, y, z)) continue;
+        solid.push({ x, y, z, color: wall(y) });
+      }
   for (let x = 0; x < W; x++)
     for (let z = 0; z < D; z++)
       solid.push({ x, y: H, z, color: wall(H) });
@@ -667,22 +691,34 @@ export function makeGrowTent(): THREE.Object3D {
     for (let y = 1; y <= H - 1; y++)
       solid.push({ x, y, z: 1, s: 0.96, color: C.frameWhite });
 
-  // front opening trim (door frame around the open face)
+  // front fabric face: closed everywhere except the zippered doorway
   for (let y = 1; y <= H - 1; y++)
-    for (const x of [0, W - 1]) solid.push({ x, y, z: D - 1, s: 1.05, color: wall(y) });
-  for (let x = 0; x < W; x++) solid.push({ x, y: H, z: D - 1, s: 1.05, color: wall(H) });
+    for (let x = 0; x < W; x++) {
+      if (inDoor(x, y)) continue;
+      solid.push({ x, y, z: D - 1, color: spill(x, y, wall(y)) });
+    }
+
+  // door frame: metal jambs and head around the opening
+  for (let y = 1; y <= DH + 1; y++)
+    for (const x of [DX0 - 1, DX1 + 1]) solid.push({ x, y, z: D - 1, s: 1.05, color: PALETTE.metalDark });
+  for (let x = DX0 - 1; x <= DX1 + 1; x++)
+    solid.push({ x, y: DH + 1, z: D - 1, s: 1.05, color: PALETTE.metalDark });
   // frame corner connectors at the two front-top corners
   solid.push({ x: 0, y: H + 0.18, z: D - 1, s: 1.35, color: PALETTE.metalDark });
   solid.push({ x: W - 1, y: H + 0.18, z: D - 1, s: 1.35, color: PALETTE.metalDark });
 
-  // zipper track up the right-front edge, slider at hand height
-  for (let y = 1.2; y <= H - 1.2; y += 0.5)
-    solid.push({ x: W - 0.45, y, z: D - 0.85, s: 0.34, color: rand() < 0.3 ? PALETTE.metalDark : PALETTE.metal });
-  solid.push({ x: W - 0.45, y: 6, z: D - 0.7, s: 0.5, color: PALETTE.ironDark });
-  solid.push({ x: W - 0.4, y: 5.5, z: D - 0.4, s: 0.3, color: PALETTE.metalDark });
+  // zipper: a dark tape line with metal teeth beside the flap, slider at hand height
+  for (let y = 1; y <= DH - 1; y++)
+    solid.push({ x: DX0 + 3, y, z: D - 1, s: 0.4, color: y % 2 === 0 ? PALETTE.metal : PALETTE.metalDark });
+  solid.push({ x: DX0 + 3, y: 9.5, z: D - 0.4, s: 0.5, color: PALETTE.ironDark });
+
+  // partly open flap: left part of the doorway, lower edge pulled out and away
+  const flap = mixColor(shellLight, PALETTE.metal, 0.12);
+  for (let x = DX0; x <= DX0 + 2; x++)
+    for (let y = 2; y <= DH - 1; y++)
+      solid.push({ x, y, z: y >= 9 ? D - 1 : D, color: y % 6 === 0 ? seam : flap });
 
   // hanging grow-light bars (two rows), lowered so they read through the mouth
-  const glow = mixColor(PALETTE.flowerYellow, PALETTE.white, 0.55);
   for (const lx of [5, 14])
     for (let lz = 3; lz < D - 3; lz++)
       solid.push({ x: lx, y: H - 5, z: lz, s: 1.05, color: glow });
@@ -691,13 +727,19 @@ export function makeGrowTent(): THREE.Object3D {
       for (let ry = H - 4.6; ry <= H - 1.2; ry += 0.55)
         solid.push({ x: lx, y: ry, z: lz, s: 0.25, color: PALETTE.metalDark }); // suspension
 
-  // seedling trays on the floor
+  // potted seedlings on the floor, visible through the doorway
   for (let x = 3; x <= 16; x += 2)
     for (let z = 4; z <= 15; z += 2) {
       solid.push({ x, y: 0.9, z, s: 0.9, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.2) });
       solid.push({ x, y: 1.5, z, s: 0.5, color: PALETTE.leafYoung });
       solid.push({ x, y: 1.9, z, s: 0.3, color: PALETTE.leaf });
     }
+
+  // duct port: short square stub poking out of the right-hand wall, hollow mouth
+  for (const x of [W, W + 1])
+    for (let z = 8; z <= 10; z++)
+      for (let y = 14; y <= 16; y++)
+        solid.push({ x, y, z, color: y === 14 || y === 16 || z === 8 || z === 10 ? PALETTE.metalDark : PALETTE.black });
 
   // roof exhaust duct + fan
   for (let i = 0; i < 4; i++) solid.push({ x: 9, y: H + 1 + i, z: 9, s: 1.1, color: PALETTE.metalDark });
