@@ -28,7 +28,7 @@
     "check:private": "node tools/check-private-files.mjs"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.9.1",
+    "@hookform/resolvers": "^6.0.0",
     "@radix-ui/react-alert-dialog": "^1.2.1",
     "@radix-ui/react-label": "^2.1.17",
     "@radix-ui/react-progress": "^1.2.1",
