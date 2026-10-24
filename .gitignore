@@ -56,3 +56,6 @@ AGENTS.local.md
 dogfood-output/
 videos/
 .claude/
+
+# Generated draft marketing-demo render; keep the source project visible for review
+marketing/farmfriend-demo/out/farmfriend-demo.mp4
