@@ -291,7 +291,9 @@ export interface GrowingSpaceLevel {
   label: string;
   elevationM: number;
   clearanceM?: number;
-  planting: Record<string, number>;
+  /** @deprecated Read-only migration input; normalized plans store crops in PlanState.targets. */
+  planting?: Record<string, number>;
+  /** @deprecated Read-only migration input; normalized plans store dates in PlanState.targets. */
   plantedAt?: Record<string, string>;
 }
 
@@ -311,6 +313,21 @@ export interface EnvironmentLayout {
   access: EnvironmentAccess[];
   reservations: EnvironmentReservation[];
   growingSpaces: GrowingSpace[];
+}
+
+export type GrowingTargetRef =
+  | { kind: 'floor' }
+  | { kind: 'growing-level'; growingSpaceId: string; levelId: string };
+
+/** Stable, encoded key for a non-floor crop target. */
+export type GrowingTargetKey = string;
+
+export interface GrowingTargetPlan {
+  growingSpaceId: string;
+  levelId: string;
+  /** Environment-local cell keys (`x,y`), restricted to the parent space. */
+  planting: Record<string, number>;
+  plantedAt?: Record<string, string>;
 }
 
 export type EnvironmentAssetMount =
@@ -378,10 +395,23 @@ export interface GardenAsset {
   pattern: AssetPattern;
   emoji: string;
   plantable: boolean;
+  /** Optional documented physical contribution; absent means zero contribution. */
+  physics?: AssetPhysics;
   description: string;
   /** Surfaces this asset is offered on. Omitted = available everywhere. */
   surfaces?: PlanSurface[];
 }
+
+export type AssetPhysics =
+  | { kind: 'light'; watts: number; efficacyUmolJ: number; photoperiodH?: number; footprintM2: number }
+  | { kind: 'fan'; achBoost: number; mixing: number }
+  | { kind: 'hvac'; heatingKw: number; coolingKw: number; electricalKw: number }
+  | { kind: 'dehumidifier'; litresPerDay: number; derateBelowRh: number }
+  | { kind: 'co2'; targetPpm: number; kgPerDay: number }
+  | { kind: 'rack'; tiers: number }
+  | { kind: 'soilless'; reservoirL: number }
+  | { kind: 'water-store'; litres: number }
+  | { kind: 'nursery' };
 
 export interface PlanState {
   farmId: number;
@@ -392,6 +422,8 @@ export interface PlanState {
   /** Simulation surface (canvas zone). Missing = 'outdoor'. */
   surface?: PlanSurface;
   planting: Record<string, number>; // "x,y" -> cropId
+  /** Per-level crop maps; floor planting remains in `planting` for legacy replay compatibility. */
+  targets?: Record<GrowingTargetKey, GrowingTargetPlan>;
   ground: Record<string, string>; // "x,y" -> asset slug
   updatedAt: string;
   // Optional: when each cell was planted (ISO date). Fallback: derive from calendar.

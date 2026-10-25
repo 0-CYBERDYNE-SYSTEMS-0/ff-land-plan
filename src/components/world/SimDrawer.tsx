@@ -14,6 +14,8 @@ export interface CropProgressRow {
   label?: string;
   /** Raw sow date ("" when undated); part of the React key so same-name rows stay unique. */
   plantedAt?: string;
+  targetKey?: string;
+  targetLabel?: string;
   stage: number;
   pct: number;
   stress: number;
@@ -186,7 +188,7 @@ function DiagnosticsPanel({ diag }: { diag: CellDiagnosticRow }) {
   const gddPct = Math.round((diag.gddAccumC / Math.max(1, diag.gddRequiredC)) * 100);
   return (
     <div className="mt-1 rounded-md border border-border bg-muted/30 p-2 text-[11px] leading-relaxed">
-      <div className="font-medium text-foreground">{diag.cropName} — drivers today</div>
+      <div className="font-medium text-foreground">{diag.cropName} · {diag.targetLabel} — drivers today</div>
       <ul className="mt-1 space-y-0.5 text-muted-foreground">
         <li>
           GDD {r1(diag.gddAccumC)} / {r1(diag.gddRequiredC)} °C·day ({gddPct}%)
@@ -808,10 +810,12 @@ export function SimDrawer({
               ) : (
                 <div className="flex flex-col gap-0.5">
                   {cropProgress.map((row) => {
-                    const rowKey = `${row.id}|${row.plantedAt ?? ''}|${row.label ?? ''}`;
-                    const diagKey = `${row.id}|${row.plantedAt ?? ''}`;
+                    const targetKey = row.targetKey ?? 'floor';
+                    const rowKey = `${row.id}|${row.plantedAt ?? ''}|${targetKey}|${row.label ?? ''}`;
                     const selected = selectedRowKey === rowKey;
-                    const diag = cellDiagnostics?.find((d) => `${d.cropId}|${d.plantedAt}` === diagKey);
+                    const diag = cellDiagnostics?.find((d) =>
+                      d.cropId === row.id && d.plantedAt === (row.plantedAt ?? '') && d.targetKey === targetKey,
+                    );
                     return (
                       <div key={rowKey}>
                         <button
@@ -820,7 +824,9 @@ export function SimDrawer({
                           title={cellDiagnostics ? 'Click for the driver breakdown' : undefined}
                           className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
                         >
-                          <span className="min-w-0 flex-1 truncate">{row.label ?? row.name}</span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {row.label ?? row.name}
+                          </span>
                           <span className="tracking-tighter text-foreground">
                             {'●'.repeat(row.stage)}{'○'.repeat(5 - row.stage)}
                           </span>

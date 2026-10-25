@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { archetypes, planningProfiles } from '@/creative/archetypes';
 import { cropLibrary } from '@/data/crops';
 import { environmentSnapshot, legacyPlanForEnvironment, makeEnvironment, migrateEnvironmentStore, normalizeEnvironment } from '@/lib/environment-model';
+import { growingTargetKey } from '@/lib/growingTargets';
 import { simulateRun } from '@/lib/sim/engine';
 import type { DailyEnvironment, RunConfig } from '@/lib/sim/types';
 import type { ArchetypeId, PlanState, PlanSurface } from '@/types';
@@ -108,6 +109,39 @@ describe('growing-world model', () => {
     expect(saved.plan.heightM).toBe(saved.heightM);
     expect(saved.plan.cellM).toBe(saved.cellM);
     expect(saved.plan.surface).toBeUndefined();
+  });
+
+  it('moves prototype level crop maps into the canonical plan once', () => {
+    const environment = makeEnvironment(1, { archetype: 'warehouse-vertical' }, 'env:1:levels');
+    environment.layout!.growingSpaces = [{
+      id: 'rack-1',
+      label: 'Rack 1',
+      kind: 'rack',
+      x: 1,
+      y: 1,
+      widthM: 1,
+      depthM: 0.75,
+      levels: [{
+        id: 'rack-1-level-2',
+        label: 'Level 2',
+        elevationM: 0.9,
+        planting: { '4,4': cropLibrary.find((crop) => crop.name === 'Basil')!.id },
+        plantedAt: { '4,4': '2026-10-24' },
+      }],
+    }];
+
+    const normalized = normalizeEnvironment(environment);
+    const key = growingTargetKey({ kind: 'growing-level', growingSpaceId: 'rack-1', levelId: 'rack-1-level-2' });
+    expect(normalized.plan.targets?.[key]).toEqual({
+      growingSpaceId: 'rack-1',
+      levelId: 'rack-1-level-2',
+      planting: { '4,4': cropLibrary.find((crop) => crop.name === 'Basil')!.id },
+      plantedAt: { '4,4': '2026-10-24' },
+    });
+    expect(normalized.layout!.growingSpaces[0]!.levels[0]).not.toHaveProperty('planting');
+    expect(normalized.layout!.growingSpaces[0]!.levels[0]).not.toHaveProperty('plantedAt');
+    expect(environmentSnapshot(normalized).layout!.growingSpaces[0]!.levels[0]).not.toHaveProperty('planting');
+    expect(normalizeEnvironment(normalized)).toEqual(normalized);
   });
 
   it('normalizes prototype-key archetypes without throwing or selecting an inherited value', () => {

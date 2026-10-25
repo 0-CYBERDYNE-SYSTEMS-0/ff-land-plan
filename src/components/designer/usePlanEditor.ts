@@ -6,7 +6,7 @@ import { assetBySlug, assetLibrary } from '@/data/assets';
 import { apiFetch } from '@/lib/api';
 import { archetypes, LEGACY_SURFACE_FOR_ARCHETYPE, planningProfiles } from '@/creative/archetypes';
 import type { GardenTemplate } from '@/data/templates';
-import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { ASSET_PHYSICS_ENABLED, ENV_CLIMATE_ENABLED, ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
 import { layoutWithinBounds } from './layoutEditing';
 import {
   canPlantAt,
@@ -24,6 +24,7 @@ import {
   type PlanPairing,
   type PlanStats,
 } from '@/lib/plan';
+import { growingTargetKey, planForTarget, planWithTarget } from '@/lib/growingTargets';
 import { drawPlan, renderPlanToPng, type RenderOptions, type SimOverlayChannels } from '@/lib/renderPlan';
 import { isInputCaptured } from '@/lib/inputArbiter';
 import { useFarm } from '@/hooks/useFarms';
@@ -33,6 +34,8 @@ import type {
   Crop,
   Environment,
   GardenAsset,
+  GrowingTargetKey,
+  GrowingTargetRef,
   PlanState,
   PlanSurface,
   SitePlan,
@@ -40,14 +43,14 @@ import type {
 
 export type Tool = 'select' | 'brush' | 'rect' | 'asset' | 'erase' | 'pick' | 'fill' | 'line';
 export type BrushSize = 1 | 3 | 5;
-export type EraseLayer = 'plants' | 'ground';
+export type EraseLayer = 'plants' | 'ground' | 'equipment';
 export type RectMode = 'plants' | 'asset' | 'erase';
 export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 export type EditorScope = { kind: 'legacy' } | { kind: 'site' } | { kind: 'env'; id: string };
 
 type HistoryEntry =
-  | { kind: 'environment'; id: string; snapshot: Environment }
+  | { kind: 'environment'; id: string; snapshot: Environment; target?: GrowingTargetRef }
   | { kind: 'site'; snapshot: SitePlan; selectedEnvironmentId: string | null }
   | { kind: 'legacy'; snapshot: PlanState };
 
@@ -65,6 +68,7 @@ function emptySite(farmId: number): SitePlan {
 
 function assetAllowedOnEnvironment(asset: GardenAsset, environment: Environment): boolean {
   const archetype = archetypes[environment.archetype];
+  if (asset.physics && !ASSET_PHYSICS_ENABLED) return false;
   if (asset.slug === 'plant-rack' && !archetype.tierPlanningAvailable) return false;
   if (!archetype.palette.includes(asset.category)) return false;
   return !asset.surfaces || asset.surfaces.includes(LEGACY_SURFACE_FOR_ARCHETYPE[environment.archetype]);
@@ -92,6 +96,36 @@ function cellOverlapsReservedArea(environment: Environment, key: string): boolea
   return false;
 }
 
+function cellOverlapsRack(environment: Environment, key: string): boolean {
+  const [x, y] = parseKey(key);
+  const cell = { x: x * environment.cellM, y: y * environment.cellM, widthM: environment.cellM, depthM: environment.cellM };
+  return (environment.layout?.growingSpaces ?? []).some((space) =>
+    space.kind === 'rack' && rectangleOverlaps(cell, space),
+  );
+}
+
+function instanceAtTargetCell(environment: Environment, key: string, target: GrowingTargetRef) {
+  const [column, row] = parseKey(key);
+  const x = column * environment.cellM;
+  const y = row * environment.cellM;
+  const cell = { x, y, widthM: environment.cellM, depthM: environment.cellM };
+  for (let index = (environment.instances?.length ?? 0) - 1; index >= 0; index--) {
+    const instance = environment.instances![index]!;
+    const mount = instance.mount;
+    const visible = mount.kind === 'environment' ||
+      (target.kind === 'floor' && mount.kind === 'floor') ||
+      (target.kind === 'growing-level' && mount.kind === 'growing-level' &&
+        mount.growingSpaceId === target.growingSpaceId && mount.levelId === target.levelId);
+    if (visible && rectangleOverlaps(cell, instance)) return instance;
+  }
+  return null;
+}
+
+function rectangleOverlaps(a: { x: number; y: number; widthM: number; depthM: number }, b: { x: number; y: number; widthM: number; depthM: number }): boolean {
+  return a.x < b.x + b.widthM && a.x + a.widthM > b.x &&
+    a.y < b.y + b.depthM && a.y + a.depthM > b.y;
+}
+
 function instanceOverlapsReservedArea(environment: Environment, item: NonNullable<Environment['instances']>[number]): boolean {
   if (item.mount.kind !== 'floor' || !environment.layout) return false;
   const x0 = item.x;
@@ -108,8 +142,35 @@ function instanceOverlapsReservedArea(environment: Environment, item: NonNullabl
   });
 }
 
-function canPlantInEnvironment(environment: Environment, key: string, plan = environment.plan): boolean {
-  return canPlantAt(plan, key) && !cellOverlapsReservedArea(environment, key);
+export function canPlantInEnvironment(
+  environment: Environment,
+  key: string,
+  plan = environment.plan,
+  target: GrowingTargetRef = { kind: 'floor' },
+): boolean {
+  if (target.kind === 'floor') {
+    if (cellOverlapsReservedArea(environment, key)) return false;
+    if (cellOverlapsRack(environment, key)) return false;
+    if (canPlantAt(plan, key)) return true;
+    const [x, y] = parseKey(key);
+    const x0 = x * environment.cellM;
+    const y0 = y * environment.cellM;
+    return (environment.instances ?? []).some((instance) => {
+      if (instance.mount.kind !== 'floor' || assetBySlug(instance.slug)?.physics?.kind !== 'soilless') return false;
+      return x0 >= instance.x && y0 >= instance.y &&
+        x0 + environment.cellM <= instance.x + instance.widthM &&
+        y0 + environment.cellM <= instance.y + instance.depthM;
+    });
+  }
+  const space = environment.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+  const level = space?.levels.find((entry) => entry.id === target.levelId);
+  if (!space || !level) return false;
+  const [x, y] = parseKey(key);
+  const x0 = x * environment.cellM;
+  const y0 = y * environment.cellM;
+  return x0 >= space.x && y0 >= space.y &&
+    x0 + environment.cellM <= space.x + space.widthM &&
+    y0 + environment.cellM <= space.y + space.depthM;
 }
 
 export interface Viewport {
@@ -135,6 +196,9 @@ export interface RectPreview {
 interface DragState {
   kind: 'paint' | 'rect' | 'line' | 'pan' | 'gesture' | null;
   before: PlanState | null;
+  beforeEnvironment?: Environment;
+  targetBefore?: GrowingTargetRef;
+  environmentChanged?: boolean;
   changed: boolean;
   startX: number;
   startY: number;
@@ -152,12 +216,18 @@ const MAX_DIM_M = 60;
 const AUTOSAVE_MS = 600;
 const HISTORY_LIMIT = 50;
 const FLOOD_CAP = 5000; // P1-2: fill tool safety ceiling
+let assetInstanceSequence = 0;
 /** Audit DES-009: fills larger than this ask for confirmation — replacing
  * hundreds of cells on one unconfirmed click is more destructive than a
  * template apply, which already confirms. */
 export const FILL_CONFIRM_THRESHOLD = 100;
 const BRUSH_SIZES: BrushSize[] = [1, 3, 5];
 const ERASE_GHOST_COLOR = '#ef4444';
+
+function editorId(prefix: string): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return `${prefix}:${uuid ?? `${Date.now().toString(36)}-${++assetInstanceSequence}`}`;
+}
 
 const PREF_KEYS = {
   overlaySpacing: 'ff-pro:overlay-spacing',
@@ -190,6 +260,11 @@ const clonePlan = (plan: PlanState): PlanState => ({
   ...plan,
   planting: { ...plan.planting },
   ground: { ...plan.ground },
+  ...(plan.targets ? { targets: Object.fromEntries(Object.entries(plan.targets).map(([key, target]) => [key, {
+    ...target,
+    planting: { ...target.planting },
+    ...(target.plantedAt ? { plantedAt: { ...target.plantedAt } } : {}),
+  }])) } : {}),
   ...(plan.plantedAt ? { plantedAt: { ...plan.plantedAt } } : {}),
 });
 
@@ -225,6 +300,40 @@ function stripInvalidPlants(plan: PlanState): PlanState {
     }
   }
   return { ...plan, planting, ...(plantedAt ? { plantedAt } : {}) };
+}
+
+function pruneTargetsForLayout(plan: PlanState, layout: Environment['layout']): PlanState {
+  if (!plan.targets) return plan;
+  const cols = planCols(plan);
+  const rows = planRows(plan);
+  const targets: NonNullable<PlanState['targets']> = {};
+  for (const [key, targetPlan] of Object.entries(plan.targets)) {
+    const space = layout?.growingSpaces.find((entry) => entry.id === targetPlan.growingSpaceId);
+    if (!space || !space.levels.some((level) => level.id === targetPlan.levelId)) continue;
+    const planting: Record<string, number> = {};
+    const plantedAt: Record<string, string> = {};
+    for (const [cell, cropId] of Object.entries(targetPlan.planting)) {
+      const [x, y] = parseKey(cell);
+      const x0 = x * plan.cellM;
+      const y0 = y * plan.cellM;
+      if (x < 0 || y < 0 || x >= cols || y >= rows ||
+          x0 < space.x || y0 < space.y || x0 + plan.cellM > space.x + space.widthM || y0 + plan.cellM > space.y + space.depthM) continue;
+      planting[cell] = cropId;
+      if (targetPlan.plantedAt?.[cell]) plantedAt[cell] = targetPlan.plantedAt[cell]!;
+    }
+    if (Object.keys(planting).length > 0) {
+      targets[key] = {
+        ...targetPlan,
+        planting,
+        ...(Object.keys(plantedAt).length > 0 ? { plantedAt } : {}),
+      };
+    }
+  }
+  return { ...plan, ...(Object.keys(targets).length > 0 ? { targets } : { targets: undefined }) };
+}
+
+function cropCellCount(plan: PlanState): number {
+  return Object.keys(plan.planting).length + Object.values(plan.targets ?? {}).reduce((total, target) => total + Object.keys(target.planting).length, 0);
 }
 
 function sameCell(a: string | null, b: string | null) {
@@ -342,9 +451,12 @@ export function usePlanEditor(farmId: number) {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  /** Selected target adapter consumed by the 2D editor; its plan maps remain canonical in canonicalPlanRef. */
   const planRef = useRef<PlanState | null>(null);
+  const canonicalPlanRef = useRef<PlanState | null>(null);
   const siteRef = useRef<SitePlan | null>(null);
   const environmentRef = useRef<Environment | null>(null);
+  const activeTargetRef = useRef<GrowingTargetRef>({ kind: 'floor' });
   const scopeRef = useRef<EditorScope>(ENV_RECORDS_ENABLED ? { kind: 'site' } : { kind: 'legacy' });
   const viewportRef = useRef<Viewport>({ cellPx: 12, offsetX: 24, offsetY: 24, viewW: 800, viewH: 520 });
   const dragRef = useRef<DragState>({
@@ -366,6 +478,7 @@ export function usePlanEditor(farmId: number) {
   const pinchRef = useRef<{ distance: number; midX: number; midY: number } | null>(null);
   const autosaveRef = useRef<number | null>(null);
   const pendingSaveRef = useRef<{ environmentId: string | null; plan: PlanState } | null>(null);
+  const environmentMutationRef = useRef<Promise<Environment> | null>(null);
   const undoRef = useRef<HistoryEntry[]>([]);
   const redoRef = useRef<HistoryEntry[]>([]);
   const spaceHeldRef = useRef(false);
@@ -390,6 +503,8 @@ export function usePlanEditor(farmId: number) {
   const [scope, setScope] = useState<EditorScope>(ENV_RECORDS_ENABLED ? { kind: 'site' } : { kind: 'legacy' });
   const [sitePlan, setSitePlan] = useState<SitePlan | null>(null);
   const [environment, setEnvironment] = useState<Environment | null>(null);
+  const [activeTarget, setActiveTarget] = useState<GrowingTargetRef>({ kind: 'floor' });
+  const [rackTierCount, setRackTierCount] = useState(4);
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
   const [staleSelectionId, setStaleSelectionId] = useState<string | null>(null);
   const [historyVersion, setHistoryVersion] = useState(0);
@@ -423,12 +538,28 @@ export function usePlanEditor(farmId: number) {
   scopeRef.current = scope;
   siteRef.current = sitePlan;
   environmentRef.current = environment;
+  activeTargetRef.current = activeTarget;
+
+  const syncCanonicalPlan = useCallback((viewPlan: PlanState) => {
+    if (ENV_RECORDS_ENABLED && scopeRef.current.kind === 'env' && environmentRef.current) {
+      const current = environmentRef.current;
+      const canonical = planWithTarget(current.plan, activeTargetRef.current, viewPlan);
+      canonicalPlanRef.current = canonical;
+      const updated = { ...current, plan: canonical };
+      environmentRef.current = updated;
+      setEnvironment(updated);
+      return canonical;
+    }
+    canonicalPlanRef.current = viewPlan;
+    return viewPlan;
+  }, []);
 
   const canPaintCrop = useCallback((key: string, plan = planRef.current) => {
     if (!plan) return false;
     if (!ENV_RECORDS_ENABLED || scopeRef.current.kind === 'legacy') return canPlantAt(plan, key);
     const activeEnvironment = environmentRef.current;
-    return !!activeEnvironment && canPlantInEnvironment(activeEnvironment, key, plan);
+    if (activeTargetRef.current.kind === 'growing-level' && !ASSET_PHYSICS_ENABLED) return false;
+    return !!activeEnvironment && canPlantInEnvironment(activeEnvironment, key, plan, activeTargetRef.current);
   }, []);
 
   const assetAllowed = useCallback((asset: GardenAsset, plan = planRef.current) => {
@@ -440,30 +571,64 @@ export function usePlanEditor(farmId: number) {
     return !!activeEnvironment && assetAllowedOnEnvironment(asset, activeEnvironment);
   }, []);
 
+  const usableHeightM = environment?.layout?.usableHeightM ?? (environment ? archetypes[environment.archetype].defaultUsableHeightM ?? 2.4 : 2.4);
+  const maxRackTiers = Math.max(1, Math.min(8, Math.floor((usableHeightM - 0.7) / 0.45) + 1));
   const assetValidAt = useCallback((asset: GardenAsset, x: number, y: number, plan = planRef.current) => {
     if (!plan || !assetAllowed(asset, plan)) return false;
     if (!ENV_RECORDS_ENABLED || scopeRef.current.kind !== 'env') return true;
     const activeEnvironment = environmentRef.current;
     if (!activeEnvironment) return false;
+    if (asset.physics && !ASSET_PHYSICS_ENABLED) return false;
     const fp = footprintCells(asset, plan);
     if (x < 0 || y < 0 || x + fp.cols > planCols(plan) || y + fp.rows > planRows(plan)) return false;
-    for (let yy = y; yy < y + fp.rows; yy++) {
-      for (let xx = x; xx < x + fp.cols; xx++) {
-        if (cellOverlapsReservedArea(activeEnvironment, cellKey(xx, yy))) return false;
+    const target = activeTargetRef.current;
+    if (asset.physics?.kind === 'rack' && (target.kind !== 'floor' || rackTierCount > maxRackTiers)) return false;
+    if (target.kind === 'growing-level') {
+      const space = activeEnvironment.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+      if (!space) return false;
+      const x0 = x * plan.cellM;
+      const y0 = y * plan.cellM;
+      if (x0 < space.x || y0 < space.y || x0 + fp.cols * plan.cellM > space.x + space.widthM || y0 + fp.rows * plan.cellM > space.y + space.depthM) return false;
+    } else {
+      const footprint = { x: x * plan.cellM, y: y * plan.cellM, widthM: fp.cols * plan.cellM, depthM: fp.rows * plan.cellM };
+      if (asset.physics?.kind !== 'light' && (activeEnvironment.layout?.growingSpaces ?? []).some((space) =>
+        space.kind === 'rack' && rectangleOverlaps(footprint, space),
+      )) return false;
+      for (let yy = y; yy < y + fp.rows; yy++) {
+        for (let xx = x; xx < x + fp.cols; xx++) {
+          if (cellOverlapsReservedArea(activeEnvironment, cellKey(xx, yy))) return false;
+          if ((asset.physics?.kind === 'rack' || asset.physics?.kind === 'soilless') &&
+              (plan.planting[cellKey(xx, yy)] !== undefined || plan.ground[cellKey(xx, yy)] !== undefined)) return false;
+        }
+      }
+      if (asset.physics?.kind === 'rack') {
+        const footprint = { x: x * plan.cellM, y: y * plan.cellM, widthM: asset.defaultWM, depthM: asset.defaultHM };
+        if ((activeEnvironment.instances ?? []).some((instance) => instance.mount.kind === 'floor' && rectangleOverlaps(footprint, instance))) return false;
       }
     }
     return true;
-  }, [assetAllowed]);
+  }, [assetAllowed, maxRackTiers, rackTierCount, usableHeightM]);
 
   const cropById = useMemo(() => new Map(crops.map((crop) => [crop.id, crop])), [crops]);
   const activeCrop = activeCropId ? cropById.get(activeCropId) ?? null : null;
   const activeAsset = assetBySlug(activeAssetSlug) ?? assetLibrary[0];
   const conflictCells = useMemo(() => conflictCellSet(pairings), [pairings]);
-
+  const targetOptions = useMemo(() => [
+    { key: growingTargetKey({ kind: 'floor' }), target: { kind: 'floor' } as GrowingTargetRef, label: 'Floor' },
+    ...(environment?.layout?.growingSpaces.flatMap((space) => space.levels.map((level) => ({
+      key: growingTargetKey({ kind: 'growing-level', growingSpaceId: space.id, levelId: level.id }),
+      target: { kind: 'growing-level', growingSpaceId: space.id, levelId: level.id } as GrowingTargetRef,
+      label: `${space.label} · ${level.label}`,
+    }))) ?? []),
+  ], [environment]);
+  const activeTargetKey = growingTargetKey(activeTarget);
+  const activeTargetLabel = targetOptions.find((option) => option.key === activeTargetKey)?.label ?? 'Floor';
   const placementMessage = useMemo(() => {
     if (!ENV_RECORDS_ENABLED || scope.kind !== 'env' || !environment || !hoverKey) return null;
     if (tool === 'brush' && activeCrop && !canPaintCrop(hoverKey)) {
+      if (activeTarget.kind === 'growing-level' && !ASSET_PHYSICS_ENABLED) return 'Tier planting is unavailable while asset physics is off.';
       if (cellOverlapsReservedArea(environment, hoverKey)) return 'This cell is reserved for access, an aisle or service space.';
+      if (cellOverlapsRack(environment, hoverKey)) return 'This floor cell is occupied by a rack. Choose one of its growing tiers to plant.';
       const groundSlug = planRef.current?.ground[hoverKey];
       const groundAsset = groundSlug ? assetBySlug(groundSlug) : undefined;
       if (groundSlug && !groundAsset?.plantable) return `${groundAsset?.label ?? 'This floor asset'} cannot accept crops.`;
@@ -471,14 +636,27 @@ export function usePlanEditor(farmId: number) {
     }
     if (tool === 'asset' && activeAsset) {
       const [x, y] = parseKey(hoverKey);
+      if (activeAsset.physics && !ASSET_PHYSICS_ENABLED) return 'Physics-enabled equipment editing is off.';
       if (activeAsset.slug === 'plant-rack' && environment.archetype && !archetypes[environment.archetype].tierPlanningAvailable) {
         return 'Rack and tier editing is not available in this world yet.';
       }
       if (!assetAllowed(activeAsset)) return `${activeAsset.label} is not available for this world type.`;
-      if (!assetValidAt(activeAsset, x, y)) return 'The full equipment footprint must fit outside reserved areas.';
+      if (!assetValidAt(activeAsset, x, y)) {
+        const footprint = footprintCells(activeAsset, planRef.current!);
+        const rectangle = { x: x * environment.cellM, y: y * environment.cellM, widthM: footprint.cols * environment.cellM, depthM: footprint.rows * environment.cellM };
+        if (activeTarget.kind === 'floor' && activeAsset.physics?.kind !== 'light' && (environment.layout?.growingSpaces ?? []).some((space) =>
+          space.kind === 'rack' && rectangleOverlaps(rectangle, space),
+        )) return 'This floor footprint is occupied by a rack; choose a tier to place level-mounted equipment.';
+        return 'The full equipment footprint must fit outside reserved areas.';
+      }
+    }
+    if (tool === 'erase' && eraseLayer === 'equipment' && ASSET_PHYSICS_ENABLED) {
+      const instance = instanceAtTargetCell(environment, hoverKey, activeTarget);
+      if (instance?.slug === 'plant-rack') return 'Remove this rack from Growing systems so its crop loss is previewed first.';
+      if (!instance) return 'Point at an installed equipment item to erase it.';
     }
     return null;
-  }, [activeAsset, activeCrop, assetAllowed, assetValidAt, canPaintCrop, environment, hoverKey, scope.kind, tool]);
+  }, [activeAsset, activeCrop, activeTarget, assetAllowed, assetValidAt, canPaintCrop, environment, eraseLayer, hoverKey, scope.kind, tool]);
 
   const filteredCrops = useMemo(() => {
     const q = cropSearch.trim().toLowerCase();
@@ -495,6 +673,9 @@ export function usePlanEditor(farmId: number) {
     if (!plan || !selectedKey) return null;
     const crop = plan.planting[selectedKey] ? cropById.get(plan.planting[selectedKey]) ?? null : null;
     const asset = plan.ground[selectedKey] ? assetBySlug(plan.ground[selectedKey]) ?? null : null;
+    const instance = ENV_RECORDS_ENABLED && environmentRef.current
+      ? instanceAtTargetCell(environmentRef.current, selectedKey, activeTargetRef.current)
+      : null;
     const [x, y] = parseKey(selectedKey);
     const nearby = new Map<number, Crop>();
     if (crop) {
@@ -515,11 +696,13 @@ export function usePlanEditor(farmId: number) {
       y,
       crop,
       asset,
+      instance,
+      instanceAsset: instance ? assetBySlug(instance.slug) ?? null : null,
       plantable: canPaintCrop(selectedKey, plan),
       companions,
       antagonists,
     };
-  }, [canPaintCrop, cropById, planVersion, selectedKey]);
+  }, [activeTarget, canPaintCrop, cropById, environment, planVersion, selectedKey]);
 
   // P0-5: spacing-violation overlay source set, recomputed only when the plan,
   // the catalog map, or the toggle changes.
@@ -718,6 +901,7 @@ export function usePlanEditor(farmId: number) {
 
   const applySavedPlan = useCallback((environmentId: string | null, saved: PlanState) => {
     if (environmentId === null) {
+      canonicalPlanRef.current = saved;
       queryClient.setQueryData(['plan', farmId], saved);
       if (scopeRef.current.kind === 'legacy' && !dragRef.current.kind) planRef.current = clonePlan(saved);
       return;
@@ -733,7 +917,8 @@ export function usePlanEditor(farmId: number) {
     if (environmentRef.current?.id === environmentId) {
       environmentRef.current = cloneEnvironment(updated);
       setEnvironment(cloneEnvironment(updated));
-      if (!dragRef.current.kind) planRef.current = clonePlan(saved);
+      canonicalPlanRef.current = clonePlan(saved);
+      if (!dragRef.current.kind) planRef.current = clonePlan(planForTarget(saved, activeTargetRef.current));
     }
   }, [farmId, queryClient, updateSiteCache]);
 
@@ -757,16 +942,17 @@ export function usePlanEditor(farmId: number) {
 
   const scheduleAutosave = useCallback((nextPlan: PlanState) => {
     const environmentId = scopeRef.current.kind === 'env' ? scopeRef.current.id : null;
-    pendingSaveRef.current = { environmentId, plan: clonePlan(nextPlan) };
+    pendingSaveRef.current = { environmentId, plan: clonePlan(syncCanonicalPlan(nextPlan)) };
     if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
     setSaveState('dirty');
     autosaveRef.current = window.setTimeout(() => { void flushAutosave(); }, AUTOSAVE_MS);
-  }, [flushAutosave]);
+  }, [flushAutosave, syncCanonicalPlan]);
 
   const snapshotPlanHistory = useCallback((plan: PlanState): HistoryEntry | null => {
     const activeEnvironment = environmentRef.current;
     if (scopeRef.current.kind === 'env' && activeEnvironment) {
-      return { kind: 'environment', id: activeEnvironment.id, snapshot: { ...cloneEnvironment(activeEnvironment), plan: clonePlan(plan) } };
+      const canonical = planWithTarget(activeEnvironment.plan, activeTargetRef.current, plan);
+      return { kind: 'environment', id: activeEnvironment.id, snapshot: { ...cloneEnvironment(activeEnvironment), plan: clonePlan(canonical) }, target: activeTargetRef.current };
     }
     if (scopeRef.current.kind === 'legacy') return { kind: 'legacy', snapshot: clonePlan(plan) };
     return null;
@@ -779,15 +965,20 @@ export function usePlanEditor(farmId: number) {
     setHistoryVersion((version) => version + 1);
   }, []);
 
-  const commitEnvironment = useCallback(async (nextEnvironment: Environment, recordHistory = true) => {
+  const commitEnvironment = useCallback(async (
+    nextEnvironment: Environment,
+    recordHistory = true,
+    beforeOverride?: Environment,
+    historyTarget: GrowingTargetRef = activeTargetRef.current,
+  ) => {
     await flushAutosave();
     const currentSite = siteRef.current;
-    const before = currentSite?.environments.find((entry) => entry.id === nextEnvironment.id) ?? environmentRef.current;
+    const before = beforeOverride ?? currentSite?.environments.find((entry) => entry.id === nextEnvironment.id) ?? environmentRef.current;
     const beforeSnapshot = before ? cloneEnvironment(before) : null;
     const proposed = cloneEnvironment(nextEnvironment);
     if (recordHistory) proposed.plan.updatedAt = new Date().toISOString();
     const saved = await apiFetch.saveEnvironment(proposed);
-    if (recordHistory && beforeSnapshot) pushUndo({ kind: 'environment', id: beforeSnapshot.id, snapshot: beforeSnapshot });
+    if (recordHistory && beforeSnapshot) pushUndo({ kind: 'environment', id: beforeSnapshot.id, snapshot: beforeSnapshot, target: historyTarget });
     const sourceSite = siteRef.current ?? emptySite(farmId);
     const nextSite = {
       ...sourceSite,
@@ -797,8 +988,10 @@ export function usePlanEditor(farmId: number) {
     if (environmentRef.current?.id === saved.id) {
       environmentRef.current = cloneEnvironment(saved);
       setEnvironment(cloneEnvironment(saved));
-      planRef.current = clonePlan(saved.plan);
-      updateStats(saved.plan);
+      canonicalPlanRef.current = clonePlan(saved.plan);
+      const view = planForTarget(saved.plan, activeTargetRef.current);
+      planRef.current = clonePlan(view);
+      updateStats(view);
       setPlanVersion((version) => version + 1);
     }
     return saved;
@@ -816,9 +1009,7 @@ export function usePlanEditor(farmId: number) {
   const replacePlan = useCallback((nextPlan: PlanState, options: { save?: boolean; recordHistory?: PlanState } = {}) => {
     planRef.current = nextPlan;
     if (environmentRef.current && scopeRef.current.kind === 'env') {
-      const updated = { ...environmentRef.current, plan: clonePlan(nextPlan) };
-      environmentRef.current = updated;
-      setEnvironment(updated);
+      syncCanonicalPlan(nextPlan);
     }
     // The plan under a pending fill confirm just changed (undo/redo/template)
     // — a stale region must never commit onto it.
@@ -827,7 +1018,7 @@ export function usePlanEditor(farmId: number) {
     setPlanVersion((v) => v + 1);
     if (options.recordHistory) pushUndo(snapshotPlanHistory(options.recordHistory));
     if (options.save) scheduleAutosave(nextPlan);
-  }, [pushUndo, scheduleAutosave, snapshotPlanHistory, updateStats]);
+  }, [pushUndo, scheduleAutosave, snapshotPlanHistory, syncCanonicalPlan, updateStats]);
 
   const applyTemplate = useCallback((tpl: GardenTemplate) => {
     const plan = planRef.current;
@@ -930,6 +1121,20 @@ export function usePlanEditor(farmId: number) {
       return true;
     }
     if (mode === 'erase') {
+      if (eraseLayer === 'equipment') {
+        const current = environmentRef.current;
+        if (!ASSET_PHYSICS_ENABLED || !current || scopeRef.current.kind !== 'env') return false;
+        const instance = instanceAtTargetCell(current, key, activeTargetRef.current);
+        if (!instance || instance.slug === 'plant-rack') return false;
+        const updated: Environment = {
+          ...current,
+          instances: (current.instances ?? []).filter((item) => item.id !== instance.id),
+        };
+        environmentRef.current = updated;
+        setEnvironment(updated);
+        dragRef.current.environmentChanged = true;
+        return true;
+      }
       if (eraseLayer === 'plants') {
         if (!plan.planting[key]) return false;
         delete plan.planting[key];
@@ -945,6 +1150,63 @@ export function usePlanEditor(farmId: number) {
       return true;
     }
     if (mode === 'asset' && activeAsset && assetValidAt(activeAsset, x, y, plan)) {
+      if (ENV_RECORDS_ENABLED && scopeRef.current.kind === 'env' && activeAsset.physics) {
+        const current = environmentRef.current;
+        if (!current) return false;
+        const footprint = footprintCells(activeAsset, plan);
+        const widthM = footprint.cols * plan.cellM;
+        const depthM = footprint.rows * plan.cellM;
+        const instanceId = editorId('instance');
+        const target = activeTargetRef.current;
+        const mount = activeAsset.physics.kind === 'rack'
+          ? { kind: 'floor' as const }
+          : target.kind === 'growing-level'
+            ? target
+            : activeAsset.physics.kind === 'soilless'
+              ? { kind: 'floor' as const }
+              : { kind: 'environment' as const };
+        const instance = {
+          id: instanceId,
+          slug: activeAsset.slug,
+          x: x * plan.cellM,
+          y: y * plan.cellM,
+          widthM,
+          depthM,
+          mount,
+        };
+        let layout = current.layout ?? { access: [], reservations: [], growingSpaces: [] };
+        if (activeAsset.physics.kind === 'rack') {
+          const spaceId = instanceId;
+          const label = `Rack ${layout.growingSpaces.filter((space) => space.kind === 'rack').length + 1}`;
+          layout = {
+            ...layout,
+            growingSpaces: [...layout.growingSpaces, {
+              id: spaceId,
+              label,
+              kind: 'rack',
+              x: instance.x,
+              y: instance.y,
+              widthM,
+              depthM,
+              levels: Array.from({ length: rackTierCount }, (_, index) => ({
+                id: `${spaceId}:level:${index + 1}`,
+                label: `Tier ${index + 1}`,
+                elevationM: 0.25 + index * 0.45,
+                clearanceM: 0.45,
+              })),
+            }],
+          };
+        }
+        const updated: Environment = {
+          ...current,
+          layout,
+          instances: [...(current.instances ?? []), instance],
+        };
+        environmentRef.current = updated;
+        setEnvironment(updated);
+        dragRef.current.environmentChanged = true;
+        return true;
+      }
       let changed = false;
       const fp = footprintCells(activeAsset, plan);
       for (let yy = y; yy < y + fp.rows; yy++) {
@@ -965,7 +1227,7 @@ export function usePlanEditor(farmId: number) {
       return changed;
     }
     return false;
-  }, [activeAsset, activeCropId, assetValidAt, canPaintCrop, eraseLayer, tool]);
+  }, [activeAsset, activeCropId, assetValidAt, canPaintCrop, eraseLayer, rackTierCount, setEnvironment, tool]);
 
   const applyBrushAt = useCallback((x: number, y: number) => {
     const radius = tool === 'brush' || tool === 'erase' ? Math.floor(brushSize / 2) : 0;
@@ -977,10 +1239,11 @@ export function usePlanEditor(farmId: number) {
     }
     if (changed && planRef.current) {
       dragRef.current.changed = true;
+      syncCanonicalPlan(planRef.current);
       updateStats(planRef.current);
       setPlanVersion((v) => v + 1);
     }
-  }, [brushSize, mutateCell, tool, updateStats]);
+  }, [brushSize, mutateCell, syncCanonicalPlan, tool, updateStats]);
 
   const applyRect = useCallback((x0: number, y0: number, x1: number, y1: number): boolean => {
     const plan = planRef.current;
@@ -990,6 +1253,12 @@ export function usePlanEditor(farmId: number) {
     const top = Math.max(0, Math.min(y0, y1));
     const bottom = Math.min(planRows(plan) - 1, Math.max(y0, y1));
     let changed = false;
+    if (rectMode === 'asset' && activeAsset?.physics) {
+      for (let y = top; y <= bottom; y++) {
+        for (let x = left; x <= right; x++) changed = mutateCell(x, y, 'asset') || changed;
+      }
+      return changed;
+    }
     for (let y = top; y <= bottom; y++) {
       for (let x = left; x <= right; x++) {
         const key = cellKey(x, y);
@@ -1000,7 +1269,8 @@ export function usePlanEditor(farmId: number) {
           changed = true;
         } else if (rectMode === 'asset' && activeAsset && assetAllowed(activeAsset, plan)) {
           if (plan.ground[key] !== activeAsset.slug) {
-            if (!ENV_RECORDS_ENABLED || scopeRef.current.kind !== 'env' || !environmentRef.current || !cellOverlapsReservedArea(environmentRef.current, key)) {
+            if (!ENV_RECORDS_ENABLED || scopeRef.current.kind !== 'env' || !environmentRef.current ||
+                (!cellOverlapsReservedArea(environmentRef.current, key) && !cellOverlapsRack(environmentRef.current, key))) {
               plan.ground[key] = activeAsset.slug;
               changed = true;
             }
@@ -1014,7 +1284,7 @@ export function usePlanEditor(farmId: number) {
       }
     }
     return changed;
-  }, [activeAsset, activeCropId, assetAllowed, canPaintCrop, rectMode]);
+  }, [activeAsset, activeCropId, assetAllowed, canPaintCrop, mutateCell, rectMode]);
 
   // P1-3: commit the line stroke — payload applied along the Bresenham cells.
   const applyLineCells = useCallback((x0: number, y0: number, x1: number, y1: number): boolean => {
@@ -1056,6 +1326,10 @@ export function usePlanEditor(farmId: number) {
   const applyFillRegion = useCallback((region: Array<[number, number]>) => {
     const plan = planRef.current;
     if (!plan || region.length === 0) return;
+    if (rectMode === 'asset' && activeAsset?.physics) {
+      toast.error('Place equipment by clicking or dragging; equipment cannot be flood-filled.');
+      return;
+    }
     const before = clonePlan(plan); // ONE undo snapshot for the whole fill
     let changed = false;
     for (const [x, y] of region) {
@@ -1064,7 +1338,8 @@ export function usePlanEditor(farmId: number) {
         // stamping a full footprint per region cell.
         const key = cellKey(x, y);
         if (activeAsset && assetAllowed(activeAsset, plan) &&
-            (!ENV_RECORDS_ENABLED || scopeRef.current.kind !== 'env' || !environmentRef.current || !cellOverlapsReservedArea(environmentRef.current, key))) {
+            (!ENV_RECORDS_ENABLED || scopeRef.current.kind !== 'env' || !environmentRef.current ||
+              (!cellOverlapsReservedArea(environmentRef.current, key) && !cellOverlapsRack(environmentRef.current, key)))) {
           if (plan.ground[key] !== activeAsset.slug) {
             plan.ground[key] = activeAsset.slug;
             changed = true;
@@ -1137,8 +1412,20 @@ export function usePlanEditor(farmId: number) {
   const cancelStroke = useCallback(() => {
     const drag = dragRef.current;
     if ((drag.kind === 'paint' || drag.kind === 'rect' || drag.kind === 'line') && drag.before) {
-      planRef.current = drag.before;
-      updateStats(drag.before);
+      if (drag.environmentChanged && drag.beforeEnvironment) {
+        const restored = cloneEnvironment(drag.beforeEnvironment);
+        environmentRef.current = restored;
+        setEnvironment(restored);
+        canonicalPlanRef.current = clonePlan(restored.plan);
+        planRef.current = clonePlan(planForTarget(restored.plan, drag.targetBefore ?? { kind: 'floor' }));
+        activeTargetRef.current = drag.targetBefore ?? { kind: 'floor' };
+        setActiveTarget(activeTargetRef.current);
+        updateStats(planRef.current);
+      } else {
+        planRef.current = drag.before;
+        syncCanonicalPlan(drag.before);
+        updateStats(drag.before);
+      }
       setPlanVersion((v) => v + 1);
     }
     setRectPreview(null);
@@ -1156,7 +1443,7 @@ export function usePlanEditor(farmId: number) {
       panOffsetX: 0,
       panOffsetY: 0,
     };
-  }, [updateStats]);
+  }, [syncCanonicalPlan, updateStats]);
 
   const finishStroke = useCallback((event?: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
@@ -1196,10 +1483,31 @@ export function usePlanEditor(farmId: number) {
       setRectPreview(null);
       setLineDraft(null);
     }
-    if (drag.changed && drag.before && plan) {
+    if (drag.changed && drag.before && plan && drag.environmentChanged) {
+      const nextEnvironment = environmentRef.current;
+      if (nextEnvironment) {
+        const pending = commitEnvironment(nextEnvironment, true, drag.beforeEnvironment, drag.targetBefore);
+        environmentMutationRef.current = pending;
+        void pending.catch((error) => {
+          if (drag.beforeEnvironment) {
+            const restored = cloneEnvironment(drag.beforeEnvironment);
+            environmentRef.current = restored;
+            setEnvironment(restored);
+            canonicalPlanRef.current = clonePlan(restored.plan);
+            planRef.current = clonePlan(planForTarget(restored.plan, drag.targetBefore ?? { kind: 'floor' }));
+            updateStats(planRef.current);
+            setPlanVersion((version) => version + 1);
+          }
+          toast.error((error as Error).message);
+        }).finally(() => {
+          if (environmentMutationRef.current === pending) environmentMutationRef.current = null;
+        });
+      }
+    } else if (drag.changed && drag.before && plan) {
       // History push FIRST, then the version bump — the very render triggered
       // by this bump already sees the enabled Undo button (P0-4).
       pushUndo(snapshotPlanHistory(drag.before));
+      syncCanonicalPlan(plan);
       setPlanVersion((v) => v + 1);
       scheduleAutosave(clonePlan(plan));
     }
@@ -1214,13 +1522,16 @@ export function usePlanEditor(farmId: number) {
       panOffsetX: 0,
       panOffsetY: 0,
     };
-  }, [applyLineCells, applyRect, getCellFromEvent, hoverKey, pushUndo, scheduleAutosave, snapshotPlanHistory, updateStats]);
+  }, [applyLineCells, applyRect, commitEnvironment, getCellFromEvent, hoverKey, pushUndo, scheduleAutosave, snapshotPlanHistory, syncCanonicalPlan, updateStats]);
 
   const activateEnvironment = useCallback((nextEnvironment: Environment) => {
     const copy = cloneEnvironment(nextEnvironment);
     environmentRef.current = copy;
     setEnvironment(copy);
-    planRef.current = clonePlan(copy.plan);
+    canonicalPlanRef.current = clonePlan(copy.plan);
+    activeTargetRef.current = { kind: 'floor' };
+    setActiveTarget({ kind: 'floor' });
+    planRef.current = clonePlan(planForTarget(copy.plan, { kind: 'floor' }));
     scopeRef.current = { kind: 'env', id: copy.id };
     setScope({ kind: 'env', id: copy.id });
     setDraftWidth(copy.widthM);
@@ -1233,7 +1544,7 @@ export function usePlanEditor(farmId: number) {
     setLineDraft(null);
     setPendingFill(null);
     setPendingResize(null);
-    updateStats(copy.plan);
+    updateStats(planRef.current);
     setPlanVersion((version) => version + 1);
     didInitialFitRef.current = false;
     if (canvasRef.current && shellRef.current) {
@@ -1241,6 +1552,115 @@ export function usePlanEditor(farmId: number) {
       didInitialFitRef.current = true;
     }
   }, [fitToView, updateStats]);
+
+  const selectTarget = useCallback((targetKey: GrowingTargetKey) => {
+    const option = targetOptions.find((entry) => entry.key === targetKey);
+    if (!option || growingTargetKey(activeTargetRef.current) === targetKey) return;
+    finishStroke();
+    void (async () => {
+      await environmentMutationRef.current?.catch(() => undefined);
+      await flushAutosave();
+      const environment = environmentRef.current;
+      const canonical = canonicalPlanRef.current ?? environment?.plan;
+      if (!environment || !canonical) return;
+      activeTargetRef.current = option.target;
+      setActiveTarget(option.target);
+      planRef.current = clonePlan(planForTarget(canonical, option.target));
+      setSelectedKey(null);
+      setHoverKey(null);
+      setRectPreview(null);
+      setLineDraft(null);
+      updateStats(planRef.current);
+      setPlanVersion((version) => version + 1);
+    })().catch((error) => toast.error((error as Error).message));
+  }, [finishStroke, flushAutosave, targetOptions, updateStats]);
+
+  const growingSpaceRemovalPreview = useCallback((spaceId: string) => {
+    const active = environmentRef.current;
+    const space = active?.layout?.growingSpaces.find((entry) => entry.id === spaceId);
+    if (!active || !space) return { cropCells: 0, equipment: 0 };
+    const targetKeys = space.levels.map((level) => growingTargetKey({ kind: 'growing-level', growingSpaceId: space.id, levelId: level.id }));
+    const cropCells = targetKeys.reduce((total, key) => total + Object.keys(canonicalPlanRef.current?.targets?.[key]?.planting ?? {}).length, 0);
+    const equipment = (active.instances ?? []).filter((instance) =>
+      instance.id === spaceId || (instance.mount.kind === 'growing-level' && instance.mount.growingSpaceId === spaceId),
+    ).length;
+    return { cropCells, equipment };
+  }, []);
+
+  const removeGrowingSpace = useCallback(async (spaceId: string) => {
+    if (!ASSET_PHYSICS_ENABLED) return;
+    const current = environmentRef.current;
+    const space = current?.layout?.growingSpaces.find((entry) => entry.id === spaceId);
+    if (!current || !space) return;
+    const targets = { ...current.plan.targets };
+    for (const level of space.levels) {
+      delete targets[growingTargetKey({ kind: 'growing-level', growingSpaceId: space.id, levelId: level.id })];
+    }
+    const targetWasRemoved = activeTargetRef.current.kind === 'growing-level' && activeTargetRef.current.growingSpaceId === spaceId;
+    const saved = await commitEnvironment({
+      ...current,
+      layout: { ...current.layout!, growingSpaces: current.layout!.growingSpaces.filter((entry) => entry.id !== spaceId) },
+      instances: (current.instances ?? []).filter((instance) =>
+        instance.id !== spaceId && !(instance.mount.kind === 'growing-level' && instance.mount.growingSpaceId === spaceId),
+      ),
+      plan: { ...current.plan, ...(Object.keys(targets).length ? { targets } : { targets: undefined }) },
+    });
+    if (targetWasRemoved) {
+      activeTargetRef.current = { kind: 'floor' };
+      setActiveTarget({ kind: 'floor' });
+      canonicalPlanRef.current = clonePlan(saved.plan);
+      planRef.current = clonePlan(planForTarget(saved.plan, { kind: 'floor' }));
+      updateStats(planRef.current);
+      setPlanVersion((version) => version + 1);
+    }
+  }, [commitEnvironment, updateStats]);
+
+  const removeEquipmentInstance = useCallback(async (instanceId: string) => {
+    if (!ASSET_PHYSICS_ENABLED) return;
+    const current = environmentRef.current;
+    const instance = current?.instances?.find((item) => item.id === instanceId);
+    if (!current || !instance || instance.slug === 'plant-rack') return;
+    await commitEnvironment({
+      ...current,
+      instances: (current.instances ?? []).filter((item) => item.id !== instanceId),
+    });
+    setSelectedKey(null);
+  }, [commitEnvironment]);
+
+  const updateEnvironmentSetpoints = useCallback(async (setpoints: NonNullable<Environment['setpoints']>) => {
+    if (!ENV_RECORDS_ENABLED || !ENV_CLIMATE_ENABLED || scopeRef.current.kind !== 'env') return;
+    await flushAutosave();
+    const current = environmentRef.current;
+    if (!current) return;
+    await commitEnvironment({
+      ...current,
+      setpoints: Object.keys(setpoints).length > 0 ? { ...setpoints } : undefined,
+    });
+  }, [commitEnvironment, flushAutosave]);
+
+  const commitExternalEnvironmentMutation = useCallback(async (before: Environment, target: GrowingTargetRef) => {
+    const current = environmentRef.current;
+    if (!current || current.id !== before.id || JSON.stringify(current) === JSON.stringify(before)) return;
+    const pending = commitEnvironment(cloneEnvironment(current), true, before, target);
+    environmentMutationRef.current = pending;
+    try {
+      await pending;
+    } catch (error) {
+      const restored = cloneEnvironment(before);
+      environmentRef.current = restored;
+      setEnvironment(restored);
+      canonicalPlanRef.current = clonePlan(restored.plan);
+      activeTargetRef.current = target;
+      setActiveTarget(target);
+      planRef.current = clonePlan(planForTarget(restored.plan, target));
+      updateStats(planRef.current);
+      setPlanVersion((version) => version + 1);
+      toast.error((error as Error).message);
+      throw error;
+    } finally {
+      if (environmentMutationRef.current === pending) environmentMutationRef.current = null;
+    }
+  }, [commitEnvironment, updateStats]);
 
   const showSite = useCallback(() => {
     if (!ENV_RECORDS_ENABLED) return;
@@ -1252,6 +1672,9 @@ export function usePlanEditor(farmId: number) {
       environmentRef.current = null;
       setEnvironment(null);
       planRef.current = null;
+      canonicalPlanRef.current = null;
+      activeTargetRef.current = { kind: 'floor' };
+      setActiveTarget({ kind: 'floor' });
       setSelectedKey(null);
       setHoverKey(null);
       setPendingFill(null);
@@ -1274,6 +1697,9 @@ export function usePlanEditor(farmId: number) {
         environmentRef.current = null;
         setEnvironment(null);
         planRef.current = null;
+        canonicalPlanRef.current = null;
+        activeTargetRef.current = { kind: 'floor' };
+        setActiveTarget({ kind: 'floor' });
         setPlanVersion((version) => version + 1);
         return;
       }
@@ -1345,6 +1771,7 @@ export function usePlanEditor(farmId: number) {
       }
       plan = { ...plan, ground, planting, ...(plantedAt ? { plantedAt } : {}) };
     }
+    plan = pruneTargetsForLayout(plan, layout);
     const saved = await commitEnvironment({
       ...current,
       label: proposed.label.trim() || archetypes[current.archetype].label,
@@ -1352,9 +1779,13 @@ export function usePlanEditor(farmId: number) {
       heightM,
       plan,
       layout,
-      ...(current.instances ? { instances: current.instances.filter((item) =>
-        item.x + item.widthM <= widthM && item.y + item.depthM <= heightM && (!layoutChanged || !instanceOverlapsReservedArea(candidate, item)),
-      ) } : {}),
+      ...(current.instances ? { instances: current.instances.filter((item) => {
+        const mount = item.mount;
+        return item.x + item.widthM <= widthM && item.y + item.depthM <= heightM &&
+          (mount.kind !== 'growing-level' || !!layout?.growingSpaces.some((space) =>
+            space.id === mount.growingSpaceId && space.levels.some((level) => level.id === mount.levelId),
+          )) && (!layoutChanged || !instanceOverlapsReservedArea(candidate, item));
+      }) } : {}),
     });
     setDraftWidth(saved.widthM);
     setDraftHeight(saved.heightM);
@@ -1387,6 +1818,9 @@ export function usePlanEditor(farmId: number) {
       environmentRef.current = null;
       setEnvironment(null);
       planRef.current = null;
+      canonicalPlanRef.current = null;
+      activeTargetRef.current = { kind: 'floor' };
+      setActiveTarget({ kind: 'floor' });
       scopeRef.current = { kind: 'site' };
       setScope({ kind: 'site' });
       setSelectedKey(null);
@@ -1403,10 +1837,11 @@ export function usePlanEditor(farmId: number) {
     const site = siteRef.current;
     const saved = site?.environments.find((entry) => entry.id === target.id);
     if (!saved) return null;
-    const current = environmentRef.current?.id === target.id && planRef.current
-      ? { ...saved, plan: clonePlan(planRef.current) }
-      : saved;
-    return { kind: 'environment', id: target.id, snapshot: cloneEnvironment(current) };
+    const current = environmentRef.current?.id === target.id ? environmentRef.current : saved;
+    const plan = planRef.current && environmentRef.current?.id === target.id
+      ? planWithTarget(current.plan, activeTargetRef.current, planRef.current)
+      : current.plan;
+    return { kind: 'environment', id: target.id, snapshot: { ...cloneEnvironment(current), plan: clonePlan(plan) }, target: activeTargetRef.current };
   }, [farmId, selectedEnvironmentId]);
 
   const restoreEntry = useCallback(async (entry: HistoryEntry) => {
@@ -1439,9 +1874,17 @@ export function usePlanEditor(farmId: number) {
         setSelectedKey(null);
       } else if (active) {
         environmentRef.current = cloneEnvironment(active);
-        planRef.current = clonePlan(active.plan);
+        canonicalPlanRef.current = clonePlan(active.plan);
+        const selectedTarget = activeTargetRef.current;
+        const targetStillExists = selectedTarget.kind === 'floor' || active.layout?.growingSpaces.some((space) =>
+          space.id === selectedTarget.growingSpaceId && space.levels.some((level) => level.id === selectedTarget.levelId),
+        );
+        const target = targetStillExists ? selectedTarget : { kind: 'floor' as const };
+        activeTargetRef.current = target;
+        setActiveTarget(target);
+        planRef.current = clonePlan(planForTarget(active.plan, target));
         setEnvironment(cloneEnvironment(active));
-        updateStats(active.plan);
+        updateStats(planRef.current);
       }
       setPlanVersion((version) => version + 1);
       return;
@@ -1455,9 +1898,18 @@ export function usePlanEditor(farmId: number) {
     updateSiteCache(nextSite);
     if (environmentRef.current?.id === saved.id) {
       environmentRef.current = cloneEnvironment(saved);
-      planRef.current = clonePlan(saved.plan);
+      canonicalPlanRef.current = clonePlan(saved.plan);
+      const requestedTarget = entry.target;
+      const targetExists = requestedTarget?.kind === 'floor' || (requestedTarget?.kind === 'growing-level' &&
+        saved.layout?.growingSpaces.some((space) =>
+          space.id === requestedTarget.growingSpaceId && space.levels.some((level) => level.id === requestedTarget.levelId),
+        ));
+      const target = targetExists && requestedTarget ? requestedTarget : { kind: 'floor' as const };
+      activeTargetRef.current = target;
+      setActiveTarget(target);
+      planRef.current = clonePlan(planForTarget(saved.plan, target));
       setEnvironment(cloneEnvironment(saved));
-      updateStats(saved.plan);
+      updateStats(planRef.current);
     }
     setPlanVersion((version) => version + 1);
   }, [farmId, queryClient, scheduleAutosave, updateSiteCache, updateStats]);
@@ -1507,8 +1959,19 @@ export function usePlanEditor(farmId: number) {
       const drag = dragRef.current;
       if (drag.kind === 'paint' || drag.kind === 'rect' || drag.kind === 'line') {
         if (drag.before) {
-          planRef.current = drag.before;
-          updateStats(drag.before);
+          if (drag.environmentChanged && drag.beforeEnvironment) {
+            const restored = cloneEnvironment(drag.beforeEnvironment);
+            environmentRef.current = restored;
+            setEnvironment(restored);
+            canonicalPlanRef.current = clonePlan(restored.plan);
+            activeTargetRef.current = drag.targetBefore ?? { kind: 'floor' };
+            setActiveTarget(activeTargetRef.current);
+            planRef.current = clonePlan(planForTarget(restored.plan, activeTargetRef.current));
+            updateStats(planRef.current);
+          } else {
+            planRef.current = drag.before;
+            updateStats(drag.before);
+          }
           setPlanVersion((v) => v + 1);
         }
         setRectPreview(null);
@@ -1574,6 +2037,9 @@ export function usePlanEditor(farmId: number) {
     dragRef.current = {
       kind: tool === 'rect' ? 'rect' : tool === 'line' ? 'line' : 'paint',
       before,
+      beforeEnvironment: environmentRef.current ? cloneEnvironment(environmentRef.current) : undefined,
+      targetBefore: activeTargetRef.current,
+      environmentChanged: false,
       changed: false,
       startX: cell.x,
       startY: cell.y,
@@ -1698,17 +2164,42 @@ export function usePlanEditor(farmId: number) {
     };
     const widthM = snap(draftWidth, active.widthM);
     const heightM = snap(draftHeight, active.heightM);
-    const nextPlan = stripInvalidPlants(clampPlan({
-      ...current,
+    const beforePlan = canonicalPlanRef.current ?? active.plan;
+    const layout = layoutWithinBounds(active.layout, widthM, heightM);
+    const candidate = { ...active, widthM, heightM, layout };
+    let nextPlan = stripInvalidPlants(clampPlan({
+      ...beforePlan,
       widthM,
       heightM,
       allowOutsideBeds: draftAllowOutsideBeds,
     }));
-    const crops = Object.keys(current.planting).length - Object.keys(nextPlan.planting).length;
-    const ground = Object.keys(current.ground).length - Object.keys(nextPlan.ground).length;
-    const equipment = (active.instances ?? []).filter((item) =>
-      item.x + item.widthM > widthM || item.y + item.depthM > heightM,
-    ).length;
+    const groundMap = { ...nextPlan.ground };
+    const plantingMap = { ...nextPlan.planting };
+    const plantedAtMap = nextPlan.plantedAt ? { ...nextPlan.plantedAt } : undefined;
+    for (const key of Object.keys(groundMap)) {
+      if (cellOverlapsReservedArea(candidate, key)) delete groundMap[key];
+    }
+    for (const key of Object.keys(plantingMap)) {
+      if (cellOverlapsReservedArea(candidate, key)) {
+        delete plantingMap[key];
+        if (plantedAtMap) delete plantedAtMap[key];
+      }
+    }
+    nextPlan = pruneTargetsForLayout({
+      ...nextPlan,
+      ground: groundMap,
+      planting: plantingMap,
+      ...(plantedAtMap ? { plantedAt: plantedAtMap } : {}),
+    }, layout);
+    const crops = cropCellCount(beforePlan) - cropCellCount(nextPlan);
+    const ground = Object.keys(beforePlan.ground).length - Object.keys(nextPlan.ground).length;
+    const equipment = (active.instances ?? []).filter((item) => {
+      const mount = item.mount;
+      return item.x + item.widthM > widthM || item.y + item.depthM > heightM ||
+        (mount.kind === 'growing-level' && !layout?.growingSpaces.some((space) =>
+          space.id === mount.growingSpaceId && space.levels.some((level) => level.id === mount.levelId),
+        )) || instanceOverlapsReservedArea(candidate, item);
+    }).length;
     if ((crops + ground + equipment > 0) && !confirmResize) {
       setPendingResize({ widthM, heightM, crops, ground, equipment });
       return;
@@ -1718,8 +2209,14 @@ export function usePlanEditor(farmId: number) {
       widthM,
       heightM,
       plan: nextPlan,
-      layout: layoutWithinBounds(active.layout, widthM, heightM),
-      ...(active.instances ? { instances: active.instances.filter((item) => item.x + item.widthM <= widthM && item.y + item.depthM <= heightM) } : {}),
+      layout,
+      ...(active.instances ? { instances: active.instances.filter((item) => {
+        const mount = item.mount;
+        return item.x + item.widthM <= widthM && item.y + item.depthM <= heightM &&
+          (mount.kind !== 'growing-level' || !!layout?.growingSpaces.some((space) =>
+            space.id === mount.growingSpaceId && space.levels.some((level) => level.id === mount.levelId),
+          )) && !instanceOverlapsReservedArea(candidate, item);
+      }) } : {}),
     };
     setPendingResize(null);
     void commitEnvironment(nextEnvironment).then(() => {
@@ -1735,21 +2232,30 @@ export function usePlanEditor(farmId: number) {
     if (!plan) return;
     try {
       const background = environment ? archetypes[environment.archetype].bg : undefined;
-      const blob = await renderPlanToPng(plan, crops, `${farm?.name ?? 'Farm'} Plot Plan`, background);
-      const filename = `${(farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-plot.png`;
+      const worldLabel = environment?.label ?? 'Plot';
+      const title = environment
+        ? `${farm?.name ?? 'Farm'} · ${worldLabel} · ${activeTargetLabel}`
+        : `${farm?.name ?? 'Farm'} Plot Plan`;
+      const context = environment && ENV_RECORDS_ENABLED ? { environment, target: activeTarget } : undefined;
+      const blob = await renderPlanToPng(plan, crops, title, background, context);
+      const fileScope = environment ? `${worldLabel}-${activeTargetLabel}` : 'plot';
+      const filename = `${(farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${fileScope.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`;
       downloadBlob(blob, filename);
       // DES-006: the export used to give no feedback at all.
       toast.success(`Exported ${filename}`);
     } catch (e) {
       toast.error((e as Error).message);
     }
-  }, [crops, environment, farm?.name]);
+  }, [activeTarget, activeTargetLabel, crops, environment, farm?.name]);
 
   const exportCsv = useCallback(() => {
     if (!stats) return;
+    const worldLabel = environment?.label ?? 'Legacy plan';
     const rows = [
-      ['crop', 'variety', 'plants_needed', 'spacing_cm', 'row_spacing_cm', 'seeds_est', 'sow_window'],
+      ['growing_world', 'growing_target', 'crop', 'variety', 'plants_needed', 'spacing_cm', 'row_spacing_cm', 'seeds_est', 'sow_window'],
       ...stats.perCrop.map((stat) => [
+        worldLabel,
+        activeTargetLabel,
         stat.crop.name,
         stat.crop.isCustom ? 'Custom' : '',
         stat.plants,
@@ -1761,8 +2267,9 @@ export function usePlanEditor(farmId: number) {
     ];
     const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
     const fileBase = (farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${fileBase}-shopping-list.csv`);
-  }, [farm?.name, stats]);
+    const scope = `${worldLabel}-${activeTargetLabel}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${fileBase}-${scope}-shopping-list.csv`);
+  }, [activeTargetLabel, environment?.label, farm?.name, stats]);
 
   const recordLoading = ENV_RECORDS_ENABLED ? siteLoading || selectionLoading : planLoading;
   const isLoading = farmLoading || cropsLoading || recordLoading || initializedFarmRef.current !== farmId;
@@ -1794,6 +2301,9 @@ export function usePlanEditor(farmId: number) {
         environmentRef.current = null;
         setEnvironment(null);
         planRef.current = null;
+        canonicalPlanRef.current = null;
+        activeTargetRef.current = { kind: 'floor' };
+        setActiveTarget({ kind: 'floor' });
         setStats(null);
         setPairings([]);
         setPlanVersion((version) => version + 1);
@@ -1808,6 +2318,7 @@ export function usePlanEditor(farmId: number) {
     environmentRef.current = null;
     setEnvironment(null);
     planRef.current = plan;
+    canonicalPlanRef.current = plan;
     setDraftWidth(plan.widthM);
     setDraftHeight(plan.heightM);
     setDraftAllowOutsideBeds(plan.allowOutsideBeds);
@@ -1974,11 +2485,19 @@ export function usePlanEditor(farmId: number) {
     environment,
     selectedEnvironmentId,
     staleSelectionId,
+    activeTarget,
+    activeTargetKey,
+    activeTargetLabel,
+    targetOptions,
+    rackTierCount,
+    setRackTierCount,
+    maxRackTiers,
 
     // refs
     canvasRef,
     shellRef,
     planRef,
+    canonicalPlanRef,
     viewportRef,
     dragRef,
     spaceHeldRef,
@@ -2098,6 +2617,12 @@ export function usePlanEditor(farmId: number) {
     applyTemplate,
     showSite,
     selectEnvironment,
+    selectTarget,
+    growingSpaceRemovalPreview,
+    removeGrowingSpace,
+    removeEquipmentInstance,
+    updateEnvironmentSetpoints,
+    commitExternalEnvironmentMutation,
     createWorld,
     moveWorld,
     saveWorld,

@@ -1,7 +1,8 @@
 import { Hand, Layers, Sprout } from 'lucide-react';
 
-import { CELL_AREA_M2, plantsForArea } from '@/lib/plan';
+import { effectivePlantingArea } from '@/lib/plan';
 import { cn } from '@/lib/utils';
+import { assetBySlug } from '@/data/assets';
 import { Button } from '@/components/ui/button';
 import type { PlanEditor } from './usePlanEditor';
 
@@ -14,6 +15,7 @@ export function BlueprintCanvas({ editor }: { editor: PlanEditor }) {
     viewportVersion,
     planVersion,
     environment,
+    activeTarget,
     placementMessage,
     handlePointerDown,
     handlePointerMove,
@@ -51,9 +53,10 @@ export function BlueprintCanvas({ editor }: { editor: PlanEditor }) {
     const w = Math.abs(rectPreview.x1 - rectPreview.x0) + 1;
     const h = Math.abs(rectPreview.y1 - rectPreview.y0) + 1;
     const cells = w * h;
-    const areaM2 = Number((cells * CELL_AREA_M2).toFixed(2));
+    const cellM = plan?.cellM ?? 0.25;
+    const areaM2 = Number((cells * cellM * cellM).toFixed(2));
     if (rectMode === 'plants' && activeCrop) {
-      rectHud = `${w}×${h} · ${areaM2} m² · ≈${plantsForArea(activeCrop, cells)} plants`;
+      rectHud = `${w}×${h} · ${areaM2} m² · ≈${effectivePlantingArea(activeCrop, [{ cells, cellM }])} plants`;
     } else if (rectMode === 'asset' && activeAsset) {
       rectHud = `${w}×${h} · ${areaM2} m² · ${activeAsset.emoji} ${activeAsset.label}`;
     } else {
@@ -87,6 +90,54 @@ export function BlueprintCanvas({ editor }: { editor: PlanEditor }) {
           aria-hidden="true"
         >
           <g transform={`translate(${viewportRef.current.offsetX} ${viewportRef.current.offsetY}) scale(${meterScale})`}>
+            {layout.growingSpaces.map((space) => {
+              const selected = activeTarget.kind === 'growing-level' && activeTarget.growingSpaceId === space.id;
+              const selectedLevel = selected ? space.levels.find((level) => level.id === activeTarget.levelId) : null;
+              return (
+                <g key={space.id}>
+                  <rect
+                    x={space.x}
+                    y={space.y}
+                    width={space.widthM}
+                    height={space.depthM}
+                    fill={selected ? '#8b5cf6' : '#64748b'}
+                    fillOpacity={selected ? '.12' : '.05'}
+                    stroke={selected ? '#7c3aed' : '#475569'}
+                    strokeDasharray={selected ? '.08 .04' : '.04 .06'}
+                    strokeWidth={plan.cellM * .08}
+                  />
+                  <text x={space.x + .05} y={space.y + .16} fill={selected ? '#6d28d9' : '#334155'} fontSize={plan.cellM * .42}>
+                    {space.label}{selectedLevel ? ` · ${selectedLevel.label} (${selectedLevel.elevationM.toFixed(2)} m)` : ''}
+                  </text>
+                </g>
+              );
+            })}
+            {(environment?.instances ?? [])
+              .filter((instance) => instance.mount.kind === 'environment' ||
+                (activeTarget.kind === 'floor' && instance.mount.kind === 'floor') ||
+                (activeTarget.kind === 'growing-level' && instance.mount.kind === 'growing-level' &&
+                  instance.mount.growingSpaceId === activeTarget.growingSpaceId && instance.mount.levelId === activeTarget.levelId))
+              .map((instance) => {
+                const asset = assetBySlug(instance.slug);
+                if (!asset) return null;
+                return (
+                  <g key={instance.id}>
+                    <rect
+                      x={instance.x}
+                      y={instance.y}
+                      width={instance.widthM}
+                      height={instance.depthM}
+                      fill={asset.colorHex}
+                      fillOpacity=".22"
+                      stroke={asset.colorHex}
+                      strokeWidth={plan.cellM * .08}
+                    />
+                    <text x={instance.x + .04} y={instance.y + Math.min(instance.depthM, .18)} fill="#0f172a" fontSize={plan.cellM * .38}>
+                      {asset.emoji} {asset.label}
+                    </text>
+                  </g>
+                );
+              })}
             {layout.reservations.map((reservation) => (
               <g key={reservation.id}>
                 <rect

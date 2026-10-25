@@ -206,4 +206,66 @@ describe('ENV_RECORDS flag compatibility', () => {
     expect(JSON.parse(storage.getItem('ff-pro:v1')!).sites[1].environments[0].plan.updatedAt)
       .toBe(restored.plan.updatedAt);
   });
+
+  it('rekeys level crop plans and mounts when duplicating a growing world', async () => {
+    vi.stubEnv('VITE_FF_ENV_RECORDS', 'true');
+    vi.resetModules();
+    const source = environment(1, 'warehouse-vertical', 'env:1:1');
+    const spaceId = 'rack-1';
+    const levelId = 'rack-1-level-2';
+    source.layout!.growingSpaces = [{
+      id: spaceId,
+      label: 'Rack 1',
+      kind: 'rack',
+      x: 1,
+      y: 1,
+      widthM: 1,
+      depthM: 0.75,
+      levels: [{ id: levelId, label: 'Level 2', elevationM: 0.9 }],
+    }];
+    source.plan.targets = {
+      'level/rack-1/rack-1-level-2': {
+        growingSpaceId: spaceId,
+        levelId,
+        planting: { '4,4': 22 },
+        plantedAt: { '4,4': '2026-10-24' },
+      },
+    };
+    source.instances = [{
+      id: 'rack-instance-1',
+      slug: 'plant-rack',
+      x: 1,
+      y: 1,
+      widthM: 1,
+      depthM: 0.75,
+      mount: { kind: 'growing-level', growingSpaceId: spaceId, levelId },
+    }];
+    installStorage({
+      version: 2,
+      farms: [{ id: 1 }],
+      plans: {},
+      sites: { 1: { farmId: 1, widthM: 8, heightM: 6, cellM: 0.25, environments: [source], updatedAt: source.plan.updatedAt } },
+      selectedEnvironmentIds: { 1: source.id },
+    });
+    vi.resetModules();
+
+    const [{ localApi }] = await Promise.all([import('@/lib/localApi')]);
+    const duplicate = await localApi.duplicateEnvironment(1, source.id);
+    const targetPlan = Object.values(duplicate.plan.targets ?? {})[0]!;
+    const duplicateSpace = duplicate.layout!.growingSpaces[0]!;
+
+    expect(duplicateSpace.id).not.toBe(spaceId);
+    expect(duplicateSpace.levels[0]!.id).not.toBe(levelId);
+    expect(targetPlan).toEqual({
+      growingSpaceId: duplicateSpace.id,
+      levelId: duplicateSpace.levels[0]!.id,
+      planting: { '4,4': 22 },
+      plantedAt: { '4,4': '2026-10-24' },
+    });
+    expect(duplicate.instances![0]!.mount).toEqual({
+      kind: 'growing-level',
+      growingSpaceId: duplicateSpace.id,
+      levelId: duplicateSpace.levels[0]!.id,
+    });
+  });
 });

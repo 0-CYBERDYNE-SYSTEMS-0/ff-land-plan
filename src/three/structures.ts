@@ -37,10 +37,11 @@
  *    only cluttered the shoreline. `fruit-tree` renders a dedicated orchard tree.
  */
 import * as THREE from 'three';
-import type { PlanState } from '@/types';
+import type { Environment, PlanState } from '@/types';
 import { parseKey } from '@/lib/plan';
 import { assetBySlug } from '@/data/assets';
 import { entries as structureEntries } from '@/creative/structures/registry';
+import { makePlantRack } from '@/creative/structures/equipment';
 
 export interface StructureGroup {
   /** Root objects added to the scene (one per linear cell / merged region). */
@@ -187,14 +188,17 @@ interface Template {
 
 const templateCache = new Map<string, Template>();
 
-function getTemplate(entryId: string): Template | null {
-  const cached = templateCache.get(entryId);
+function getTemplate(entryId: string, rackTiers?: number): Template | null {
+  const cacheKey = rackTiers === undefined ? entryId : `${entryId}|planned-tiers:${rackTiers}`;
+  const cached = templateCache.get(cacheKey);
   if (cached) return cached;
 
   const entry = structureEntries.find((e) => e.id === entryId);
   if (!entry) return null;
 
-  const obj = entry.make();
+  const obj = entryId === 'plant-rack' && rackTiers !== undefined
+    ? makePlantRack(rackTiers, false)
+    : entry.make();
   // Measure FIRST (object at identity), then re-centre: builders anchor voxels
   // at a corner (e.g. the polytunnel spans 0..+Z with tie-down pegs at −x), but
   // instances are placed at a region's centre, so the template's footprint
@@ -209,7 +213,7 @@ function getTemplate(entryId: string): Template | null {
   obj.position.z -= center.z;
   const sizeM = Math.max(size.x, size.z) || 1;
   const tpl = { obj, size, sizeM };
-  templateCache.set(entryId, tpl);
+  templateCache.set(cacheKey, tpl);
   return tpl;
 }
 
@@ -308,6 +312,41 @@ export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureG
   // 'pond' is intentionally not placed here — the terrain pond tile from
   // src/three/ground.ts covers it (see header note).
 
+  return [{ roots }];
+}
+
+/** Render catalog-backed Environment.instances using their saved identities and mounts. */
+export function buildEnvironmentAssets(environment: Environment, plan: PlanState, scene: THREE.Scene): StructureGroup[] {
+  const roots: THREE.Object3D[] = [];
+  const offsetX = -(plan.widthM / 2);
+  const offsetZ = -(plan.heightM / 2);
+  for (const instance of environment.instances ?? []) {
+    const mapping = SLUG_MAP[instance.slug];
+    if (!mapping) continue;
+    const mount = instance.mount;
+    const space = mount.kind === 'growing-level'
+      ? environment.layout?.growingSpaces.find((entry) => entry.id === mount.growingSpaceId)
+      : undefined;
+    const level = mount.kind === 'growing-level'
+      ? space?.levels.find((entry) => entry.id === mount.levelId)
+      : undefined;
+    if (mount.kind === 'growing-level' && !level) continue;
+    const template = getTemplate(mapping.entryId, instance.slug === 'plant-rack' ? space?.levels.length : undefined);
+    if (!template) continue;
+    const root = template.obj.clone();
+    root.name = `asset-instance:${instance.id}:${instance.slug}`;
+    root.scale.set(
+      instance.widthM / Math.max(0.001, template.size.x),
+      0.1,
+      instance.depthM / Math.max(0.001, template.size.z),
+    );
+    const worldX = offsetX + instance.x + instance.widthM / 2;
+    const worldZ = offsetZ + instance.y + instance.depthM / 2;
+    const mountY = level?.elevationM ?? mapping.yOffsetM ?? 0;
+    root.position.set(worldX, mountY, worldZ);
+    scene.add(root);
+    roots.push(root);
+  }
   return [{ roots }];
 }
 

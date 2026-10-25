@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiFetch } from '@/lib/api';
 import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { growingTargetKey, parseTargetCellKey } from '@/lib/growingTargets';
 import { isInputCaptured } from '@/lib/inputArbiter';
 import type { SimEvent, SimState } from '@/lib/sim';
 import { runDayEnv } from '@/hooks/useSimRun';
@@ -27,6 +28,7 @@ import { TemplatesCard } from '@/components/designer/TemplatesCard';
 import { ViewToggle } from '@/components/designer/ViewToggle';
 import { FILL_CONFIRM_THRESHOLD, usePlanEditor } from '@/components/designer/usePlanEditor';
 import { GrowingWorldSetup } from '@/components/designer/GrowingWorldSetup';
+import { GrowingSystemsPanel } from '@/components/designer/GrowingSystemsPanel';
 import { SiteOverview } from '@/components/designer/SiteOverview';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -87,27 +89,29 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     const st = rec ? simRun.simStateRef.current : null;
     const plan = editor.planRef.current;
     if (!rec || !st || !plan) return undefined;
+    const activeTargetKey = growingTargetKey(editor.activeTarget);
     const moisture = new Map<string, number>();
     const stress = new Map<string, number>();
     const ready = new Set<string>();
     const env = runDayEnv(rec, st.dayIndex);
-    for (const [key, cell] of Object.entries(st.cells)) {
-      if (plan.planting[key] === undefined) continue;
+    for (const [stateKey, cell] of Object.entries(st.cells)) {
+      const { target, localCellKey } = parseTargetCellKey(stateKey);
+      if (growingTargetKey(target) !== activeTargetKey || plan.planting[localCellKey] === undefined) continue;
       const crop = editor.cropById.get(cell.cropId);
       if (!crop) continue;
-      const view = projectPlant({ cell, crop, env, dayIndex: st.dayIndex, cellKey: key, stageCount: stageCountFor(crop.name) });
-      if (view.moisture !== null) moisture.set(key, view.moisture);
+      const view = projectPlant({ cell, crop, env, dayIndex: st.dayIndex, cellKey: localCellKey, stageCount: stageCountFor(crop.name) });
+      if (view.moisture !== null) moisture.set(localCellKey, view.moisture);
       const s = effectiveStress(cell);
-      if (s > 0.15) stress.set(key, s);
+      if (s > 0.15) stress.set(localCellKey, s);
       // Ripe = biomass already crossed 1.0 (readyAtDay is set at crossing)
       // and still standing: the engine auto-harvests at readyAtDay, so the
       // alive window IS the pick-me window (engine.ts HARVEST_GRACE_DAYS).
       if (view.lifecycle === 'alive' && cell.readyAtDay !== undefined) {
-        ready.add(key);
+        ready.add(localCellKey);
       }
     }
     return { moisture, stress, ready };
-  }, [simRun.record, simRun.dayIndex, simRun.simStateRef, editor.planVersion, editor.cropById, editor.planRef]);
+  }, [simRun.record, simRun.dayIndex, simRun.simStateRef, editor.planVersion, editor.cropById, editor.planRef, editor.activeTarget]);
 
   useEffect(() => {
     editor.setSimChannels(simChannels);
@@ -350,7 +354,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
           </h1>
           <p className="text-sm text-muted-foreground truncate">
             {editor.environment
-              ? `${farm.name} · ${archetypes[editor.environment.archetype].label} · ${editor.environment.widthM} × ${editor.environment.heightM} m · Floor · ${editor.environment.cellM * 100} cm cells`
+              ? `${farm.name} · ${archetypes[editor.environment.archetype].label} · ${editor.environment.widthM} × ${editor.environment.heightM} m · ${editor.activeTargetLabel} · ${editor.environment.cellM * 100} cm cells`
               : `${farm.name} · ${currentPlan.widthM} m × ${currentPlan.heightM} m · 25 cm cells`}
             {editor.environment && !editor.environment.layout?.growingSpaces.length &&
               (editor.archetype === 'warehouse-vertical' || editor.archetype === 'container-farm') && ' · Tier planning unavailable'}
@@ -367,6 +371,16 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
               <SelectContent>
                 {editor.environments.map((environment) => (
                   <SelectItem key={environment.id} value={environment.id}>{environment.label} · {archetypes[environment.archetype].label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={editor.activeTargetKey} onValueChange={editor.selectTarget}>
+              <SelectTrigger className="h-9 w-[190px] text-xs" aria-label="Selected growing level">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {editor.targetOptions.map((option) => (
+                  <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -413,6 +427,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
             <TemplatesCard editor={editor} />
             <CropPalette editor={editor} />
             <AssetPalette editor={editor} />
+            <GrowingSystemsPanel editor={editor} />
             <SelectionPanel editor={editor} />
             <StatsPanel editor={editor} />
             <PairingsPanel editor={editor} />

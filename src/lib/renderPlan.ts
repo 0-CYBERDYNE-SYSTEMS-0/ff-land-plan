@@ -2,7 +2,7 @@
 // both draw through here. Pure text/vector drawing only — never drawImage from
 // a remote URL, or the export canvas taints and toBlob() throws.
 
-import type { Crop, GardenAsset, PlanState, PlanSurface } from '@/types';
+import type { Crop, Environment, GardenAsset, GrowingTargetRef, PlanState, PlanSurface } from '@/types';
 import { assetBySlug } from '@/data/assets';
 import { cellKey, parseKey, planCols, planRows } from '@/lib/plan';
 
@@ -66,6 +66,62 @@ export interface SimOverlayChannels {
   moisture?: Map<string, number> | null;
   stress?: Map<string, number> | null;
   ready?: Set<string> | null;
+}
+
+export interface PlanExportContext {
+  environment: Environment;
+  target: GrowingTargetRef;
+}
+
+function drawEnvironmentOverlay(ctx: CanvasRenderingContext2D, plan: PlanState, context: PlanExportContext, offsetX: number, offsetY: number, cellPx: number): void {
+  const { environment, target } = context;
+  const meterPx = cellPx / plan.cellM;
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(meterPx, meterPx);
+  for (const space of environment.layout?.growingSpaces ?? []) {
+    const selected = target.kind === 'growing-level' && target.growingSpaceId === space.id;
+    ctx.fillStyle = selected ? 'rgba(139, 92, 246, 0.12)' : 'rgba(100, 116, 139, 0.05)';
+    ctx.strokeStyle = selected ? '#7c3aed' : '#475569';
+    ctx.lineWidth = Math.max(0.015, plan.cellM * 0.08);
+    ctx.setLineDash(selected ? [0.08, 0.04] : [0.04, 0.06]);
+    ctx.fillRect(space.x, space.y, space.widthM, space.depthM);
+    ctx.strokeRect(space.x, space.y, space.widthM, space.depthM);
+  }
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(245, 158, 11, 0.18)';
+  ctx.strokeStyle = 'rgba(180, 83, 9, 0.8)';
+  ctx.lineWidth = 0.025;
+  for (const area of environment.layout?.reservations ?? []) {
+    ctx.fillRect(area.x, area.y, area.widthM, area.depthM);
+    ctx.strokeRect(area.x, area.y, area.widthM, area.depthM);
+  }
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = plan.cellM * 0.7;
+  for (const access of environment.layout?.access ?? []) {
+    const horizontal = access.edge === 'north' || access.edge === 'south';
+    const x = horizontal ? access.offsetM : access.edge === 'east' ? environment.widthM : 0;
+    const y = horizontal ? access.edge === 'south' ? environment.heightM : 0 : access.offsetM;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (horizontal ? access.widthM : 0), y + (horizontal ? 0 : access.widthM));
+    ctx.stroke();
+  }
+  for (const instance of environment.instances ?? []) {
+    const visible = instance.mount.kind === 'environment' ||
+      (target.kind === 'floor' && instance.mount.kind === 'floor') ||
+      (target.kind === 'growing-level' && instance.mount.kind === 'growing-level' &&
+        instance.mount.growingSpaceId === target.growingSpaceId && instance.mount.levelId === target.levelId);
+    if (!visible) continue;
+    const asset = assetBySlug(instance.slug);
+    if (!asset) continue;
+    ctx.fillStyle = `${asset.colorHex}33`;
+    ctx.strokeStyle = asset.colorHex;
+    ctx.lineWidth = Math.max(0.015, plan.cellM * 0.08);
+    ctx.fillRect(instance.x, instance.y, instance.widthM, instance.depthM);
+    ctx.strokeRect(instance.x, instance.y, instance.widthM, instance.depthM);
+  }
+  ctx.restore();
 }
 
 const EMOJI_MIN_PX = 16;
@@ -408,6 +464,7 @@ export function renderPlanToPng(
   crops: Crop[],
   title: string,
   background?: { dark: string; light: string },
+  context?: PlanExportContext,
 ): Promise<Blob> {
   const cols = planCols(plan);
   const rows = planRows(plan);
@@ -455,6 +512,12 @@ export function renderPlanToPng(
     54,
   );
 
+  // drawPlan clears its full viewport; clip it to the plot so the export
+  // header and title above remain intact.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(margin, headerH, planW, planH + 2);
+  ctx.clip();
   drawPlan(ctx, plan, {
     cellPx,
     offsetX: margin,
@@ -466,6 +529,8 @@ export function renderPlanToPng(
     surface: plan.surface ?? 'outdoor',
     background,
   });
+  ctx.restore();
+  if (context) drawEnvironmentOverlay(ctx, plan, context, margin, headerH, cellPx);
 
   // Scale bar: 1 m.
   const sbY = headerH + planH + 22;

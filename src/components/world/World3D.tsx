@@ -10,6 +10,7 @@ import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForSca
 import { setInputMode } from '@/lib/inputArbiter';
 import { makeCropFor, makeCropForCustom } from '@/creative/crops/map';
 import { parseKey, planCols, planRows } from '@/lib/plan';
+import { growingCellWorldPosition, growingTargetElevationM, growingTargetKey, parseTargetCellKey, planForTarget } from '@/lib/growingTargets';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
 import { projectPlant, stageCountFor, type PlantViewParams } from '@/lib/sim/view';
 import { envToWeatherCurrent } from '@/lib/sim/runWeather';
@@ -17,7 +18,7 @@ import { archetypes, LEGACY_SURFACE_FOR_ARCHETYPE } from '@/creative/archetypes'
 import type { DailyEnvironment } from '@/lib/sim/types';
 import type { CellState } from '@/lib/sim/types';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
-import type { ArchetypeId, PlanState, PlanSurface, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
+import type { ArchetypeId, Environment, GrowingTargetRef, PlanState, PlanSurface, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
 import type { RunRecord, SimEvent, SimState } from '@/lib/sim';
 import {
   buildCellDiagnostics,
@@ -37,12 +38,12 @@ import { createEngine, setEngineOrbitEnabled, type Engine } from '@/three/engine
 import { fitCameraToBounds, worldFrameBounds } from '@/three/cameraFrame';
 import { createFlightCamera, type FlightCamera } from '@/three/flight';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
-import { __padProbe, advancePlantGrowth, buildPlants, disposePlants, type PlantBatch, type PlantUpdateOptions, swayPlants, updatePlants } from '@/three/plants';
+import { __padProbe, advancePlantGrowth, disposePlants, type PlantBatch, type PlantUpdateOptions, swayPlants, updatePlants } from '@/three/plants';
 import { buildGround, disposeGround, updateGround, type GroundBatch } from '@/three/ground';
 import { buildShell, disposeShell, releaseShellCache, type ShellGroup } from '@/three/shell';
 import { World3DErrorBoundary } from './World3DErrorBoundary';
 import { createSky, type Sky } from '@/three/sky';
-import { buildStructures, disposeStructures, type StructureGroup, updateStructures } from '@/three/structures';
+import { buildEnvironmentAssets, buildStructures, disposeStructures, type StructureGroup } from '@/three/structures';
 import { createTour, generateTourWaypoints, type Tour } from '@/three/tour';
 import { use3DEditor } from '@/three/use3DEditor';
 import { buildWaterPlanes, disposeWaterPlanes, updateWaterPlanes, type WaterPlane } from '@/three/water';
@@ -260,9 +261,8 @@ function reconcileGhostRunBatches(
   },
 ): number {
   const plan = args.record.config.basePlan;
+  const environment = args.record.config.environment;
   const cellM = plan.cellM;
-  const offsetX = -(plan.widthM / 2);
-  const offsetZ = -(plan.heightM / 2);
 
   // Wanted groups: ghost state cells placed on the GHOST's own plan (honest
   // fork view — cells the live plan lost still render as the what-if).
@@ -276,7 +276,9 @@ function reconcileGhostRunBatches(
   let templateCount = 0;
   let capped = false;
   for (const [key, cell] of Object.entries(args.state.cells)) {
-    if (plan.planting[key] === undefined) continue;
+    const { target, localCellKey } = parseTargetCellKey(key);
+    const targetPlan = planForTarget(plan, target);
+    if (targetPlan.planting[localCellKey] === undefined || growingTargetElevationM(environment, target) === null) continue;
     const groupKey = `${cell.cropId}|${cell.stage}`;
     let w = wanted.get(groupKey);
     if (!w) {
@@ -340,11 +342,14 @@ function reconcileGhostRunBatches(
 
     const denom = ghostTemplateScaleT(w.stage);
     const entries: GhostCellEntry[] = [];
-    w.keys.forEach((key, i) => {
-      const [cx, cy] = parseKey(key);
-      const jitter = ghostJitterForCell(cx, cy, cellM);
-      const liftSlugs = GHOST_SHELF_LIFTS[plan.ground[key] ?? ''];
-      const lift = liftSlugs ? liftSlugs[ghostShelfForCell(cx, cy)]! : 0;
+    w.keys.forEach((key) => {
+      const { target, localCellKey } = parseTargetCellKey(key);
+      const targetPlan = planForTarget(plan, target);
+      const position = growingCellWorldPosition(key, plan, environment, 0.02);
+      if (!position) return;
+      const jitter = ghostJitterForCell(position.column, position.row, cellM);
+      const liftSlugs = GHOST_SHELF_LIFTS[targetPlan.ground[localCellKey] ?? ''];
+      const lift = liftSlugs ? liftSlugs[ghostShelfForCell(position.column, position.row)]! : 0;
       // Biomass → scale: the SAME template-scale math as plants.ts
       // writeCellMatrix, so a ghost that is "ahead" is visibly taller at the
       // same stage boundary. visualP carries the eased biomass across day
@@ -353,21 +358,22 @@ function reconcileGhostRunBatches(
       const targetP = Math.min(1, Math.max(0, args.state.cells[key]!.biomassFrac));
       const entry: GhostCellEntry = {
         key,
-        px: cx * cellM + cellM / 2 + offsetX + jitter.offsetX,
-        py: 0.02 + lift, // +0.01 over the real plants' y=0.01 — no z-fighting
-        pz: cy * cellM + cellM / 2 + offsetZ + jitter.offsetZ,
+        px: position.x + jitter.offsetX,
+        py: position.y + lift,
+        pz: position.z + jitter.offsetZ,
         rotY: jitter.rotY,
         baseScale: jitter.scaleY,
         denom,
         targetP,
         visualP: ghostVisualPByCell.get(key) ?? targetP,
       };
+      const slot = entries.length;
       entries.push(entry);
       ghostVisualPByCell.set(key, entry.visualP);
-      writeGhostEntry(b.mesh, i, entry);
+      writeGhostEntry(b.mesh, slot, entry);
     });
     b.entries = entries;
-    b.mesh.count = w.keys.length;
+    b.mesh.count = entries.length;
     b.mesh.instanceMatrix.needsUpdate = true;
   }
   return templateCount;
@@ -469,6 +475,26 @@ function planWithSurface(plan: PlanState, surface: PlanSurface): PlanState {
   return plan.surface === surface ? plan : { ...plan, surface };
 }
 
+interface PlantTargetSpec {
+  key: string;
+  plan: PlanState;
+  elevationM: number;
+  target: GrowingTargetRef;
+}
+
+function plantTargetSpecs(plan: PlanState, environment?: Environment | null): PlantTargetSpec[] {
+  const floor: GrowingTargetRef = { kind: 'floor' };
+  const targets: PlantTargetSpec[] = [{ key: growingTargetKey(floor), plan: planForTarget(plan, floor), elevationM: 0, target: floor }];
+  for (const space of environment?.layout?.growingSpaces ?? []) {
+    for (const level of space.levels) {
+      const target: GrowingTargetRef = { kind: 'growing-level', growingSpaceId: space.id, levelId: level.id };
+      const elevationM = growingTargetElevationM(environment, target);
+      if (elevationM !== null) targets.push({ key: growingTargetKey(target), plan: planForTarget(plan, target), elevationM, target });
+    }
+  }
+  return targets;
+}
+
 function archetypePlantScale(archetype: unknown): number | undefined {
   return typeof archetype === 'string' && Object.prototype.hasOwnProperty.call(archetypes, archetype)
     ? archetypes[archetype as ArchetypeId].plantScale
@@ -542,6 +568,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const groundBatchesRef = useRef<GroundBatch[]>([]);
   const structureBatchesRef = useRef<StructureGroup[]>([]);
   const plantBatchesRef = useRef<PlantBatch[]>([]);
+  const levelPlantBatchesRef = useRef(new Map<string, { batches: PlantBatch[]; elevationM: number }>());
   const waterPlanesRef = useRef<WaterPlane[]>([]);
   const shellRef = useRef<ShellGroup | null>(null);
   const undoGhostsRef = useRef<GhostBatch[]>([]);
@@ -585,6 +612,63 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // Latest monthly DLI (mol/m²/day, index 0 = January) consumed via helper
   // below by the ref-based plant builders; refs never appear in dep arrays.
   const monthlyDliRef = useRef<number[] | null>(null);
+
+  const reconcileAllPlantTargets = (
+    sourcePlan: PlanState,
+    currentDate: Date | undefined,
+    targetScenario: ScenarioType | undefined,
+    growthContext: GrowthModCtx | undefined,
+    floorOptions?: PlantUpdateOptions,
+  ) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const canonicalPlan = editor.featureEnabled
+      ? editor.canonicalPlanRef.current ?? sourcePlan
+      : sourcePlan;
+    const specs = plantTargetSpecs(canonicalPlan, editor.environment);
+    const floor = specs[0]!;
+    const surface = editor.environment
+      ? LEGACY_SURFACE_FOR_ARCHETYPE[editor.environment.archetype]
+      : editor.surface;
+    plantBatchesRef.current = updatePlants(
+      plantBatchesRef.current,
+      planWithSurface(floor.plan, surface),
+      editor.cropById,
+      engine.scene,
+      currentDate,
+      targetScenario,
+      growthContext,
+      { ...floorOptions, plantScale: archetypePlantScale(editor.archetype), elevationM: 0 },
+    );
+
+    const liveKeys = new Set<string>();
+    for (const spec of specs.slice(1)) {
+      liveKeys.add(spec.key);
+      let existing = levelPlantBatchesRef.current.get(spec.key);
+      if (existing && existing.elevationM !== spec.elevationM) {
+        disposePlants(existing.batches);
+        levelPlantBatchesRef.current.delete(spec.key);
+        existing = undefined;
+      }
+      const batches = updatePlants(
+        existing?.batches ?? [],
+        planWithSurface(spec.plan, surface),
+        editor.cropById,
+        engine.scene,
+        currentDate,
+        targetScenario,
+        growthContext,
+        { plantScale: archetypePlantScale(editor.archetype), elevationM: spec.elevationM, skipPadReconcile: true },
+      );
+      if (batches.length > 0) levelPlantBatchesRef.current.set(spec.key, { batches, elevationM: spec.elevationM });
+      else levelPlantBatchesRef.current.delete(spec.key);
+    }
+    for (const [key, value] of levelPlantBatchesRef.current) {
+      if (liveKeys.has(key)) continue;
+      disposePlants(value.batches);
+      levelPlantBatchesRef.current.delete(key);
+    }
+  };
 
   // Launch params (test hooks): fftime = initial timeOfDay, ffdebug = open Perf HUD.
   const [scrubDate, setScrubDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -708,38 +792,84 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
    */
   const applyRunGrowth = () => {
     const engine = engineRef.current;
-    const plan = editor.planRef.current;
+    const selectedPlan = editor.planRef.current;
+    const plan = editor.featureEnabled ? editor.canonicalPlanRef.current ?? selectedPlan : selectedPlan;
     const run = simRunRef.current;
     const record = run?.record ?? null;
     const st = run?.simStateRef.current ?? null;
     if (!engine || !plan || !record || !st) return;
-    const plantedAtShim: Record<string, string> = {};
-    for (const key of Object.keys(plan.planting)) plantedAtShim[key] = FAR_FUTURE_ISO;
-    const shimPlan = planWithSurface({ ...plan, plantedAt: plantedAtShim }, runSurface(record));
     // View projection (SPEC-GROWTH-VISUAL §2.1): per-cell growth, stage, wilt
     // and stress tint all derive from the pure seam — the aggregation (MAX of
     // the four stress terms + pest × 0.8) lives in view.ts effectiveStress.
-    const viewByCell = new Map<string, PlantViewParams>();
-    for (const [key, cell] of Object.entries(st.cells)) {
-      if (plan.planting[key] === undefined) continue; // cell no longer in the live plan
-      const crop = editor.cropById.get(cell.cropId);
-      if (!crop) continue;
-      viewByCell.set(
-        key,
-        projectPlant({ cell, crop, env: runDayEnv(record, st.dayIndex), dayIndex: st.dayIndex, cellKey: key, stageCount: stageCountFor(crop.name) }),
-      );
+    const specs = plantTargetSpecs(plan, editor.environment);
+    const viewsByTarget = new Map<string, Map<string, PlantViewParams>>();
+    for (const spec of specs) {
+      const viewByCell = new Map<string, PlantViewParams>();
+      for (const [stateKey, cell] of Object.entries(st.cells)) {
+        const { target, localCellKey } = parseTargetCellKey(stateKey);
+        if (growingTargetKey(target) !== spec.key || spec.plan.planting[localCellKey] === undefined) continue;
+        const crop = editor.cropById.get(cell.cropId);
+        if (!crop) continue;
+        viewByCell.set(
+          localCellKey,
+          projectPlant({ cell, crop, env: runDayEnv(record, st.dayIndex), dayIndex: st.dayIndex, cellKey: localCellKey, stageCount: stageCountFor(crop.name) }),
+        );
+      }
+      viewsByTarget.set(spec.key, viewByCell);
     }
     const runDate = new Date(`${runDateISO(record, st.dayIndex)}T00:00:00`);
+    const surface = runSurface(record);
+    const shimFor = (spec: PlantTargetSpec): PlanState => {
+      const plantedAt: Record<string, string> = {};
+      for (const key of Object.keys(spec.plan.planting)) plantedAt[key] = FAR_FUTURE_ISO;
+      return planWithSurface({ ...spec.plan, plantedAt }, surface);
+    };
+    const floor = specs.find((spec) => spec.target.kind === 'floor');
+    if (!floor) return;
     plantBatchesRef.current = updatePlants(
       plantBatchesRef.current,
-      shimPlan,
+      shimFor(floor),
       editor.cropById,
       engine.scene,
       runDate,
       undefined,
       growthCtxRef.current,
-      { viewByCell, plantScale: runPlantScale(record) },
+      { viewByCell: viewsByTarget.get(floor.key), plantScale: runPlantScale(record), elevationM: 0 },
     );
+
+    const liveLevelKeys = new Set<string>();
+    for (const spec of specs) {
+      if (spec.target.kind !== 'growing-level') continue;
+      liveLevelKeys.add(spec.key);
+      let existing = levelPlantBatchesRef.current.get(spec.key);
+      if (existing && existing.elevationM !== spec.elevationM) {
+        disposePlants(existing.batches);
+        levelPlantBatchesRef.current.delete(spec.key);
+        existing = undefined;
+      }
+      const batches = updatePlants(
+        existing?.batches ?? [],
+        shimFor(spec),
+        editor.cropById,
+        engine.scene,
+        runDate,
+        undefined,
+        growthCtxRef.current,
+        {
+          viewByCell: viewsByTarget.get(spec.key),
+          plantScale: runPlantScale(record),
+          elevationM: spec.elevationM,
+          skipPadReconcile: true,
+        },
+      );
+      if (batches.length > 0) levelPlantBatchesRef.current.set(spec.key, { batches, elevationM: spec.elevationM });
+      else levelPlantBatchesRef.current.delete(spec.key);
+    }
+    for (const [key, value] of levelPlantBatchesRef.current) {
+      if (liveLevelKeys.has(key)) continue;
+      disposePlants(value.batches);
+      levelPlantBatchesRef.current.delete(key);
+    }
   };
 
   // Outbound run events → harvest celebration at the harvested cells' world
@@ -750,18 +880,17 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       const fx = growthFXRef.current;
       const plan = editor.planRef.current;
       if (!fx || !plan) return;
+      const record = simRunRef.current?.record ?? null;
+      const runPlan = record?.config.basePlan ?? plan;
+      const environment = record?.config.environment ?? editor.environment;
       const ready = events.filter((e) => e.kind === 'harvest-ready' && typeof e.cell === 'string');
       if (ready.length === 0) return;
-      const offsetX = -(plan.widthM / 2);
-      const offsetZ = -(plan.heightM / 2);
       const positions: THREE.Vector3[] = [];
       for (const ev of ready.slice(0, 12)) {
-        const [cx, cy] = parseKey(ev.cell as string);
-        positions.push(
-          new THREE.Vector3(cx * plan.cellM + plan.cellM / 2 + offsetX, 0.5, cy * plan.cellM + plan.cellM / 2 + offsetZ),
-        );
+        const position = growingCellWorldPosition(ev.cell as string, runPlan, environment, 0.5, ev.target);
+        if (position) positions.push(new THREE.Vector3(position.x, position.y, position.z));
       }
-      fx.celebrate(positions);
+      if (positions.length > 0) fx.celebrate(positions);
     };
   }
 
@@ -785,6 +914,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
 
   const achievements = useRef(createAchievementSystem());
   const flightTime = useRef(0);
+  const hoverTargetRef = useRef(editor.activeTarget);
+  const hoverTargetLabelRef = useRef(editor.activeTargetLabel);
+  const hoverEnvironmentRef = useRef(editor.environment);
+  hoverTargetRef.current = editor.activeTarget;
+  hoverTargetLabelRef.current = editor.activeTargetLabel;
+  hoverEnvironmentRef.current = editor.environment;
 
   // Hover readout builder (use3DEditor dedupes to one call per cell change):
   // positions the ONE hover-highlight mesh (created in the init effect) and
@@ -806,7 +941,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       return;
     }
     if (mesh) {
-      mesh.position.set(cell.x * plan.cellM + plan.cellM / 2 - plan.widthM / 2, 0.035, cell.y * plan.cellM + plan.cellM / 2 - plan.heightM / 2);
+      const target = hoverTargetRef.current;
+      const elevationM = target.kind === 'growing-level'
+        ? hoverEnvironmentRef.current?.layout?.growingSpaces.find((space) => space.id === target.growingSpaceId)
+          ?.levels.find((level) => level.id === target.levelId)?.elevationM ?? 0
+        : 0;
+      mesh.position.set(cell.x * plan.cellM + plan.cellM / 2 - plan.widthM / 2, elevationM + 0.035, cell.y * plan.cellM + plan.cellM / 2 - plan.heightM / 2);
       mesh.scale.set(plan.cellM * 0.98, 1, plan.cellM * 0.98);
       mesh.visible = true;
     }
@@ -841,7 +981,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     setHoverInfo({
       key: cell.key,
       title: crop.name,
-      sub: `Sown ${sown} · ${Math.round(prog * 100)}% grown${mod.stress > 0.2 ? ' · ⚠ stress' : ''}`,
+      sub: `${hoverTargetLabelRef.current} · Sown ${sown} · ${Math.round(prog * 100)}% grown${mod.stress > 0.2 ? ' · ⚠ stress' : ''}`,
     });
   }, []);
 
@@ -944,7 +1084,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     if (!container || !sceneReady) return;
     if (engineRef.current) return; // StrictMode double-mount safety
 
-    const plan = editor.planRef.current;
+    const selectedPlan = editor.planRef.current;
+    const plan = editor.featureEnabled ? editor.canonicalPlanRef.current ?? selectedPlan : selectedPlan;
     if (!plan) return;
     const cropById = cropByIdRef.current;
 
@@ -1003,12 +1144,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     }
 
     // Structures, plants, water
-    structureBatchesRef.current = buildStructures(plan, engine.scene);
-    plantBatchesRef.current = buildPlants(
-      planWithSurface(plan, editor.surface), cropById, engine.scene,
-      new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders(),
-      { plantScale: archetypePlantScale(editor.archetype) },
-    );
+    structureBatchesRef.current = [
+      ...buildStructures(plan, engine.scene),
+      ...(editor.environment ? buildEnvironmentAssets(editor.environment, plan, engine.scene) : []),
+    ];
+    reconcileAllPlantTargets(plan, new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders());
     waterPlanesRef.current = buildWaterPlanes(plan, engine.scene);
 
     // Animals
@@ -1152,11 +1292,17 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       // Plant sway
       const windStr = w.windSpeedKmh / 20;
       swayPlants(plantBatchesRef.current, cropByIdRef.current, t, windStr);
+      for (const targetBatches of levelPlantBatchesRef.current.values()) {
+        swayPlants(targetBatches.batches, cropByIdRef.current, t, windStr);
+      }
 
       // Smooth growth — ease each planted cell's visual progress toward the
       // target captured by the last reconcile (allocation-free, ref-reads
       // only, no scene rebuilds).
       advancePlantGrowth(plantBatchesRef.current, dt);
+      for (const targetBatches of levelPlantBatchesRef.current.values()) {
+        advancePlantGrowth(targetBatches.batches, dt);
+      }
       // Ghost-run plants ease under the same contract (wave 4) — no-op when
       // no ghost is loaded.
       if (ghostRunBatchesRef.current.length > 0) {
@@ -1271,6 +1417,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       disposeGround(groundBatchesRef.current);
       disposeStructures(structureBatchesRef.current);
       disposePlants(plantBatchesRef.current);
+      for (const targetBatches of levelPlantBatchesRef.current.values()) disposePlants(targetBatches.batches);
+      levelPlantBatchesRef.current.clear();
       disposeWaterPlanes(waterPlanesRef.current);
       disposeShell(shellRef.current);
       shellRef.current = null;
@@ -1331,13 +1479,18 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     if (!ring || !plan) return;
     if (editor.selectedKey) {
       const [cx, cy] = parseKey(editor.selectedKey);
-      ring.position.set(cx * plan.cellM + plan.cellM / 2 - plan.widthM / 2, 0.05, cy * plan.cellM + plan.cellM / 2 - plan.heightM / 2);
+      const selectedTarget = editor.activeTarget;
+      const elevationM = selectedTarget.kind === 'growing-level'
+        ? editor.environment?.layout?.growingSpaces.find((space) => space.id === selectedTarget.growingSpaceId)
+          ?.levels.find((level) => level.id === selectedTarget.levelId)?.elevationM ?? 0
+        : 0;
+      ring.position.set(cx * plan.cellM + plan.cellM / 2 - plan.widthM / 2, elevationM + 0.05, cy * plan.cellM + plan.cellM / 2 - plan.heightM / 2);
       ring.scale.setScalar(plan.cellM);
       ring.visible = true;
     } else {
       ring.visible = false;
     }
-  }, [sceneReady, editor.selectedKey, editor.planVersion]);
+  }, [sceneReady, editor.selectedKey, editor.activeTarget, editor.environment, editor.planVersion]);
 
   // Drag-preview overlay (rect/line tools): ONE InstancedMesh rebuilt only
   // when the string signature changes, so per-pointermove setRectPreview calls
@@ -1376,7 +1529,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const offsetX = -(plan.widthM / 2);
     const offsetZ = -(plan.heightM / 2);
     cells.forEach(([cx, cy], i) => {
-      dummy.position.set(cx * plan.cellM + plan.cellM / 2 + offsetX, 0.03, cy * plan.cellM + plan.cellM / 2 + offsetZ);
+      const target = editor.activeTarget;
+      const elevationM = target.kind === 'growing-level'
+        ? editor.environment?.layout?.growingSpaces.find((space) => space.id === target.growingSpaceId)
+          ?.levels.find((level) => level.id === target.levelId)?.elevationM ?? 0
+        : 0;
+      dummy.position.set(cx * plan.cellM + plan.cellM / 2 + offsetX, elevationM + 0.03, cy * plan.cellM + plan.cellM / 2 + offsetZ);
       dummy.rotation.set(0, 0, 0);
       dummy.scale.setScalar(plan.cellM);
       dummy.updateMatrix();
@@ -1391,12 +1549,13 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       (mesh.material as THREE.Material).dispose();
       if (previewOverlayRef.current === mesh) previewOverlayRef.current = null;
     };
-  }, [previewSig, sceneReady, editor.planVersion]);
+  }, [previewSig, sceneReady, editor.planVersion, editor.activeTarget, editor.environment]);
 
   // React to plan changes
   useEffect(() => {
     const engine = engineRef.current;
-    const plan = editor.planRef.current;
+    const selectedPlan = editor.planRef.current;
+    const plan = editor.featureEnabled ? editor.canonicalPlanRef.current ?? selectedPlan : selectedPlan;
     const cropById = editor.cropById;
     if (!engine || !plan) return;
 
@@ -1420,17 +1579,17 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     }
 
     // Structures & plants
-    structureBatchesRef.current = updateStructures(structureBatchesRef.current, plan, engine.scene);
+    disposeStructures(structureBatchesRef.current);
+    structureBatchesRef.current = [
+      ...buildStructures(plan, engine.scene),
+      ...(editor.environment ? buildEnvironmentAssets(editor.environment, plan, engine.scene) : []),
+    ];
     if (runActiveRef.current) {
       // Run mode owns the plant reconcile — keep run targets while the rest
       // of the scene rebuilds (next run commit would restore them anyway).
       applyRunGrowth();
     } else {
-      plantBatchesRef.current = updatePlants(
-        plantBatchesRef.current, planWithSurface(plan, editor.surface), cropById, engine.scene,
-        new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders(),
-        { plantScale: archetypePlantScale(editor.archetype) },
-      );
+      reconcileAllPlantTargets(plan, new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders());
     }
 
     // Water planes
@@ -1531,7 +1690,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // reconcile then; runActive in deps restores this projection on run end.
   useEffect(() => {
     const engine = engineRef.current;
-    const plan = editor.planRef.current;
+    const selectedPlan = editor.planRef.current;
+    const plan = editor.featureEnabled ? editor.canonicalPlanRef.current ?? selectedPlan : selectedPlan;
     if (!engine || !plan) return;
     if (runActiveRef.current) return;
     // A DEV vis demo owns the plant reconcile while active: this effect's
@@ -1569,16 +1729,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       monotonicProgressRef.current = null;
     }
 
-    plantBatchesRef.current = updatePlants(
-      plantBatchesRef.current,
-      planWithSurface(plan, surfaceRef.current),
-      editor.cropById,
-      engine.scene,
-      new Date(scrubDate),
-      scenario,
-      { ...ctx, dliMol: scrubDliMol },
-      { ...opts, plantScale: archetypePlantScale(editor.archetype) },
-    );
+    reconcileAllPlantTargets(plan, new Date(scrubDate), scenario, { ...ctx, dliMol: scrubDliMol }, opts);
   }, [scrubDate, scenario, ambientTempC, climateBaseline, scrubDliMol, editor.cropById, runActive]);
 
   // Run-mode growth reconcile: run state (per-cell biomass) is the target.
@@ -1611,7 +1762,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   useEffect(() => {
     if ((!visStressDemo && !visLifecycleDemo && !visDroughtDemo && !visRainDemo) || runActive) return;
     const engine = engineRef.current;
-    const plan = editor.planRef.current;
+    const selectedPlan = editor.planRef.current;
+    const plan = editor.featureEnabled ? editor.canonicalPlanRef.current ?? selectedPlan : selectedPlan;
     if (!engine || !plan) return;
     const keys = Object.keys(plan.planting);
     if (keys.length === 0) return;
@@ -1754,7 +1906,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // draw calls), historyViz dispose discipline (own geometry+material each).
   useEffect(() => {
     const engine = engineRef.current;
-    const plan = editor.planRef.current;
+    const selectedPlan = editor.planRef.current;
+    const plan = editor.featureEnabled ? editor.canonicalPlanRef.current ?? selectedPlan : selectedPlan;
     if (!engine || !plan) return;
     const disposeOverlay = () => {
       for (const mesh of moistureRef.current) {
@@ -1771,11 +1924,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       return;
     }
     unlock('moisture_lens'); // idempotent — safe on every re-run
-    const offsetX = -(plan.widthM / 2);
-    const offsetZ = -(plan.heightM / 2);
     const byBand: string[][] = [[], [], [], []];
     for (const [key, cell] of Object.entries(st.cells)) {
-      if (plan.planting[key] === undefined) continue;
+      const { target, localCellKey } = parseTargetCellKey(key);
+      if (planForTarget(plan, target).planting[localCellKey] === undefined) continue;
       const m = cell.moistureFrac;
       const band = m < 0.25 ? 0 : m < 0.5 ? 1 : m < 0.75 ? 2 : 3;
       byBand[band]!.push(key);
@@ -1783,6 +1935,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const meshes: THREE.InstancedMesh[] = [];
     byBand.forEach((keys, band) => {
       if (keys.length === 0) return;
+      const positions = keys
+        .map((key) => growingCellWorldPosition(key, plan, editor.environment, 0.02))
+        .filter((position): position is NonNullable<typeof position> => position !== null);
+      if (positions.length === 0) return;
       const geometry = new THREE.BoxGeometry(plan.cellM * 0.96, 0.02, plan.cellM * 0.96);
       const material = new THREE.MeshBasicMaterial({
         color: MOISTURE_BANDS[band]!.color,
@@ -1790,14 +1946,13 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         opacity: 0.4,
         depthWrite: false,
       });
-      const mesh = new THREE.InstancedMesh(geometry, material, keys.length);
+      const mesh = new THREE.InstancedMesh(geometry, material, positions.length);
       mesh.name = `moisture:band${band}`;
       mesh.castShadow = false;
       mesh.receiveShadow = false;
       const dummy = new THREE.Object3D();
-      keys.forEach((key, i) => {
-        const [cx, cy] = parseKey(key);
-        dummy.position.set(cx * plan.cellM + plan.cellM / 2 + offsetX, 0.02, cy * plan.cellM + plan.cellM / 2 + offsetZ);
+      positions.forEach((position, i) => {
+        dummy.position.set(position.x, position.y, position.z);
         dummy.rotation.set(0, 0, 0);
         dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
@@ -1811,7 +1966,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     return disposeOverlay;
     // Keyed on the sim DAY, not tickVersion: moisture evolves per sim-day, so
     // rebuilding on every throttled commit (~5/s) would just churn GPU buffers.
-  }, [runActive, showMoisture, runDayIndex, sceneReady, editor.planVersion]);
+  }, [runActive, showMoisture, runDayIndex, sceneReady, editor.planVersion, editor.environment]);
 
   // Run-mode fauna presence (spec §3.4 "live ecosystem dressing"): pollinator
   // flock fractions come from SimState.creatures ÷ this day's flowering
@@ -2048,7 +2203,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const rec = run?.record ?? null;
     const st = run?.simStateRef.current ?? null;
     if (!rec || !st) return [];
-    return buildRunProgressRows(st, rec.config.startDate, editor.cropById);
+    return buildRunProgressRows(st, rec.config.startDate, editor.cropById, rec.config.environment?.layout);
   }, [runTickVersion, runRecord, editor.cropById]);
 
   const cellDiagnostics = useMemo<CellDiagnosticRow[]>(() => {

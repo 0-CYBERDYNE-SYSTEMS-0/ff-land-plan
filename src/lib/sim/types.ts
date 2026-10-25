@@ -9,7 +9,27 @@
 //      rewrites).
 //   2. Every environment number traces to a source via EnvSourceTag.
 
-import type { ArchetypeId, EnvironmentSnapshot, PlanState, PlanSurface, ScenarioType } from '@/types';
+import type { ArchetypeId, Crop, EnvironmentSnapshot, GrowingTargetKey, GrowingTargetRef, PlanState, PlanSurface, ScenarioType } from '@/types';
+import type { EnvironmentClimateDay } from './environment-climate';
+import type { ClimateEquipmentInput } from './environment-climate';
+import type { EquipmentTerms } from './equipment';
+
+export interface RunAssetPhysicsSnapshot {
+  model: 'assets-v1';
+  room: EquipmentTerms;
+  targets: Partial<Record<GrowingTargetKey, EquipmentTerms>>;
+  /** Local cells physically covered by a hydro asset at run creation. */
+  soillessCells: Partial<Record<GrowingTargetKey, string[]>>;
+  /** Cells on a hydro-designed level that require installed hydro coverage. */
+  hydroRequiredCells: Partial<Record<GrowingTargetKey, string[]>>;
+}
+
+/** Minimum crop/soil inputs needed to replay new runs independently of later data refreshes. */
+export interface RunModelInputs {
+  soil: { awcMmPerCm: number | null; organicMatterPct: number | null } | null;
+  /** Only crops referenced by the frozen plan or its planting interventions. */
+  crops: Crop[];
+}
 
 /** Provenance chip for one environment value. */
 export type EnvSourceTag =
@@ -31,6 +51,8 @@ export interface DailyEnvironment {
   /** Reference ET (FAO-56 ET0, mm/day): real archive/normals value when
    * available, else the documented temp-range proxy (model-estimate). */
   etoMm: number;
+  /** Outdoor monthly-mean DLI input, frozen when light data is available. */
+  dliNaturalMol?: number;
   /** max(0, (tMin + tMax)/2 − 10), °C·day — computed from EFFECTIVE temps so
    * climate scenarios actually move the GDD clock. */
   gddBase10C: number;
@@ -39,7 +61,10 @@ export interface DailyEnvironment {
     tMaxC: EnvSourceTag;
     precipMm: EnvSourceTag;
     etoMm: EnvSourceTag;
+    dliNaturalMol?: EnvSourceTag;
   };
+  /** Derived interior values attached only to the current effective day. */
+  climate?: EnvironmentClimateDay;
   /** Pre-scenario values; present only when the scenario changed the day. */
   raw?: { tMinC: number; tMaxC: number; precipMm: number; source: EnvSourceTag };
 }
@@ -54,10 +79,11 @@ export interface DailyEnvironment {
  *   composed env series is the single weather truth a step sees.
  */
 export type Intervention =
-  | { kind: 'irrigate'; date: string; cells?: string[]; zone?: string; mm: number }
-  | { kind: 'fertilize'; date: string; cells?: string[]; zone?: string; nKgHa: number }
-  | { kind: 'plant'; date: string; cell: string; cropId: number }
-  | { kind: 'harvest'; date: string; cell: string }
+  | { kind: 'irrigate'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; mm: number }
+  | { kind: 'fertilize'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; nKgHa: number }
+  | { kind: 'refill-water'; date: string; litres: number }
+  | { kind: 'plant'; date: string; cell: string; target?: GrowingTargetRef; cropId: number }
+  | { kind: 'harvest'; date: string; cell: string; target?: GrowingTargetRef }
   | { kind: 'surface'; date: string; surface: PlanSurface } // greenhouse/tent/etc.
   | { kind: 'weather'; fromDate: string; tempDeltaC?: number; precipMultiplier?: number };
 
@@ -67,6 +93,7 @@ export interface CellStress {
   cold: number;
   /** Real since Phase 3: pool vs remaining seasonal N demand (ecosystem.ts). */
   nitrogen: number;
+  light?: number;
 }
 
 /** Static per-cell neighbor context, built once per run (and on 'plant'
@@ -113,6 +140,8 @@ export interface CellState {
    * snapshot, so season-long nitrogen/water management shows in yield. */
   stressSum?: number;
   stressDaysCount?: number;
+  /** Omitted only for historic floor cells; elevated cells keep their target. */
+  target?: GrowingTargetRef;
   stress: CellStress;
 }
 
@@ -121,6 +150,10 @@ export interface SimState {
   /** Current archetype; 'surface' is the one-release legacy climate adapter. */
   archetype: ArchetypeId;
   surface: PlanSurface;
+  /** Current deterministic interior estimate; absent for legacy/outdoor runs. */
+  climate?: EnvironmentClimateDay;
+  /** Remaining shared physical water storage, present for ASSET_PHYSICS runs. */
+  waterStoreL?: number;
   cells: Record<string, CellState>; // sparse, planted cells only
   /** Neighbor context per cell key — cached (built at createRun, rebuilt on
    * 'plant'); drivers read it, nothing rescans the grid per day. */
@@ -140,7 +173,7 @@ export interface DayStats {
   waterUseMm: number;
   /** Cell-days with max stress ≥ STRESS_ONSET (any term). */
   stressCellDays: number;
-  stressDays: { water: number; heat: number; cold: number; nitrogen: number };
+  stressDays: { water: number; heat: number; cold: number; nitrogen: number; light?: number };
   /** Cell-days with pestPressure ≥ PEST_OUTBREAK. */
   outbreakDays: number;
 }
@@ -157,13 +190,17 @@ export type SimEventKind =
   | 'frost'
   | 'outbreak' // pestPressure crossed 0.6 upward (hysteresis: ends below 0.3)
   | 'outbreak-end'
-  | 'harvest-too-early'; // manual harvest below the 0.8 biomass minimum
+  | 'harvest-too-early' // manual harvest below the 0.8 biomass minimum
+  | 'water-short'
+  | 'water-refilled';
 
 export interface SimEvent {
   dayIndex: number;
   date: string;
   kind: SimEventKind;
   cell?: string;
+  /** Omitted only for historic floor events; elevated cell keys are also qualified. */
+  target?: GrowingTargetRef;
   cropId?: number;
   message: string;
   data?: Record<string, number>;
@@ -176,6 +213,16 @@ export interface RunConfig {
   /** Frozen world metadata/layout. Absent only on historical v1 RunRecords;
    * basePlan is the sole plan snapshot and is never duplicated here. */
   environment?: EnvironmentSnapshot;
+  /** Missing means the pre-environment legacy surface model. */
+  climateModel?: 'environment-v1';
+  /** Frozen placed-asset contributions used by replay; absent means legacy semantics. */
+  assetPhysics?: RunAssetPhysicsSnapshot;
+  /** New records freeze model-driving soil values and the crops they use; absent on legacy runs. */
+  modelInputs?: RunModelInputs;
+  /** Frozen equipment contribution used by the climate solver during replay. */
+  climateEquipment?: ClimateEquipmentInput;
+  /** Frozen light/air terms per growing target; keys use growingTargetKey(). */
+  climateTargetEquipment?: Partial<Record<GrowingTargetKey, ClimateEquipmentInput>>;
   /** "YYYY-MM-DD" of dayIndex 0. */
   startDate: string;
   /** Planned sim days. */
@@ -212,7 +259,7 @@ export interface RunSummary {
    * ET0 × Kc(biomass) across live cells (an average cell's season depth). */
   waterUseMm: number;
   /** Cell-days at/above STRESS_ONSET per term (nitrogen included since Phase 3). */
-  stressDays: { water: number; heat: number; cold: number; nitrogen: number };
+  stressDays: { water: number; heat: number; cold: number; nitrogen: number; light?: number };
   /** Cell-days with pestPressure ≥ ecosystem.PEST_OUTBREAK (0.6). */
   outbreakDays: number;
   /** Residual plant-available N at run end, mean over live cells, kg/ha. */
@@ -230,6 +277,10 @@ export interface RunSummary {
 export interface RunRecord {
   id: string;
   farmId: number;
+  /** Parent record for a saved counterfactual fork. */
+  parentId?: string;
+  /** Number of completed days at the fork boundary. */
+  forkedAtDay?: number;
   label: string;
   createdAt: string;
   config: RunConfig;

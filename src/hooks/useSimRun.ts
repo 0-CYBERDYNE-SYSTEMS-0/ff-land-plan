@@ -18,9 +18,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import type { Crop } from '@/types';
+import type { Crop, EnvironmentLayout, GrowingTargetRef } from '@/types';
 import { apiFetch } from '@/lib/api';
 import { fetchSoilProfile } from '@/lib/soil';
+import { growingTargetKey } from '@/lib/growingTargets';
 import {
   bucketCapacityMm,
   createRun,
@@ -59,6 +60,13 @@ export interface SimRunTimeline {
     mm?: number;
     /** fertilize amount, kg/ha N. */
     nKgHa?: number;
+    /** refill-water amount, litres. */
+    litres?: number;
+    /** Missing target is the historical floor target. */
+    target?: GrowingTargetRef;
+    targetKey: string;
+    targetLabel: string;
+    allTargets?: boolean;
   }[];
   events: { day: number; kind: string }[];
 }
@@ -82,6 +90,8 @@ export interface RunProgressRow {
   id: number;
   name: string;
   label?: string;
+  targetKey: string;
+  targetLabel: string;
   plantedAt: string;
   stage: number;
   pct: number;
@@ -92,6 +102,8 @@ export interface RunProgressRow {
  * carries its number and — where it traces to weather — its source tag. */
 export interface CellDiagnosticRow {
   cropId: number;
+  targetKey: string;
+  targetLabel: string;
   plantedAt: string;
   cropName: string;
   gddAccumC: number;
@@ -205,6 +217,9 @@ export function runDayEnv(record: RunRecord, dayIndex: number): DailyEnvironment
 
 interface CellAgg {
   cropId: number;
+  target: GrowingTargetRef;
+  targetKey: string;
+  targetLabel: string;
   plantedAtDay: number;
   biomass: number;
   stage: number;
@@ -218,10 +233,20 @@ interface CellAgg {
   count: number;
 }
 
-function aggregateCells(state: SimState): CellAgg[] {
+function targetLabelFor(target: GrowingTargetRef, layout?: EnvironmentLayout): string {
+  if (target.kind === 'floor') return 'Floor';
+  const space = layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+  const level = space?.levels.find((entry) => entry.id === target.levelId);
+  return `${space?.label ?? `Growing space ${target.growingSpaceId}`} · ${level?.label ?? `Level ${target.levelId}`}`;
+}
+
+function aggregateCells(state: SimState, layout?: EnvironmentLayout): CellAgg[] {
   const groups = new Map<string, CellAgg>();
   for (const cell of Object.values(state.cells)) {
-    const key = `${cell.cropId}|${cell.plantedAtDay}`;
+    const target = cell.target ?? { kind: 'floor' as const };
+    const targetKey = growingTargetKey(target);
+    const targetLabel = targetLabelFor(target, layout);
+    const key = `${cell.cropId}|${cell.plantedAtDay}|${targetKey}`;
     const g = groups.get(key);
     if (g) {
       g.biomass = Math.max(g.biomass, cell.biomassFrac);
@@ -237,6 +262,9 @@ function aggregateCells(state: SimState): CellAgg[] {
     } else {
       groups.set(key, {
         cropId: cell.cropId,
+        target,
+        targetKey,
+        targetLabel,
         plantedAtDay: cell.plantedAtDay,
         biomass: cell.biomassFrac,
         stage: cell.stage,
@@ -260,10 +288,11 @@ export function buildRunProgressRows(
   state: SimState,
   startDate: string,
   cropById: Map<number, Crop>,
+  layout?: EnvironmentLayout,
 ): RunProgressRow[] {
   const start = isoDayNumber(startDate);
   const rows: RunProgressRow[] = [];
-  for (const g of aggregateCells(state)) {
+  for (const g of aggregateCells(state, layout)) {
     const crop = cropById.get(g.cropId);
     if (!crop) continue;
     const plantedAt = isoFromDayNumber(start + g.plantedAtDay);
@@ -272,9 +301,11 @@ export function buildRunProgressRows(
     rows.push({
       id: g.cropId,
       name: crop.name,
+      targetKey: g.targetKey,
+      targetLabel: g.targetLabel,
       label: Number.isFinite(d.getTime())
-        ? `${crop.name} · ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-        : crop.name,
+        ? `${crop.name} · ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${g.targetLabel}`
+        : `${crop.name} · ${g.targetLabel}`,
       plantedAt,
       stage: g.stage,
       pct: Math.round(g.biomass * 100),
@@ -282,7 +313,7 @@ export function buildRunProgressRows(
     });
   }
   return rows.sort(
-    (a, b) => a.name.localeCompare(b.name) || a.plantedAt.localeCompare(b.plantedAt),
+    (a, b) => a.name.localeCompare(b.name) || a.plantedAt.localeCompare(b.plantedAt) || a.targetKey.localeCompare(b.targetKey),
   );
 }
 
@@ -299,11 +330,13 @@ export function buildCellDiagnostics(
   const env = dayEnv ?? record.envSeries[0] ?? null;
   const start = isoDayNumber(record.config.startDate);
   const rows: CellDiagnosticRow[] = [];
-  for (const g of aggregateCells(state)) {
+  for (const g of aggregateCells(state, record.config.environment?.layout)) {
     const crop = cropById.get(g.cropId);
     if (!crop) continue;
     rows.push({
       cropId: g.cropId,
+      targetKey: g.targetKey,
+      targetLabel: g.targetLabel,
       plantedAt: isoFromDayNumber(start + g.plantedAtDay),
       cropName: crop.name,
       gddAccumC: g.gddAccum,
@@ -334,7 +367,7 @@ export function buildCellDiagnostics(
     });
   }
   return rows.sort(
-    (a, b) => a.cropName.localeCompare(b.cropName) || a.plantedAt.localeCompare(b.plantedAt),
+    (a, b) => a.cropName.localeCompare(b.cropName) || a.plantedAt.localeCompare(b.plantedAt) || a.targetKey.localeCompare(b.targetKey),
   );
 }
 
@@ -616,16 +649,28 @@ export function useSimRun(opts: {
         error: 'Weather overrides are baked into this run’s environment series and cannot be authored here.',
       };
     }
-    if (iv.kind !== 'irrigate' && iv.kind !== 'fertilize') {
-      return { ok: false, error: 'Only irrigate and fertilize interventions can be authored here.' };
+    if (iv.kind !== 'irrigate' && iv.kind !== 'fertilize' && iv.kind !== 'refill-water') {
+      return { ok: false, error: 'Only watering, fertilizing, and store-refill interventions can be authored here.' };
     }
-    const amount = iv.kind === 'irrigate' ? iv.mm : iv.nKgHa;
+    if (iv.kind === 'refill-water' && (rec.config.assetPhysics?.room.waterStoreL ?? 0) <= 0) {
+      return { ok: false, error: 'This run has no placed water store to refill.' };
+    }
+    const target = 'target' in iv ? iv.target : undefined;
+    if (target?.kind === 'growing-level') {
+      const targetExists = rec.config.environment?.layout?.growingSpaces.some((space) =>
+        space.id === target.growingSpaceId && space.levels.some((level) => level.id === target.levelId),
+      );
+      if (!targetExists) return { ok: false, error: 'Choose a growing level that exists in this run.' };
+    }
+    const amount = iv.kind === 'irrigate' ? iv.mm : iv.kind === 'fertilize' ? iv.nKgHa : iv.litres;
     if (!Number.isFinite(amount) || amount <= 0) {
       return {
         ok: false,
         error: iv.kind === 'irrigate'
           ? 'Irrigation needs a positive mm amount.'
-          : 'Fertilizing needs a positive kg/ha N amount.',
+          : iv.kind === 'fertilize'
+            ? 'Fertilizing needs a positive kg/ha N amount.'
+            : 'A water-store refill needs a positive litre amount.',
       };
     }
     const runCtx = ctxRef.current;
@@ -766,12 +811,18 @@ function buildTimeline(rec: RunRecord, ctx: SimRunCtx): SimRunTimeline {
   for (const iv of rec.config.interventions) {
     const iso = ivDateOf(iv);
     const day = isoDayNumber(iso) - start;
+    const target = 'target' in iv ? iv.target ?? { kind: 'floor' as const } : { kind: 'floor' as const };
     interventions.push({
       day: Math.min(days, Math.max(0, day)),
       kind: iv.kind,
       date: iso,
+      ...('target' in iv && iv.target ? { target: iv.target } : {}),
+      targetKey: growingTargetKey(target),
+      targetLabel: targetLabelFor(target, rec.config.environment?.layout),
+      ...('allTargets' in iv && iv.allTargets ? { allTargets: true } : {}),
       ...(iv.kind === 'irrigate' ? { mm: iv.mm } : {}),
       ...(iv.kind === 'fertilize' ? { nKgHa: iv.nKgHa } : {}),
+      ...(iv.kind === 'refill-water' ? { litres: iv.litres } : {}),
     });
   }
   interventions.sort((a, b) => a.day - b.day);

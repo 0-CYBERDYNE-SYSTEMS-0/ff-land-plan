@@ -2,7 +2,7 @@
 // mapping (SPEC-SIM-ECOSYSTEM §3.1 drivers.ts). All pure functions of their
 // inputs — determinism is what makes replay-as-storage work.
 
-import { SURFACE_SHELTER } from '@/lib/growth';
+import { DLI_MIN_MOL, LIGHT_STRESS_WEIGHT, SURFACE_SHELTER } from '@/lib/growth';
 import type { Crop, PlanSurface } from '@/types';
 import type { CellStress, DailyEnvironment, NeighborContext } from './types';
 
@@ -157,5 +157,15 @@ export function floweringForBiomass(biomassFrac: number): number {
 
 /** Mean of the four stress terms (yield penalty input). */
 export function meanStress(stress: CellStress): number {
-  return (stress.water + stress.heat + stress.cold + stress.nitrogen) / 4;
+  const sum = stress.water + stress.heat + stress.cold + stress.nitrogen + (stress.light ?? 0);
+  return sum / (stress.light === undefined ? 4 : 5);
+}
+
+/** Light deficit at the minimum-stress floor; null means the light input is unknown. */
+export function lightStressFromDli(crop: Crop, dliMol: number | null | undefined): number | undefined {
+  if (dliMol === undefined || dliMol === null || !Number.isFinite(dliMol)) return undefined;
+  const minimum = DLI_MIN_MOL[crop.category] ?? 0;
+  if (minimum <= 0) return undefined;
+  if (dliMol >= minimum) return 0;
+  return Math.max(0, Math.min(1, (minimum - dliMol) / minimum)) * LIGHT_STRESS_WEIGHT;
 }

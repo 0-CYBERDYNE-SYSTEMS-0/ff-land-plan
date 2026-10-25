@@ -13,10 +13,12 @@
 //   - Water bucket + GDD are the living memory: droughts and heat carry over.
 
 import { cropLibrary } from '@/data/crops';
-import { ARCHETYPE_FOR_SURFACE, LEGACY_SURFACE_FOR_ARCHETYPE } from '@/creative/archetypes';
-import { plantsForArea } from '@/lib/plan';
+import { ARCHETYPE_FOR_SURFACE, LEGACY_SURFACE_FOR_ARCHETYPE, archetypes } from '@/creative/archetypes';
+import { effectivePlantingArea } from '@/lib/plan';
+import { growingTargetKey, parseTargetCellKey, targetCellKey } from '@/lib/growingTargets';
+import { effectivePhotoperiodH, environmentDay, NO_CLIMATE_EQUIPMENT, withEnvironmentClimate } from './environment-climate';
 import type { SoilProfile } from '@/lib/soil';
-import type { Crop } from '@/types';
+import type { ArchetypeId, Crop, GrowingTargetRef } from '@/types';
 import type {
   CellState,
   CellStress,
@@ -45,6 +47,7 @@ import {
   floweringForBiomass,
   gddGain,
   gddRequiredC,
+  lightStressFromDli,
   meanStress,
   stageForBiomass,
   thermalStress,
@@ -77,6 +80,7 @@ const r4 = (v: number) => Math.round(v * 10000) / 10000;
 /** Shared no-intervention array — keeps the hot stepDay path allocation-free
  * when the run has no interventions at all. */
 const EMPTY_TODAY: Intervention[] = [];
+const FLOOR_TARGET: GrowingTargetRef = { kind: 'floor' };
 
 export interface SimRunCtx {
   /** Farm soil (only AWC + OM are read; both optional). */
@@ -92,14 +96,25 @@ export const HARVEST_GRACE_DAYS = 3;
 /** Manual 'harvest' interventions pay out only from this biomass on. */
 export const MIN_MANUAL_HARVEST_BIOMASS = 0.8;
 
+function eventTarget(key: string): { target?: GrowingTargetRef } {
+  const target = parseTargetCellKey(key).target;
+  return target.kind === 'floor' ? {} : { target };
+}
+
+function displayCell(key: string): string {
+  return parseTargetCellKey(key).localCellKey;
+}
+
 function initialCell(
   cropId: number,
   plantedAtDay: number,
   ctx: SimRunCtx,
+  target?: GrowingTargetRef,
 ): CellState {
   return {
     cropId,
     plantedAtDay,
+    ...(target && target.kind !== 'floor' ? { target } : {}),
     moistureFrac: MOISTURE_INIT,
     nitrogenKgHa: initialNitrogenKgHa(ctx.soil?.organicMatterPct),
     gddAccumC: 0,
@@ -120,6 +135,128 @@ function cropMapOf(ctx: SimRunCtx): Map<number, Crop> {
   return map;
 }
 
+interface HarvestPlantGroup {
+  cropId: number;
+  system: string;
+  cells: number;
+}
+
+function growingSystemForCell(key: string, config: RunConfig): string {
+  const parsed = parseTargetCellKey(key);
+  const target = parsed.target;
+  if (target.kind === 'floor') {
+    if (config.assetPhysics?.soillessCells.floor?.includes(parsed.localCellKey)) return 'hydro';
+    const ground = config.basePlan.ground[parsed.localCellKey] ?? '';
+    if (ground.includes('hydro')) return 'hydro';
+    if (ground.includes('pot') || ground.includes('container')) return 'containers';
+    return 'soil-beds';
+  }
+  const space = config.environment?.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+  switch (space?.kind) {
+    case 'hydro': return 'hydro';
+    case 'rack': return 'racks';
+    case 'bench': return 'containers';
+    default: return 'soil-beds';
+  }
+}
+
+function harvestGroupKey(cropId: number, system: string): string {
+  return JSON.stringify([cropId, system]);
+}
+
+function climateEnabledFor(config: RunConfig, archetype: ArchetypeId): boolean {
+  return config.climateModel === 'environment-v1'
+    && !!config.environment
+    && config.environment.archetype === archetype
+    && archetypes[config.environment.archetype]?.kind !== 'open';
+}
+
+function climateInputsFor(
+  config: RunConfig,
+  state: SimState,
+  env: DailyEnvironment,
+  crops: Map<number, Crop>,
+  archetype: ArchetypeId,
+  surface: SimState['surface'],
+  cells: Record<string, CellState>,
+): { env: DailyEnvironment; climate?: ReturnType<typeof environmentDay> } {
+  if (!climateEnabledFor(config, archetype)) return { env: effectiveEnvironmentForSurface(env, surface) };
+  const environment = config.environment!;
+  const modelArchetype = archetypes[environment.archetype]!;
+  const cellM = Number.isFinite(config.basePlan.cellM) && config.basePlan.cellM > 0 ? config.basePlan.cellM : 0.25;
+  const cellArea = cellM * cellM;
+  const floorArea = Math.max(0.01, environment.widthM * environment.heightM);
+  const previousEtFactor = state.climate?.etFactor ?? modelArchetype.etFactor;
+  let transpirationKgDay = 0;
+  let leafAreaM2 = 0;
+  for (const cell of Object.values(cells)) {
+    const crop = crops.get(cell.cropId);
+    if (!crop) continue;
+    const cover = Math.max(0, Math.min(1, cell.biomassFrac));
+    const kc = kcForBiomass(cell.biomassFrac);
+    transpirationKgDay += env.etoMm * previousEtFactor * kc * cellArea;
+    leafAreaM2 += cover * cellArea;
+  }
+  const roomEquipment = config.climateEquipment ?? NO_CLIMATE_EQUIPMENT;
+  const climate = environmentDay(
+    environment,
+    {
+      tMinC: env.tMinC,
+      tMaxC: env.tMaxC,
+      precipMm: env.precipMm,
+      ...(env.dliNaturalMol !== undefined ? { dliNaturalMol: env.dliNaturalMol } : {}),
+    },
+    roomEquipment,
+    state.climate,
+    { transpirationKgDay, leafAreaIndex: leafAreaM2 / floorArea },
+  );
+  return { env: withEnvironmentClimate(env, climate, modelArchetype), climate };
+}
+
+function hydroCellsForRun(config: RunConfig, key: string): { required: boolean; covered: boolean } {
+  const parsed = parseTargetCellKey(key);
+  const targetKey = growingTargetKey(parsed.target);
+  const model = config.assetPhysics;
+  if (!model) return { required: false, covered: false };
+  const localKey = parsed.localCellKey;
+  const covered = model.soillessCells[targetKey]?.includes(localKey) ?? false;
+  const required = covered || (model.hydroRequiredCells[targetKey]?.includes(localKey) ?? false);
+  return { required, covered };
+}
+
+function targetDliForCell(
+  key: string,
+  config: RunConfig,
+  outdoor: DailyEnvironment,
+): number | undefined {
+  const environment = config.environment;
+  if (!environment || config.climateModel !== 'environment-v1') return undefined;
+  const parsed = parseTargetCellKey(key);
+  const target = parsed.target;
+  const archetype = archetypes[environment.archetype];
+  if (!archetype || archetype.kind === 'open') return undefined;
+  const equipment = config.climateTargetEquipment?.[growingTargetKey(target)] ?? NO_CLIMATE_EQUIPMENT;
+  const naturalAvailable = outdoor.dliNaturalMol !== undefined;
+  const photoperiodH = effectivePhotoperiodH(environment, equipment.photoperiodH);
+  const space = target.kind === 'growing-level'
+    ? environment.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId)
+    : undefined;
+  const targetLevel = target.kind === 'growing-level'
+    ? space?.levels.find((entry) => entry.id === target.levelId)
+    : undefined;
+  const topLevel = space?.levels
+    .slice()
+    .sort((a, b) => b.elevationM - a.elevationM || a.id.localeCompare(b.id))[0];
+  const levelGetsNaturalLight = target.kind === 'floor' || targetLevel?.id === topLevel?.id;
+  const naturalDli = naturalAvailable && levelGetsNaturalLight && archetype.dliMode !== 'supplement-only'
+    ? outdoor.dliNaturalMol! * archetype.coverTransmission
+    : 0;
+  const installedLight = equipment.ppfdUmol > 0 && photoperiodH > 0;
+  if (!naturalAvailable && archetype.dliMode !== 'supplement-only' && !installedLight) return undefined;
+  const supplementalDli = equipment.ppfdUmol * photoperiodH * 3600 / 1e6;
+  return Math.min(archetype.maxDliMol, naturalDli + supplementalDli);
+}
+
 /** Initial state at dayIndex 0: one cell per basePlan planting key. Cells
  * planted (per plan plantedAt) after startDate carry that offset and only
  * start accumulating GDD once dayIndex reaches it. The neighbor context is
@@ -136,6 +273,18 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
     const offset = iso !== undefined ? isoDayNumber(iso) - start : 0;
     cells[key] = initialCell(planting[key], Math.max(0, offset), ctx);
   }
+  for (const targetPlan of Object.values(config.basePlan.targets ?? {})) {
+    const target: GrowingTargetRef = {
+      kind: 'growing-level',
+      growingSpaceId: targetPlan.growingSpaceId,
+      levelId: targetPlan.levelId,
+    };
+    for (const key of Object.keys(targetPlan.planting)) {
+      const iso = targetPlan.plantedAt?.[key];
+      const offset = iso !== undefined ? isoDayNumber(iso) - start : 0;
+      cells[targetCellKey(target, key)] = initialCell(targetPlan.planting[key]!, Math.max(0, offset), ctx, target);
+    }
+  }
   const archetype = config.environment?.archetype
     ?? ARCHETYPE_FOR_SURFACE[config.basePlan.surface ?? 'outdoor'];
   const surface = config.environment
@@ -146,6 +295,7 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
     archetype,
     surface,
     cells,
+    ...(config.assetPhysics ? { waterStoreL: Math.max(0, config.assetPhysics.room.waterStoreL) } : {}),
     neighbors: buildNeighborCache(cells, cropGet),
     creatures: creaturesFromCells(cells, cropGet),
     events: [],
@@ -158,14 +308,22 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
 function targetCells(
   cellList: string[] | undefined,
   cells: Record<string, CellState>,
+  target: GrowingTargetRef = FLOOR_TARGET,
+  allTargets = false,
 ): string[] {
-  if (cellList && cellList.length > 0) {
-    return cellList.filter((k) => k in cells);
+  if (allTargets) {
+    return cellList?.length
+      ? cellList.filter((key) => key in cells)
+      : Object.keys(cells);
   }
-  return Object.keys(cells);
+  if (cellList && cellList.length > 0) {
+    return cellList.map((cell) => targetCellKey(target, cell)).filter((key) => key in cells);
+  }
+  const targetKey = growingTargetKey(target);
+  return Object.keys(cells).filter((key) => growingTargetKey(parseTargetCellKey(key).target) === targetKey);
 }
 
-const STRESS_TERMS = ['water', 'heat', 'cold', 'nitrogen'] as const;
+const STRESS_TERMS = ['water', 'heat', 'cold', 'nitrogen', 'light'] as const;
 
 /** Onset/relief events for one stress term (STRESS_ONSET/STRESS_RELIEF
  * hysteresis). Module-level so the hot per-cell loop stays allocation-lean. */
@@ -180,16 +338,20 @@ function pushStressTermEvents(
   name: string,
 ): void {
   for (const term of STRESS_TERMS) {
-    const prevV = prevStress[term];
-    const nextV = nextStress[term];
+    const prevRaw = prevStress[term];
+    const nextRaw = nextStress[term];
+    if (prevRaw === undefined && nextRaw === undefined) continue;
+    const prevV = prevRaw ?? 0;
+    const nextV = nextRaw ?? 0;
     if (prevV < STRESS_ONSET && nextV >= STRESS_ONSET) {
       out.push({
         dayIndex,
         date,
         kind: 'stress-onset',
         cell: key,
+        ...eventTarget(key),
         cropId,
-        message: `${term} stress onset for ${name} at ${key}`,
+        message: `${term} stress onset for ${name} at ${displayCell(key)}`,
         data: { value: r2(nextV) },
       });
     } else if (prevV >= STRESS_ONSET && nextV < STRESS_RELIEF) {
@@ -198,8 +360,9 @@ function pushStressTermEvents(
         date,
         kind: 'stress-end',
         cell: key,
+        ...eventTarget(key),
         cropId,
-        message: `${term} stress relieved for ${name} at ${key}`,
+        message: `${term} stress relieved for ${name} at ${displayCell(key)}`,
         data: { value: r2(nextV) },
       });
     }
@@ -223,11 +386,17 @@ function sameCell(a: CellState, b: CellState): boolean {
       a.harvested === b.harvested &&
       a.stressSum === b.stressSum &&
       a.stressDaysCount === b.stressDaysCount &&
+      growingTargetKey(a.target ?? FLOOR_TARGET) === growingTargetKey(b.target ?? FLOOR_TARGET) &&
       a.stress.water === b.stress.water &&
       a.stress.heat === b.stress.heat &&
       a.stress.cold === b.stress.cold &&
-      a.stress.nitrogen === b.stress.nitrogen)
+      a.stress.nitrogen === b.stress.nitrogen &&
+      a.stress.light === b.stress.light)
   );
+}
+
+function maxCellStress(stress: CellStress): number {
+  return Math.max(stress.water, stress.heat, stress.cold, stress.nitrogen, stress.light ?? 0);
 }
 
 /** Advance one day. `env` is that day's composed environment (the run's
@@ -241,7 +410,7 @@ export function stepDay(
   env: DailyEnvironment,
   config: RunConfig,
   ctx: SimRunCtx = {},
-): { state: SimState; events: SimEvent[]; dayStats: DayStats } {
+): { state: SimState; events: SimEvent[]; dayStats: DayStats; effectiveEnv: DailyEnvironment } {
   const dayIndex = state.dayIndex;
   const date = env.date;
   const crops = cropMapOf(ctx);
@@ -252,18 +421,40 @@ export function stepDay(
   const todays = config.interventions.length
     ? config.interventions.filter((iv) => iv.kind !== 'weather' && iv.date === date)
     : EMPTY_TODAY;
+  const storeCapacityL = Math.max(0, config.assetPhysics?.room.waterStoreL ?? 0);
+  let waterStoreL = config.assetPhysics
+    ? Math.min(storeCapacityL, Math.max(0, state.waterStoreL ?? storeCapacityL))
+    : undefined;
+  const irrigationByCell = new Map<string, number>();
+  const waterSuppliedToday = new Set<string>();
+  const climateArchetype = config.environment ? archetypes[config.environment.archetype] : undefined;
+  if (config.assetPhysics && storeCapacityL > 0 && climateArchetype && climateArchetype.kind !== 'open') {
+    const roofAreaM2 = Math.max(0, config.environment!.widthM * config.environment!.heightM);
+    const rainL = Math.max(0, Number.isFinite(env.precipMm) ? env.precipMm : 0) * roofAreaM2;
+    waterStoreL = Math.min(storeCapacityL, waterStoreL! + rainL);
+  }
 
   let cells = state.cells;
-  // Harvest events are per sim cell, so spread each crop's whole-area plant
-  // count over its occupied cells to keep payouts aligned with plan stats.
-  const cellsPerCrop = new Map<number, number>();
-  for (const cell of Object.values(cells)) {
-    cellsPerCrop.set(cell.cropId, (cellsPerCrop.get(cell.cropId) ?? 0) + 1);
-  }
-  const plantsPerCell = (cropId: number): number => {
-    const count = cellsPerCrop.get(cropId) ?? 0;
+  // Yield uses actual area grouped by crop and growing system. Equivalent
+  // targets share one spacing floor; separately enumerated tiers are never
+  // multiplied by a rack factor again.
+  const harvestGroups = new Map<string, HarvestPlantGroup>();
+  const updateHarvestGroup = (cropId: number, key: string, delta: number) => {
+    const system = growingSystemForCell(key, config);
+    const groupKey = harvestGroupKey(cropId, system);
+    const group = harvestGroups.get(groupKey) ?? { cropId, system, cells: 0 };
+    group.cells += delta;
+    if (group.cells <= 0) harvestGroups.delete(groupKey);
+    else harvestGroups.set(groupKey, group);
+  };
+  for (const [key, cell] of Object.entries(cells)) updateHarvestGroup(cell.cropId, key, 1);
+  const plantsPerCell = (cropId: number, key: string): number => {
+    const group = harvestGroups.get(harvestGroupKey(cropId, growingSystemForCell(key, config)));
     const crop = crops.get(cropId);
-    return crop && count > 0 ? plantsForArea(crop, count) / count : 0;
+    if (!crop || !group || group.cells <= 0) return 0;
+    const cellM = Number.isFinite(config.basePlan.cellM) && config.basePlan.cellM > 0 ? config.basePlan.cellM : 0.25;
+    const totalPlants = effectivePlantingArea(crop, [{ cells: group.cells, cellM, system: group.system }]);
+    return totalPlants / group.cells;
   };
   let cellsOwned = false;
   const ownCells = () => {
@@ -287,21 +478,21 @@ export function stepDay(
   for (const iv of todays) {
     switch (iv.kind) {
       case 'plant': {
-        const existing = cells[iv.cell];
-        if (existing) {
-          cellsPerCrop.set(existing.cropId, (cellsPerCrop.get(existing.cropId) ?? 1) - 1);
-        }
+        const cellKey = targetCellKey(iv.target ?? FLOOR_TARGET, iv.cell);
+        const existing = cells[cellKey];
+        if (existing) updateHarvestGroup(existing.cropId, cellKey, -1);
         ownCells();
-        cells[iv.cell] = initialCell(iv.cropId, dayIndex, ctx);
-        cellsPerCrop.set(iv.cropId, (cellsPerCrop.get(iv.cropId) ?? 0) + 1);
+        cells[cellKey] = initialCell(iv.cropId, dayIndex, ctx, iv.target);
+        updateHarvestGroup(iv.cropId, cellKey, 1);
         neighbors = buildNeighborCache(cells, cropGet);
         events.push({
           dayIndex,
           date,
           kind: 'planted',
-          cell: iv.cell,
+          cell: cellKey,
+          ...eventTarget(cellKey),
           cropId: iv.cropId,
-          message: `Planted ${crops.get(iv.cropId)?.name ?? `crop ${iv.cropId}`} at ${iv.cell}`,
+          message: `Planted ${crops.get(iv.cropId)?.name ?? `crop ${iv.cropId}`} at ${displayCell(cellKey)}`,
         });
         break;
       }
@@ -310,7 +501,8 @@ export function stepDay(
         // ripe enough (biomass ≥ 0.8), applying the pest peak penalty. The
         // crop stays standing — a twin, not a clearing sim. Too early →
         // 'harvest-too-early' event, no payout.
-        const c = cells[iv.cell];
+        const cellKey = targetCellKey(iv.target ?? FLOOR_TARGET, iv.cell);
+        const c = cells[cellKey];
         if (c && !c.harvested) {
           const crop = crops.get(c.cropId);
           const name = crop?.name ?? `crop ${c.cropId}`;
@@ -319,18 +511,19 @@ export function stepDay(
               (c.stressDaysCount ?? 0) > 0 ? (c.stressSum ?? 0) / c.stressDaysCount! : meanStress(c.stress);
             const kg =
               (crop?.yieldKgPerPlant ?? 0) *
-              plantsPerCell(c.cropId) *
+              plantsPerCell(c.cropId, cellKey) *
               (1 - 0.5 * seasonMean) *
               (1 - 0.3 * (c.peakPestPressure ?? c.pestPressure));
             ownCells();
-            cells[iv.cell] = { ...c, harvested: true };
+            cells[cellKey] = { ...c, harvested: true };
             events.push({
               dayIndex,
               date,
               kind: 'harvested',
-              cell: iv.cell,
+              cell: cellKey,
+              ...eventTarget(cellKey),
               cropId: c.cropId,
-              message: `Harvested ${name} at ${iv.cell}`,
+              message: `Harvested ${name} at ${displayCell(cellKey)}`,
               data: { yieldKg: kg },
             });
           } else {
@@ -338,9 +531,10 @@ export function stepDay(
               dayIndex,
               date,
               kind: 'harvest-too-early',
-              cell: iv.cell,
+              cell: cellKey,
+              ...eventTarget(cellKey),
               cropId: c.cropId,
-              message: `${name} at ${iv.cell} is not ready to harvest (biomass ${r2(c.biomassFrac)} < ${MIN_MANUAL_HARVEST_BIOMASS})`,
+              message: `${name} at ${displayCell(cellKey)} is not ready to harvest (biomass ${r2(c.biomassFrac)} < ${MIN_MANUAL_HARVEST_BIOMASS})`,
               data: { biomass: c.biomassFrac, minimum: MIN_MANUAL_HARVEST_BIOMASS },
             });
           }
@@ -348,7 +542,7 @@ export function stepDay(
         break;
       }
       case 'fertilize': {
-        const targets = targetCells(iv.cells, cells);
+        const targets = targetCells(iv.cells, cells, iv.target ?? FLOOR_TARGET, iv.allTargets);
         if (targets.length > 0) {
           ownCells();
           for (const k of targets) {
@@ -359,6 +553,7 @@ export function stepDay(
             dayIndex,
             date,
             kind: 'fertilized',
+            ...(iv.target && iv.target.kind !== 'floor' ? { target: iv.target } : {}),
             message: `Fertilized ${targets.length} cell(s) with ${iv.nKgHa} kg/ha N`,
             data: { nKgHa: iv.nKgHa, cellCount: targets.length },
           });
@@ -366,14 +561,32 @@ export function stepDay(
         break;
       }
       case 'irrigate': {
-        const targets = targetCells(iv.cells, cells);
-        if (targets.length > 0) {
+        // Resolved after planting interventions so same-day planted cells are
+        // included, preserving the legacy order-independent watering pass.
+        break;
+      }
+      case 'refill-water': {
+        const requestedL = Math.max(0, Number.isFinite(iv.litres) ? iv.litres : 0);
+        const acceptedL = config.assetPhysics
+          ? Math.min(requestedL, Math.max(0, storeCapacityL - (waterStoreL ?? 0)))
+          : 0;
+        if (waterStoreL !== undefined) waterStoreL += acceptedL;
+        if (acceptedL > 0) {
           events.push({
             dayIndex,
             date,
-            kind: 'irrigated',
-            message: `Irrigated ${targets.length} cell(s) with ${iv.mm} mm`,
-            data: { mmPerCell: iv.mm, cellCount: targets.length, totalMm: r2(iv.mm * targets.length) },
+            kind: 'water-refilled',
+            message: `Refilled the shared water store with ${r2(acceptedL)} L`,
+            data: { requestedL, acceptedL, remainingL: waterStoreL ?? 0 },
+          });
+        }
+        if (acceptedL < requestedL) {
+          events.push({
+            dayIndex,
+            date,
+            kind: 'water-short',
+            message: 'The shared water store could not accept the full refill',
+            data: { requestedL, acceptedL, remainingL: waterStoreL ?? 0, capacityL: storeCapacityL },
           });
         }
         break;
@@ -392,11 +605,58 @@ export function stepDay(
   // Per-cell water + growth pass. Water applied to cells (incl. same-day
   // plants); multiple irrigations sum. ONE pass per day: day stats and the
   // creature populations accumulate inside this loop.
-  const irrigationByCell = new Map<string, number>();
   for (const iv of todays) {
     if (iv.kind !== 'irrigate') continue;
-    for (const k of targetCells(iv.cells, cells)) {
-      irrigationByCell.set(k, (irrigationByCell.get(k) ?? 0) + iv.mm);
+    const targets = targetCells(iv.cells, cells, iv.target ?? FLOOR_TARGET, iv.allTargets)
+      .sort((a, b) => {
+        const ta = growingTargetKey(parseTargetCellKey(a).target);
+        const tb = growingTargetKey(parseTargetCellKey(b).target);
+        return ta.localeCompare(tb) || displayCell(a).localeCompare(displayCell(b));
+      });
+    const requestedMm = Math.max(0, Number.isFinite(iv.mm) ? iv.mm : 0);
+    const cellM = Number.isFinite(config.basePlan.cellM) && config.basePlan.cellM > 0 ? config.basePlan.cellM : 0.25;
+    const cellAreaM2 = cellM * cellM;
+    let totalDeliveredMm = 0;
+    let unmetCells = 0;
+    for (const key of targets) {
+      const hydro = hydroCellsForRun(config, key);
+      let deliveredMm = requestedMm;
+      if (hydro.required && !hydro.covered) {
+        deliveredMm = 0;
+      } else if (hydro.required || storeCapacityL > 0) {
+        const availableL = waterStoreL ?? 0;
+        deliveredMm = Math.min(requestedMm, availableL / cellAreaM2);
+        waterStoreL = Math.max(0, availableL - deliveredMm * cellAreaM2);
+      }
+      irrigationByCell.set(key, (irrigationByCell.get(key) ?? 0) + deliveredMm);
+      if (deliveredMm > 0) waterSuppliedToday.add(key);
+      totalDeliveredMm += deliveredMm;
+      if (deliveredMm < requestedMm) unmetCells += 1;
+    }
+    if (targets.length > 0) {
+      events.push({
+        dayIndex,
+        date,
+        kind: 'irrigated',
+        ...(iv.target && iv.target.kind !== 'floor' ? { target: iv.target } : {}),
+        message: `Irrigated ${targets.length} cell(s) with up to ${requestedMm} mm`,
+        data: { mmPerCell: targets.length ? r2(totalDeliveredMm / targets.length) : 0, cellCount: targets.length, totalMm: r2(totalDeliveredMm) },
+      });
+    }
+    if (unmetCells > 0) {
+      events.push({
+        dayIndex,
+        date,
+        kind: 'water-short',
+        ...(iv.target && iv.target.kind !== 'floor' ? { target: iv.target } : {}),
+        message: `Water was short for ${unmetCells} of ${targets.length} cell(s)`,
+        data: {
+          requestedMm,
+          unmetCells,
+          cellCount: targets.length,
+          remainingL: waterStoreL ?? 0,
+        },
+      });
     }
   }
 
@@ -404,18 +664,22 @@ export function stepDay(
   let etcMmSum = 0;
   let statsStressCellDays = 0;
   let outbreakCellDays = 0;
-  const statsStressDays = { water: 0, heat: 0, cold: 0, nitrogen: 0 };
+  const statsStressDays: DayStats['stressDays'] = { water: 0, heat: 0, cold: 0, nitrogen: 0 };
+  let lightStressObserved = false;
   let beeCapacity = 0;
   let butterflyCapacity = 0;
   let pestSum = 0;
 
-  // Shelter at ingestion: one effective env per day feeds every consumer in
-  // the pass below (outdoor passes through by reference).
-  const env2 = effectiveEnvironmentForSurface(env, surface);
+  // One effective environment per day feeds every consumer in the pass below.
+  const climateResult = climateInputsFor(config, state, env, crops, archetype, surface, cells);
+  const env2 = climateResult.env;
 
   for (const key of Object.keys(cells)) {
     const prev = cells[key]!;
     const crop = crops.get(prev.cropId);
+    const hydro = hydroCellsForRun(config, key);
+    const hydroAvailable = hydro.required && hydro.covered
+      && ((waterStoreL ?? 0) > 0 || waterSuppliedToday.has(key));
     const kc = kcForBiomass(prev.biomassFrac);
     const bucket = stepBucketMoisture(
       prev.moistureFrac * capacity,
@@ -425,7 +689,9 @@ export function stepDay(
       params,
     );
     const moistureFrac = r4(bucket.moistureFrac);
-    const water = waterStressFromMoisture(moistureFrac);
+    const water = hydro.required
+      ? (hydroAvailable ? 0 : 1)
+      : waterStressFromMoisture(moistureFrac);
 
     let gddAccumC = prev.gddAccumC;
     let biomassFrac = prev.biomassFrac;
@@ -435,6 +701,7 @@ export function stepDay(
     let cold = 0;
     let frost = false;
     let pestPressure = prev.pestPressure;
+    let light: number | undefined;
 
     // --- Nitrogen pool (Phase 3): mineralize always, uptake + stress while
     // the crop is growing, leach on heavy water-input days (rain + irrigation).
@@ -448,13 +715,17 @@ export function stepDay(
       const seasonalNeed = nitrogenNeedKgHa(crop);
       // Stress reads the pool available going into today vs the remaining
       // seasonal need at the current biomass.
-      nitrogen = nitrogenStress(nitrogenKgHa, seasonalNeed, prev.biomassFrac);
-      const demand = uptakeDemandKgHa(
-        seasonalNeed,
-        env2.gddBase10C / required, // potential (unstressed) biomass gain
-        prev.biomassFrac,
-      );
-      nitrogenKgHa = r2(nitrogenKgHa - Math.min(nitrogenKgHa, demand));
+      if (hydro.required) {
+        nitrogen = hydroAvailable ? 0 : 1;
+      } else {
+        nitrogen = nitrogenStress(nitrogenKgHa, seasonalNeed, prev.biomassFrac);
+        const demand = uptakeDemandKgHa(
+          seasonalNeed,
+          env2.gddBase10C / required, // potential (unstressed) biomass gain
+          prev.biomassFrac,
+        );
+        nitrogenKgHa = r2(nitrogenKgHa - Math.min(nitrogenKgHa, demand));
+      }
     }
     const waterInMm = env2.precipMm + (irrigationByCell.get(key) ?? 0);
     if (waterInMm > N_LEACH_MM) {
@@ -472,10 +743,13 @@ export function stepDay(
       heat = th.heat;
       cold = th.cold;
       frost = th.frost;
+      if (climateResult.climate) {
+        light = lightStressFromDli(crop, targetDliForCell(key, config, env));
+      }
       const nb = neighbors?.[key];
       const maxStress = Math.min(
         1,
-        Math.max(water, heat, cold, nitrogen) + antagonistStressAdd(nb),
+        Math.max(water, heat, cold, nitrogen, light ?? 0) + antagonistStressAdd(nb),
       );
       gddAccumC = r2(prev.gddAccumC + gddGain(env2, maxStress, companionRateBonus(nb)));
       biomassFrac = r4(biomassFromGdd(gddAccumC, required));
@@ -496,7 +770,7 @@ export function stepDay(
       );
     }
 
-    const nextStress: CellStress = { water, heat, cold, nitrogen };
+    const nextStress: CellStress = { water, heat, cold, nitrogen, ...(light !== undefined ? { light } : {}) };
     const peakPestPressure = Math.max(prev.peakPestPressure ?? 0, pestPressure);
 
     // Season stress accumulation — the yield penalty reads this mean.
@@ -520,7 +794,7 @@ export function stepDay(
         harvested = true;
         const kg =
           (crop?.yieldKgPerPlant ?? 0) *
-          plantsPerCell(prev.cropId) *
+          plantsPerCell(prev.cropId, key) *
           (1 - 0.5 * seasonMeanStress) *
           (1 - 0.3 * peakPestPressure);
         events.push({
@@ -528,8 +802,9 @@ export function stepDay(
           date,
           kind: 'harvested',
           cell: key,
+          ...eventTarget(key),
           cropId: prev.cropId,
-          message: `Harvested ${crop?.name ?? `crop ${prev.cropId}`} at ${key}`,
+          message: `Harvested ${crop?.name ?? `crop ${prev.cropId}`} at ${displayCell(key)}`,
           data: { yieldKg: kg, seasonMeanStress: r2(seasonMeanStress), peakPest: r2(peakPestPressure) },
         });
       }
@@ -550,6 +825,7 @@ export function stepDay(
       harvested,
       stressSum: r4(stressSum),
       stressDaysCount,
+      ...(prev.target ? { target: prev.target } : {}),
       stress: nextStress,
     };
 
@@ -560,8 +836,9 @@ export function stepDay(
         date,
         kind: 'stage',
         cell: key,
+        ...eventTarget(key),
         cropId: prev.cropId,
-        message: `${name} at ${key} reached stage ${stage}`,
+        message: `${name} at ${displayCell(key)} reached stage ${stage}`,
         data: { stage, biomass: biomassFrac },
       });
     }
@@ -571,8 +848,9 @@ export function stepDay(
         date,
         kind: 'harvest-ready',
         cell: key,
+        ...eventTarget(key),
         cropId: prev.cropId,
-        message: `${name} at ${key} is harvest-ready`,
+        message: `${name} at ${displayCell(key)} is harvest-ready`,
         data: { gddAccumC },
       });
     }
@@ -582,8 +860,9 @@ export function stepDay(
         date,
         kind: 'frost',
         cell: key,
+        ...eventTarget(key),
         cropId: prev.cropId,
-        message: `Frost hit ${name} at ${key} (low ${r1(env2.tMinC)} °C)`,
+        message: `Frost hit ${name} at ${displayCell(key)} (low ${r1(env2.tMinC)} °C)`,
         data: { tMinC: r1(env2.tMinC) },
       });
     }
@@ -593,8 +872,9 @@ export function stepDay(
         date,
         kind: 'outbreak',
         cell: key,
+        ...eventTarget(key),
         cropId: prev.cropId,
-        message: `Pest outbreak on ${name} at ${key} (pressure ${r2(pestPressure)})`,
+        message: `Pest outbreak on ${name} at ${displayCell(key)} (pressure ${r2(pestPressure)})`,
         data: { pressure: r2(pestPressure) },
       });
     } else if (prev.pestPressure >= PEST_OUTBREAK && pestPressure < PEST_OUTBREAK_END) {
@@ -603,16 +883,17 @@ export function stepDay(
         date,
         kind: 'outbreak-end',
         cell: key,
+        ...eventTarget(key),
         cropId: prev.cropId,
-        message: `Pest pressure eased on ${name} at ${key} (pressure ${r2(pestPressure)})`,
+        message: `Pest pressure eased on ${name} at ${displayCell(key)} (pressure ${r2(pestPressure)})`,
         data: { pressure: r2(pestPressure) },
       });
     }
     // Stress onset/relief events — skipped entirely on the common no-stress
     // day (prev below onset AND next below relief threshold).
     const prevStress = prev.stress;
-    const prevMax = Math.max(prevStress.water, prevStress.heat, prevStress.cold, prevStress.nitrogen);
-    const nextMax = Math.max(nextStress.water, nextStress.heat, nextStress.cold, nextStress.nitrogen);
+    const prevMax = maxCellStress(prevStress);
+    const nextMax = maxCellStress(nextStress);
     if (prevMax >= STRESS_ONSET || nextMax >= STRESS_RELIEF) {
       pushStressTermEvents(events, prevStress, nextStress, dayIndex, date, key, prev.cropId, name);
     }
@@ -630,12 +911,17 @@ export function stepDay(
     if (nextStress.heat >= STRESS_ONSET) statsStressDays.heat++;
     if (nextStress.cold >= STRESS_ONSET) statsStressDays.cold++;
     if (nextStress.nitrogen >= STRESS_ONSET) statsStressDays.nitrogen++;
+    if (nextStress.light !== undefined) {
+      lightStressObserved = true;
+      if (nextStress.light >= STRESS_ONSET) statsStressDays.light = (statsStressDays.light ?? 0) + 1;
+    }
     if (pestPressure >= PEST_OUTBREAK) outbreakCellDays++;
     butterflyCapacity += floweringFrac;
     if (crop && isInsectPollinated(crop)) beeCapacity += floweringFrac;
     pestSum += pestPressure;
   }
 
+  if (lightStressObserved) statsStressDays.light ??= 0;
   const dayStats: DayStats = {
     liveCells,
     waterUseMm: liveCells > 0 ? etcMmSum / liveCells : 0,
@@ -660,12 +946,14 @@ export function stepDay(
     dayIndex: dayIndex + 1,
     surface,
     archetype,
+    ...(climateResult.climate ? { climate: climateResult.climate } : {}),
+    ...(config.assetPhysics ? { waterStoreL: waterStoreL ?? 0 } : {}),
     cells, // previous ref when nothing changed; owned copy otherwise
     neighbors,
     creatures: creaturesEqual ? state.creatures : nextCreatures,
     events: events.length > 0 ? [...state.events, ...events] : state.events,
   };
-  return { state: nextState, events, dayStats };
+  return { state: nextState, events, dayStats, effectiveEnv: env2 };
 }
 
 export interface SimulateResult {
@@ -690,6 +978,8 @@ export function simulateRun(
   let waterUseMm = 0;
   let outbreakDays = 0;
   const stressDays = { water: 0, heat: 0, cold: 0, nitrogen: 0 };
+  let lightStressDays = 0;
+  let hasLightStressData = false;
   let harvestReadyDay: number | null = null;
   const yieldByCrop = new Map<number, number>();
   const eventCounts = new Map<string, number>();
@@ -699,7 +989,7 @@ export function simulateRun(
     st = res.state;
     // Summary rain/ET reflect the world the run lives in: the effective env
     // (an enclosed run reports 0 rain, attenuated ET0).
-    const eff = effectiveEnvironmentForSurface(env, st.surface);
+    const eff = res.effectiveEnv;
     rainMm += eff.precipMm;
     etoMm += eff.etoMm;
     const ds = res.dayStats;
@@ -711,6 +1001,10 @@ export function simulateRun(
       stressDays.heat += ds.stressDays.heat;
       stressDays.cold += ds.stressDays.cold;
       stressDays.nitrogen += ds.stressDays.nitrogen;
+      if (ds.stressDays.light !== undefined) {
+        hasLightStressData = true;
+        lightStressDays += ds.stressDays.light;
+      }
     }
     for (const ev of res.events) {
       eventCounts.set(ev.kind, (eventCounts.get(ev.kind) ?? 0) + 1);
@@ -748,7 +1042,7 @@ export function simulateRun(
     yieldKgByCrop,
     stressCellDays,
     waterUseMm: r1(waterUseMm),
-    stressDays,
+    stressDays: { ...stressDays, ...(hasLightStressData ? { light: lightStressDays } : {}) },
     outbreakDays,
     meanNitrogenKgHa: finalKeys.length > 0 ? r1(nSum / finalKeys.length) : 0,
     harvestReadyDay,

@@ -1792,3 +1792,35 @@ snapshots changed, and no application implementation is claimed by this revision
   (existing large-chunk warning), and `npm run check:private` pass. The independent critic reports
   the Phase 0 create/switch/reload, run-target, history, resize, delete, duplicate and move journeys
   pass; the camera screenshot/scroll confirmation after the framing change is pending.
+
+## 2026-10-24 — Workstream C equipment terms
+
+- Added catalog physics for installed lights, fans, HVAC, dehumidifiers, CO₂, racks, soilless
+  assets, nursery trays and explicit water stores. The aggregator counts mounted instance IDs
+  once, adapts legacy floor placements deterministically, computes PPFD from the geometric union
+  per target while summing installed light watts, and returns room-wide or target-scoped terms.
+- `co2KgDay` is an additive EquipmentTerms field summed from placed CO₂ assets for the climate
+  model's daily dose capacity. Hydro channel and raft reservoir capacity is explicitly 0 L until
+  specified; no volume is inferred from dimensions, so stored-water capacity requires a separate
+  water-store asset and the inspector should explain that constraint.
+- Verification checkpoint: `npx vitest run src/lib/sim/equipment.test.ts` passes (8 tests) and
+  `npm run typecheck` passes. Full repository tests are being run against the integrated branch.
+
+## 2026-10-25 — Workstreams B/C climate and placed-equipment integration
+
+- Enclosed runs now freeze environment, room/target equipment terms, and optional daily light
+  inputs. The climate solver models interior temperature, continuous air exchange, absolute
+  humidity/condensation, ventilation, installed dehumidification, CO₂ dose limits and target
+  photoperiod. Environment setpoints remain explicit inputs; missing setpoints retain archetype
+  and asset defaults. The model is a documented v1 estimate, not a full greenhouse energy model
+  (see `references/CLIMATE-MODEL.md`).
+- Installed equipment affects the run only when both environment records and asset physics are
+  enabled. Snapshot tests cover the flag combinations and frozen equipment inputs. Rack-tier
+  planting contributes actual occupied growing area; hydro cells distinguish designed coverage
+  from installed soilless assets, and shared reservoir limits produce water-short outcomes.
+- Verification: the integrated 69-test suite, TypeScript check, production build and private-file
+  scan pass. Independent browser review completed a 90-day run after the expected archive/weather
+  load, persisted it, and opened replay at Day 0; the reviewer verified the environment/equipment
+  snapshot with two growing targets. Runs default to a 15-second archive/weather load on that
+  network (about 15 seconds in that review); this was a measured wait, not a failure. All new
+  workstream flags remain off by default.

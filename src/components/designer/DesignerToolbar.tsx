@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { ASSET_PHYSICS_ENABLED } from '@/lib/featureFlags';
 import type { PlanSurface } from '@/types';
 import { DESIGNER_CONSTANTS, type EraseLayer, type PlanEditor, type RectMode, type Tool } from './usePlanEditor';
 
@@ -115,6 +116,7 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
             <SelectContent>
               <SelectItem value="plants">Plants</SelectItem>
               <SelectItem value="ground">Ground</SelectItem>
+              {editor.scope.kind === 'env' && ASSET_PHYSICS_ENABLED && <SelectItem value="equipment">Equipment</SelectItem>}
             </SelectContent>
           </Select>
         )}

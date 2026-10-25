@@ -28,18 +28,41 @@ export interface SiteOverviewProps {
   onDeleteWorld: (environmentId: string) => Promise<void>;
 }
 
-function floorCellsOutside(environment: Environment, widthM: number, heightM: number) {
+function cropCellCount(environment: Environment) {
+  return Object.keys(environment.plan.planting).length + Object.values(environment.plan.targets ?? {})
+    .reduce((total, target) => total + Object.keys(target.planting).length, 0);
+}
+
+function floorCellsOutside(environment: Environment, widthM: number, heightM: number, layout = environment.layout) {
   const cols = Math.round(widthM / environment.cellM);
   const rows = Math.round(heightM / environment.cellM);
   const outside = (key: string) => {
     const [x, y] = key.split(',').map(Number);
     return !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= cols || y >= rows;
   };
-  const crops = Object.keys(environment.plan.planting).filter(outside).length;
+  let crops = Object.keys(environment.plan.planting).filter(outside).length;
+  for (const target of Object.values(environment.plan.targets ?? {})) {
+    const space = layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+    if (!space || !space.levels.some((level) => level.id === target.levelId)) {
+      crops += Object.keys(target.planting).length;
+      continue;
+    }
+    for (const cell of Object.keys(target.planting)) {
+      const [x, y] = cell.split(',').map(Number);
+      const x0 = x * environment.cellM;
+      const y0 = y * environment.cellM;
+      if (outside(cell) || !Number.isFinite(x) || !Number.isFinite(y) ||
+          x0 < space.x || y0 < space.y || x0 + environment.cellM > space.x + space.widthM || y0 + environment.cellM > space.y + space.depthM) crops += 1;
+    }
+  }
   const ground = Object.keys(environment.plan.ground).filter(outside).length;
-  const equipment = (environment.instances ?? []).filter((instance) =>
-    instance.x + instance.widthM > widthM || instance.y + instance.depthM > heightM,
-  ).length;
+  const equipment = (environment.instances ?? []).filter((instance) => {
+    const mount = instance.mount;
+    return instance.x + instance.widthM > widthM || instance.y + instance.depthM > heightM ||
+      (mount.kind === 'growing-level' && !layout?.growingSpaces.some((space) =>
+        space.id === mount.growingSpaceId && space.levels.some((level) => level.id === mount.levelId),
+      ));
+  }).length;
   return { crops, ground, equipment };
 }
 
@@ -140,7 +163,7 @@ export function SiteOverview({
     : null;
   const accessEdgeChanged = !!editing?.layout?.access.length && editAccessEdge !== editing.layout.access[0]?.edge;
   const layoutChanged = !!editing && (previewWidth !== editing.widthM || previewDepth !== editing.heightM || accessEdgeChanged);
-  const outside = editing ? floorCellsOutside(editing, previewWidth, previewDepth) : { crops: 0, ground: 0, equipment: 0 };
+  const outside = editing ? floorCellsOutside(editing, previewWidth, previewDepth, previewLayout) : { crops: 0, ground: 0, equipment: 0 };
   const newlyReserved = layoutChanged && previewEnvironment ? contentInReservations(previewEnvironment) : { crops: 0, ground: 0, equipment: 0 };
   const affected = {
     crops: outside.crops + newlyReserved.crops,
@@ -410,7 +433,7 @@ export function SiteOverview({
                         <>
                           <div className="rounded-md border border-amber-600/40 bg-amber-500/10 p-3 text-xs" role="status">
                             <p className="font-medium">Changing type starts a separate world; this world stays unchanged.</p>
-                            <p className="mt-1">This world keeps {Object.keys(environment.plan.planting).length} crop cells, {Object.keys(environment.plan.ground).length} ground cells and {environment.instances?.length ?? 0} equipment instances. {incompatibleCells} ground cells use assets unavailable in {archetypes[editArchetype].label}. The new world will use its profile dimensions and access layout; content will not move.</p>
+                            <p className="mt-1">This world keeps {cropCellCount(environment)} crop cells across its floor and growing levels, {Object.keys(environment.plan.ground).length} ground cells and {environment.instances?.length ?? 0} equipment instances. {incompatibleCells} ground cells use assets unavailable in {archetypes[editArchetype].label}. The new world will use its profile dimensions and access layout; content will not move.</p>
                           </div>
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="ghost" onClick={() => { setEditingId(null); setConfirmResize(false); }}>Cancel</Button>

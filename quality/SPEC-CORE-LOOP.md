@@ -348,17 +348,30 @@ interface GrowingSpace {
   label: string;
   kind: 'bed' | 'bench' | 'rack' | 'hydro';
   x: number; y: number; widthM: number; depthM: number;
-  levels: { id: string; label: string; elevationM: number;
-    clearanceM?: number; planting: Record<string, number>;
-    plantedAt?: Record<string, string> }[];
+  levels: { id: string; label: string; elevationM: number; clearanceM?: number }[];
+}
+interface GrowingTargetPlan {
+  growingSpaceId: string;
+  levelId: string;
+  planting: Record<string, number>;
+  plantedAt?: Record<string, string>;
+}
+interface PlanState {
+  planting: Record<string, number>; // floor target; legacy compatibility shape
+  plantedAt?: Record<string, string>;
+  targets?: Record<string, GrowingTargetPlan>; // elevated targets, keyed by stable ids
 }
 ```
 
-Floor crops remain in `env.plan.planting`; elevated crops live only on their growing-space
-level. Level cell keys use the environment grid's origin and resolution, constrained to that
-space's footprint. Stable ids distinguish two crops at the same x/y on different levels.
-Every growing space has at least one level; a four-tier rack has four independently editable
-levels. Do not serialize a derived merged planting map as another source of truth.
+Floor crops remain in `env.plan.planting`; elevated crops live in `env.plan.targets`, keyed by
+the stable `(growingSpaceId, levelId)` pair. Level cell keys use the environment grid's origin
+and resolution, constrained to that space's footprint. Stable target ids distinguish two crops
+at the same x/y on different levels. Every growing space has at least one level; a four-tier
+rack has four independently editable levels. Do not serialize a derived merged planting map as
+another source of truth. `GrowingSpaceLevel.planting` and `plantedAt` are accepted only as a
+one-way migration input: normalize them into `PlanState.targets`, then remove them from layout.
+This keeps `RunConfig.basePlan` as the sole frozen crop-plan snapshot; `EnvironmentSnapshot`
+contains level geometry and equipment mounts but no crop maps.
 
 `EnvironmentLayout` absent means legacy floor-only layout, with no invented door reservation
 or loss of existing crop cells. New setups receive editable profile defaults. The initial
@@ -605,6 +618,12 @@ export function equipmentTermsFor(plan: PlanState, ar: EnvironmentArchetype): Eq
 Every row is a `model-estimate`; put the table in the module header so the next engineer can
 argue with a number instead of reverse-engineering it.
 
+Two capacity details are explicit: `EquipmentTerms` also exposes `co2KgDay`, summed once per
+installed CO₂ asset, so the climate model can distinguish a requested concentration from the
+available daily dose. `hydro-channel` and `hydro-raft` are soilless, but their reservoir capacity
+is `0 L` until a capacity is specified; do not infer litres from the footprint. The inspector
+must disclose that external water storage is required for stored-water capacity.
+
 ### 3.5 UI
 
 - Asset palette shows an effect line ("+13.5 DLI · 40 W · 1.2 kW heat") for physical assets.
@@ -708,8 +727,9 @@ scrubbable, branchable object and turn ensembles into uncertainty.
 ```ts
 export function forkRun(
   parent: RunRecord,
-  atDay: number,
-  patch?: Partial<Pick<RunConfig, 'interventions' | 'tempDeltaC' | 'precipMultiplier'>>,
+  afterDayCount: number,
+  patch?: Partial<Pick<RunConfig, 'interventions'>>,
+  ctx?: SimRunCtx,
 ): RunRecord;
 ```
 
@@ -720,15 +740,21 @@ Rules:
   date, stamp new ids. Do not add a parallel divergence path.
 - `envSeries` = parent's `envSeries` **exactly**, whole series (not sliced). The counterfactual
   is management, not weather; keeping the parent's weather is what makes the comparison causal.
-- `config.interventions` = parent's interventions with `date <= dayDate(atDay)`, then `patch`
-  appended. `config.basePlan` = deep copy of parent's.
-- New `id`, `label` = `<parent label> ⟂ d<atDay>`, plus `parentId` and `forkedAtDay` on
-  `RunRecord` (new optional fields).
+- `afterDayCount` counts completed days: `0` is before the series; `N` means day indexes
+  `0..N-1` are complete. `config.interventions` keeps the parent's actions through the last
+  completed date, then appends **management-only** patch interventions dated after that
+  boundary and inside the parent's series. Weather is frozen in `envSeries`; weather and
+  structural/surface patches are rejected. `config.basePlan` is a deep copy of the parent's.
+- New `id`, `label` = `<parent label> ⟂ d<afterDayCount>`, plus `parentId` and `forkedAtDay`
+  on `RunRecord` (`forkedAtDay` stores the completed-day count).
+- Recompute the summary using the same `SimRunCtx` (soil profile and crop catalog) as the
+  parent run. Historical records do not freeze that context yet, so callers must pass the
+  active run context; records without one continue to use the legacy defaults.
 - `meanDailyGddC` stays the parent's. Extensions (`extendRun`) recompute only for the appended
   window and document the discontinuity.
 - Forking from the live (not-yet-saved) run is allowed: `createRun` → `simulateRun`.
 
-**Prefix identity test is mandatory:** for days `0..atDay`, the fork's per-day `DayStats`, cell
+**Prefix identity test is mandatory:** for days `0..afterDayCount-1`, the fork's per-day `DayStats`, cell
 `biomassFrac` and event list equal the parent's within `1e-9`. If this fails, the engine has
 hidden mutable state — fix the engine, do not loosen the test.
 

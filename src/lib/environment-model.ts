@@ -1,4 +1,5 @@
 import { archetypes, ARCHETYPE_FOR_SURFACE, LEGACY_SURFACE_FOR_ARCHETYPE, planningProfiles } from '@/creative/archetypes';
+import { growingTargetKey } from '@/lib/growingTargets';
 import type {
   ArchetypeId,
   CreateEnvironmentInput,
@@ -27,6 +28,7 @@ function planWithoutSurface(plan: PlanState): PlanState {
     ...plan,
     planting: { ...plan.planting },
     ground: { ...plan.ground },
+    ...(plan.targets ? { targets: structuredClone(plan.targets) } : {}),
     ...(plan.plantedAt ? { plantedAt: { ...plan.plantedAt } } : {}),
   };
   delete next.surface;
@@ -44,6 +46,32 @@ export function normalizeEnvironment(environment: Environment, alignDimensions =
     : environment.heightM;
   const plan = planWithoutSurface(environment.plan);
   let layout = environment.layout ? structuredClone(environment.layout) : undefined;
+  if (layout) {
+    const targets = { ...plan.targets };
+    layout = {
+      ...layout,
+      growingSpaces: layout.growingSpaces.map((space) => ({
+        ...space,
+        levels: space.levels.map((level) => {
+          const { planting: legacyPlanting, plantedAt: legacyPlantedAt, ...geometry } = level;
+          if (legacyPlanting || legacyPlantedAt) {
+            const key = growingTargetKey({ kind: 'growing-level', growingSpaceId: space.id, levelId: level.id });
+            const existing = targets[key];
+            const planting = { ...legacyPlanting, ...existing?.planting };
+            const plantedAt = { ...legacyPlantedAt, ...existing?.plantedAt };
+            targets[key] = {
+              growingSpaceId: space.id,
+              levelId: level.id,
+              planting,
+              ...(Object.keys(plantedAt).length > 0 ? { plantedAt } : {}),
+            };
+          }
+          return geometry;
+        }),
+      })),
+    };
+    if (Object.keys(targets).length > 0) plan.targets = targets;
+  }
   if (layout && alignDimensions) {
     layout.access = layout.access.flatMap((item) => {
       const edgeLength = item.edge === 'north' || item.edge === 'south' ? widthM : heightM;
@@ -236,7 +264,6 @@ export function makeEnvironment(
     cellM,
     plan,
     layout,
-    ...(archetype.setpoints ? { setpoints: { ...archetype.setpoints } } : {}),
   });
 }
 

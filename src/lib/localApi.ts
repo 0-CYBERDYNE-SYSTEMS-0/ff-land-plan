@@ -8,11 +8,14 @@ import type {
   Crop,
   CreateEnvironmentInput,
   Environment,
+  EnvironmentAssetInstance,
   Farm,
   FarmCell,
   ForecastDay,
   NdviEstimate,
   PlanState,
+  GrowingTargetKey,
+  GrowingTargetRef,
   SitePlan,
   Sensor,
   SensorReading,
@@ -21,6 +24,8 @@ import type {
   WeatherHistoryPoint,
 } from '@/types';
 import { cropLibrary } from '@/data/crops';
+import { assetLibrary } from '@/data/assets';
+import { archetypes } from '@/creative/archetypes';
 import { state, persist } from '@/lib/store';
 import { deriveAlerts, fetchFarmWeather, type FarmWeather } from '@/lib/weather';
 import { fetchClimateNormals } from '@/lib/climate';
@@ -28,9 +33,14 @@ import { fetchSoilProfile } from '@/lib/soil';
 import { SCENARIOS } from '@/lib/growth';
 import { buildEnvSeries, extractWeatherOverrides, meanDailyGddForRange } from '@/lib/sim/environment';
 import { simulateRun } from '@/lib/sim/engine';
-import type { CreateSimRunInput, RunConfig, RunRecord } from '@/lib/sim/types';
+import type { ClimateEquipmentInput } from '@/lib/sim/environment-climate';
+import { NO_CLIMATE_EQUIPMENT } from '@/lib/sim/environment-climate';
+import { equipmentTermsFor } from '@/lib/sim/equipment';
+import type { CreateSimRunInput, RunAssetPhysicsSnapshot, RunConfig, RunRecord } from '@/lib/sim/types';
 import { environmentSnapshot, legacyPlanForEnvironment, makeEnvironment, normalizeEnvironment, siteForEnvironments } from '@/lib/environment-model';
-import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { growingTargetKey } from '@/lib/growingTargets';
+import { ASSET_PHYSICS_ENABLED, ENV_CLIMATE_ENABLED, ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { fetchMonthlyDli } from '@/lib/light';
 
 function farmOrThrow(id: number): Farm {
   const f = state.farms.find((x) => x.id === id);
@@ -93,7 +103,143 @@ function cloneEnvironmentWithNewIds(source: Environment, id: string): Environmen
       };
     }
   });
+  if (copied.plan.targets) {
+    copied.plan.targets = Object.fromEntries(Object.values(copied.plan.targets).map((targetPlan) => {
+      const growingSpaceId = spaceIds.get(targetPlan.growingSpaceId) ?? targetPlan.growingSpaceId;
+      const levelId = levelIds.get(targetPlan.levelId) ?? targetPlan.levelId;
+      const targetKey = growingTargetKey({ kind: 'growing-level', growingSpaceId, levelId });
+      return [targetKey, {
+        ...targetPlan,
+        growingSpaceId,
+        levelId,
+        planting: { ...targetPlan.planting },
+        ...(targetPlan.plantedAt ? { plantedAt: { ...targetPlan.plantedAt } } : {}),
+      }];
+    }));
+  }
   return copied;
+}
+
+function climateEquipment(terms: ReturnType<typeof equipmentTermsFor>): ClimateEquipmentInput {
+  return {
+    ppfdUmol: terms.ppfdUmol,
+    lightingW: terms.lightingW,
+    photoperiodH: terms.photoperiodH,
+    achBoost: terms.achBoost,
+    heatingKw: terms.heatingKw,
+    coolingKw: terms.coolingKw,
+    dehumLpd: terms.dehumLpd,
+    dehumDerateBelowRh: terms.dehumDerateBelowRh,
+    co2TargetPpm: terms.co2TargetPpm,
+    co2KgDay: terms.co2KgDay,
+  };
+}
+
+function soillessCellsForTarget(
+  environment: Environment,
+  plan: PlanState,
+  target: GrowingTargetRef,
+): string[] {
+  const cellM = plan.cellM > 0 ? plan.cellM : 0.25;
+  const covered = new Set<string>();
+  const assetBySlug = new Map(assetLibrary.map((asset) => [asset.slug, asset]));
+  if (target.kind === 'floor') {
+    for (const [cell, slug] of Object.entries(plan.ground)) {
+      if (assetBySlug.get(slug)?.physics?.kind === 'soilless') covered.add(cell);
+    }
+  }
+
+  const bounds = target.kind === 'floor'
+    ? { x: 0, y: 0, widthM: plan.widthM, depthM: plan.heightM }
+    : (() => {
+      const space = environment.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+      return space && space.levels.some((level) => level.id === target.levelId)
+        ? { x: space.x, y: space.y, widthM: space.widthM, depthM: space.depthM }
+        : null;
+    })();
+  if (!bounds) return [...covered].sort();
+
+  const instances: EnvironmentAssetInstance[] = (environment.instances ?? []).filter((instance) => {
+    if (assetBySlug.get(instance.slug)?.physics?.kind !== 'soilless') return false;
+    if (target.kind === 'floor') return instance.mount.kind === 'floor';
+    return instance.mount.kind === 'growing-level'
+      && instance.mount.growingSpaceId === target.growingSpaceId
+      && instance.mount.levelId === target.levelId;
+  });
+  const x0 = Math.max(0, Math.floor(bounds.x / cellM));
+  const y0 = Math.max(0, Math.floor(bounds.y / cellM));
+  const x1 = Math.ceil((bounds.x + bounds.widthM) / cellM);
+  const y1 = Math.ceil((bounds.y + bounds.depthM) / cellM);
+  for (const instance of instances) {
+    const ix1 = instance.x + instance.widthM;
+    const iy1 = instance.y + instance.depthM;
+    for (let y = y0; y < y1; y += 1) {
+      for (let x = x0; x < x1; x += 1) {
+        const cx0 = x * cellM;
+        const cy0 = y * cellM;
+        const overlaps = cx0 < ix1 && cx0 + cellM > instance.x && cy0 < iy1 && cy0 + cellM > instance.y;
+        if (overlaps) covered.add(`${x},${y}`);
+      }
+    }
+  }
+  return [...covered].sort((a, b) => {
+    const [ax, ay] = a.split(',').map(Number);
+    const [bx, by] = b.split(',').map(Number);
+    return ay! - by! || ax! - bx!;
+  });
+}
+
+function hydroRequiredCellsForTarget(
+  environment: Environment,
+  plan: PlanState,
+  target: GrowingTargetRef,
+): string[] {
+  if (target.kind !== 'growing-level') return [];
+  const space = environment.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+  if (space?.kind !== 'hydro' || !space.levels.some((level) => level.id === target.levelId)) return [];
+  const cellM = plan.cellM > 0 ? plan.cellM : 0.25;
+  const x0 = Math.max(0, Math.floor(space.x / cellM));
+  const y0 = Math.max(0, Math.floor(space.y / cellM));
+  const x1 = Math.ceil((space.x + space.widthM) / cellM);
+  const y1 = Math.ceil((space.y + space.depthM) / cellM);
+  const cells: string[] = [];
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const x0M = x * cellM;
+      const y0M = y * cellM;
+      if (x0M < space.x + space.widthM && x0M + cellM > space.x
+        && y0M < space.y + space.depthM && y0M + cellM > space.y) {
+        cells.push(`${x},${y}`);
+      }
+    }
+  }
+  return cells;
+}
+
+function runAssetPhysicsSnapshot(environment: Environment, plan: PlanState): RunAssetPhysicsSnapshot {
+  const archetype = archetypes[environment.archetype];
+  const targets: GrowingTargetRef[] = [
+    { kind: 'floor' },
+    ...(environment.layout?.growingSpaces.flatMap((space) => space.levels.map((level) => ({
+      kind: 'growing-level' as const,
+      growingSpaceId: space.id,
+      levelId: level.id,
+    }))) ?? []),
+  ];
+  const room = equipmentTermsFor(plan, archetype, environment);
+  const targetTerms = Object.fromEntries(targets.map((target) => [
+    growingTargetKey(target),
+    equipmentTermsFor(plan, archetype, environment, target),
+  ])) as Partial<Record<GrowingTargetKey, ReturnType<typeof equipmentTermsFor>>>;
+  const soillessCells = Object.fromEntries(targets.map((target) => [
+    growingTargetKey(target),
+    soillessCellsForTarget(environment, plan, target),
+  ])) as Partial<Record<GrowingTargetKey, string[]>>;
+  const hydroRequiredCells = Object.fromEntries(targets.map((target) => [
+    growingTargetKey(target),
+    hydroRequiredCellsForTarget(environment, plan, target),
+  ])) as Partial<Record<GrowingTargetKey, string[]>>;
+  return { model: 'assets-v1', room, targets: targetTerms, soillessCells, hydroRequiredCells };
 }
 
 // One Open-Meteo call serves weather + forecast + history for a farm; memoize
@@ -479,11 +625,26 @@ export const localApi: Api = {
     }
     const scenario = input.scenario ?? 'baseline';
     const preset = SCENARIOS[scenario];
+    const climateEnabled = ENV_RECORDS_ENABLED
+      && ENV_CLIMATE_ENABLED
+      && !!environment
+      && archetypes[environment.archetype].kind !== 'open';
+    const assetPhysics = ASSET_PHYSICS_ENABLED && ENV_RECORDS_ENABLED && environment
+      ? runAssetPhysicsSnapshot(environment, plan)
+      : undefined;
     const config: RunConfig = {
       farmId: input.farmId,
       // Deep fork: a run never aliases the live plan (which keeps mutating).
       basePlan: structuredClone(plan),
       ...(ENV_RECORDS_ENABLED && environment ? { environment: environmentSnapshot(environment) } : {}),
+      ...(assetPhysics ? { assetPhysics } : {}),
+      ...(climateEnabled ? {
+        climateModel: 'environment-v1' as const,
+        climateEquipment: assetPhysics ? climateEquipment(assetPhysics.room) : { ...NO_CLIMATE_EQUIPMENT },
+        climateTargetEquipment: assetPhysics
+          ? Object.fromEntries(Object.entries(assetPhysics.targets).map(([key, terms]) => [key, climateEquipment(terms!)]))
+          : {},
+      } : {}),
       startDate: input.startDate ?? new Date().toISOString().slice(0, 10),
       dayCount: Math.min(365, Math.max(1, Math.round(input.dayCount ?? 90))),
       seed: input.seed ?? 1,
@@ -494,9 +655,10 @@ export const localApi: Api = {
       lat: farm.lat,
       lng: farm.lng,
     };
-    const [normals, soil] = await Promise.all([
+    const [normals, soil, monthlyDli] = await Promise.all([
       fetchClimateNormals(farm.lat, farm.lng),
       fetchSoilProfile(farm.lat, farm.lng),
+      climateEnabled ? fetchMonthlyDli(farm.lat, farm.lng) : Promise.resolve(null),
     ]);
     const envSeries = await buildEnvSeries(config.startDate, config.dayCount, {
       lat: farm.lat,
@@ -505,6 +667,7 @@ export const localApi: Api = {
       precipMultiplier: config.precipMultiplier,
       climateNormals: normals,
       weatherOverrides: extractWeatherOverrides(config.interventions),
+      ...(climateEnabled ? { monthlyDli } : {}),
     });
     // Kill the invisible 20 °C default when real climate exists: the run's
     // GDD pace comes from the normals over the actual window.
