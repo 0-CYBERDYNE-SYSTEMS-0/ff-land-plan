@@ -74,6 +74,7 @@ export interface Sensor {
   farmId: number;
   name: string;
   sensorType: SensorType;
+  environmentId?: string;
   isActive: boolean;
   lastValue: number | null;
   lastUnit: string | null;
@@ -86,6 +87,32 @@ export interface SensorReading {
   value: number;
   recordedAt: string;
 }
+
+export type ObservationMetric =
+  | 'airTempC' | 'rhPct' | 'vpdKPa' | 'co2Ppm' | 'dliMol'
+  | 'soilMoistureFrac' | 'soilTempC' | 'yieldKg' | 'stage';
+
+export interface Observation {
+  id: string;
+  farmId: number;
+  environmentId?: string;
+  growingSpaceId?: string;
+  levelId?: string;
+  metric: ObservationMetric;
+  value: number;
+  unit: string;
+  date: string;
+  at?: string;
+  source: 'manual' | 'csv' | 'sensor' | 'lab' | 'photo';
+  quality?: 'ok' | 'suspect';
+}
+
+export type ObservationInput = Omit<Observation, 'id'>;
+export type ObservationPatch = Partial<Omit<ObservationInput, 'farmId' | 'environmentId' | 'growingSpaceId' | 'levelId'>> & {
+  environmentId?: string | null;
+  growingSpaceId?: string | null;
+  levelId?: string | null;
+};
 
 export interface FarmCell {
   id: number;
@@ -382,6 +409,50 @@ export interface SitePlan {
   heightM: number;
   cellM: number;
   environments: Environment[];
+  updatedAt: string;
+}
+
+export interface SoilCarry {
+  organicMatterPct: number;
+  nPoolKgHa: number;
+  ph?: number;
+  inoculum: Record<string, number>;
+}
+
+export interface SeasonHarvest {
+  date: string;
+  cropId: number;
+  kg: number;
+  cell: string;
+  family: string;
+  /** Absent only for legacy/outdoor records that had no growing-world id. */
+  environmentId?: string;
+  /** Legacy cell-only harvests resolve to the floor target when loaded. */
+  target: GrowingTargetRef;
+}
+
+export interface SeasonSoilCarry {
+  environmentId: string;
+  target: GrowingTargetRef;
+  soilIn: SoilCarry;
+  soilOut: SoilCarry;
+}
+
+export interface SeasonRecord {
+  id: string;
+  farmId: number;
+  year: number;
+  label: string;
+  startDate: string;
+  endDate: string;
+  environmentIds: string[];
+  runIds: string[];
+  /** One carry per soil-growing surface; hydro targets never inherit soil carry. */
+  soil: SeasonSoilCarry[];
+  /** Legacy adapter for records written before carry was target-scoped. */
+  soilIn?: SoilCarry;
+  soilOut?: SoilCarry;
+  harvests: SeasonHarvest[];
   updatedAt: string;
 }
 

@@ -1,13 +1,17 @@
 import { ArrowLeft, Check, Map as MapIcon, Redo2, Undo2 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { apiFetch } from '@/lib/api';
-import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { buildSeasonPreview, makeSeasonRecord, rotationCellKey, rotationHint, rotationIndexFromSeasons } from '@/lib/campaign';
+import { CAMPAIGN_ENABLED, ENV_RECORDS_ENABLED, TIMELINE_ENABLED } from '@/lib/featureFlags';
+import { fetchSeasonEnsembles } from '@/lib/ensembles';
 import { growingTargetKey, parseTargetCellKey } from '@/lib/growingTargets';
 import { isInputCaptured } from '@/lib/inputArbiter';
-import type { SimEvent, SimState } from '@/lib/sim';
-import { runDayEnv } from '@/hooks/useSimRun';
+import { ensembleConfigKey, forkRun, runEnsembleInWorker } from '@/lib/sim';
+import type { Intervention, RunRecord, SimEvent, SimState } from '@/lib/sim';
+import { runDateISO, runDayEnv } from '@/hooks/useSimRun';
 import { effectiveStress, projectPlant, stageCountFor } from '@/lib/sim/view';
 import type { SimOverlayChannels } from '@/lib/renderPlan';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useSimRun } from '@/hooks/useSimRun';
 import { archetypes } from '@/creative/archetypes';
-import type { ArchetypeId } from '@/types';
+import type { ArchetypeId, SeasonRecord } from '@/types';
 import { AssetPalette } from '@/components/designer/AssetPalette';
 import { BlueprintCanvas } from '@/components/designer/BlueprintCanvas';
 import { CropPalette } from '@/components/designer/CropPalette';
@@ -29,7 +33,9 @@ import { ViewToggle } from '@/components/designer/ViewToggle';
 import { FILL_CONFIRM_THRESHOLD, usePlanEditor } from '@/components/designer/usePlanEditor';
 import { GrowingWorldSetup } from '@/components/designer/GrowingWorldSetup';
 import { GrowingSystemsPanel } from '@/components/designer/GrowingSystemsPanel';
+import { CampaignPanel, type CampaignCloseInput, type CampaignPreview } from '@/components/designer/CampaignPanel';
 import { SiteOverview } from '@/components/designer/SiteOverview';
+import type { RunEnsemblePanelState } from '@/components/world/SimDrawer';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog,
@@ -44,6 +50,18 @@ import {
 
 const World3D = lazy(() => import('@/components/world/World3D'));
 
+function interventionDate(intervention: Intervention): string {
+  return intervention.kind === 'weather' ? intervention.fromDate : intervention.date;
+}
+
+function isForkManagementIntervention(intervention: Intervention): boolean {
+  return intervention.kind === 'irrigate'
+    || intervention.kind === 'fertilize'
+    || intervention.kind === 'plant'
+    || intervention.kind === 'harvest'
+    || intervention.kind === 'refill-water';
+}
+
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
@@ -53,6 +71,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function PlotDesigner({ farmId }: { farmId: number }) {
   const navigate = useNavigation();
   const editor = usePlanEditor(farmId);
+  const queryClient = useQueryClient();
   const { farm, isLoading, planRef, saveState, savedAt } = editor;
 
   // --- Sim run lifecycle (SPEC-SIM-ECOSYSTEM Phase 1/2) ---
@@ -64,6 +83,9 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     onEvents: (events, state) => runEventsRef.current?.(events, state),
     farmCoords: farm ? { lat: farm.lat, lng: farm.lng } : undefined,
   });
+  const [forkSaving, setForkSaving] = useState(false);
+  const [runEnsemble, setRunEnsemble] = useState<RunEnsemblePanelState>({ status: 'idle', completed: 0, total: 0 });
+  const ensembleAbortRef = useRef<AbortController | null>(null);
 
   // DEV-only launch param (wave 5): ?ffvis2d=drought|baseline composes a REAL
   // run through the same createSimRun path the Simulations page uses, seeks it
@@ -148,6 +170,22 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   const simRunRef = useRef(simRun);
   simRunRef.current = simRun;
   useEffect(() => {
+    const record = simRun.record;
+    const cache = record?.ensembleCache;
+    const result = cache?.result;
+    const expectedKey = record ? ensembleConfigKey(record.config, simRun.ctx ?? undefined) : null;
+    setRunEnsemble(result && cache?.configKey === expectedKey
+      ? { status: 'ready', completed: result.years.length, total: result.years.length, result, persisted: true }
+      : { status: 'idle', completed: 0, total: 0 });
+  }, [simRun.record, simRun.ctx]);
+  const runInputIdentity = simRun.record
+    ? `${simRun.record.id}:${ensembleConfigKey(simRun.record.config, simRun.ctx ?? undefined)}`
+    : '';
+  useEffect(() => () => {
+    ensembleAbortRef.current?.abort();
+    ensembleAbortRef.current = null;
+  }, [runInputIdentity]);
+  useEffect(() => {
     if (!launchRunId && !launchGhostId) return;
     const launchKey = `${launchRunId ?? ''}|${launchGhostId ?? ''}`;
     if (launchRunDoneRef.current.has(launchKey)) return;
@@ -221,6 +259,171 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     queryKey: ['sim-runs', farmId],
     queryFn: () => apiFetch.listSimRuns(farmId),
   });
+  const { data: seasons = [] } = useQuery<SeasonRecord[]>({
+    queryKey: ['seasons', farmId],
+    queryFn: () => apiFetch.listSeasons(farmId),
+    enabled: CAMPAIGN_ENABLED,
+  });
+  const rotationIndex = useMemo(
+    () => rotationIndexFromSeasons(seasons, allRuns),
+    [allRuns, seasons],
+  );
+  const rotationWarnings = useMemo(() => Object.fromEntries(seasons.map((season) => {
+    const warnedCells = new Set<string>();
+    for (const harvest of season.harvests ?? []) {
+      const environmentId = harvest.environmentId ?? season.environmentIds[0] ?? '';
+      const target = harvest.target ?? { kind: 'floor' as const };
+      const hint = rotationHint(rotationIndex, environmentId, target, harvest.cell, harvest.family, season.year);
+      if (hint?.warning) warnedCells.add(rotationCellKey(environmentId, target, harvest.cell));
+    }
+    return [season.id, warnedCells.size];
+  })), [rotationIndex, seasons]);
+  const campaignYear = Math.max(
+    new Date().getUTCFullYear(),
+    ...seasons.map((season) => season.year + 1),
+  );
+  const currentRotationHint = CAMPAIGN_ENABLED && editor.environment && editor.hoverKey && editor.activeCrop?.family
+    ? rotationHint(rotationIndex, editor.environment.id, editor.activeTarget, editor.hoverKey, editor.activeCrop.family, campaignYear)
+    : null;
+  const previewSeason = async (input: CampaignCloseInput): Promise<CampaignPreview> => {
+    if (input.startDate.slice(0, 4) !== String(input.year) || input.endDate.slice(0, 4) !== String(input.year)) {
+      throw new Error('The season dates must fall within its selected calendar year.');
+    }
+    const selected = input.runIds.map((id) => allRuns.find((run) => run.id === id));
+    if (selected.some((run) => !run)) throw new Error('A selected run is no longer available.');
+    const selectedRuns = selected.filter((run): run is RunRecord => run !== undefined);
+    const outsideWindow = selectedRuns.find((run) =>
+      run.config.startDate < input.startDate || runDateISO(run, run.config.dayCount - 1) > input.endDate,
+    );
+    if (outsideWindow) throw new Error(`${outsideWindow.label} does not fit inside ${input.startDate}–${input.endDate}.`);
+    return buildSeasonPreview(selectedRuns, { compostAppsByScope: input.compostAppsByScope });
+  };
+  const saveSeason = async (input: CampaignCloseInput, preview: CampaignPreview): Promise<SeasonRecord> => {
+    if (!CAMPAIGN_ENABLED) throw new Error('Campaign features are disabled.');
+    const saved = await apiFetch.saveSeason(makeSeasonRecord({
+      farmId,
+      year: input.year,
+      label: input.label,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      updatedAt: new Date().toISOString(),
+    }, preview));
+    await queryClient.invalidateQueries({ queryKey: ['seasons', farmId] });
+    return saved;
+  };
+  const startNextPlan = (season: SeasonRecord) => editor.startNextPlan(season.environmentIds);
+  const cacheSavedRun = (saved: RunRecord) => {
+    queryClient.setQueryData<RunRecord[]>(['sim-runs', farmId], (current) =>
+      [saved, ...(current ?? allRuns).filter((run) => run.id !== saved.id)].slice(0, 40),
+    );
+  };
+  const saveFork = async () => {
+    if (!TIMELINE_ENABLED) return;
+    const controller = simRunRef.current;
+    const parent = controller.record;
+    if (!parent) return;
+    controller.pause();
+    const afterDayCount = controller.simStateRef.current?.dayIndex ?? controller.dayIndex;
+    const parentConfigSnapshot = JSON.stringify(parent.config);
+    const firstUncompletedDate = runDateISO(parent, afterDayCount);
+    const futureInterventions = parent.config.interventions.filter((intervention) =>
+      isForkManagementIntervention(intervention) && interventionDate(intervention) >= firstUncompletedDate,
+    );
+    setForkSaving(true);
+    try {
+      const fork = forkRun(parent, afterDayCount, { interventions: futureInterventions }, controller.ctx ?? undefined);
+      const saved = await apiFetch.saveSimRun(fork);
+      cacheSavedRun(saved);
+      const currentController = simRunRef.current;
+      const currentParent = currentController.record;
+      const currentDay = currentController.simStateRef.current?.dayIndex ?? currentController.dayIndex;
+      if (currentParent?.id === parent.id && JSON.stringify(currentParent.config) === parentConfigSnapshot && currentDay === afterDayCount) {
+        const ghost = currentController.ghostRecord;
+        currentController.startRun(saved);
+        currentController.seekDay(afterDayCount);
+        if (ghost) currentController.loadGhost(ghost);
+      }
+      toast.success(`Saved ${saved.label}`);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setForkSaving(false);
+    }
+  };
+  const calculateEnsemble = async () => {
+    if (!TIMELINE_ENABLED || !farm) return;
+    const controller = simRunRef.current;
+    const active = controller.record;
+    if (!active) return;
+    ensembleAbortRef.current?.abort();
+    const abortController = new AbortController();
+    ensembleAbortRef.current = abortController;
+    const configSnapshot = JSON.stringify(active.config);
+    const activeId = active.id;
+    const isCurrentRequest = () => ensembleAbortRef.current === abortController && !abortController.signal.aborted;
+    const isCurrentRun = () => {
+      const current = simRunRef.current.record;
+      return current?.id === activeId && JSON.stringify(current.config) === configSnapshot;
+    };
+    setRunEnsemble({ status: 'loading-weather', completed: 0, total: 0 });
+    try {
+      const seasons = await fetchSeasonEnsembles(farm.lat, farm.lng);
+      if (!isCurrentRequest() || !isCurrentRun()) return;
+      if (!seasons) {
+        if (isCurrentRun()) {
+          setRunEnsemble({ status: 'unavailable', completed: 0, total: 0, message: 'Fewer than three complete historical weather windows are available for this location.' });
+        }
+        return;
+      }
+      const { key, result, unavailableReason } = await runEnsembleInWorker(active.config, seasons, {
+        maxYears: 10,
+        ctx: controller.ctx ?? undefined,
+        signal: abortController.signal,
+        onProgress: (completed, total) => {
+          if (isCurrentRequest() && isCurrentRun()) {
+            setRunEnsemble({ status: 'running', completed, total });
+          }
+        },
+      });
+      if (!isCurrentRequest()) return;
+      if (!result) {
+        if (isCurrentRun()) {
+          setRunEnsemble({ status: 'unavailable', completed: 0, total: 0, message: unavailableReason ?? 'Fewer than three complete historical weather windows are available for this location.' });
+        }
+        return;
+      }
+      const current = simRunRef.current.record;
+      if (!current || !isCurrentRun()) {
+        if (current?.id === activeId) setRunEnsemble({ status: 'idle', completed: 0, total: 0 });
+        return;
+      }
+      if (simRunRef.current.unsavedChanges) {
+        setRunEnsemble({ status: 'ready', completed: result.years.length, total: result.years.length, result, persisted: false });
+        return;
+      }
+      setRunEnsemble({ status: 'saving', completed: result.years.length, total: result.years.length, result });
+      const saved = await apiFetch.saveSimRun({
+        ...current,
+        ensembleCache: { key, configKey: ensembleConfigKey(current.config, controller.ctx ?? undefined), result },
+      });
+      cacheSavedRun(saved);
+      if (isCurrentRequest() && isCurrentRun()) {
+        setRunEnsemble({ status: 'ready', completed: result.years.length, total: result.years.length, result: saved.ensembleCache?.result ?? result, persisted: true });
+      }
+    } catch (error) {
+      if (isCurrentRequest() && isCurrentRun() && (error as Error).name !== 'AbortError') {
+        setRunEnsemble({ status: 'error', completed: 0, total: 0, message: (error as Error).message });
+      }
+    } finally {
+      if (ensembleAbortRef.current === abortController) ensembleAbortRef.current = null;
+    }
+  };
+  const cancelEnsemble = () => {
+    if (!ensembleAbortRef.current) return;
+    ensembleAbortRef.current.abort();
+    ensembleAbortRef.current = null;
+    setRunEnsemble({ status: 'cancelled', completed: 0, total: 0 });
+  };
   const runCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const run of allRuns) {
@@ -334,6 +537,16 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
               onDuplicateWorld={editor.duplicateWorld}
               onDeleteWorld={editor.deleteWorld}
             />
+            {!empty && (
+              <CampaignPanel
+                runs={allRuns}
+                seasons={seasons}
+                rotationWarnings={rotationWarnings}
+                onPreview={previewSeason}
+                onSaveSeason={saveSeason}
+                onStartNextPlan={startNextPlan}
+              />
+            )}
           </>
         )}
       </div>
@@ -416,6 +629,11 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
                 onToggleCinema={() => setCinema((c) => !c)}
                 simRun={simRun}
                 compareRuns={allRuns}
+                onSaveFork={saveFork}
+                forkSaving={forkSaving}
+                runEnsemble={runEnsemble}
+                onCalculateEnsemble={calculateEnsemble}
+                onCancelEnsemble={cancelEnsemble}
                 runEventsRef={runEventsRef}
               />
             </Suspense>
@@ -428,6 +646,15 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
             <CropPalette editor={editor} />
             <AssetPalette editor={editor} />
             <GrowingSystemsPanel editor={editor} />
+            <CampaignPanel
+              runs={allRuns}
+              seasons={seasons}
+              rotationHint={currentRotationHint}
+              rotationWarnings={rotationWarnings}
+              onPreview={previewSeason}
+              onSaveSeason={saveSeason}
+              onStartNextPlan={startNextPlan}
+            />
             <SelectionPanel editor={editor} />
             <StatsPanel editor={editor} />
             <PairingsPanel editor={editor} />

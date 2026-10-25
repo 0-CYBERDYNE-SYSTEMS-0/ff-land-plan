@@ -28,11 +28,34 @@ export const DEFAULT_N_POOL_KG_HA = 500;
 
 /** Documented default when soil is unknown; clamps the OM heuristic. Same
  * numbers the engine shipped in Phase 1 — dynamics now act on top. */
-export function initialNitrogenKgHa(organicMatterPct: number | null | undefined): number {
+export function initialNitrogenKgHa(
+  organicMatterPct: number | null | undefined,
+  explicitPoolKgHa?: number,
+): number {
+  if (typeof explicitPoolKgHa === 'number' && Number.isFinite(explicitPoolKgHa)) {
+    return Math.max(0, explicitPoolKgHa);
+  }
   if (typeof organicMatterPct !== 'number' || !Number.isFinite(organicMatterPct)) {
     return DEFAULT_N_POOL_KG_HA;
   }
   return Math.min(N_POOL_MAX_KG_HA, Math.max(N_POOL_MIN_KG_HA, organicMatterPct * N_PER_OM_PCT));
+}
+
+/** Repeat-host pressure reduces early growth; it fades after 21 days and as the canopy closes. */
+export function soilbornePressure(family: string | undefined, inoculum: Record<string, number> | undefined): number {
+  const value = family ? inoculum?.[family] : undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? clamp01(value) : 0;
+}
+
+export function soilborneGrowthFactor(
+  family: string | undefined,
+  inoculum: Record<string, number> | undefined,
+  daysSincePlant: number,
+  biomassFrac: number,
+): number {
+  const daysFactor = clamp01((21 - Math.max(0, daysSincePlant)) / 21);
+  const canopyFactor = clamp01(1 - biomassFrac);
+  return 1 - 0.25 * soilbornePressure(family, inoculum) * daysFactor * canopyFactor;
 }
 
 /** Seasonal crop N demand from the catalog band (standard extension-table

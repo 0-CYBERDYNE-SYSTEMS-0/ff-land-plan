@@ -293,7 +293,7 @@ function ThisRoomInspector({ editor }: { editor: PlanEditor }) {
             <form className="mt-2 space-y-2" onSubmit={saveSetpoints}>
               <div className="grid grid-cols-2 gap-2">
                 {SETPOINT_FIELDS.map((field) => {
-                  const hasOverride = environment.setpoints?.[field.key] !== undefined;
+                  const override = environment.setpoints?.[field.key];
                   const assumed = setpointAssumption(field.key, environment, archetype, inheritedPhotoperiod, inheritedCo2Target);
                   return (
                     <label key={field.key} className="space-y-1 text-[10px] text-muted-foreground">
@@ -311,7 +311,9 @@ function ThisRoomInspector({ editor }: { editor: PlanEditor }) {
                         }}
                         className="h-8"
                       />
-                      <span className="block">{hasOverride ? `Override saved · ${assumed}` : `Assumed: ${assumed}`}</span>
+                      <span className="block">
+                        {override !== undefined ? `Override saved · ${override} ${field.unit}` : `Assumed: ${assumed}`}
+                      </span>
                     </label>
                   );
                 })}

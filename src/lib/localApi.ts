@@ -13,12 +13,16 @@ import type {
   FarmCell,
   ForecastDay,
   NdviEstimate,
+  Observation,
+  ObservationInput,
+  ObservationPatch,
   PlanState,
   GrowingTargetKey,
   GrowingTargetRef,
   SitePlan,
   Sensor,
   SensorReading,
+  SeasonRecord,
   Simulation,
   Weather,
   WeatherHistoryPoint,
@@ -26,20 +30,25 @@ import type {
 import { cropLibrary } from '@/data/crops';
 import { assetLibrary } from '@/data/assets';
 import { archetypes } from '@/creative/archetypes';
-import { state, persist } from '@/lib/store';
+import { state, persist, persistNow, ensureLegacySimRunsMigrated } from '@/lib/store';
+import { deleteRecord, getAllRecords, getRecord, putRecord } from '@/lib/db';
 import { deriveAlerts, fetchFarmWeather, type FarmWeather } from '@/lib/weather';
 import { fetchClimateNormals } from '@/lib/climate';
 import { fetchSoilProfile } from '@/lib/soil';
 import { SCENARIOS } from '@/lib/growth';
 import { buildEnvSeries, extractWeatherOverrides, meanDailyGddForRange } from '@/lib/sim/environment';
 import { simulateRun } from '@/lib/sim/engine';
+import { freezeRunModelInputs } from '@/lib/sim/model-inputs';
 import type { ClimateEquipmentInput } from '@/lib/sim/environment-climate';
 import { NO_CLIMATE_EQUIPMENT } from '@/lib/sim/environment-climate';
 import { equipmentTermsFor } from '@/lib/sim/equipment';
 import type { CreateSimRunInput, RunAssetPhysicsSnapshot, RunConfig, RunRecord } from '@/lib/sim/types';
+import type { FarmCalibration } from '@/lib/sim/calibration';
+import { canonicalizeObservations } from '@/lib/sim/observations';
 import { environmentSnapshot, legacyPlanForEnvironment, makeEnvironment, normalizeEnvironment, siteForEnvironments } from '@/lib/environment-model';
-import { growingTargetKey } from '@/lib/growingTargets';
-import { ASSET_PHYSICS_ENABLED, ENV_CLIMATE_ENABLED, ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { growingTargetKey, parseTargetCellKey } from '@/lib/growingTargets';
+import { normalizeSeasonRecord } from '@/lib/campaign';
+import { ASSET_PHYSICS_ENABLED, CAMPAIGN_ENABLED, ENV_CLIMATE_ENABLED, ENV_RECORDS_ENABLED, TIMELINE_ENABLED, TWIN_ENABLED } from '@/lib/featureFlags';
 import { fetchMonthlyDli } from '@/lib/light';
 
 function farmOrThrow(id: number): Farm {
@@ -52,6 +61,54 @@ function sensorOrThrow(id: number): Sensor {
   const s = state.sensors.find((x) => x.id === id);
   if (!s) throw new Error(`Sensor ${id} not found`);
   return s;
+}
+
+function validateSensorEnvironment(farmId: number, environmentId: string | undefined): void {
+  if (!environmentId) return;
+  const exists = state.sites[farmId]?.environments.some((environment) => environment.id === environmentId);
+  if (!exists) throw new Error(`Growing world ${environmentId} not found on farm ${farmId}.`);
+}
+
+let observationSequence = 0;
+
+function newObservationId(): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return `obs:${uuid}`;
+  observationSequence += 1;
+  return `obs:${Date.now().toString(36)}:${observationSequence.toString(36)}`;
+}
+
+function newestRunFirst(a: RunRecord, b: RunRecord): number {
+  return Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id);
+}
+
+function storeLocalRunWithCap(run: RunRecord): void {
+  const previous = state.simRuns;
+  state.simRuns = [structuredClone(run), ...previous.filter((entry) => entry.id !== run.id)]
+    .sort(newestRunFirst)
+    .slice(0, 40);
+  persist();
+  if (!persistNow()) {
+    state.simRuns = previous;
+    persist();
+    throw new Error('Could not persist this sim run to localStorage. The previous run list was retained.');
+  }
+}
+
+async function storeRunWithCap(run: RunRecord, mode: 'indexeddb' | 'localstorage'): Promise<void> {
+  if (mode === 'localstorage') {
+    storeLocalRunWithCap(run);
+    return;
+  }
+  const existing = await getAllRecords<RunRecord>('runs');
+  const retained = [run, ...existing.filter((entry) => entry.id !== run.id)]
+    .sort(newestRunFirst)
+    .slice(0, 40);
+  const retainedIds = new Set(retained.map((entry) => entry.id));
+  await putRecord('runs', run.id, structuredClone(run));
+  await Promise.all(existing
+    .filter((entry) => !retainedIds.has(entry.id))
+    .map((entry) => deleteRecord('runs', entry.id)));
 }
 
 function siteOrThrow(farmId: number): SitePlan {
@@ -242,6 +299,20 @@ function runAssetPhysicsSnapshot(environment: Environment, plan: PlanState): Run
   return { model: 'assets-v1', room, targets: targetTerms, soillessCells, hydroRequiredCells };
 }
 
+function soilCarryInputsForRun(
+  carryByTarget: CreateSimRunInput['soilCarryByTarget'],
+  environment: Environment | undefined,
+): RunConfig['soilCarryByTarget'] {
+  if (!carryByTarget) return undefined;
+  return Object.fromEntries(Object.entries(carryByTarget).filter(([key]) => {
+    if (key === 'floor') return true;
+    const target = parseTargetCellKey(`${key}|0,0`).target;
+    if (target.kind !== 'growing-level') return false;
+    const space = environment?.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+    return !!space && space.kind !== 'hydro';
+  }));
+}
+
 // One Open-Meteo call serves weather + forecast + history for a farm; memoize
 // per coordinate for 15 minutes and dedupe in-flight requests.
 const WEATHER_TTL_MS = 15 * 60 * 1000;
@@ -279,10 +350,19 @@ export interface Api {
 
   // Sensors (manual readings)
   listSensors: (farmId: number) => Promise<Sensor[]>;
-  createSensor: (farmId: number, input: { name: string; sensorType: Sensor['sensorType'] }) => Promise<Sensor>;
+  createSensor: (farmId: number, input: { name: string; sensorType: Sensor['sensorType']; environmentId?: string }) => Promise<Sensor>;
+  updateSensor: (id: number, patch: { environmentId: string | null }) => Promise<Sensor>;
   deleteSensor: (id: number) => Promise<void>;
   listReadings: (sensorId: number, limit?: number) => Promise<SensorReading[]>;
   addReading: (sensorId: number, value: number, unit: string) => Promise<SensorReading>;
+
+  // Twin observations and approved per-world calibrations
+  listObservations: (farmId: number, environmentId?: string) => Promise<Observation[]>;
+  addObservation: (input: ObservationInput) => Promise<Observation>;
+  updateObservation: (id: string, patch: ObservationPatch) => Promise<Observation>;
+  deleteObservation: (id: string) => Promise<void>;
+  listFarmCalibrations: (farmId: number) => Promise<FarmCalibration[]>;
+  saveFarmCalibration: (calibration: FarmCalibration) => Promise<FarmCalibration>;
 
   // Legacy voxel cells / NDVI (Monitoring page)
   listCells: (farmId: number) => Promise<FarmCell[]>;
@@ -311,7 +391,13 @@ export interface Api {
   // page is a run manager over these)
   createSimRun: (input: CreateSimRunInput) => Promise<RunRecord>;
   listSimRuns: (farmId: number) => Promise<RunRecord[]>;
+  saveSimRun: (run: RunRecord) => Promise<RunRecord>;
   deleteSimRun: (id: string) => Promise<void>;
+
+  // Campaign records (season summaries over replayable sim runs)
+  listSeasons: (farmId: number) => Promise<SeasonRecord[]>;
+  saveSeason: (season: SeasonRecord) => Promise<SeasonRecord>;
+  deleteSeason: (id: string) => Promise<void>;
 
   // Crops
   listCrops: () => Promise<Crop[]>;
@@ -339,10 +425,27 @@ export const localApi: Api = {
     return { ...f };
   },
   deleteFarm: async (id) => {
+    const runStorage = await ensureLegacySimRunsMigrated();
+    if (runStorage === 'indexeddb') {
+      const farmRuns = (await getAllRecords<RunRecord>('runs')).filter((run) => run.farmId === id);
+      await Promise.all(farmRuns.map((run) => deleteRecord('runs', run.id)));
+    }
+    const farmSeasons = (await getAllRecords<SeasonRecord>('seasons')).filter((season) => season.farmId === id);
+    await Promise.all(farmSeasons.map((season) => deleteRecord('seasons', season.id)));
+    const [farmObservations, farmCalibrations] = await Promise.all([
+      getAllRecords<Observation>('observations'),
+      getAllRecords<FarmCalibration>('calibrations'),
+    ]);
+    await Promise.all([
+      ...farmObservations.filter((observation) => observation.farmId === id).map((observation) => deleteRecord('observations', observation.id)),
+      ...farmCalibrations.filter((calibration) => calibration.farmId === id).map((calibration) => deleteRecord('calibrations', calibration.environmentId)),
+    ]);
     state.farms = state.farms.filter((f) => f.id !== id);
     state.cells = state.cells.filter((c) => c.farmId !== id);
     state.simulations = state.simulations.filter((s) => s.farmId !== id);
-    state.simRuns = state.simRuns.filter((r) => r.farmId !== id);
+    if (runStorage === 'localstorage') {
+      state.simRuns = state.simRuns.filter((r) => r.farmId !== id);
+    }
     state.sensors = state.sensors.filter((s) => s.farmId !== id);
     delete state.plans[id];
     delete state.sites[id];
@@ -393,11 +496,16 @@ export const localApi: Api = {
   // Sensors
   listSensors: async (farmId) => state.sensors.filter((s) => s.farmId === farmId),
   createSensor: async (farmId, input) => {
+    if (input.environmentId && !TWIN_ENABLED) {
+      throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to associate sensors with a growing world.');
+    }
+    validateSensorEnvironment(farmId, input.environmentId);
     const sensor: Sensor = {
       id: state.counters.sensor++,
       farmId,
       name: input.name,
       sensorType: input.sensorType,
+      ...(input.environmentId ? { environmentId: input.environmentId } : {}),
       isActive: true,
       lastValue: null,
       lastUnit: null,
@@ -406,6 +514,17 @@ export const localApi: Api = {
     state.sensors = [...state.sensors, sensor];
     persist();
     return sensor;
+  },
+  updateSensor: async (id, patch) => {
+    const sensor = sensorOrThrow(id);
+    if (patch.environmentId && !TWIN_ENABLED) {
+      throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to associate sensors with a growing world.');
+    }
+    validateSensorEnvironment(sensor.farmId, patch.environmentId ?? undefined);
+    if (patch.environmentId === null) delete sensor.environmentId;
+    else sensor.environmentId = patch.environmentId;
+    persist();
+    return structuredClone(sensor);
   },
   deleteSensor: async (id) => {
     state.sensors = state.sensors.filter((s) => s.id !== id);
@@ -429,6 +548,48 @@ export const localApi: Api = {
     sensor.lastReadingAt = reading.recordedAt;
     persist();
     return reading;
+  },
+  listObservations: async (farmId, environmentId) => {
+    if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable observations.');
+    farmOrThrow(farmId);
+    return (await getAllRecords<Observation>('observations'))
+      .filter((observation) => observation.farmId === farmId
+        && (environmentId === undefined || observation.environmentId === environmentId))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+      .map((observation) => structuredClone(observation));
+  },
+  addObservation: async (input) => {
+    if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable observations.');
+    farmOrThrow(input.farmId);
+    validateSensorEnvironment(input.farmId, input.environmentId);
+    const [observation] = canonicalizeObservations([{ ...input, id: newObservationId() }]);
+    await putRecord('observations', observation!.id, observation!);
+    return structuredClone(observation!);
+  },
+  updateObservation: async (id, patch) => {
+    if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable observations.');
+    const existing = await getRecord<Observation>('observations', id);
+    if (!existing) throw new Error(`Observation ${id} not found.`);
+    const { environmentId, growingSpaceId, levelId, ...values } = patch;
+    const cleanPatch: Partial<ObservationInput> = {
+      ...values,
+      ...(environmentId === undefined ? {} : { environmentId: environmentId ?? undefined }),
+      ...(growingSpaceId === null || levelId === null
+        ? { growingSpaceId: undefined, levelId: undefined }
+        : {
+          ...(growingSpaceId === undefined ? {} : { growingSpaceId }),
+          ...(levelId === undefined ? {} : { levelId }),
+        }),
+    };
+    const next: Observation = { ...existing, ...cleanPatch, id: existing.id, farmId: existing.farmId };
+    if (next.environmentId !== existing.environmentId) validateSensorEnvironment(next.farmId, next.environmentId);
+    const [validated] = canonicalizeObservations([next]);
+    await putRecord('observations', id, validated!);
+    return structuredClone(validated!);
+  },
+  deleteObservation: async (id) => {
+    if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable observations.');
+    await deleteRecord('observations', id);
   },
 
   // Legacy cells / NDVI
@@ -602,6 +763,10 @@ export const localApi: Api = {
   // and never throw; offline runs fall back to documented defaults.
   createSimRun: async (input) => {
     const farm = farmOrThrow(input.farmId);
+    const runStorage = await ensureLegacySimRunsMigrated();
+    if (input.soilCarryByTarget && !CAMPAIGN_ENABLED) {
+      throw new Error('Campaign features are disabled. Set VITE_FF_CAMPAIGN=true to use soil carry.');
+    }
     const site = state.sites[input.farmId];
     let environment: Environment | undefined;
     let plan: PlanState | undefined;
@@ -632,6 +797,9 @@ export const localApi: Api = {
     const assetPhysics = ASSET_PHYSICS_ENABLED && ENV_RECORDS_ENABLED && environment
       ? runAssetPhysicsSnapshot(environment, plan)
       : undefined;
+    const soilCarryByTarget = CAMPAIGN_ENABLED
+      ? soilCarryInputsForRun(input.soilCarryByTarget, environment)
+      : undefined;
     const config: RunConfig = {
       farmId: input.farmId,
       // Deep fork: a run never aliases the live plan (which keeps mutating).
@@ -652,14 +820,23 @@ export const localApi: Api = {
       tempDeltaC: input.tempDeltaC ?? preset.tempDeltaC,
       precipMultiplier: input.precipMultiplier ?? preset.precipMultiplier,
       interventions: input.interventions ?? [],
+      ...(soilCarryByTarget && Object.keys(soilCarryByTarget).length > 0
+        ? { soilCarryByTarget: structuredClone(soilCarryByTarget) }
+        : {}),
       lat: farm.lat,
       lng: farm.lng,
     };
-    const [normals, soil, monthlyDli] = await Promise.all([
+    const [normals, soil, monthlyDli, calibration] = await Promise.all([
       fetchClimateNormals(farm.lat, farm.lng),
       fetchSoilProfile(farm.lat, farm.lng),
       climateEnabled ? fetchMonthlyDli(farm.lat, farm.lng) : Promise.resolve(null),
+      TWIN_ENABLED && environment
+        ? getRecord<FarmCalibration>('calibrations', environment.id)
+        : Promise.resolve(undefined),
     ]);
+    if (calibration?.farmId === farm.id && calibration.environmentId === environment?.id) {
+      config.calibration = structuredClone(calibration);
+    }
     const envSeries = await buildEnvSeries(config.startDate, config.dayCount, {
       lat: farm.lat,
       lng: farm.lng,
@@ -673,11 +850,9 @@ export const localApi: Api = {
     // GDD pace comes from the normals over the actual window.
     const meanDailyGddC = meanDailyGddForRange(normals, config.startDate, config.dayCount);
     if (meanDailyGddC !== null) config.meanDailyGddC = meanDailyGddC;
-    const { summary } = simulateRun(
-      config,
-      envSeries,
-      { soil, crops: [...cropLibrary, ...state.customCrops] },
-    );
+    const runCtx = { soil, crops: [...cropLibrary, ...state.customCrops] };
+    config.modelInputs = freezeRunModelInputs(config, runCtx);
+    const { summary } = simulateRun(config, envSeries, runCtx);
     const record: RunRecord = {
       id: `run:${input.farmId}:${Date.now().toString(36)}`,
       farmId: input.farmId,
@@ -692,17 +867,87 @@ export const localApi: Api = {
       summary,
       status: 'complete',
     };
-    // Cap to the newest 40: each run carries a full envSeries, so an unbounded
-    // list is the main localStorage-quota driver.
-    state.simRuns = [record, ...state.simRuns].slice(0, 40);
-    persist();
+    // Cap IndexedDB to the newest 40 complete records; the environment series
+    // no longer shares the localStorage plan/settings blob.
+    await storeRunWithCap(record, runStorage);
     return record;
   },
-  listSimRuns: async (farmId) =>
-    state.simRuns.filter((r) => r.farmId === farmId).map((r) => ({ ...r })),
+  listSimRuns: async (farmId) => {
+    const mode = await ensureLegacySimRunsMigrated();
+    const runs = mode === 'indexeddb' ? await getAllRecords<RunRecord>('runs') : state.simRuns;
+    return runs
+      .filter((run) => run.farmId === farmId)
+      .sort(newestRunFirst)
+      .map((run) => structuredClone(run));
+  },
+  saveSimRun: async (run) => {
+    if (!TIMELINE_ENABLED && !(TWIN_ENABLED && (run.observations?.length ?? 0) > 0)) {
+      throw new Error('Timeline features are disabled. Set VITE_FF_TIMELINE=true to save forks or ensemble results.');
+    }
+    const mode = await ensureLegacySimRunsMigrated();
+    const saved = structuredClone(run);
+    await storeRunWithCap(saved, mode);
+    return structuredClone(saved);
+  },
   deleteSimRun: async (id) => {
-    state.simRuns = state.simRuns.filter((r) => r.id !== id);
+    const mode = await ensureLegacySimRunsMigrated();
+    if (mode === 'indexeddb') {
+      await deleteRecord('runs', id);
+      return;
+    }
+    const previous = state.simRuns;
+    state.simRuns = previous.filter((run) => run.id !== id);
     persist();
+    if (!persistNow()) {
+      state.simRuns = previous;
+      persist();
+      throw new Error('Could not delete this sim run from localStorage. The previous run list was retained.');
+    }
+  },
+
+  listSeasons: async (farmId) => {
+    if (!CAMPAIGN_ENABLED) throw new Error('Campaign features are disabled. Set VITE_FF_CAMPAIGN=true to enable seasons.');
+    return (await getAllRecords<SeasonRecord>('seasons'))
+      .filter((season) => season.farmId === farmId)
+      .map(normalizeSeasonRecord)
+      .sort((a, b) => b.year - a.year || b.updatedAt.localeCompare(a.updatedAt))
+      .map((season) => structuredClone(season));
+  },
+  saveSeason: async (season) => {
+    if (!CAMPAIGN_ENABLED) throw new Error('Campaign features are disabled. Set VITE_FF_CAMPAIGN=true to enable seasons.');
+    farmOrThrow(season.farmId);
+    const saved = structuredClone(season);
+    await putRecord('seasons', saved.id, saved);
+    return structuredClone(saved);
+  },
+  deleteSeason: async (id) => {
+    if (!CAMPAIGN_ENABLED) throw new Error('Campaign features are disabled. Set VITE_FF_CAMPAIGN=true to enable seasons.');
+    await deleteRecord('seasons', id);
+  },
+
+  listFarmCalibrations: async (farmId) => {
+    if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable calibration.');
+    farmOrThrow(farmId);
+    return (await getAllRecords<FarmCalibration>('calibrations'))
+      .filter((calibration) => calibration.farmId === farmId)
+      .sort((a, b) => a.environmentId.localeCompare(b.environmentId))
+      .map((calibration) => structuredClone(calibration));
+  },
+  saveFarmCalibration: async (calibration) => {
+    if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable calibration.');
+    farmOrThrow(calibration.farmId);
+    validateSensorEnvironment(calibration.farmId, calibration.environmentId);
+    if (calibration.version !== 'farm-calibration-v1' || !Number.isInteger(calibration.revision) || calibration.revision < 1) {
+      throw new Error('Calibration version or revision is invalid.');
+    }
+    const existing = await getRecord<FarmCalibration>('calibrations', calibration.environmentId);
+    const expectedRevision = existing ? existing.revision + 1 : 1;
+    if (calibration.revision !== expectedRevision) {
+      throw new Error(`Calibration changed since this proposal was prepared. Expected revision ${expectedRevision}.`);
+    }
+    const saved = structuredClone(calibration);
+    await putRecord('calibrations', saved.environmentId, saved);
+    return structuredClone(saved);
   },
 
   // Crops

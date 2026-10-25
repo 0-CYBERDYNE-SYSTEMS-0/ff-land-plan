@@ -1824,3 +1824,26 @@ snapshots changed, and no application implementation is claimed by this revision
   snapshot with two growing targets. Runs default to a 15-second archive/weather load on that
   network (about 15 seconds in that review); this was a measured wait, not a failure. All new
   workstream flags remain off by default.
+
+## 2026-10-24 — Core loop D/E/F integration
+
+- Added deterministic timeline seek/fork/compare and worker-backed ensemble bands; campaign
+  storage and run selection retain their frozen season inputs. Campaign previews are invalidated
+  when inputs change, overlapping run windows are rejected, and a successful save clears the
+  stale preview so next-season actions remain available.
+- Added optional Twin observation CRUD, generic wide-CSV mapping, sensor-world association,
+  observation-frozen twin copies, replay scorecards, and approval/versioning for per-world
+  calibration. `VITE_FF_TWIN` defaults off. Assimilation writes only soil moisture and biomass
+  stage; driver and yield observations remain scoring/calibration inputs. Calibration fits only
+  cover transmission from paired natural-DLI days and U value from paired air-temperature days
+  after cover transmission is known. Other climate parameters are not fitted.
+- Scorecards show only predictions the current replay model can produce; soil temperature has no
+  model prediction, and RH/VPD/CO₂/DLI predictions can be unavailable depending on run inputs.
+  CSV mapping is header/unit-guided and generic, not a vendor-certified Ecowitt or AC Infinity
+  adapter. Sensor observations are created from readings entered in the app; no vendor polling or
+  cloud API is used. The REST methods are covered by mocked fetch tests; a remote backend must
+  implement the documented routes.
+- No sim golden snapshot files changed in this integration. Verification: `npm test` passes
+  (30 files / 120 tests), `npm run typecheck` passes, and `npm run build` passes with the existing
+  Vite large-chunk advisory. `npm run check:private` passed for 443 tracked files before the
+  final exact staging pass; rerun it after staging to include newly added files.

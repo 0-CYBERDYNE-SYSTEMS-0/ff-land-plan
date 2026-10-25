@@ -11,14 +11,13 @@
 // simStateRef is the source of truth for rendering between commits.
 //
 // Determinism: replay folds stepDay over record.envSeries + record.config
-// ONLY — no live fetches inside the tick loop. The soil/crops SimRunCtx is
-// loaded once per startRun (fetchSoilProfile + apiFetch.listCrops are both
-// cached and never throw) so the replay matches the summary computed at
-// createSimRun time byte-for-byte.
+// ONLY — no live fetches inside the tick loop. New records carry their
+// model-driving soil and crop inputs; historical records still load the
+// legacy context once at start.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import type { Crop, EnvironmentLayout, GrowingTargetRef } from '@/types';
+import type { Crop, EnvironmentLayout, GrowingTargetRef, ObservationMetric } from '@/types';
 import { apiFetch } from '@/lib/api';
 import { fetchSoilProfile } from '@/lib/soil';
 import { growingTargetKey } from '@/lib/growingTargets';
@@ -28,9 +27,12 @@ import {
   gddRequiredC,
   isoDayNumber,
   isoFromDayNumber,
+  replayRunToDay,
+  replayStateCache,
   soilWaterParams,
   stepDay,
 } from '@/lib/sim';
+import { canonicalizeObservations } from '@/lib/sim/observations';
 import type {
   DailyEnvironment,
   EnvSourceTag,
@@ -68,7 +70,7 @@ export interface SimRunTimeline {
     targetLabel: string;
     allTargets?: boolean;
   }[];
-  events: { day: number; kind: string }[];
+  events: { day: number; kind: string; message: string; metric?: ObservationMetric; innovation?: number }[];
 }
 
 /** Result of authoring one intervention on the ACTIVE run. The RunInspector
@@ -441,10 +443,7 @@ export function useSimRun(opts: {
     if (!g) return;
     const runCtx = ctxRef.current ?? {};
     const n = Math.min(Math.max(0, Math.round(targetDay)), g.envSeries.length);
-    let st = createRun(g.config, runCtx);
-    for (let i = 0; i < n; i++) {
-      st = stepDay(st, g.envSeries[i]!, g.config, runCtx).state;
-    }
+    const st = replayRunToDay(g, n, runCtx);
     ghostStateRef.current = st;
     setGhostVersion((v) => v + 1);
   }, []);
@@ -457,9 +456,10 @@ export function useSimRun(opts: {
     if (!rec || !st) return false;
     const env = rec.envSeries[dayIndexRef.current];
     if (!env) return false;
-    const { state, events } = stepDay(st, env, rec.config, ctxRef.current ?? {});
+    const { state, events } = stepDay(st, env, rec.config, ctxRef.current ?? {}, rec.observations ?? []);
     simStateRef.current = state;
     dayIndexRef.current = state.dayIndex;
+    replayStateCache.set(rec.id, state.dayIndex, state);
     // Ghost lockstep (Phase 4): each primary sim-day ALSO steps the ghost one
     // day through its own config × envSeries — exactly one extra pure stepDay
     // (a season is ~ms, a day is sub-ms ⇒ real-time even at max speed). The
@@ -471,7 +471,9 @@ export function useSimRun(opts: {
       const gst = ghostStateRef.current;
       if (gst && gst.dayIndex < g.envSeries.length) {
         const genv = g.envSeries[gst.dayIndex]!;
-        ghostStateRef.current = stepDay(gst, genv, g.config, ctxRef.current ?? {}).state;
+        const nextGhostState = stepDay(gst, genv, g.config, ctxRef.current ?? {}, g.observations ?? []).state;
+        ghostStateRef.current = nextGhostState;
+        replayStateCache.set(g.id, nextGhostState.dayIndex, nextGhostState);
       }
     }
     if (events.length > 0) onEventsRef.current?.(events, state);
@@ -527,10 +529,7 @@ export function useSimRun(opts: {
       if (!rec) return;
       const runCtx = ctxRef.current ?? {};
       const n = Math.min(Math.max(0, Math.round(targetDay)), rec.envSeries.length);
-      let st = createRun(rec.config, runCtx);
-      for (let i = 0; i < n; i++) {
-        st = stepDay(st, rec.envSeries[i]!, rec.config, runCtx).state;
-      }
+      const st = replayRunToDay(rec, n, runCtx);
       simStateRef.current = st;
       dayIndexRef.current = st.dayIndex;
       accumRef.current = 0;
@@ -545,10 +544,14 @@ export function useSimRun(opts: {
   );
 
   const startRun = useCallback(
-    (rec: RunRecord) => {
+    (input: RunRecord) => {
+      const rec = input.observations === undefined
+        ? input
+        : { ...input, observations: canonicalizeObservations(input.observations) };
       stopTicking();
       loadIdRef.current += 1;
       const loadId = loadIdRef.current;
+      replayStateCache.invalidateRun(rec.id);
       recordRef.current = rec;
       setRecord(rec);
       // A new primary invalidates any ghost comparison (Phase 4): a ghost
@@ -562,19 +565,24 @@ export function useSimRun(opts: {
       simStateRef.current = null;
       dayIndexRef.current = 0;
       pendingSeekRef.current = null;
+      ctxRef.current = null;
+      setCtx(null);
       setTimeline(null);
       setDayIndex(0);
       maybeCommit(true);
-      // Replay context (soil AWC/OM + full crop list incl. custom crops) —
-      // the SAME inputs createSimRun used, so the fold matches its summary.
-      // Both calls are cached-forever + never-throw.
-      void Promise.all([
-        fetchSoilProfile(
-          rec.config.lat ?? farmCoordsRef.current?.lat ?? 0,
-          rec.config.lng ?? farmCoordsRef.current?.lng ?? 0,
-        ),
-        apiFetch.listCrops(),
-      ]).then(([soil, crops]) => {
+      // New records replay from their frozen model inputs; historical records
+      // still use the cached soil/crop lookup because they predate snapshots.
+      const modelInputs = rec.config.modelInputs;
+      const contextPromise = modelInputs
+        ? Promise.resolve({ soil: modelInputs.soil, crops: modelInputs.crops })
+        : Promise.all([
+            fetchSoilProfile(
+              rec.config.lat ?? farmCoordsRef.current?.lat ?? 0,
+              rec.config.lng ?? farmCoordsRef.current?.lng ?? 0,
+            ),
+            apiFetch.listCrops(),
+          ]).then(([soil, crops]) => ({ soil, crops }));
+      void contextPromise.then(({ soil, crops }) => {
         if (loadId !== loadIdRef.current) return; // superseded by stop/start
         const runCtx: SimRunCtx = { soil, crops };
         ctxRef.current = runCtx;
@@ -692,6 +700,7 @@ export function useSimRun(opts: {
     // byte-identically (stable sort keeps same-day insertion order fixed).
     const amended: RunRecord = {
       ...rec,
+      ensembleCache: undefined,
       config: {
         ...rec.config,
         interventions: [...rec.config.interventions, iv].sort(
@@ -700,6 +709,7 @@ export function useSimRun(opts: {
       },
     };
     const targetDay = dayIndexRef.current;
+    replayStateCache.invalidateRun(rec.id);
     recordRef.current = amended;
     setRecord(amended);
     setUnsavedChanges(true);
@@ -719,7 +729,10 @@ export function useSimRun(opts: {
    * The ghost keeps its OWN config and envSeries forever — primary
    * interventions never leak into it — and shares only the transport. */
   const loadGhost = useCallback(
-    (g: RunRecord) => {
+    (inputGhost: RunRecord) => {
+      const g = inputGhost.observations === undefined
+        ? inputGhost
+        : { ...inputGhost, observations: canonicalizeObservations(inputGhost.observations) };
       const rec = recordRef.current;
       if (!rec) return; // ghosts exist only against an active primary run
       if (g.farmId !== rec.farmId) return; // a comparison crosses runs, not farms
@@ -827,12 +840,19 @@ function buildTimeline(rec: RunRecord, ctx: SimRunCtx): SimRunTimeline {
   }
   interventions.sort((a, b) => a.day - b.day);
 
-  const events: { day: number; kind: string }[] = [];
+  const events: SimRunTimeline['events'] = [];
   let st = createRun(rec.config, ctx);
   for (let i = 0; i < days; i++) {
-    const res = stepDay(st, rec.envSeries[i]!, rec.config, ctx);
+    const res = stepDay(st, rec.envSeries[i]!, rec.config, ctx, rec.observations ?? []);
     st = res.state;
-    for (const ev of res.events) events.push({ day: ev.dayIndex, kind: ev.kind });
+    for (const ev of res.events) {
+      events.push({
+        day: ev.dayIndex,
+        kind: ev.kind,
+        message: ev.message,
+        ...(ev.kind === 'assimilated' ? { metric: ev.data.metric, innovation: ev.data.innovation } : {}),
+      });
+    }
   }
   // dayIndex here is always overridden by the live controller value at the
   // call site ({...timeline, dayIndex}); 0 keeps the initial shape honest.

@@ -18,7 +18,8 @@ import { effectivePlantingArea } from '@/lib/plan';
 import { growingTargetKey, parseTargetCellKey, targetCellKey } from '@/lib/growingTargets';
 import { effectivePhotoperiodH, environmentDay, NO_CLIMATE_EQUIPMENT, withEnvironmentClimate } from './environment-climate';
 import type { SoilProfile } from '@/lib/soil';
-import type { ArchetypeId, Crop, GrowingTargetRef } from '@/types';
+import type { ArchetypeId, Crop, GrowingTargetRef, SoilCarry } from '@/types';
+import type { Observation } from '@/types';
 import type {
   CellState,
   CellStress,
@@ -30,6 +31,7 @@ import type {
   SimEvent,
   SimState,
 } from './types';
+import { assimilateObservations, canonicalizeObservations } from './observations';
 import {
   bucketCapacityMm,
   kcForBiomass,
@@ -69,6 +71,7 @@ import {
   nitrogenNeedKgHa,
   nitrogenStress,
   stepPestPressure,
+  soilborneGrowthFactor,
   uptakeDemandKgHa,
 } from './ecosystem';
 import { isoDayNumber } from './environment';
@@ -87,6 +90,8 @@ export interface SimRunCtx {
   soil?: Pick<SoilProfile, 'awcMmPerCm' | 'organicMatterPct'> | null;
   /** Crop lookup incl. custom crops; defaults to the static library. */
   crops?: Crop[];
+  /** Legacy floor-only campaign adapter; new runs freeze soilCarryByTarget in RunConfig. */
+  carry?: SoilCarry;
 }
 
 const MOISTURE_INIT = 0.7; // documented v1 start: a wet-but-not-saturated bucket
@@ -108,15 +113,16 @@ function displayCell(key: string): string {
 function initialCell(
   cropId: number,
   plantedAtDay: number,
-  ctx: SimRunCtx,
+  soil: SimRunCtx['soil'],
   target?: GrowingTargetRef,
+  carry?: SoilCarry,
 ): CellState {
   return {
     cropId,
     plantedAtDay,
     ...(target && target.kind !== 'floor' ? { target } : {}),
     moistureFrac: MOISTURE_INIT,
-    nitrogenKgHa: initialNitrogenKgHa(ctx.soil?.organicMatterPct),
+    nitrogenKgHa: initialNitrogenKgHa(carry?.organicMatterPct ?? soil?.organicMatterPct, carry?.nPoolKgHa),
     gddAccumC: 0,
     biomassFrac: 0,
     stage: 0,
@@ -129,9 +135,27 @@ function initialCell(
   };
 }
 
-function cropMapOf(ctx: SimRunCtx): Map<number, Crop> {
+function soilFor(config: RunConfig, ctx: SimRunCtx): SimRunCtx['soil'] {
+  return config.modelInputs ? config.modelInputs.soil : ctx.soil;
+}
+
+function carryForTarget(
+  config: RunConfig,
+  ctx: SimRunCtx,
+  target: GrowingTargetRef = FLOOR_TARGET,
+): SoilCarry | undefined {
+  if (target.kind === 'growing-level') {
+    const space = config.environment?.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+    if (!space || space.kind === 'hydro') return undefined;
+  }
+  return config.soilCarryByTarget?.[growingTargetKey(target)]
+    ?? (target.kind === 'floor' ? ctx.carry : undefined);
+}
+
+function cropMapOf(config: RunConfig, ctx: SimRunCtx): Map<number, Crop> {
   const map = new Map<number, Crop>();
-  for (const c of ctx.crops ?? cropLibrary) map.set(c.id, c);
+  const crops = config.modelInputs?.crops ?? ctx.crops ?? cropLibrary;
+  for (const c of crops) map.set(c.id, c);
   return map;
 }
 
@@ -198,6 +222,10 @@ function climateInputsFor(
     leafAreaM2 += cover * cellArea;
   }
   const roomEquipment = config.climateEquipment ?? NO_CLIMATE_EQUIPMENT;
+  const calibration = config.calibration?.farmId === config.farmId
+    && config.calibration.environmentId === environment.id
+    ? config.calibration.parameters
+    : undefined;
   const climate = environmentDay(
     environment,
     {
@@ -208,7 +236,11 @@ function climateInputsFor(
     },
     roomEquipment,
     state.climate,
-    { transpirationKgDay, leafAreaIndex: leafAreaM2 / floorArea },
+    {
+      transpirationKgDay,
+      leafAreaIndex: leafAreaM2 / floorArea,
+      ...(calibration ? { modelOverrides: calibration } : {}),
+    },
   );
   return { env: withEnvironmentClimate(env, climate, modelArchetype), climate };
 }
@@ -222,6 +254,16 @@ function hydroCellsForRun(config: RunConfig, key: string): { required: boolean; 
   const covered = model.soillessCells[targetKey]?.includes(localKey) ?? false;
   const required = covered || (model.hydroRequiredCells[targetKey]?.includes(localKey) ?? false);
   return { required, covered };
+}
+
+function carryForCell(
+  config: RunConfig,
+  ctx: SimRunCtx,
+  target: GrowingTargetRef,
+  localCellKey: string,
+): SoilCarry | undefined {
+  if (hydroCellsForRun(config, targetCellKey(target, localCellKey)).required) return undefined;
+  return carryForTarget(config, ctx, target);
 }
 
 function targetDliForCell(
@@ -248,8 +290,15 @@ function targetDliForCell(
     .slice()
     .sort((a, b) => b.elevationM - a.elevationM || a.id.localeCompare(b.id))[0];
   const levelGetsNaturalLight = target.kind === 'floor' || targetLevel?.id === topLevel?.id;
+  const fittedCoverTransmission = config.calibration?.farmId === config.farmId
+    && config.calibration.environmentId === environment.id
+    ? config.calibration.parameters.coverTransmission
+    : undefined;
+  const coverTransmission = fittedCoverTransmission !== undefined && Number.isFinite(fittedCoverTransmission)
+    ? Math.min(1, Math.max(0, fittedCoverTransmission))
+    : archetype.coverTransmission;
   const naturalDli = naturalAvailable && levelGetsNaturalLight && archetype.dliMode !== 'supplement-only'
-    ? outdoor.dliNaturalMol! * archetype.coverTransmission
+    ? outdoor.dliNaturalMol! * coverTransmission
     : 0;
   const installedLight = equipment.ppfdUmol > 0 && photoperiodH > 0;
   if (!naturalAvailable && archetype.dliMode !== 'supplement-only' && !installedLight) return undefined;
@@ -265,13 +314,20 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
   const start = isoDayNumber(config.startDate);
   const planting = config.basePlan.planting ?? {};
   const plantedAt = config.basePlan.plantedAt ?? {};
-  const cropMap = cropMapOf(ctx);
+  const cropMap = cropMapOf(config, ctx);
+  const soil = soilFor(config, ctx);
   const cropGet = (id: number) => cropMap.get(id);
   const cells: Record<string, CellState> = {};
   for (const key of Object.keys(planting)) {
     const iso = plantedAt[key];
     const offset = iso !== undefined ? isoDayNumber(iso) - start : 0;
-    cells[key] = initialCell(planting[key], Math.max(0, offset), ctx);
+    cells[key] = initialCell(
+      planting[key],
+      Math.max(0, offset),
+      soil,
+      FLOOR_TARGET,
+      carryForCell(config, ctx, FLOOR_TARGET, key),
+    );
   }
   for (const targetPlan of Object.values(config.basePlan.targets ?? {})) {
     const target: GrowingTargetRef = {
@@ -282,7 +338,13 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
     for (const key of Object.keys(targetPlan.planting)) {
       const iso = targetPlan.plantedAt?.[key];
       const offset = iso !== undefined ? isoDayNumber(iso) - start : 0;
-      cells[targetCellKey(target, key)] = initialCell(targetPlan.planting[key]!, Math.max(0, offset), ctx, target);
+      cells[targetCellKey(target, key)] = initialCell(
+        targetPlan.planting[key]!,
+        Math.max(0, offset),
+        soil,
+        target,
+        carryForCell(config, ctx, target, key),
+      );
     }
   }
   const archetype = config.environment?.archetype
@@ -410,13 +472,17 @@ export function stepDay(
   env: DailyEnvironment,
   config: RunConfig,
   ctx: SimRunCtx = {},
+  observations: readonly Observation[] = [],
 ): { state: SimState; events: SimEvent[]; dayStats: DayStats; effectiveEnv: DailyEnvironment } {
   const dayIndex = state.dayIndex;
   const date = env.date;
-  const crops = cropMapOf(ctx);
-  const params = soilWaterParams(ctx.soil?.awcMmPerCm);
+  const crops = cropMapOf(config, ctx);
+  const assimilation = assimilateObservations(state, config, observations, date, [...crops.values()]);
+  state = assimilation.state;
+  const soil = soilFor(config, ctx);
+  const params = soilWaterParams(soil?.awcMmPerCm);
   const capacity = bucketCapacityMm(params);
-  const events: SimEvent[] = [];
+  const events: SimEvent[] = [...assimilation.events];
 
   const todays = config.interventions.length
     ? config.interventions.filter((iv) => iv.kind !== 'weather' && iv.date === date)
@@ -469,10 +535,6 @@ export function stepDay(
   // intervention adds a cell (O(cells × 24), rare).
   let neighbors = state.neighbors;
   const cropGet = (id: number) => crops.get(id);
-  // Run-constant OM-derived pool reference driving the daily mineralization
-  // trickle (see ecosystem.mineralizationKgHa).
-  const omRef = initialNitrogenKgHa(ctx.soil?.organicMatterPct);
-
   // Interventions first: plants/harvests/fertilizer/irrigation targets resolve
   // against the post-plant cell set.
   for (const iv of todays) {
@@ -482,7 +544,14 @@ export function stepDay(
         const existing = cells[cellKey];
         if (existing) updateHarvestGroup(existing.cropId, cellKey, -1);
         ownCells();
-        cells[cellKey] = initialCell(iv.cropId, dayIndex, ctx, iv.target);
+        const target = iv.target ?? FLOOR_TARGET;
+        cells[cellKey] = initialCell(
+          iv.cropId,
+          dayIndex,
+          soil,
+          target,
+          carryForCell(config, ctx, target, iv.cell),
+        );
         updateHarvestGroup(iv.cropId, cellKey, 1);
         neighbors = buildNeighborCache(cells, cropGet);
         events.push({
@@ -678,6 +747,8 @@ export function stepDay(
     const prev = cells[key]!;
     const crop = crops.get(prev.cropId);
     const hydro = hydroCellsForRun(config, key);
+    const target = parseTargetCellKey(key).target;
+    const carry = hydro.required ? undefined : carryForTarget(config, ctx, target);
     const hydroAvailable = hydro.required && hydro.covered
       && ((waterStoreL ?? 0) > 0 || waterSuppliedToday.has(key));
     const kc = kcForBiomass(prev.biomassFrac);
@@ -706,6 +777,7 @@ export function stepDay(
     // --- Nitrogen pool (Phase 3): mineralize always, uptake + stress while
     // the crop is growing, leach on heavy water-input days (rain + irrigation).
     const tMeanC = (env2.tMinC + env2.tMaxC) / 2;
+    const omRef = initialNitrogenKgHa(carry?.organicMatterPct ?? soil?.organicMatterPct);
     let nitrogenKgHa = r2(prev.nitrogenKgHa + mineralizationKgHa(omRef, tMeanC));
     let nitrogen = 0;
     let required = 0;
@@ -751,7 +823,11 @@ export function stepDay(
         1,
         Math.max(water, heat, cold, nitrogen, light ?? 0) + antagonistStressAdd(nb),
       );
-      gddAccumC = r2(prev.gddAccumC + gddGain(env2, maxStress, companionRateBonus(nb)));
+      const dailyGdd = gddGain(env2, maxStress, companionRateBonus(nb));
+      const soilborneFactor = carry
+        ? soilborneGrowthFactor(crop.family, carry.inoculum, dayIndex - prev.plantedAtDay, prev.biomassFrac)
+        : 1;
+      gddAccumC = r2(prev.gddAccumC + dailyGdd * soilborneFactor);
       biomassFrac = r4(biomassFromGdd(gddAccumC, required));
       stage = stageForBiomass(biomassFrac);
       floweringFrac = r4(floweringForBiomass(biomassFrac));
@@ -969,7 +1045,9 @@ export function simulateRun(
   config: RunConfig,
   envSeries: readonly DailyEnvironment[],
   ctx: SimRunCtx = {},
+  observations: readonly Observation[] = [],
 ): SimulateResult {
+  const frozenObservations = canonicalizeObservations(observations);
   let st = createRun(config, ctx);
   let rainMm = 0;
   let etoMm = 0;
@@ -985,7 +1063,7 @@ export function simulateRun(
   const eventCounts = new Map<string, number>();
 
   for (const env of envSeries) {
-    const res = stepDay(st, env, config, ctx);
+    const res = stepDay(st, env, config, ctx, frozenObservations);
     st = res.state;
     // Summary rain/ET reflect the world the run lives in: the effective env
     // (an enclosed run reports 0 rain, attenuated ET0).

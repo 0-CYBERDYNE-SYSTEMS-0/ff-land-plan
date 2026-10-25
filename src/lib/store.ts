@@ -1,7 +1,7 @@
-// Persistent app store. All user data lives in one localStorage blob
-// (`ff-pro:v1`), loaded synchronously at boot and written debounced. Plans are
-// sparse maps, so even max-size plots serialize small. Quota errors degrade to
-// in-memory with a console warning instead of crashing autosave.
+// Persistent app store. Plans, settings and small records live in one
+// localStorage blob (`ff-pro:v1`), loaded synchronously at boot and written
+// debounced. Large sim runs migrate to IndexedDB before their local copies are
+// removed.
 
 import type {
   Crop,
@@ -15,8 +15,9 @@ import type {
   Simulation,
 } from '@/types';
 import type { RunRecord } from '@/lib/sim/types';
+import { dispatchStorageFailed, getAllRecords, getRecord, putRecordIfAbsent } from '@/lib/db';
 import { legacyPlanForEnvironment, migrateEnvironmentStore, siteFromLegacyPlans } from '@/lib/environment-model';
-import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { CAMPAIGN_ENABLED, ENV_RECORDS_ENABLED, TIMELINE_ENABLED, TWIN_ENABLED } from '@/lib/featureFlags';
 import {
   seedCells,
   seedFarms,
@@ -29,6 +30,15 @@ import {
 import { estimateFrostDates } from '@/lib/frost';
 
 const STORAGE_KEY = 'ff-pro:v1';
+const RUN_MIGRATION_KEY = 'ff-pro:idb-runs-authoritative:v1';
+
+function indexedDbRunsAreAuthoritative(): boolean {
+  try {
+    return localStorage.getItem(RUN_MIGRATION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export interface AppState {
   version?: 2;
@@ -138,7 +148,7 @@ function load(): AppState {
 
     // Sim runs are additive user data (never seeded): keep the stored list
     // as-is; missing/corrupt key degrades to empty.
-    merged.simRuns = parsed.simRuns ?? [];
+    merged.simRuns = indexedDbRunsAreAuthoritative() ? [] : parsed.simRuns ?? [];
 
     // Keep the farm-id counter ahead of every present farm so it can never
     // collide with the seed range or itself.
@@ -161,29 +171,96 @@ function load(): AppState {
 
 export const state: AppState = load();
 
+export type SimRunStorageMode = 'indexeddb' | 'localstorage';
+
+let simRunMigration: Promise<SimRunStorageMode> | null = null;
+
+function sameRecord(a: RunRecord, b: RunRecord): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+async function migrateLegacySimRuns(): Promise<SimRunStorageMode> {
+  if (indexedDbRunsAreAuthoritative()) {
+    state.simRuns = [];
+    return 'indexeddb';
+  }
+
+  const migrationEnabled = TIMELINE_ENABLED || CAMPAIGN_ENABLED || TWIN_ENABLED;
+  let existingRuns: RunRecord[];
+  try {
+    existingRuns = await getAllRecords<RunRecord>('runs');
+  } catch (error) {
+    if (!migrationEnabled) return 'localstorage';
+    throw error;
+  }
+  if (!migrationEnabled && existingRuns.length === 0) return 'localstorage';
+
+  const legacyRuns = structuredClone(state.simRuns);
+
+  const uniqueRuns = new Map<string, RunRecord>();
+  for (const run of legacyRuns) {
+    const existing = uniqueRuns.get(run.id);
+    if (existing && !sameRecord(existing, run)) {
+      const error = new Error(`Legacy sim runs contain conflicting records for ${run.id}.`);
+      dispatchStorageFailed('IndexedDB legacy run migration', error);
+      throw error;
+    }
+    uniqueRuns.set(run.id, run);
+  }
+
+  for (const run of uniqueRuns.values()) {
+    await putRecordIfAbsent('runs', run.id, run);
+  }
+
+  for (const [id, expected] of uniqueRuns) {
+    const stored = await getRecord<RunRecord>('runs', id);
+    if (!stored || !sameRecord(stored, expected)) {
+      const error = new Error(`Could not verify migrated sim run ${id}; the local copy was kept.`);
+      dispatchStorageFailed('IndexedDB legacy run migration', error);
+      throw error;
+    }
+  }
+
+  try {
+    localStorage.setItem(RUN_MIGRATION_KEY, '1');
+  } catch (error) {
+    dispatchStorageFailed('localStorage run-migration marker', error);
+    throw error;
+  }
+
+  state.simRuns = [];
+  persist();
+  persistNow();
+  return 'indexeddb';
+}
+
+/** Select one durable run store, migrating before IndexedDB becomes authoritative. */
+export function ensureLegacySimRunsMigrated(): Promise<SimRunStorageMode> {
+  simRunMigration ??= migrateLegacySimRuns();
+  return simRunMigration;
+}
+
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
-let warnedQuota = false;
 let dirty = false;
 
-function flush(): void {
+function flush(): boolean {
   if (writeTimer) {
     clearTimeout(writeTimer);
     writeTimer = null;
   }
-  if (!dirty) return; // nothing changed since the last committed write
+  if (!dirty) return true; // nothing changed since the last committed write
   try {
     // ONE atomic setItem of ONE snapshot key — never clear+write or split
     // across keys: a partially-applied commit is how storage ends up
     // re-seeding over user data (dogfood CRIT-001 evidence).
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     dirty = false;
+    return true;
   } catch (err) {
     // Leave `dirty` set: a transient quota failure (e.g. a same-origin tab
     // momentarily filling storage) gets retried on the next flush.
-    if (!warnedQuota) {
-      warnedQuota = true;
-      console.warn('FarmFriend: localStorage write failed; changes are in-memory only.', err);
-    }
+    dispatchStorageFailed('localStorage persist', err);
+    return false;
   }
 }
 
@@ -193,8 +270,8 @@ export function persist(): void {
   writeTimer = setTimeout(flush, 500);
 }
 
-export function persistNow(): void {
-  flush();
+export function persistNow(): boolean {
+  return flush();
 }
 
 // Flush pending writes when the tab is hidden or closing. pagehide/beforeunload

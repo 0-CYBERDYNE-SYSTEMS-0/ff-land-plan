@@ -19,6 +19,7 @@ import type { DailyEnvironment } from '@/lib/sim/types';
 import type { CellState } from '@/lib/sim/types';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
 import type { ArchetypeId, Environment, GrowingTargetRef, PlanState, PlanSurface, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
+import { compareRuns as compareRunSummaries } from '@/lib/sim';
 import type { RunRecord, SimEvent, SimState } from '@/lib/sim';
 import {
   buildCellDiagnostics,
@@ -50,7 +51,7 @@ import { buildWaterPlanes, disposeWaterPlanes, updateWaterPlanes, type WaterPlan
 import { createGrowthFX, type GrowthFX } from '@/three/growth-fx';
 import { createPerfHUD, type PerfHUD } from '@/three/perf';
 import { createWeatherFX, type WeatherFX } from '@/three/weather-fx';
-import { formatTimeOfDay, MOISTURE_BANDS, SimDrawer, type CropProgressRow, type ClimateBaselineInfo } from './SimDrawer';
+import { formatTimeOfDay, MOISTURE_BANDS, SimDrawer, type CropProgressRow, type ClimateBaselineInfo, type RunEnsemblePanelState } from './SimDrawer';
 
 /** Provenance tag for the growth model's baseline temperature (spec §3.3:
  * every number traces to its source). */
@@ -437,6 +438,11 @@ interface World3DProps {
   /** Other runs of this farm offered as ghost comparisons (Phase 4); the
    * active primary is filtered out before the picker renders. */
   compareRuns?: RunRecord[];
+  onSaveFork?: () => void;
+  forkSaving?: boolean;
+  runEnsemble?: RunEnsemblePanelState;
+  onCalculateEnsemble?: () => void;
+  onCancelEnsemble?: () => void;
   /** Outbound notable-event sink (harvest-ready → celebrate). PlotDesigner
    * owns the ref; useSimRun fires it per stepped day. */
   runEventsRef?: { current: ((events: SimEvent[], state: SimState) => void) | null };
@@ -562,7 +568,7 @@ interface PointerHandlers {
   leave: () => void;
 }
 
-export default function World3D({ editor, cinema = false, onToggleCinema, simRun = null, compareRuns, runEventsRef }: World3DProps) {
+export default function World3D({ editor, cinema = false, onToggleCinema, simRun = null, compareRuns, onSaveFork, forkSaving, runEnsemble, onCalculateEnsemble, onCancelEnsemble, runEventsRef }: World3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const groundBatchesRef = useRef<GroundBatch[]>([]);
@@ -2522,6 +2528,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         showMoisture={showMoisture}
         onToggleMoisture={runActive ? setShowMoisture : undefined}
         runUnsaved={simRun?.unsavedChanges ?? false}
+        onSaveFork={onSaveFork}
+        forkSaving={forkSaving}
+        runComparison={simRun?.record && simRun.ghostRecord ? compareRunSummaries(simRun.record, simRun.ghostRecord) : undefined}
+        runEnsemble={runEnsemble}
+        onCalculateEnsemble={onCalculateEnsemble}
+        onCancelEnsemble={onCancelEnsemble}
         onAddIntervention={
           runActive
             ? (iv) => {

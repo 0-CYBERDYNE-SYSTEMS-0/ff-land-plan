@@ -6,7 +6,8 @@ import { assetBySlug, assetLibrary } from '@/data/assets';
 import { apiFetch } from '@/lib/api';
 import { archetypes, LEGACY_SURFACE_FOR_ARCHETYPE, planningProfiles } from '@/creative/archetypes';
 import type { GardenTemplate } from '@/data/templates';
-import { ASSET_PHYSICS_ENABLED, ENV_CLIMATE_ENABLED, ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { ASSET_PHYSICS_ENABLED, CAMPAIGN_ENABLED, ENV_CLIMATE_ENABLED, ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { clearEnvironmentPlanting } from '@/lib/campaign';
 import { layoutWithinBounds } from './layoutEditing';
 import {
   canPlantAt,
@@ -1638,6 +1639,52 @@ export function usePlanEditor(farmId: number) {
     });
   }, [commitEnvironment, flushAutosave]);
 
+  const startNextPlan = useCallback(async (environmentIds: string[]) => {
+    if (!CAMPAIGN_ENABLED) throw new Error('Campaign features are disabled.');
+    finishStroke();
+    await environmentMutationRef.current?.catch(() => undefined);
+    await flushAutosave();
+
+    if (scopeRef.current.kind === 'legacy' && environmentIds.length === 0) {
+      const current = planRef.current;
+      if (!current) throw new Error('There is no plan to clear.');
+      const next = { ...clonePlan(current), planting: {} };
+      delete next.plantedAt;
+      delete next.targets;
+      replacePlan(next, { save: true, recordHistory: clonePlan(current) });
+      await flushAutosave();
+      return;
+    }
+
+    const site = siteRef.current;
+    const selectedIds = new Set(environmentIds);
+    if (!site || selectedIds.size === 0) throw new Error('This season has no saved growing-world plans to clear.');
+    if ([...selectedIds].some((id) => !site.environments.some((environment) => environment.id === id))) {
+      throw new Error('A growing world from this season is no longer on the site.');
+    }
+
+    const activeEnvironmentId = environmentRef.current?.id;
+    const cleared = await commitSite({
+      ...site,
+      environments: site.environments.map((environment) => selectedIds.has(environment.id)
+        ? clearEnvironmentPlanting(environment)
+        : environment),
+    });
+    const active = activeEnvironmentId
+      ? cleared.environments.find((environment) => environment.id === activeEnvironmentId)
+      : undefined;
+    if (active) {
+      environmentRef.current = cloneEnvironment(active);
+      setEnvironment(cloneEnvironment(active));
+      canonicalPlanRef.current = clonePlan(active.plan);
+      planRef.current = clonePlan(planForTarget(active.plan, activeTargetRef.current));
+      updateStats(planRef.current);
+      setPlanVersion((version) => version + 1);
+    }
+    setSelectedKey(null);
+    setPendingFill(null);
+  }, [commitSite, finishStroke, flushAutosave, replacePlan, updateStats]);
+
   const commitExternalEnvironmentMutation = useCallback(async (before: Environment, target: GrowingTargetRef) => {
     const current = environmentRef.current;
     if (!current || current.id !== before.id || JSON.stringify(current) === JSON.stringify(before)) return;
@@ -2622,6 +2669,7 @@ export function usePlanEditor(farmId: number) {
     removeGrowingSpace,
     removeEquipmentInstance,
     updateEnvironmentSetpoints,
+    startNextPlan,
     commitExternalEnvironmentMutation,
     createWorld,
     moveWorld,

@@ -1,7 +1,8 @@
 import { X } from 'lucide-react';
 import { SCENARIOS } from '@/lib/growth';
+import { TIMELINE_ENABLED } from '@/lib/featureFlags';
 import type { ScenarioType, WeatherCurrent } from '@/types';
-import type { DailyEnvironment, EnvSourceTag, Intervention } from '@/lib/sim';
+import type { ComparisonMetric, DailyEnvironment, EnsembleBand, EnvSourceTag, Intervention, RunComparison, RunEnsembleResult } from '@/lib/sim';
 import type { ApplyInterventionResult, CellDiagnosticRow, SimRunTimeline } from '@/hooks/useSimRun';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,6 +40,7 @@ export const MOISTURE_BANDS: { maxFrac: number; color: string; label: string }[]
 /** Short provenance labels for environment source tags (chip pattern). */
 const TAG_LABEL: Record<EnvSourceTag, string> = {
   'open-meteo-archive': 'ERA5 archive',
+  'nasa-power': 'NASA POWER',
   'open-meteo-forecast': 'forecast',
   'era5-normals': 'ERA5 normals',
   'model-estimate': 'estimate',
@@ -48,6 +50,7 @@ const TAG_LABEL: Record<EnvSourceTag, string> = {
 
 const TAG_TITLE: Record<EnvSourceTag, string> = {
   'open-meteo-archive': 'Observed ERA5 reanalysis value (Open-Meteo archive)',
+  'nasa-power': 'NASA POWER daily temperature or precipitation input',
   'open-meteo-forecast': 'Forecast-backed day',
   'era5-normals': 'Synthesized from ERA5 climate normals (monthly means)',
   'model-estimate': 'Documented v1 proxy formula',
@@ -67,6 +70,128 @@ function SourceTag({ tag }: { tag: EnvSourceTag }) {
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
+
+export interface RunEnsemblePanelState {
+  status: 'idle' | 'loading-weather' | 'running' | 'saving' | 'ready' | 'unavailable' | 'error' | 'cancelled';
+  completed: number;
+  total: number;
+  message?: string;
+  result?: RunEnsembleResult;
+  persisted?: boolean;
+}
+
+function signedDelta(metric: ComparisonMetric, unit: string, digits = 1): string {
+  if (metric.delta === null) return 'Unavailable';
+  const sign = metric.delta > 0 ? '+' : '';
+  return `${sign}${metric.delta.toFixed(digits)} ${unit}`;
+}
+
+function EnsembleBandMetric({ label, band, unit, digits = 1 }: {
+  label: string;
+  band: EnsembleBand;
+  unit: string;
+  digits?: number;
+}) {
+  if (band.samples < 3) {
+    return (
+      <div className="rounded bg-muted/50 px-2 py-1">
+        <div className="text-[10px] text-muted-foreground">{label}</div>
+        <div className="mt-1 text-[9px] text-muted-foreground">Fewer than 3 values · n={band.samples}</div>
+      </div>
+    );
+  }
+  const fmt = (value: number | null) => value === null ? '—' : value.toFixed(digits);
+  const marker = band.p10 === null || band.p50 === null || band.p90 === null || band.p10 === band.p90
+    ? 50
+    : Math.min(100, Math.max(0, ((band.p50 - band.p10) / (band.p90 - band.p10)) * 100));
+  const bandLabel = `p10 ${fmt(band.p10)} to p90 ${fmt(band.p90)} ${unit}; p50 ${fmt(band.p50)} ${unit}`;
+  return (
+    <div className="rounded bg-muted/50 px-2 py-1">
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="mt-1 flex items-center gap-1 text-[9px] tabular-nums">
+        <span>p10 {fmt(band.p10)}</span>
+        <div className="relative h-1.5 min-w-0 flex-1 rounded-full bg-muted" role="img" aria-label={bandLabel}>
+          <span className="absolute inset-0 rounded-full bg-primary/30" />
+          <span className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-primary" style={{ left: `${marker}%` }} />
+        </div>
+        <span>p90 {fmt(band.p90)} {unit} · n={band.samples}</span>
+      </div>
+      <div className="text-[9px] text-muted-foreground">p50 {fmt(band.p50)} {unit}</div>
+    </div>
+  );
+}
+
+function EnsemblePanel({ state, onRun, onCancel }: { state?: RunEnsemblePanelState; onRun?: () => void; onCancel?: () => void }) {
+  if (!onRun) return null;
+  const status = state?.status ?? 'idle';
+  const busy = status === 'loading-weather' || status === 'running' || status === 'saving';
+  const result = state?.result;
+  const progressPct = state?.total ? Math.min(100, Math.round((state.completed / state.total) * 100)) : 0;
+  const source = result?.source === 'era5' ? 'ERA5 archive' : result?.source === 'nasa-power' ? 'NASA POWER' : null;
+
+  return (
+    <div className="mt-3 border-t border-primary/20 pt-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-foreground/80">Historical range</span>
+        <span className="flex items-center gap-1">
+          {busy && status !== 'saving' && onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-destructive"
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRun}
+            disabled={busy}
+            className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground disabled:opacity-50"
+          >
+            {busy ? 'Working…' : result ? 'Recalculate' : 'Calculate'}
+          </button>
+        </span>
+      </div>
+      {status === 'loading-weather' && <p className="mt-1 text-[10px] text-muted-foreground">Loading historical weather…</p>}
+      {status === 'running' && (
+        <div className="mt-1" role="progressbar" aria-label="Historical ensemble progress" aria-valuemin={0} aria-valuemax={state?.total ?? 0} aria-valuenow={state?.completed ?? 0}>
+          <div className="h-1.5 overflow-hidden rounded bg-muted">
+            <div className="h-full bg-primary transition-[width]" style={{ width: `${progressPct}%` }} />
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">Year {state?.completed ?? 0} of {state?.total ?? 0}</p>
+        </div>
+      )}
+      {status === 'saving' && <p className="mt-1 text-[10px] text-muted-foreground">Saving range with this run…</p>}
+      {status === 'cancelled' && <p role="status" className="mt-1 text-[10px] text-muted-foreground">Historical calculation cancelled.</p>}
+      {(status === 'unavailable' || status === 'error') && (
+        <p role="status" className="mt-1 text-[10px] text-muted-foreground">
+          {state?.message ?? (status === 'error' ? 'Could not calculate the historical range.' : 'Fewer than three complete historical windows are available.')}
+        </p>
+      )}
+      {result && (
+        <>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <EnsembleBandMetric label="Yield" band={result.totalYieldKg} unit="kg" />
+            <EnsembleBandMetric label="Harvest-ready day" band={result.harvestReadyDay} unit="days" digits={0} />
+            <EnsembleBandMetric label="Water use" band={result.waterUseMm} unit="mm" />
+          </div>
+          <p className="mt-1 text-[9px] leading-snug text-muted-foreground">
+            p50 is the typical year. The p10–p90 band covers {result.years.length} historical weather years under the same management; this is not a forecast. Source: {source}.
+          </p>
+          {result.limitations && result.limitations.length > 0 && (
+            <ul className="mt-1 list-disc space-y-0.5 pl-3 text-[9px] leading-snug text-muted-foreground">
+              {result.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
+            </ul>
+          )}
+          {state?.persisted === false && (
+            <p className="mt-1 text-[9px] text-amber-700 dark:text-amber-300">Session-only while run changes are unsaved. Save as a fork to preserve the run; calculate again to store its range.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 // --- In-world intervention authoring (spec §3.2/§3.3, presentational) ------
 // All form state is UNCONTROLLED DOM state (FormData at submit time); the
@@ -158,8 +283,14 @@ export interface SimDrawerProps {
   showMoisture?: boolean;
   onToggleMoisture?: (v: boolean) => void;
   /** True when the in-session amended config diverges from the stored
-   * RunRecord (authoring is session-only; save-as-new is a follow-up seam). */
+   * RunRecord; it can be promoted into a saved fork while timeline is enabled. */
   runUnsaved?: boolean;
+  onSaveFork?: () => void;
+  forkSaving?: boolean;
+  runComparison?: RunComparison;
+  runEnsemble?: RunEnsemblePanelState;
+  onCalculateEnsemble?: () => void;
+  onCancelEnsemble?: () => void;
   /** Author an intervention on the active run — present only in run mode;
    * the whole Interventions section renders only when set. Returns the
    * controller's verdict so the form can flash a confirmation or reason. */
@@ -267,6 +398,12 @@ export function SimDrawer({
   showMoisture,
   onToggleMoisture,
   runUnsaved,
+  onSaveFork,
+  forkSaving,
+  runComparison,
+  runEnsemble,
+  onCalculateEnsemble,
+  onCancelEnsemble,
   onAddIntervention,
   compareRuns,
   ghostLabel,
@@ -283,6 +420,7 @@ export function SimDrawer({
   const eventDots = (runTimeline?.events ?? []).filter(
     (e) => e.kind === 'stress-onset' || e.kind === 'harvest-ready',
   );
+  const assimilationEvents = (runTimeline?.events ?? []).filter((event) => event.kind === 'assimilated');
 
   // Intervention form season bounds: in run mode `scrubDate` IS the current
   // sim date (World3D passes runDateISO), so the season starts dayIndex days
@@ -431,6 +569,23 @@ export function SimDrawer({
                   ))}
                 </div>
               </div>
+              {assimilationEvents.length > 0 && (
+                <details className="mt-2 rounded-md border border-border/70 bg-muted/30 px-2 py-1.5">
+                  <summary className="cursor-pointer text-[10px] font-medium text-foreground/80">
+                    Observation corrections · {assimilationEvents.length}
+                  </summary>
+                  <p className="mt-1 text-[9px] text-muted-foreground">Innovation = observation minus the model before correction.</p>
+                  <ul className="mt-1 max-h-28 space-y-1 overflow-y-auto text-[10px]">
+                    {assimilationEvents.slice(-8).reverse().map((event, index) => (
+                      <li key={`${event.day}:${event.metric ?? 'observation'}:${index}`} className="border-t border-border/50 pt-1">
+                        <span className="font-medium">Day {event.day + 1} · {(event.metric ?? 'measurement').replace(/([A-Z])/g, ' $1').toLowerCase()}</span>
+                        {event.innovation !== undefined && <span className="ml-1 text-muted-foreground tabular-nums">innovation {event.innovation > 0 ? '+' : ''}{event.innovation.toFixed(3)}</span>}
+                        <span className="block text-[9px] text-muted-foreground">{event.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
               <div className="mt-1.5 flex items-center gap-2">
                 <span id="ff-run-speed-label" className="shrink-0 text-xs text-muted-foreground">
                   Speed
@@ -509,6 +664,28 @@ export function SimDrawer({
                         solid = {runLabel ?? 'primary run'} · ghost = {ghostLabel}
                         {ghostCapped && ' · ghost season ended'}
                       </p>
+                      {TIMELINE_ENABLED && runComparison && (
+                        <div className="mt-2 rounded-md bg-muted/50 p-2" title={`${runComparison.b.label} minus ${runComparison.a.label}`}>
+                          <div className="mb-1 text-[10px] font-medium text-foreground/80">Delta · B − A ({runComparison.b.label} − {runComparison.a.label})</div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                            <span className="text-muted-foreground">Yield</span><span className="text-right tabular-nums">{signedDelta(runComparison.totalYieldKg, 'kg')}</span>
+                            <span className="text-muted-foreground">Water</span><span className="text-right tabular-nums">{signedDelta(runComparison.waterUseMm, 'mm')}</span>
+                            <span className="text-muted-foreground">Stress cell-days</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressCellDays, 'days', 0)}</span>
+                            <span className="text-muted-foreground">Harvest-ready day</span><span className="text-right tabular-nums">{signedDelta(runComparison.harvestReadyDay, 'days', 0)}</span>
+                            <span className="text-muted-foreground">Outbreak days</span><span className="text-right tabular-nums">{signedDelta(runComparison.outbreakDays, 'days', 0)}</span>
+                          </div>
+                          <details className="mt-1 border-t border-border/60 pt-1">
+                            <summary className="cursor-pointer text-[9px] font-medium text-muted-foreground">Stress by cause · B − A</summary>
+                            <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
+                              <span className="text-muted-foreground">Water</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.water, 'cell-days', 0)}</span>
+                              <span className="text-muted-foreground">Heat</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.heat, 'cell-days', 0)}</span>
+                              <span className="text-muted-foreground">Cold</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.cold, 'cell-days', 0)}</span>
+                              <span className="text-muted-foreground">Nitrogen</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.nitrogen, 'cell-days', 0)}</span>
+                              <span className="text-muted-foreground">Light</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.light, 'cell-days', 0)}</span>
+                            </div>
+                          </details>
+                        </div>
+                      )}
                     </div>
                   ) : compareRuns && compareRuns.length > 0 ? (
                     // Native select (the drawer's uncontrolled-form pattern):
@@ -539,6 +716,9 @@ export function SimDrawer({
                   )}
                 </div>
               )}
+              {runTimeline && TIMELINE_ENABLED && (
+                <EnsemblePanel state={runEnsemble} onRun={onCalculateEnsemble} onCancel={onCancelEnsemble} />
+              )}
               {onAddIntervention && (
                 <div className="mt-3 border-t border-primary/20 pt-2">
                   <div className="flex items-center justify-between gap-2">
@@ -550,6 +730,17 @@ export function SimDrawer({
                       >
                         unsaved
                       </span>
+                    )}
+                    {TIMELINE_ENABLED && runUnsaved && onSaveFork && (
+                      <button
+                        type="button"
+                        onClick={onSaveFork}
+                        disabled={forkSaving}
+                        title="Save the current what-if as a new run, frozen at this day"
+                        className="rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground disabled:opacity-50"
+                      >
+                        {forkSaving ? 'Saving…' : 'Save as fork'}
+                      </button>
                     )}
                   </div>
                   {(runTimeline?.interventions.length ?? 0) > 0 ? (

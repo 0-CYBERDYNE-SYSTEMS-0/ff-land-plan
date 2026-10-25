@@ -1,16 +1,19 @@
 // Per-season historical weather ensembles (Wave 3 L1). ONE archive request
 // (Open-Meteo ERA5, 1940→, keyless/CORS*) covering the last 10 COMPLETE
 // calendar years (same window rule as climate.ts — recomputed here, not
-// imported), split per year into daily tmean/precip/ET₀ arrays (2 dp).
+// imported), split per year into daily date/Tmin/Tmax/tmean/precip/ET₀ arrays (2 dp).
 // Fallback when ERA5 fails: per-year NASA POWER daily (keyless/CORS*,
 // −9999 sentinels are real data gaps → skip the day) with ET₀ derived by the
 // FAO-56 Hargreaves proxy. Never throws; <3 usable years ⇒ null.
 // Live-verified 2026-09-04 from the sandbox (Portland OR): both endpoints
 // return the documented shapes/units.
 
+import { fetchMonthlyDli } from './light';
+
 export interface SeasonYear {
   year: number;
-  daily: { tmeanC: number; precipMm: number; et0Mm: number }[];
+  source: 'era5' | 'nasa-power';
+  daily: { date: string; tminC: number; tmaxC: number; tmeanC: number; precipMm: number; et0Mm: number; dliNaturalMol?: number }[];
 }
 
 export interface SeasonEnsembles {
@@ -19,7 +22,7 @@ export interface SeasonEnsembles {
 }
 
 interface SeasonsCacheEntry {
-  version: 1;
+  version: 4;
   startYear: number;
   endYear: number;
   ensembles: SeasonEnsembles;
@@ -30,7 +33,7 @@ const POWER_URL = 'https://power.larc.nasa.gov/api/temporal/daily/point';
 const WINDOW_YEARS = 10; // same 10-complete-year window as climate.ts
 const MIN_YEAR_DAYS = 300; // calendar year counts as usable with ≥300 usable days (climate.ts rule)
 const POWER_MISSING = -900; // POWER fill values are -999/-9999; anything ≤ -900 is a sentinel
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 4;
 
 const cacheKey = (lat: number, lng: number) => `ff-pro:seasons:${lat.toFixed(2)},${lng.toFixed(2)}`;
 
@@ -106,7 +109,7 @@ interface Era5Daily {
 
 // Split the single ERA5 response into per-calendar-year arrays; a day needs
 // tmax+tmin+precip+et0 all finite to count. Years sorted ascending.
-function splitEra5(daily: Era5Daily): SeasonYear[] {
+export function splitEra5(daily: Era5Daily): SeasonYear[] {
   const time = daily.time;
   const tmax = daily.temperature_2m_max;
   const tmin = daily.temperature_2m_min;
@@ -114,7 +117,7 @@ function splitEra5(daily: Era5Daily): SeasonYear[] {
   const et0 = daily.et0_fao_evapotranspiration;
   if (!Array.isArray(time) || !Array.isArray(tmax) || !Array.isArray(tmin) || !Array.isArray(precip) || !Array.isArray(et0)) return [];
   if (tmax.length !== time.length || tmin.length !== time.length || precip.length !== time.length || et0.length !== time.length) return [];
-  const byYear = new Map<number, { n: number; daily: { tmeanC: number; precipMm: number; et0Mm: number }[] }>();
+  const byYear = new Map<number, { n: number; daily: SeasonYear['daily'] }>();
   for (let i = 0; i < time.length; i++) {
     const ds = time[i];
     if (typeof ds !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(ds)) continue;
@@ -126,13 +129,20 @@ function splitEra5(daily: Era5Daily): SeasonYear[] {
     const year = Number(ds.slice(0, 4));
     const acc = byYear.get(year) ?? { n: 0, daily: [] };
     acc.n++;
-    acc.daily.push({ tmeanC: round2((tx + tn) / 2), precipMm: round2(pr), et0Mm: round2(ev) });
+    acc.daily.push({
+      date: ds,
+      tminC: round2(tn),
+      tmaxC: round2(tx),
+      tmeanC: round2((tx + tn) / 2),
+      precipMm: round2(pr),
+      et0Mm: round2(ev),
+    });
     byYear.set(year, acc);
   }
   return [...byYear.entries()]
     .filter(([, a]) => a.n >= MIN_YEAR_DAYS)
     .sort(([a], [b]) => a - b)
-    .map(([year, a]) => ({ year, daily: a.daily }));
+    .map(([year, a]) => ({ year, source: 'era5' as const, daily: a.daily }));
 }
 
 interface PowerPayload {
@@ -154,8 +164,8 @@ async function fetchPowerYear(lat: number, lng: number, year: number, raTable: n
   const tmin = params?.T2M_MIN;
   const precip = params?.PRECTOTCORR;
   if (!tmax || !tmin || !precip) return null;
-  const daily: { tmeanC: number; precipMm: number; et0Mm: number }[] = [];
-  for (const key of Object.keys(tmax)) {
+  const daily: SeasonYear['daily'] = [];
+  for (const key of Object.keys(tmax).sort()) {
     if (!/^\d{8}$/.test(key)) continue;
     const tx = tmax[key];
     const tn = tmin[key];
@@ -165,13 +175,16 @@ async function fetchPowerYear(lat: number, lng: number, year: number, raTable: n
     const mo = Number(key.slice(4, 6)) - 1;
     const tmean = (tx + tn) / 2;
     daily.push({
+      date: `${key.slice(0, 4)}-${key.slice(4, 6)}-${key.slice(6, 8)}`,
+      tminC: round2(tn),
+      tmaxC: round2(tx),
       tmeanC: round2(tmean),
       precipMm: round2(pr),
       et0Mm: round2(hargreavesEt0(raTable[mo]!, tmean, tx, tn)),
     });
   }
   if (daily.length < MIN_YEAR_DAYS) return null;
-  return { year, daily };
+  return { year, source: 'nasa-power', daily };
 }
 
 /**
@@ -188,6 +201,7 @@ export async function fetchSeasonEnsembles(lat: number, lng: number): Promise<Se
   if (hit) return hit;
   const promise = (async (): Promise<SeasonEnsembles | null> => {
     try {
+      const monthlyDliPromise = fetchMonthlyDli(lat, lng).catch(() => null);
       let ensembles: SeasonEnsembles | null = null;
       try {
         const url =
@@ -220,7 +234,22 @@ export async function fetchSeasonEnsembles(lat: number, lng: number): Promise<Se
         years.sort((a, b) => a.year - b.year);
         if (years.length >= 3) ensembles = { years, source: 'nasa-power' };
       }
-      if (ensembles) writeCache(key, { version: CACHE_VERSION, startYear, endYear, ensembles });
+      if (ensembles) {
+        const monthlyDli = await monthlyDliPromise;
+        if (monthlyDli) {
+          ensembles = {
+            ...ensembles,
+            years: ensembles.years.map((season) => ({
+              ...season,
+              daily: season.daily.map((day) => ({
+                ...day,
+                dliNaturalMol: monthlyDli[Number(day.date.slice(5, 7)) - 1]!,
+              })),
+            })),
+          };
+        }
+        writeCache(key, { version: CACHE_VERSION, startYear, endYear, ensembles });
+      }
       return ensembles;
     } catch {
       return null; // never throw past the module boundary

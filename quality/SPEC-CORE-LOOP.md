@@ -714,7 +714,13 @@ scrubbable, branchable object and turn ensembles into uncertainty.
 - `SimRunController.seekDay(day)` **already exists**, as does `applyIntervention` (deterministic
   refold to the current `dayIndex`) and `unsavedChanges`. The work here is narrow: one clock
   shared by Blueprint, World and `SimDrawer`, and an LRU cache of replayed states per
-  `(runId, dayIndex)` (64 entries) so scrubbing never re-folds from day 0.
+  `(runId, dayIndex)` (64 entries) so scrubbing never re-folds from day 0. The cache is shared
+  across active and ghost runs and is invalidated when a same-id run's interventions change.
+- New runs freeze the soil values used by the engine and copies of the crop records referenced
+  by the frozen plan or planting interventions (`modelInputs: run-inputs-v1`). Forks reuse that
+  snapshot and add a copied crop record for a newly planted crop when the caller supplies it.
+  Historical records without the snapshot still require their original `SimRunCtx`; without it,
+  replay uses today's legacy crop lookup and absent soil data.
 - 3D: `historyViz.buildGhostPlants(plan, …)` builds a translucent instanced batch from **a
   PlanState**, so trail mode needs one derived `PlanState` per ghosted day (cells → `planting`
   keys, which is cheap and deterministic). Reuse the batch type and disposal path; do not write
@@ -747,9 +753,9 @@ Rules:
   structural/surface patches are rejected. `config.basePlan` is a deep copy of the parent's.
 - New `id`, `label` = `<parent label> ⟂ d<afterDayCount>`, plus `parentId` and `forkedAtDay`
   on `RunRecord` (`forkedAtDay` stores the completed-day count).
-- Recompute the summary using the same `SimRunCtx` (soil profile and crop catalog) as the
-  parent run. Historical records do not freeze that context yet, so callers must pass the
-  active run context; records without one continue to use the legacy defaults.
+- Recompute the summary from the parent's frozen model inputs. For legacy records without them,
+  callers must pass the active `SimRunCtx`; without it, a fork can only snapshot the legacy
+  defaults available at fork time and cannot promise exact historical prefix identity.
 - `meanDailyGddC` stays the parent's. Extensions (`extendRun`) recompute only for the appended
   window and document the discontinuity.
 - Forking from the live (not-yet-saved) run is allowed: `createRun` → `simulateRun`.
@@ -775,10 +781,19 @@ hidden mutable state — fix the engine, do not loosen the test.
   `harvestReadyDay`, `waterUseMm`.
 - Runs in a **Web Worker**, one at a time, chunked with progress. Budget: p95 ≤ 2.5 s for
   2,000 cells × 90 days × 10 years on the dev machine; if exceeded, cut to 5 years and say so.
-- Cache key = `hash(config without interventions dates) + years[]`; store the result (small)
-  next to the run, never the per-year states.
+  Measured here: one 10-year run took 3,450.6 ms; the 5-year cap measured p95 1,780.9 ms across
+  10 trials, so the worker currently caps at 5 years.
+- Historical daily inputs retain their date, Tmin, Tmax, mean temperature, precipitation and
+  ET₀, plus the source for that year. A season with a missing calendar day is skipped rather
+  than filled with fabricated weather. The current builder has no historical daily DLI, so an
+  ensemble for light-sensitive enclosed runs reports that input limit.
+- Cache key = hash of normalized run config and exact historical year inputs. Calendar dates
+  in planting and interventions normalize to day offsets from the run start (start month/day is
+  retained), so timing stays causal while equal schedules across years can share a key. Store
+  the small result next to the run, never per-year states.
 - UI: fan chart on yield and harvest date, with the p50 labelled "typical year" and the band
-  labelled "10 historical years, same management". Wording matters: this is not a forecast.
+  labelled with the actual number of complete historical seasons, up to five, under the same
+  management. Wording matters: this is not a forecast.
 
 ### 4.6 Acceptance
 
@@ -813,23 +828,37 @@ export interface SeasonRecord {
   startDate: string; endDate: string;
   environmentIds: string[];
   runIds: string[];        // runs that composed the season
-  soilIn: SoilCarry; soilOut: SoilCarry;
-  harvests: { date: string; cropId: number; kg: number; cell: string; family: string }[];
+  soil: {
+    environmentId: string;
+    target: GrowingTargetRef;
+    soilIn: SoilCarry;
+    soilOut: SoilCarry;
+  }[];
+  harvests: {
+    date: string; cropId: number; kg: number; cell: string; family: string;
+    environmentId?: string; target: GrowingTargetRef;
+  }[];
   updatedAt: string;
 }
 ```
+
+Legacy records may retain optional singular `soilIn`/`soilOut` fields for read compatibility. New
+records use the `soil` array so carry is scoped to an environment and growing target.
 
 For multiple worlds/levels, harvest and rotation keys include environment id and growing
 target (§3.7); identical local x/y coordinates must not share rotation history. Legacy cell-only
 records resolve to their frozen run's floor target.
 
-Rotation memory is **derived**, not stored twice: a `rotationIndex` built from season records
-(`Record<cellKey, { year: number; family: string }[] >`, last 5 seasons) recomputed on load.
+Rotation memory is **derived**, not stored twice: a `rotationIndex` built from the last five
+season records (`Record<JSON([environmentId, growingTargetKey(target), cell]), { year: number;
+family: string }[]>`) and recomputed on load.
 
 ### 5.3 Engine insertion (keep the engine pure)
 
-- `SimRunCtx` gains `carry?: SoilCarry`. `initialNitrogenKgHa` accepts an explicit pool;
-  when `carry` is present it wins over the OM derivation.
+- `SimRunCtx` gains `carry?: SoilCarry` as a floor-only compatibility input. New runs freeze
+  optional `RunConfig.soilCarryByTarget`, keyed by `growingTargetKey(target)`, so replay does not
+  need transient context. `initialNitrogenKgHa` accepts an explicit pool; when carry is present
+  it wins over the OM derivation. Hydro targets never consume soil carry.
 - New daily term in `ecosystem.ts`: `soilbornePressure(family, inoculum)` multiplies early
   `biomassFrac` gain by `1 − 0.25·pressure` for the first 21 days, decaying to 0 by canopy
   closure. Small, one term, one test.
@@ -845,10 +874,13 @@ Rotation memory is **derived**, not stored twice: a `rotationIndex` built from s
 40 runs × a season `envSeries` is already the localStorage-quota driver (`localApi` comment).
 Campaign mode multiplies it. In this workstream:
 
-- `src/lib/db.ts` — tiny IndexedDB wrapper (`idb` **not** required; raw API, ~80 lines), stores
-  `runs`, `seasons`, `ensembles`; localStorage keeps `plans/sites`, settings, crops.
-- One-time migration copies `simRuns` out of the blob and deletes them there.
-- `Api` interface unchanged — `localApi` reads/writes IndexedDB. `restApi` unchanged.
+- `src/lib/db.ts` — tiny IndexedDB wrapper (`idb` **not** required; raw API), stores `runs`,
+  `seasons`, `ensembles`; localStorage keeps `plans/sites`, settings, crops.
+- One-time migration copies `simRuns` out of the blob and deletes them there only after verified
+  copies exist. A durable authority marker keeps IndexedDB authoritative after feature flags turn
+  off; with both `TIMELINE` and `CAMPAIGN` off and no marker/data, runs stay in localStorage.
+- `Api` adds campaign season CRUD (`listSeasons`, `saveSeason`, `deleteSeason`); both local and
+  REST clients implement it. Run methods keep their existing signatures.
 - Quota failure must be **loud**: today `store.flush()` catches the write error, leaves `dirty`
   set, and `console.warn`s exactly once — silent to the user, who keeps editing into a buffer
   that will never persist. Replace with a `storage-failed` event + banner, and never fall back
@@ -900,10 +932,11 @@ export interface Observation {
 }
 ```
 
-v1 adapters: manual entry (exists), **CSV import** with a column-mapping UI (Ecowitt and
-AC Infinity exports are both wide CSVs), and a `POST /observations` passthrough in `restApi`.
-MQTT/Home Assistant is a documented next step, not in scope. Never gate on a vendor: no
-AC Infinity cloud call in v1 — it is reverse-engineered and read-only at best.
+v1 adapters: manual entry, quoted wide-CSV import with explicit column/unit mapping, and
+observation CRUD in the `Api` seam and REST client. CSV mapping is generic; Ecowitt and
+AC Infinity files are not vendor-certified. Sensor readings for supported soil moisture,
+soil temperature, and humidity probes are also recorded as observations when Twin is enabled.
+There is no vendor polling or cloud call. MQTT/Home Assistant remains a future adapter.
 
 Sensors gain `environmentId` so a tent probe corrects the tent.
 
@@ -920,25 +953,41 @@ Sensors gain `environmentId` so a tent probe corrects the tent.
   so the correction is visible, not magic.
 - A run with observations is labelled `twin`; the original stays untouched.
 
-### 6.4 Calibration (the payoff)
+### 6.4 Calibration
 
-`FarmCalibration` per environment: fitted `{ coverTransmission, uValue, achInfiltration,
-etFactor, shelterFactor }` from ≥14 days of paired sensor + outdoor data, via **bounded grid
-search** (deterministic — no optimisers with random restarts). Stored versioned, shown as a
-diff against archetype defaults, applied only on user approval:
-
-> "Your greenhouse runs 3.1 °C warmer than the model. Apply? (raises cover transmission
-> 0.70 → 0.78, U 4.0 → 3.2)"
-
-This is the feature nobody else can ship, because nobody else has a parameterised model and
-the user's own measurements.
+The implemented, versioned `FarmCalibration` fits only `{ coverTransmission, uValueWm2K }`
+for one environment. Cover transmission uses at least 14 paired natural-DLI days with a
+measurable outdoor-light response. U value uses at least 14 paired air-temperature days and
+requires a known cover-transmission value (a fit from DLI or an existing approved value).
+Both use deterministic bounded grid searches. The UI shows parameter changes against the
+archetype defaults and applies a new revision only after explicit approval; later runs freeze
+the approved values. ACH, ET, and shelter factors are not fitted in v1.
 
 ### 6.5 Scorecard
 
-`TwinScorecard { metric, n, mae, bias, windowDays }` per farm/environment, rolling 30 days.
-UI: "model vs. you" — predicted vs observed sparkline, MAE, bias, and the worst-metric callout.
+`TwinScorecard { metric, n, mae, bias, windowDays }` per run/world, rolling 30 days. Bias is
+observed minus predicted, and MAE stays in each metric's native units. The UI shows paired
+sparklines and scores only where replay currently produces a prediction. Soil-temperature
+observations have no model prediction yet; environment-dependent RH/VPD/CO₂/DLI predictions may
+also be unavailable for a run and are omitted rather than estimated.
 
-### 6.6 Acceptance
+### 6.6 Shipped v1 boundary (2026-10-24)
+
+- `VITE_FF_TWIN` defaults off. With it on, manual and generic CSV observations can be added,
+  edited, filtered by environment, and deleted; records and approved calibration revisions use
+  IndexedDB in the local API. Sensor readings are captured only when entered in the app; this is
+  not a device polling service.
+- A completed run can be copied into a twin record when observations match its farm, exact
+  environment, target, and frozen dates. The parent record is unchanged. The twin stores a
+  canonical observation snapshot and is replayed from its frozen inputs.
+- Assimilation currently changes only soil moisture and biomass stage at daily boundaries.
+  Other metrics remain scoring/calibration inputs. Current scorecard and calibration omissions
+  above are deliberate limits; no broader fit or prediction is promised.
+- The REST client exposes observation and calibration endpoints, but the integrated tests use a
+  mocked fetch contract; a deployment backend must implement these endpoints before remote
+  persistence works.
+
+### 6.7 Acceptance
 
 `twin.replay.test.ts`: identical observation sets replay byte-identically; unsorted input is
 canonicalised; assimilation is bounded and monotonic; a driver observation changes no state;
@@ -956,7 +1005,7 @@ scorecard math is unit-tested against a hand-computed fixture.
 | 2 | C (asset physics + editable growing levels) | DLI/rack/water-store tests; vertical/container journeys; inspector live |
 | 3 | D (time) | fork prefix identity; ensemble budget met |
 | 4 | E (campaign + IndexedDB) | season carry tests; quota banner |
-| 5 | F (twin) | replay + calibration tests; scorecard UI |
+| 5 | F (twin) | replay + calibration tests; scorecard UI — shipped v1 boundary in §6.6 |
 
 Each phase is a PR series behind its flag. Phase 0 must land before 1–2 touch anything
 climate-shaped; 3 and 4 are independent of 1–2; 5 depends on 1 (and benefits from 2).

@@ -19,16 +19,21 @@ import type {
   FarmCell,
   ForecastDay,
   NdviEstimate,
+  Observation,
+  ObservationInput,
+  ObservationPatch,
   PlanState,
   SitePlan,
   Sensor,
   SensorReading,
+  SeasonRecord,
   Simulation,
   Weather,
   WeatherHistoryPoint,
 } from '@/types';
 import type { Api } from '@/lib/localApi';
 import type { RunRecord } from '@/lib/sim/types';
+import type { FarmCalibration } from '@/lib/sim/calibration';
 
 export function createRestApi(baseUrl: string): Api {
   const base = baseUrl.replace(/\/+$/, '');
@@ -100,6 +105,11 @@ export function createRestApi(baseUrl: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    updateSensor: (id, patch) =>
+      request<Sensor>(`/sensors/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
     deleteSensor: async (id) => {
       await request<void>(`/sensors/${id}`, { method: 'DELETE' });
     },
@@ -110,6 +120,27 @@ export function createRestApi(baseUrl: string): Api {
         method: 'POST',
         body: JSON.stringify({ value, unit }),
       }),
+
+    // Twin observations ------------------------------------------------------
+    listObservations: (farmId, environmentId) => request<Observation[]>(
+      `/farms/${farmId}/observations${environmentId ? `?environmentId=${encodeURIComponent(environmentId)}` : ''}`,
+    ),
+    addObservation: (input: ObservationInput) => request<Observation>('/observations', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+    updateObservation: (id, patch: ObservationPatch) => request<Observation>(`/observations/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+    deleteObservation: async (id) => {
+      await request<void>(`/observations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+    listFarmCalibrations: (farmId) => request<FarmCalibration[]>(`/farms/${farmId}/calibrations`),
+    saveFarmCalibration: (calibration) => request<FarmCalibration>(`/calibrations/${encodeURIComponent(calibration.environmentId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(calibration),
+    }),
 
     // Legacy voxel cells / NDVI -------------------------------------------------
     listCells: (farmId) => request<FarmCell[]>(`/farms/${farmId}/cells`),
@@ -199,8 +230,23 @@ export function createRestApi(baseUrl: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    saveSimRun: (run) =>
+      request<RunRecord>(`/sim-runs/${encodeURIComponent(run.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(run),
+      }),
     deleteSimRun: async (id) => {
       await request<void>(`/sim-runs/${id}`, { method: 'DELETE' });
+    },
+
+    // Campaign seasons (small summaries; detailed run replay stays with runs) --
+    listSeasons: (farmId) => request<SeasonRecord[]>(`/farms/${farmId}/seasons`),
+    saveSeason: (season) => request<SeasonRecord>(`/seasons/${encodeURIComponent(season.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(season),
+    }),
+    deleteSeason: async (id) => {
+      await request<void>(`/seasons/${encodeURIComponent(id)}`, { method: 'DELETE' });
     },
 
     // Crops ---------------------------------------------------------------------

@@ -111,9 +111,16 @@ The API seam mirrors these logical endpoints:
 - `POST   /api/farms/:id/alerts/read-all`
 - `GET    /api/farms/:id/sensors`
 - `POST   /api/farms/:id/sensors`
+- `PATCH  /api/sensors/:id` (sensor world association)
 - `DELETE /api/sensors/:id`
 - `GET    /api/sensors/:id/readings?limit=20`
 - `POST   /api/sensors/:id/readings`
+- `GET    /api/farms/:id/observations?environmentId=...` (environment filter optional)
+- `POST   /api/observations`
+- `PATCH  /api/observations/:id`
+- `DELETE /api/observations/:id`
+- `GET    /api/farms/:id/calibrations`
+- `PUT    /api/calibrations/:environmentId`
 - `GET    /api/farms/:id/cells`
 - `POST   /api/farms/:id/cells`
 - `GET    /api/farms/:id/plan`
@@ -135,6 +142,7 @@ The API seam mirrors these logical endpoints:
 - `DELETE /api/simulations/:id` (legacy records)
 - `GET    /api/farms/:id/sim-runs`
 - `POST   /api/farms/:id/sim-runs`
+- `PUT    /api/sim-runs/:id` (persist a forked or ensemble-enriched RunRecord)
 - `DELETE /api/sim-runs/:id`
 - `GET    /api/crops`
 - `POST   /api/crops`
@@ -154,15 +162,20 @@ contract above — including its prefix, e.g. `http://localhost:8787/api` — an
 `src/lib/api.ts` swaps `apiFetch` to `createRestApi(base)` from
 `src/lib/restApi.ts`: a dependency-free `fetch` client covering every seam
 method (farms CRUD, weather/forecast/history, alerts, sensors + readings,
-legacy cells + NDVI, plans, simulations, sim runs, crops). One mapping
+observations + calibrations, legacy cells + NDVI, plans, simulations, sim runs,
+crops). One mapping
 assumption: assigning a cell's crop posts to `/api/farms/:id/cells` with
 `{ id, cropId }`, since the table defines only GET/POST on that collection.
 Sim runs (`src/lib/sim/`) are deterministic engine runs over a forked plan:
 `POST /sim-runs` takes a `CreateSimRunInput` (farm, dates, scenario,
 interventions — never a full plan) and the server composes + replays the run,
 returning a `RunRecord` (config + frozen daily env series + summary; per-tick
-state is never stored — replay rebuilds it). Local-first remains
-the default — with the variable unset or empty, the local store plus live
+state is never stored — replay rebuilds it). `PUT /sim-runs/:id` accepts the
+complete frozen record to persist a management fork or its small cached
+ensemble result without recomposing weather or reading the current plan.
+Campaign mode stores season summaries separately: `GET /farms/:id/seasons` lists a farm's seasons,
+`PUT /seasons/:id` upserts a complete `SeasonRecord`, and `DELETE /seasons/:id` removes it.
+Local-first remains the default — with the variable unset or empty, the local store plus live
 Open-Meteo weather (`src/lib/localApi.ts`) stays exactly as before.
 
 ## Develop

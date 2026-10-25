@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Menu, Moon, Sun } from 'lucide-react';
 
 import { useTheme } from '@/hooks/useTheme';
+import type { StorageFailureDetail } from '@/lib/db';
 import { Button } from '@/components/ui/button';
 import { Logo } from './Logo';
 import { Sidebar } from './Sidebar';
@@ -12,7 +13,16 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [storageFailure, setStorageFailure] = useState<StorageFailureDetail | null>(null);
   const { theme, toggle } = useTheme();
+
+  useEffect(() => {
+    const onStorageFailure = (event: Event) => {
+      setStorageFailure((event as CustomEvent<StorageFailureDetail>).detail);
+    };
+    window.addEventListener('storage-failed', onStorageFailure);
+    return () => window.removeEventListener('storage-failed', onStorageFailure);
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -54,6 +64,17 @@ export function AppShell({ children }: AppShellProps) {
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </Button>
         </header>
+        {storageFailure && (
+          <div role="alert" className="flex items-start gap-3 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">Persistent storage failed · {storageFailure.operation}</div>
+              <p className="text-xs">Your latest changes may not survive a reload. {storageFailure.message}</p>
+            </div>
+            <button type="button" onClick={() => setStorageFailure(null)} className="shrink-0 rounded px-2 py-1 text-xs font-medium hover:bg-destructive/10">
+              Dismiss
+            </button>
+          </div>
+        )}
         <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto focus:outline-none">{children}</main>
       </div>
     </div>

@@ -9,7 +9,7 @@
 //      rewrites).
 //   2. Every environment number traces to a source via EnvSourceTag.
 
-import type { ArchetypeId, Crop, EnvironmentSnapshot, GrowingTargetKey, GrowingTargetRef, PlanState, PlanSurface, ScenarioType } from '@/types';
+import type { ArchetypeId, Crop, EnvironmentSnapshot, GrowingTargetKey, GrowingTargetRef, Observation, ObservationMetric, PlanState, PlanSurface, ScenarioType, SoilCarry } from '@/types';
 import type { EnvironmentClimateDay } from './environment-climate';
 import type { ClimateEquipmentInput } from './environment-climate';
 import type { EquipmentTerms } from './equipment';
@@ -26,14 +26,43 @@ export interface RunAssetPhysicsSnapshot {
 
 /** Minimum crop/soil inputs needed to replay new runs independently of later data refreshes. */
 export interface RunModelInputs {
+  model: 'run-inputs-v1';
   soil: { awcMmPerCm: number | null; organicMatterPct: number | null } | null;
   /** Only crops referenced by the frozen plan or its planting interventions. */
   crops: Crop[];
 }
 
+export interface FarmCalibration {
+  version: 'farm-calibration-v1';
+  revision: number;
+  farmId: number;
+  environmentId: string;
+  fittedAt: string;
+  pairedDays: number;
+  parameters: Partial<{ coverTransmission: number; uValueWm2K: number }>;
+}
+
+export interface EnsembleBand {
+  p10: number | null;
+  p50: number | null;
+  p90: number | null;
+  samples: number;
+}
+
+export interface RunEnsembleResult {
+  source: 'era5' | 'nasa-power';
+  years: number[];
+  /** Explicit model/input caveats shown beside the percentile bands. */
+  limitations?: string[];
+  totalYieldKg: EnsembleBand;
+  harvestReadyDay: EnsembleBand;
+  waterUseMm: EnsembleBand;
+}
+
 /** Provenance chip for one environment value. */
 export type EnvSourceTag =
   | 'open-meteo-archive' // observed ERA5 daily value (Open-Meteo archive API)
+  | 'nasa-power' // daily temperature/precipitation from NASA POWER
   | 'open-meteo-forecast' // reserved for forecast-backed days (not produced yet)
   | 'era5-normals' // synthesized from ERA5 climate normals (monthly means)
   | 'model-estimate' // v1 proxy formula (documented fallback, e.g. ETO proxy)
@@ -190,21 +219,87 @@ export type SimEventKind =
   | 'frost'
   | 'outbreak' // pestPressure crossed 0.6 upward (hysteresis: ends below 0.3)
   | 'outbreak-end'
+  | 'assimilated'
   | 'harvest-too-early' // manual harvest below the 0.8 biomass minimum
   | 'water-short'
   | 'water-refilled';
 
-export interface SimEvent {
+export interface SimEventDataByKind {
+  planted: {};
+  irrigated: { mmPerCell: number; cellCount: number; totalMm: number };
+  fertilized: { nKgHa: number; cellCount: number };
+  'water-refilled': { requestedL: number; acceptedL: number; remainingL: number };
+  'water-short': {
+    requestedL?: number;
+    acceptedL?: number;
+    remainingL?: number;
+    capacityL?: number;
+    requestedMm?: number;
+    unmetCells?: number;
+    cellCount?: number;
+    deliveredMm?: number;
+  };
+  stage: { stage: number; biomass: number };
+  'harvest-ready': { biomass?: number; gddAccumC?: number };
+  'stress-onset': { value: number };
+  'stress-end': { value: number };
+  frost: { tMinC: number };
+  outbreak: { pressure: number };
+  'outbreak-end': { pressure: number };
+  assimilated: { metric: ObservationMetric; innovation: number };
+  harvested: { yieldKg: number; seasonMeanStress?: number; peakPest?: number };
+  'harvest-too-early': { biomass: number; minimum: number };
+}
+
+interface SimEventBase {
   dayIndex: number;
   date: string;
-  kind: SimEventKind;
   cell?: string;
   /** Omitted only for historic floor events; elevated cell keys are also qualified. */
   target?: GrowingTargetRef;
   cropId?: number;
   message: string;
-  data?: Record<string, number>;
 }
+
+interface SimEventDataFields {
+  metric: ObservationMetric;
+  innovation: number;
+  yieldKg: number;
+  seasonMeanStress: number;
+  peakPest: number;
+  biomass: number;
+  gddAccumC: number;
+  stage: number;
+  value: number;
+  minimum: number;
+  tMinC: number;
+  pressure: number;
+  mmPerCell: number;
+  cellCount: number;
+  totalMm: number;
+  requestedL: number;
+  acceptedL: number;
+  remainingL: number;
+  capacityL: number;
+  requestedMm: number;
+  unmetCells: number;
+  deliveredMm: number;
+  nKgHa: number;
+}
+
+type SimEventDataFor<K extends SimEventKind> = SimEventDataByKind[K] & {
+  [P in Exclude<keyof SimEventDataFields, keyof SimEventDataByKind[K]>]?: never;
+};
+
+export type SimEvent = {
+  [K in SimEventKind]: SimEventBase & { kind: K } & (
+    K extends 'assimilated'
+      ? { data: SimEventDataFor<K> }
+      : K extends 'planted'
+        ? { data?: SimEventDataFor<K> }
+        : { data: SimEventDataFor<K> }
+  )
+}[SimEventKind];
 
 export interface RunConfig {
   farmId: number;
@@ -215,6 +310,8 @@ export interface RunConfig {
   environment?: EnvironmentSnapshot;
   /** Missing means the pre-environment legacy surface model. */
   climateModel?: 'environment-v1';
+  /** User-approved, per-world model calibration frozen for deterministic replay. */
+  calibration?: FarmCalibration;
   /** Frozen placed-asset contributions used by replay; absent means legacy semantics. */
   assetPhysics?: RunAssetPhysicsSnapshot;
   /** New records freeze model-driving soil values and the crops they use; absent on legacy runs. */
@@ -223,6 +320,8 @@ export interface RunConfig {
   climateEquipment?: ClimateEquipmentInput;
   /** Frozen light/air terms per growing target; keys use growingTargetKey(). */
   climateTargetEquipment?: Partial<Record<GrowingTargetKey, ClimateEquipmentInput>>;
+  /** Campaign carry copied into this run; only soil-growing targets are read. */
+  soilCarryByTarget?: Partial<Record<GrowingTargetKey, SoilCarry>>;
   /** "YYYY-MM-DD" of dayIndex 0. */
   startDate: string;
   /** Planned sim days. */
@@ -271,9 +370,8 @@ export interface RunSummary {
   eventCounts: Record<string, number>;
 }
 
-/** What localStorage holds for one run — tiny by design: config + frozen
- * envSeries + summary. Replay (config × envSeries through simulateRun)
- * rebuilds all state in milliseconds; NEVER persist per-tick snapshots. */
+/** Persist run inputs (config, frozen envSeries, optional observations) + summary.
+ * Replay rebuilds all state in milliseconds; NEVER persist per-tick snapshots. */
 export interface RunRecord {
   id: string;
   farmId: number;
@@ -286,7 +384,11 @@ export interface RunRecord {
   config: RunConfig;
   /** Frozen provenance artifact ⇒ stable replay regardless of later weather. */
   envSeries: DailyEnvironment[];
+  /** Frozen measured inputs used by deterministic twin replay. */
+  observations?: Observation[];
   summary: RunSummary;
+  /** Small historical uncertainty result; never stores per-year states. */
+  ensembleCache?: { key: string; configKey?: string; result: RunEnsembleResult };
   status: 'running' | 'complete';
 }
 
@@ -308,4 +410,6 @@ export interface CreateSimRunInput {
   precipMultiplier?: number;
   seed?: number; // default 1
   interventions?: Intervention[];
+  /** Explicit, target-scoped campaign input. Omission retains ordinary soil defaults. */
+  soilCarryByTarget?: Partial<Record<GrowingTargetKey, SoilCarry>>;
 }

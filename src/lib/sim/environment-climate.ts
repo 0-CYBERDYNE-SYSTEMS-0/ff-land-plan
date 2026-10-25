@@ -90,6 +90,8 @@ export interface EnvironmentClimateInputs {
   transpirationKgDay?: number;
   /** Canopy LAI used only by the simplified CO₂ uptake term. */
   leafAreaIndex?: number;
+  /** User-approved calibration terms; other archetype defaults remain fixed. */
+  modelOverrides?: Partial<Pick<EnvironmentArchetype, 'coverTransmission' | 'uValueWm2K'>>;
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
@@ -200,7 +202,12 @@ export function environmentDay(
     & Partial<Pick<EnvironmentClimateDay, 'tMinC' | 'tMaxC'>>,
   inputs: EnvironmentClimateInputs = {},
 ): EnvironmentClimateDay {
-  const archetype = archetypeFor(environment);
+  const baseArchetype = archetypeFor(environment);
+  const archetype = {
+    ...baseArchetype,
+    coverTransmission: finiteBound(inputs.modelOverrides?.coverTransmission, baseArchetype.coverTransmission, 0, 1),
+    uValueWm2K: finiteBound(inputs.modelOverrides?.uValueWm2K, baseArchetype.uValueWm2K, 0.01, 50),
+  };
   const setpoints = { ...archetype.setpoints, ...environment.setpoints };
   const widthM = finiteBound(environment.widthM, archetype.defaultFootprint.wM, 0.1, MAX_ENV_DIM_M);
   const depthM = finiteBound(environment.heightM, archetype.defaultFootprint.hM, 0.1, MAX_ENV_DIM_M);

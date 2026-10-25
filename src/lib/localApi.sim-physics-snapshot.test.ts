@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import type { DailyEnvironment } from '@/lib/sim/types';
+import type { SoilProfile } from '@/lib/soil';
 import type { Environment, SitePlan } from '@/types';
 
 const mocks = vi.hoisted(() => ({
@@ -8,6 +9,28 @@ const mocks = vi.hoisted(() => ({
   fetchClimateNormals: vi.fn(),
   fetchMonthlyDli: vi.fn(),
   fetchSoilProfile: vi.fn(),
+}));
+
+const dbState = vi.hoisted(() => ({ records: new Map<string, Map<string, unknown>>() }));
+
+vi.mock('@/lib/db', () => ({
+  getRecord: vi.fn(async (store: string, key: string) => dbState.records.get(store)?.get(key)),
+  getAllRecords: vi.fn(async (store: string) => [...(dbState.records.get(store)?.values() ?? [])]),
+  putRecord: vi.fn(async (store: string, key: string, value: unknown) => {
+    const records = dbState.records.get(store) ?? new Map<string, unknown>();
+    records.set(key, structuredClone(value));
+    dbState.records.set(store, records);
+  }),
+  putRecordIfAbsent: vi.fn(async (store: string, key: string, value: unknown) => {
+    const records = dbState.records.get(store) ?? new Map<string, unknown>();
+    if (records.has(key)) return false;
+    records.set(key, structuredClone(value));
+    dbState.records.set(store, records);
+    return true;
+  }),
+  deleteRecord: vi.fn(async (store: string, key: string) => { dbState.records.get(store)?.delete(key); }),
+  clearRecords: vi.fn(async (store: string) => { dbState.records.get(store)?.clear(); }),
+  dispatchStorageFailed: vi.fn(),
 }));
 
 vi.mock('@/lib/sim/environment', async (importOriginal) => {
@@ -109,6 +132,7 @@ function siteFor(environment: Environment): SitePlan {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetModules();
+  dbState.records.clear();
 });
 
 describe('local sim run physics snapshots', () => {
@@ -124,6 +148,7 @@ describe('local sim run physics snapshots', () => {
     const record = await localApi.createSimRun({ farmId: 1, startDate: '2026-06-01', dayCount: 1 });
     persistNow();
 
+    expect(await localApi.listSimRuns(1)).toEqual([record]);
     expect(record.config.environment).toBeUndefined();
     expect(record.config.assetPhysics).toBeUndefined();
     expect(record.config.climateModel).toBeUndefined();
@@ -139,6 +164,10 @@ describe('local sim run physics snapshots', () => {
     const environment = roomEnvironment(makeEnvironment);
     state.sites[1] = siteFor(environment);
     const originalInstanceX = environment.instances![0]!.x;
+    mocks.fetchSoilProfile.mockResolvedValue({
+      awcMmPerCm: 1.7,
+      organicMatterPct: 3.4,
+    } as SoilProfile);
 
     const record = await localApi.createSimRun({
       farmId: 1,
@@ -155,6 +184,11 @@ describe('local sim run physics snapshots', () => {
     expect(record.config.assetPhysics?.room).toMatchObject({ lightingW: 40, waterStoreL: 200 });
     expect(record.config.climateModel).toBe('environment-v1');
     expect(record.config.climateEquipment?.lightingW).toBe(40);
+    expect(record.config.modelInputs).toMatchObject({
+      model: 'run-inputs-v1',
+      soil: { awcMmPerCm: 1.7, organicMatterPct: 3.4 },
+      crops: [{ id: cropLibrary.find((entry) => entry.slug === 'lettuce')!.id }],
+    });
     expect(record.envSeries[0]?.dliNaturalMol).toBe(24);
     expect(mocks.fetchMonthlyDli).toHaveBeenCalledOnce();
 

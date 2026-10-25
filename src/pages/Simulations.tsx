@@ -15,14 +15,16 @@ import {
 } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
-import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { CAMPAIGN_ENABLED, ENV_RECORDS_ENABLED, TWIN_ENABLED } from '@/lib/featureFlags';
 import { archetypes, ARCHETYPE_FOR_SURFACE } from '@/creative/archetypes';
 import { useFarm } from '@/hooks/useFarms';
 import { useNavigation } from '@/hooks/useNavigation';
 import { SCENARIOS } from '@/lib/growth';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim';
+import { growingTargetKey } from '@/lib/growingTargets';
+import { createTwinRunRecord } from '@/lib/sim/twin';
 import type { RunRecord, RunSummary } from '@/lib/sim/types';
-import type { Environment, ScenarioType, Simulation } from '@/types';
+import type { Environment, Observation, ScenarioType, SeasonRecord, Simulation } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,11 +92,17 @@ function RunCard({
   selected,
   selectDisabled,
   onToggleSelect,
+  hasMatchingObservations,
+  twinPending,
+  onCreateTwin,
 }: {
   run: RunRecord;
   selected: boolean;
   selectDisabled: boolean;
   onToggleSelect: () => void;
+  hasMatchingObservations: boolean;
+  twinPending: boolean;
+  onCreateTwin: () => void;
 }) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -145,6 +153,7 @@ function RunCard({
                 <Badge variant="outline" className="max-w-[220px] truncate text-xs" title={runWorldContext(run)}>
                   {runWorldContext(run)}
                 </Badge>
+                {(run.observations?.length ?? 0) > 0 && <Badge variant="secondary" className="text-xs">Twin · {run.observations!.length}</Badge>}
                 <span className="text-xs tabular-nums text-muted-foreground">{dateRange(run)}</span>
               </div>
             </div>
@@ -187,9 +196,16 @@ function RunCard({
         <p className="text-xs italic text-muted-foreground">
           First harvest-ready: {ready} · {run.summary.daysSimulated} days simulated · seed {run.config.seed}
         </p>
-        <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={openInWorld}>
-          <MapIcon className="h-3.5 w-3.5" /> Open in world
-        </Button>
+        <div className={TWIN_ENABLED && run.status === 'complete' && !(run.observations?.length) ? 'grid grid-cols-2 gap-2' : ''}>
+          <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={openInWorld}>
+            <MapIcon className="h-3.5 w-3.5" /> Open in world
+          </Button>
+          {TWIN_ENABLED && run.status === 'complete' && !(run.observations?.length) && (
+            <Button size="sm" variant="secondary" className="w-full" onClick={onCreateTwin} disabled={!hasMatchingObservations || twinPending} title={hasMatchingObservations ? 'Freeze matching measurements into a new twin run' : 'Add measurements from this world and run dates in Monitoring'}>
+              {twinPending ? 'Creating…' : 'Create twin copy'}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -379,6 +395,11 @@ export function Simulations({ farmId }: { farmId: number }) {
     queryKey: ['sim-runs', farmId],
     queryFn: () => apiFetch.listSimRuns(farmId),
   });
+  const { data: observations = [] } = useQuery<Observation[]>({
+    queryKey: ['observations', farmId],
+    queryFn: () => apiFetch.listObservations(farmId),
+    enabled: TWIN_ENABLED,
+  });
   // Pre-engine records (read-only legacy of the old slider arithmetic).
   const { data: legacy = [] } = useQuery({
     queryKey: ['simulations', farmId],
@@ -393,6 +414,11 @@ export function Simulations({ farmId }: { farmId: number }) {
     queryKey: ['selected-environment', farmId],
     queryFn: () => apiFetch.getSelectedEnvironmentId(farmId),
     enabled: ENV_RECORDS_ENABLED,
+  });
+  const { data: seasons = [] } = useQuery<SeasonRecord[]>({
+    queryKey: ['seasons', farmId],
+    queryFn: () => apiFetch.listSeasons(farmId),
+    enabled: CAMPAIGN_ENABLED,
   });
   const environments = sitePlan?.environments ?? EMPTY_ENVIRONMENTS;
   const [runEnvironmentId, setRunEnvironmentId] = useState('');
@@ -410,6 +436,9 @@ export function Simulations({ farmId }: { farmId: number }) {
     setRunEnvironmentId('');
   }, [environments, runEnvironmentId, savedEnvironmentId]);
   const selectedEnvironment = environments.find((environment) => environment.id === runEnvironmentId) ?? null;
+  const [soilCarrySeasonId, setSoilCarrySeasonId] = useState('none');
+  const selectedCarrySeason = seasons.find((season) => season.id === soilCarrySeasonId) ?? null;
+  const selectedCarryScopes = (selectedCarrySeason?.soil ?? []).filter((scope) => scope.environmentId === selectedEnvironment?.id);
 
   // Multi-select comparison (Phase 4): selection ORDER matters — the first
   // selected run is the baseline, the second becomes the A/B ghost. Capped at
@@ -436,6 +465,28 @@ export function Simulations({ farmId }: { farmId: number }) {
     });
   };
 
+  const matchingObservations = (run: RunRecord): Observation[] => {
+    const runDates = new Set(run.envSeries.map((day) => day.date));
+    return observations.filter((observation) => observation.farmId === run.farmId
+      && (run.config.environment
+        ? observation.environmentId === run.config.environment.id
+        : observation.environmentId === undefined)
+      && runDates.has(observation.date));
+  };
+  const twin = useMutation({
+    mutationFn: async (parent: RunRecord) => {
+      const twinRecord = createTwinRunRecord(parent, matchingObservations(parent));
+      return apiFetch.saveSimRun(twinRecord);
+    },
+    onSuccess: (saved) => {
+      qc.setQueryData<RunRecord[]>(['sim-runs', farmId], (current) =>
+        [saved, ...(current ?? runs).filter((run) => run.id !== saved.id)].slice(0, 40),
+      );
+      toast.success('Twin run saved; the source run is unchanged');
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not create a twin run.'),
+  });
+
   const [formOpen, setFormOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [startDate, setStartDate] = useState(todayISO);
@@ -450,9 +501,18 @@ export function Simulations({ farmId }: { farmId: number }) {
       if (ENV_RECORDS_ENABLED && !selectedEnvironment) {
         throw new Error('Choose a growing world before creating a run.');
       }
+      if (soilCarrySeasonId !== 'none' && selectedCarryScopes.length === 0) {
+        throw new Error('The selected season has no soil carry for this growing world.');
+      }
       return apiFetch.createSimRun({
         farmId,
         ...(ENV_RECORDS_ENABLED ? { environmentId: selectedEnvironment!.id } : {}),
+        ...(CAMPAIGN_ENABLED && selectedCarryScopes.length > 0 ? {
+          soilCarryByTarget: Object.fromEntries(selectedCarryScopes.map((scope) => [
+            growingTargetKey(scope.target),
+            scope.soilOut,
+          ])),
+        } : {}),
         label: label.trim() || undefined,
         startDate,
         dayCount,
@@ -472,6 +532,7 @@ export function Simulations({ farmId }: { farmId: number }) {
 
   const selectEnvironment = async (environmentId: string) => {
     setRunEnvironmentId(environmentId);
+    setSoilCarrySeasonId('none');
     try {
       await apiFetch.setSelectedEnvironmentId(farmId, environmentId);
       qc.setQueryData(['selected-environment', farmId], environmentId);
@@ -542,6 +603,27 @@ export function Simulations({ farmId }: { farmId: number }) {
                   <p className="text-xs text-muted-foreground">
                     This run will use {selectedEnvironment.label} ({archetypes[selectedEnvironment.archetype].label}); the run keeps this world’s frozen context if you edit or delete it later.
                   </p>
+                )}
+                {CAMPAIGN_ENABLED && selectedEnvironment && (
+                  <div className="space-y-1.5 border-t border-border pt-2">
+                    <Label className="text-xs">Soil input for this run (optional)</Label>
+                    <Select value={soilCarrySeasonId} onValueChange={setSoilCarrySeasonId}>
+                      <SelectTrigger className="h-9" aria-label="Campaign soil input for this run">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Ordinary soil inputs</SelectItem>
+                        {seasons.filter((season) => (season.soil ?? []).some((scope) => scope.environmentId === selectedEnvironment.id)).map((season) => (
+                          <SelectItem key={season.id} value={season.id}>{season.label} · {season.year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      {selectedCarrySeason
+                        ? `${selectedCarryScopes.length} saved soil surface(s) from this world are frozen into the run. Hydro targets and other worlds are excluded.`
+                        : 'Choose a saved season to explicitly carry its matching floor and tier soil into this run. No carry is applied automatically.'}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -725,6 +807,9 @@ export function Simulations({ farmId }: { farmId: number }) {
               selected={selectedIds.includes(r.id)}
               selectDisabled={selectedIds.length >= MAX_COMPARE}
               onToggleSelect={() => toggleSelect(r.id)}
+              hasMatchingObservations={matchingObservations(r).length > 0}
+              twinPending={twin.isPending && twin.variables?.id === r.id}
+              onCreateTwin={() => twin.mutate(r)}
             />
           ))}
         </div>
