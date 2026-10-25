@@ -6,11 +6,14 @@
 import type {
   Alert,
   Crop,
+  CreateEnvironmentInput,
+  Environment,
   Farm,
   FarmCell,
   ForecastDay,
   NdviEstimate,
   PlanState,
+  SitePlan,
   Sensor,
   SensorReading,
   Simulation,
@@ -26,6 +29,8 @@ import { SCENARIOS } from '@/lib/growth';
 import { buildEnvSeries, extractWeatherOverrides, meanDailyGddForRange } from '@/lib/sim/environment';
 import { simulateRun } from '@/lib/sim/engine';
 import type { CreateSimRunInput, RunConfig, RunRecord } from '@/lib/sim/types';
+import { environmentSnapshot, legacyPlanForEnvironment, makeEnvironment, normalizeEnvironment, siteForEnvironments } from '@/lib/environment-model';
+import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
 
 function farmOrThrow(id: number): Farm {
   const f = state.farms.find((x) => x.id === id);
@@ -37,6 +42,58 @@ function sensorOrThrow(id: number): Sensor {
   const s = state.sensors.find((x) => x.id === id);
   if (!s) throw new Error(`Sensor ${id} not found`);
   return s;
+}
+
+function siteOrThrow(farmId: number): SitePlan {
+  const site = state.sites[farmId];
+  if (!site) throw new Error(`Farm ${farmId} has no site plan`);
+  return site;
+}
+
+function requireEnvironmentRecords(): void {
+  if (!ENV_RECORDS_ENABLED) {
+    throw new Error('Growing-world records are disabled. Set VITE_FF_ENV_RECORDS=true to enable them.');
+  }
+}
+
+function environmentIndex(site: SitePlan, environmentId: string): number {
+  return site.environments.findIndex((environment) => environment.id === environmentId);
+}
+
+function nextEnvironmentId(farmId: number, environments: Environment[]): string {
+  const used = new Set(environments.map((environment) => environment.id));
+  let seq = 1;
+  while (used.has(`env:${farmId}:${seq}`)) seq++;
+  return `env:${farmId}:${seq}`;
+}
+
+function cloneEnvironmentWithNewIds(source: Environment, id: string): Environment {
+  const copied = structuredClone(source);
+  copied.id = id;
+  copied.label = `${source.label} copy`;
+  const spaceIds = new Map<string, string>();
+  const levelIds = new Map<string, string>();
+  copied.layout?.growingSpaces.forEach((space, spaceIndex) => {
+    const nextSpaceId = `${id}:space:${spaceIndex + 1}`;
+    spaceIds.set(space.id, nextSpaceId);
+    space.id = nextSpaceId;
+    space.levels.forEach((level, levelIndex) => {
+      const nextLevelId = `${nextSpaceId}:level:${levelIndex + 1}`;
+      levelIds.set(level.id, nextLevelId);
+      level.id = nextLevelId;
+    });
+  });
+  copied.instances?.forEach((instance, index) => {
+    instance.id = `${id}:asset:${index + 1}`;
+    if (instance.mount.kind === 'growing-level') {
+      instance.mount = {
+        kind: 'growing-level',
+        growingSpaceId: spaceIds.get(instance.mount.growingSpaceId) ?? instance.mount.growingSpaceId,
+        levelId: levelIds.get(instance.mount.levelId) ?? instance.mount.levelId,
+      };
+    }
+  });
+  return copied;
 }
 
 // One Open-Meteo call serves weather + forecast + history for a farm; memoize
@@ -87,8 +144,17 @@ export interface Api {
   getNdvi: (farmId: number) => Promise<NdviEstimate>;
 
   // Plot plans (designer)
-  getPlan: (farmId: number) => Promise<PlanState | null>;
-  savePlan: (plan: PlanState) => Promise<PlanState>;
+  getPlan: (farmId: number, environmentId?: string) => Promise<PlanState | null>;
+  savePlan: (plan: PlanState, environmentId?: string) => Promise<PlanState>;
+  getSitePlan: (farmId: number) => Promise<SitePlan | null>;
+  saveSitePlan: (site: SitePlan) => Promise<SitePlan>;
+  createEnvironment: (farmId: number, input: CreateEnvironmentInput) => Promise<Environment>;
+  getEnvironment: (farmId: number, environmentId: string) => Promise<Environment | null>;
+  saveEnvironment: (environment: Environment) => Promise<Environment>;
+  duplicateEnvironment: (farmId: number, environmentId: string) => Promise<Environment>;
+  deleteEnvironment: (farmId: number, environmentId: string) => Promise<void>;
+  getSelectedEnvironmentId: (farmId: number) => Promise<string | null>;
+  setSelectedEnvironmentId: (farmId: number, environmentId: string | null) => Promise<void>;
 
   // Simulations (legacy records only — the farm-blind creation arithmetic was
   // deleted with the run manager; old stored sims stay readable/deletable)
@@ -133,6 +199,8 @@ export const localApi: Api = {
     state.simRuns = state.simRuns.filter((r) => r.farmId !== id);
     state.sensors = state.sensors.filter((s) => s.farmId !== id);
     delete state.plans[id];
+    delete state.sites[id];
+    delete state.selectedEnvironmentIds[id];
     persist();
   },
 
@@ -232,12 +300,146 @@ export const localApi: Api = {
     return { farmId, ndviGrid: [], timestamp: new Date().toISOString() };
   },
 
-  // Plans
-  getPlan: async (farmId) => state.plans[farmId] ?? null,
-  savePlan: async (plan) => {
-    state.plans[plan.farmId] = { ...plan, updatedAt: new Date().toISOString() };
+  // Site/world records. Farm-only plan calls are deliberately a single-world
+  // compatibility adapter; new planner calls always name their environment.
+  getSitePlan: async (farmId) => {
+    const site = state.sites[farmId];
+    return site ? structuredClone(site) : null;
+  },
+  saveSitePlan: async (site) => {
+    requireEnvironmentRecords();
+    const normalized = siteForEnvironments(
+      site.farmId,
+      site.environments.map((environment) => normalizeEnvironment(environment, true)),
+      site,
+    );
+    state.sites[site.farmId] = normalized;
+    if (normalized.environments.length === 1) {
+      state.plans[site.farmId] = legacyPlanForEnvironment(normalized.environments[0]!);
+    }
     persist();
-    return state.plans[plan.farmId];
+    return structuredClone(normalized);
+  },
+  createEnvironment: async (farmId, input) => {
+    requireEnvironmentRecords();
+    farmOrThrow(farmId);
+    const oldSite = state.sites[farmId] ?? {
+      farmId,
+      widthM: 0,
+      heightM: 0,
+      cellM: input.cellM ?? 0.25,
+      environments: [],
+      updatedAt: new Date().toISOString(),
+    };
+    const id = nextEnvironmentId(farmId, oldSite.environments);
+    const x = input.x ?? (oldSite.environments.length === 0
+      ? 0
+      : Math.max(...oldSite.environments.map((environment) => environment.x + environment.widthM)));
+    const environment = makeEnvironment(farmId, { ...input, x }, id);
+    const next = siteForEnvironments(farmId, [...oldSite.environments, environment], oldSite);
+    state.sites[farmId] = next;
+    state.selectedEnvironmentIds[farmId] = id;
+    if (next.environments.length === 1) state.plans[farmId] = legacyPlanForEnvironment(environment);
+    persist();
+    return structuredClone(environment);
+  },
+  getEnvironment: async (farmId, environmentId) => {
+    const site = state.sites[farmId];
+    const environment = site?.environments.find((entry) => entry.id === environmentId);
+    return environment ? structuredClone(environment) : null;
+  },
+  saveEnvironment: async (environment) => {
+    requireEnvironmentRecords();
+    farmOrThrow(environment.farmId);
+    const site = siteOrThrow(environment.farmId);
+    const index = environmentIndex(site, environment.id);
+    if (index < 0) throw new Error(`Growing world ${environment.id} not found on farm ${environment.farmId}`);
+    const normalized = normalizeEnvironment(environment, true);
+    const environments = [...site.environments];
+    environments[index] = normalized;
+    state.sites[environment.farmId] = siteForEnvironments(environment.farmId, environments, site);
+    if (environments.length === 1) state.plans[environment.farmId] = legacyPlanForEnvironment(normalized);
+    persist();
+    return structuredClone(normalized);
+  },
+  duplicateEnvironment: async (farmId, environmentId) => {
+    requireEnvironmentRecords();
+    const site = siteOrThrow(farmId);
+    const source = site.environments.find((entry) => entry.id === environmentId);
+    if (!source) throw new Error(`Growing world ${environmentId} not found on farm ${farmId}`);
+    const id = nextEnvironmentId(farmId, site.environments);
+    const duplicate = cloneEnvironmentWithNewIds(source, id);
+    duplicate.x = Math.max(...site.environments.map((environment) => environment.x + environment.widthM));
+    duplicate.plan.updatedAt = new Date().toISOString();
+    state.sites[farmId] = siteForEnvironments(farmId, [...site.environments, duplicate], site);
+    state.selectedEnvironmentIds[farmId] = id;
+    persist();
+    return structuredClone(duplicate);
+  },
+  deleteEnvironment: async (farmId, environmentId) => {
+    requireEnvironmentRecords();
+    const site = siteOrThrow(farmId);
+    if (environmentIndex(site, environmentId) < 0) throw new Error(`Growing world ${environmentId} not found on farm ${farmId}`);
+    const environments = site.environments.filter((environment) => environment.id !== environmentId);
+    state.sites[farmId] = siteForEnvironments(farmId, environments, site);
+    if (state.selectedEnvironmentIds[farmId] === environmentId) delete state.selectedEnvironmentIds[farmId];
+    if (environments.length === 1) state.plans[farmId] = legacyPlanForEnvironment(environments[0]!);
+    persist();
+  },
+  getSelectedEnvironmentId: async (farmId) => state.selectedEnvironmentIds[farmId] ?? null,
+  setSelectedEnvironmentId: async (farmId, environmentId) => {
+    requireEnvironmentRecords();
+    farmOrThrow(farmId);
+    if (environmentId === null) {
+      delete state.selectedEnvironmentIds[farmId];
+    } else {
+      const site = state.sites[farmId];
+      if (!site || !site.environments.some((environment) => environment.id === environmentId)) {
+        throw new Error(`Growing world ${environmentId} not found on farm ${farmId}`);
+      }
+      state.selectedEnvironmentIds[farmId] = environmentId;
+    }
+    persist();
+  },
+  getPlan: async (farmId, environmentId) => {
+    const site = state.sites[farmId];
+    if (!site) {
+      if (environmentId || ENV_RECORDS_ENABLED) return null;
+      return structuredClone(state.plans[farmId] ?? null);
+    }
+    const environment = environmentId
+      ? site.environments.find((entry) => entry.id === environmentId)
+      : site.environments.length === 1 ? site.environments[0] : undefined;
+    return environment ? legacyPlanForEnvironment(environment) : null;
+  },
+  savePlan: async (plan, environmentId) => {
+    if (environmentId && !ENV_RECORDS_ENABLED) requireEnvironmentRecords();
+    const site = state.sites[plan.farmId];
+    if (!site) {
+      if (ENV_RECORDS_ENABLED) {
+        throw new Error(`Farm ${plan.farmId} has no growing world to save.`);
+      }
+      state.plans[plan.farmId] = { ...plan, updatedAt: new Date().toISOString() };
+      persist();
+      return structuredClone(state.plans[plan.farmId]!);
+    }
+    const environment = environmentId
+      ? site.environments.find((entry) => entry.id === environmentId)
+      : site.environments.length === 1 ? site.environments[0] : undefined;
+    if (!environment) {
+      throw new Error(site.environments.length > 1
+        ? 'Choose a growing world before saving this plan.'
+        : `Farm ${plan.farmId} has no growing world to save.`);
+    }
+    const normalized = normalizeEnvironment({
+      ...environment,
+      plan: { ...plan, farmId: plan.farmId, updatedAt: new Date().toISOString() },
+    });
+    const environments = site.environments.map((entry) => entry.id === environment.id ? normalized : entry);
+    state.sites[plan.farmId] = siteForEnvironments(plan.farmId, environments, site);
+    if (environments.length === 1) state.plans[plan.farmId] = legacyPlanForEnvironment(normalized);
+    persist();
+    return structuredClone(normalized.plan);
   },
 
   // Simulations (legacy): list + delete only — see the Api interface note.
@@ -254,14 +456,34 @@ export const localApi: Api = {
   // and never throw; offline runs fall back to documented defaults.
   createSimRun: async (input) => {
     const farm = farmOrThrow(input.farmId);
-    const plan = state.plans[input.farmId];
-    if (!plan) throw new Error(`Farm ${input.farmId} has no plan to simulate`);
+    const site = state.sites[input.farmId];
+    let environment: Environment | undefined;
+    let plan: PlanState | undefined;
+    if (ENV_RECORDS_ENABLED) {
+      environment = input.environmentId
+        ? site?.environments.find((entry) => entry.id === input.environmentId)
+        : site?.environments.length === 1 ? site.environments[0] : undefined;
+      plan = environment?.plan;
+    } else {
+      if (input.environmentId) requireEnvironmentRecords();
+      if (site && site.environments.length > 1) {
+        throw new Error('This farm has several growing worlds. Enable growing-world records and choose one before creating a run.');
+      }
+      environment = site?.environments[0];
+      plan = environment ? legacyPlanForEnvironment(environment) : state.plans[input.farmId];
+    }
+    if (!plan) {
+      throw new Error(site?.environments.length
+        ? 'Choose a growing world before creating this run.'
+        : `Farm ${input.farmId} has no plan to simulate`);
+    }
     const scenario = input.scenario ?? 'baseline';
     const preset = SCENARIOS[scenario];
     const config: RunConfig = {
       farmId: input.farmId,
       // Deep fork: a run never aliases the live plan (which keeps mutating).
       basePlan: structuredClone(plan),
+      ...(ENV_RECORDS_ENABLED && environment ? { environment: environmentSnapshot(environment) } : {}),
       startDate: input.startDate ?? new Date().toISOString().slice(0, 10),
       dayCount: Math.min(365, Math.max(1, Math.round(input.dayCount ?? 90))),
       seed: input.seed ?? 1,

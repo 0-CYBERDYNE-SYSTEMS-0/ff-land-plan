@@ -9,7 +9,7 @@
 //      rewrites).
 //   2. Every environment number traces to a source via EnvSourceTag.
 
-import type { PlanState, PlanSurface, ScenarioType } from '@/types';
+import type { ArchetypeId, EnvironmentSnapshot, PlanState, PlanSurface, ScenarioType } from '@/types';
 
 /** Provenance chip for one environment value. */
 export type EnvSourceTag =
@@ -118,7 +118,8 @@ export interface CellState {
 
 export interface SimState {
   dayIndex: number; // days completed; stepDay(state, day d) returns dayIndex d+1
-  /** Current run surface (shelter source); mutable mid-run via 'surface'. */
+  /** Current archetype; 'surface' is the one-release legacy climate adapter. */
+  archetype: ArchetypeId;
   surface: PlanSurface;
   cells: Record<string, CellState>; // sparse, planted cells only
   /** Neighbor context per cell key — cached (built at createRun, rebuilt on
@@ -172,6 +173,9 @@ export interface RunConfig {
   farmId: number;
   /** Forked at create time (deep copy) — runs never mutate the live plan. */
   basePlan: PlanState;
+  /** Frozen world metadata/layout. Absent only on historical v1 RunRecords;
+   * basePlan is the sole plan snapshot and is never duplicated here. */
+  environment?: EnvironmentSnapshot;
   /** "YYYY-MM-DD" of dayIndex 0. */
   startDate: string;
   /** Planned sim days. */
@@ -239,6 +243,8 @@ export interface RunRecord {
  * (localApi) / by the backend (rest) — callers never ship a PlanState. */
 export interface CreateSimRunInput {
   farmId: number;
+  /** New callers name the environment. Omission is a legacy one-world adapter. */
+  environmentId?: string;
   label?: string;
   /** "YYYY-MM-DD"; default = today (UTC). */
   startDate?: string;

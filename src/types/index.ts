@@ -195,6 +195,179 @@ export type AssetPattern = 'solid' | 'stripes' | 'dots' | 'cross';
  */
 export type PlanSurface = 'outdoor' | 'greenhouse' | 'hoophouse' | 'tent' | 'indoor' | 'warehouse';
 
+export type ArchetypeId =
+  | 'open-field'
+  | 'garden-beds'
+  | 'greenhouse-glass'
+  | 'hoophouse'
+  | 'cold-frame'
+  | 'grow-tent'
+  | 'grow-room'
+  | 'warehouse-vertical'
+  | 'container-farm';
+export type EnvKind = 'open' | 'protected' | 'sealed';
+export type PlanningProfileId =
+  | 'field'
+  | 'garden'
+  | 'glasshouse'
+  | 'tunnel'
+  | 'cold-frame'
+  | 'compact-enclosed'
+  | 'grow-room'
+  | 'vertical'
+  | 'container';
+export type GrowingSystem = 'soil-beds' | 'containers' | 'hydro' | 'racks';
+export type SiteEdge = 'north' | 'east' | 'south' | 'west';
+
+export interface PlanningProfile {
+  id: PlanningProfileId;
+  label: string;
+  supportedSystems: GrowingSystem[];
+  allowOutsideBeds: boolean;
+  compatibleTemplates: string[];
+  accessDefaults: { edge: SiteEdge; offsetM: number; widthM: number }[];
+  reservationDefaults: {
+    id: string;
+    kind: 'aisle' | 'service';
+    x: number;
+    y: number;
+    widthM: number;
+    depthM: number;
+    edge?: SiteEdge;
+    offsetM?: number;
+  }[];
+  warningRules: string[];
+  tierPlanningAvailable: boolean;
+}
+
+export interface EnvironmentArchetype {
+  id: ArchetypeId;
+  label: string;
+  purpose: string;
+  previewAssetId: string;
+  kind: EnvKind;
+  defaultFootprint: { wM: number; hM: number };
+  defaultUsableHeightM?: number;
+  coverTransmission: number;
+  uValueWm2K: number;
+  achInfiltration: number;
+  achVented: number;
+  volumePerM2: number;
+  thermalMassKJm2K: number;
+  etFactor: number;
+  plantScale: number;
+  maxDliMol: number;
+  rainEnters: boolean;
+  dliMode: 'natural' | 'natural+supplement' | 'supplement-only';
+  floorTile: string | null;
+  shell: 'none' | 'greenhouse' | 'hoophouse' | 'cold-frame' | 'tent' | 'room' | 'warehouse' | 'container';
+  bg: { dark: string; light: string };
+  planningProfile: PlanningProfileId;
+  palette: AssetCategory[];
+  tierPlanningAvailable: boolean;
+  setpoints?: { heatC?: number; coolC?: number; rhMaxPct?: number; photoperiodH?: number };
+}
+
+export interface EnvironmentAccess {
+  id: string;
+  edge: SiteEdge;
+  offsetM: number;
+  widthM: number;
+}
+
+export interface EnvironmentReservation {
+  id: string;
+  kind: 'aisle' | 'service';
+  x: number;
+  y: number;
+  widthM: number;
+  depthM: number;
+  edge?: SiteEdge;
+  offsetM?: number;
+}
+
+export interface GrowingSpaceLevel {
+  id: string;
+  label: string;
+  elevationM: number;
+  clearanceM?: number;
+  planting: Record<string, number>;
+  plantedAt?: Record<string, string>;
+}
+
+export interface GrowingSpace {
+  id: string;
+  label: string;
+  kind: 'bed' | 'bench' | 'rack' | 'hydro';
+  x: number;
+  y: number;
+  widthM: number;
+  depthM: number;
+  levels: GrowingSpaceLevel[];
+}
+
+export interface EnvironmentLayout {
+  usableHeightM?: number;
+  access: EnvironmentAccess[];
+  reservations: EnvironmentReservation[];
+  growingSpaces: GrowingSpace[];
+}
+
+export type EnvironmentAssetMount =
+  | { kind: 'floor' }
+  | { kind: 'environment' }
+  | { kind: 'growing-level'; growingSpaceId: string; levelId: string };
+
+export interface EnvironmentAssetInstance {
+  id: string;
+  slug: string;
+  x: number;
+  y: number;
+  widthM: number;
+  depthM: number;
+  mount: EnvironmentAssetMount;
+}
+
+export interface Environment {
+  id: string;
+  farmId: number;
+  archetype: ArchetypeId;
+  label: string;
+  x: number;
+  y: number;
+  widthM: number;
+  heightM: number;
+  /** Canonical grid resolution; nested plan dimensions mirror this record. */
+  cellM: number;
+  plan: PlanState;
+  layout?: EnvironmentLayout;
+  instances?: EnvironmentAssetInstance[];
+  setpoints?: { heatC?: number; coolC?: number; rhMaxPct?: number; co2Ppm?: number; photoperiodH?: number };
+}
+
+export type EnvironmentSnapshot = Omit<Environment, 'plan'>;
+
+export interface CreateEnvironmentInput {
+  archetype: ArchetypeId;
+  label?: string;
+  x?: number;
+  y?: number;
+  widthM?: number;
+  heightM?: number;
+  usableHeightM?: number;
+  cellM?: number;
+  layout?: EnvironmentLayout;
+}
+
+export interface SitePlan {
+  farmId: number;
+  widthM: number;
+  heightM: number;
+  cellM: number;
+  environments: Environment[];
+  updatedAt: string;
+}
+
 export interface GardenAsset {
   slug: string;
   label: string;

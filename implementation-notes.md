@@ -1754,3 +1754,41 @@ specialists; patches landed as one PR. Notable decisions:
   are stored inputs). P2 model credibility (#52–#54) precedes P3 assimilation.
 - The roadmap's garlic example was wrong: the catalog spacing is 10×25 cm
   (~2.5× undercount), not 5×18 cm (~7×).
+
+
+## 2026-10-24 — Core-loop spec: selectable growing worlds
+
+Expanded `quality/SPEC-CORE-LOOP.md` to make choosing a growing world and planning for its
+specific physical space a binding product contract. Added nine-world planning behavior,
+selection/setup/navigation, access and service reservations, additive spatial layout and
+mounted-equipment identity, independently editable rack tiers, historical-layout replay,
+exports and end-to-end acceptance journeys. Clarified empty sites, migration compatibility,
+Phase 0 run targeting and Phase 2 vertical/container release gates; actual planted tier area
+supersedes a blind rack yield multiplier. Documentation only: no engine terms or golden
+snapshots changed, and no application implementation is claimed by this revision.
+
+## 2026-10-24 — Phase 0 foundation implementation
+
+- Added typed archetypes, planning profiles, environment/site persistence and explicit API
+  targets. The v1 migration preserves valid v2 sites and their separate plans; feature-off
+  reads retain the legacy surface adapter without rewriting stored worlds.
+- New runs freeze selected-world metadata separately from the one base-plan snapshot; legacy
+  runs replay from `basePlan.surface`. Environment resize/save keeps extents aligned to the
+  floor grid, and history restoration preserves the saved plan timestamp.
+- World render adapters now use archetype floor tiles and plant-height limits, with distinct
+  cold-frame and container shells. Verification: `npm test` passes (6 files / 23 tests),
+  `npm run typecheck` passes, `npm run build` passes with the existing >500 kB chunk warning,
+  and `npm run check:private` passes. Flag-on browser acceptance is still in independent review.
+
+## 2026-10-24 — Phase 0 critic follow-up
+
+- Default shell meshes now contain the enclosure only; unpersisted lights, filters, shelving,
+  racks, HVAC units and greenhouse screens are left out until placed equipment is rendered from
+  saved instances.
+- World load and Reset calculate a perspective frame from the actual floor and shell bounds at
+  the current viewport aspect. `cameraFrame.test.ts` checks projected corners for greenhouse,
+  cold-frame, warehouse, container and a large open plan.
+- Latest local gates: `npm test` passes (9 files / 34 tests), `npm run typecheck`, `npm run build`
+  (existing large-chunk warning), and `npm run check:private` pass. The independent critic reports
+  the Phase 0 create/switch/reload, run-target, history, resize, delete, duplicate and move journeys
+  pass; the camera screenshot/scroll confirmation after the framing change is pending.

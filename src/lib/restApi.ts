@@ -14,11 +14,13 @@
 import type {
   Alert,
   Crop,
+  Environment,
   Farm,
   FarmCell,
   ForecastDay,
   NdviEstimate,
   PlanState,
+  SitePlan,
   Sensor,
   SensorReading,
   Simulation,
@@ -124,18 +126,64 @@ export function createRestApi(baseUrl: string): Api {
     getNdvi: (farmId) => request<NdviEstimate>(`/farms/${farmId}/ndvi-estimate`),
 
     // Plot plans ----------------------------------------------------------------
-    getPlan: (farmId) =>
-      request<PlanState | null>(`/farms/${farmId}/plan`).catch((err: unknown) => {
+    getPlan: (farmId, environmentId) =>
+      request<PlanState | null>(environmentId
+        ? `/farms/${farmId}/environments/${encodeURIComponent(environmentId)}/plan`
+        : `/farms/${farmId}/plan`).catch((err: unknown) => {
         // No plan yet is a normal state (the interface allows null), so map a
         // 404 from our own error format to null instead of surfacing an error.
         if (err instanceof Error && err.message.startsWith('404:')) return null;
         throw err;
       }),
-    savePlan: (plan) =>
-      request<PlanState>(`/farms/${plan.farmId}/plan`, {
+    savePlan: (plan, environmentId) =>
+      request<PlanState>(environmentId
+        ? `/farms/${plan.farmId}/environments/${encodeURIComponent(environmentId)}/plan`
+        : `/farms/${plan.farmId}/plan`, {
         method: 'POST',
         body: JSON.stringify(plan),
       }),
+    getSitePlan: (farmId) =>
+      request<SitePlan | null>(`/farms/${farmId}/site-plan`).catch((err: unknown) => {
+        if (err instanceof Error && err.message.startsWith('404:')) return null;
+        throw err;
+      }),
+    saveSitePlan: (site) =>
+      request<SitePlan>(`/farms/${site.farmId}/site-plan`, {
+        method: 'POST',
+        body: JSON.stringify(site),
+      }),
+    createEnvironment: (farmId, input) =>
+      request<Environment>(`/farms/${farmId}/environments`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    getEnvironment: (farmId, environmentId) =>
+      request<Environment | null>(`/farms/${farmId}/environments/${encodeURIComponent(environmentId)}`).catch((err: unknown) => {
+        if (err instanceof Error && err.message.startsWith('404:')) return null;
+        throw err;
+      }),
+    saveEnvironment: (environment) =>
+      request<Environment>(`/farms/${environment.farmId}/environments/${encodeURIComponent(environment.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(environment),
+      }),
+    duplicateEnvironment: (farmId, environmentId) =>
+      request<Environment>(`/farms/${farmId}/environments/${encodeURIComponent(environmentId)}/duplicate`, {
+        method: 'POST',
+      }),
+    deleteEnvironment: async (farmId, environmentId) => {
+      await request<void>(`/farms/${farmId}/environments/${encodeURIComponent(environmentId)}`, { method: 'DELETE' });
+    },
+    getSelectedEnvironmentId: async (farmId) => {
+      const result = await request<{ environmentId: string | null }>(`/farms/${farmId}/selected-environment`);
+      return result.environmentId;
+    },
+    setSelectedEnvironmentId: async (farmId, environmentId) => {
+      await request<void>(`/farms/${farmId}/selected-environment`, {
+        method: 'PATCH',
+        body: JSON.stringify({ environmentId }),
+      });
+    },
 
     // Simulations (legacy records only — creation was deleted with the
     // farm-blind slider arithmetic; the run manager owns new simulations) ---

@@ -11,9 +11,12 @@ import type {
   PlanState,
   Sensor,
   SensorReading,
+  SitePlan,
   Simulation,
 } from '@/types';
 import type { RunRecord } from '@/lib/sim/types';
+import { legacyPlanForEnvironment, migrateEnvironmentStore, siteFromLegacyPlans } from '@/lib/environment-model';
+import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
 import {
   seedCells,
   seedFarms,
@@ -28,6 +31,7 @@ import { estimateFrostDates } from '@/lib/frost';
 const STORAGE_KEY = 'ff-pro:v1';
 
 export interface AppState {
+  version?: 2;
   farms: Farm[];
   customCrops: Crop[];
   cells: FarmCell[]; // legacy voxel cells (Monitoring still reads them)
@@ -36,6 +40,8 @@ export interface AppState {
   simulations: Simulation[];
   ndvi: Record<number, NdviEstimate>;
   plans: Record<number, PlanState>;
+  sites: Record<number, SitePlan>;
+  selectedEnvironmentIds: Record<number, string>;
   alertReads: Record<number, true>;
   /** Deterministic sim engine runs (SPEC-SIM-ECOSYSTEM). Each RunRecord holds
    * config + frozen envSeries + summary only — state is rebuilt by replay,
@@ -50,7 +56,12 @@ function seedState(): AppState {
     elevationM: null,
     ...estimateFrostDates(f.lat),
   }));
+  const sites = ENV_RECORDS_ENABLED ? siteFromLegacyPlans(seedPlans) : {};
+  const selectedEnvironmentIds = ENV_RECORDS_ENABLED
+    ? Object.fromEntries(Object.entries(sites).map(([farmId, site]) => [farmId, site.environments[0]!.id]))
+    : {};
   return {
+    ...(ENV_RECORDS_ENABLED ? { version: 2 as const } : {}),
     farms,
     customCrops: [],
     cells: [...seedCells],
@@ -59,6 +70,8 @@ function seedState(): AppState {
     simulations: [...seedSimulations],
     ndvi: { ...seedNdvi },
     plans: { ...seedPlans },
+    sites,
+    selectedEnvironmentIds,
     alertReads: {},
     simRuns: [],
     counters: {
@@ -76,7 +89,15 @@ function load(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fresh;
-    const parsed = JSON.parse(raw) as AppState;
+    const rawParsed = JSON.parse(raw) as Partial<AppState>;
+    const migrated = ENV_RECORDS_ENABLED
+      ? migrateEnvironmentStore(rawParsed)
+      : {
+          ...rawParsed,
+          sites: rawParsed.sites ?? {},
+          selectedEnvironmentIds: rawParsed.selectedEnvironmentIds ?? {},
+        };
+    const parsed = { ...rawParsed, ...migrated } as AppState;
     // Forward-compat: merge over a fresh seed shape so missing keys get defaults.
     const merged = { ...fresh, ...parsed };
 
@@ -89,16 +110,30 @@ function load(): AppState {
       ...fresh.farms,
       ...parsed.farms.filter((f) => !seedFarmIds.has(f.id)),
     ];
+    // V2 site records are user work, including on demo farms: keep every
+    // environment and its interior plan when the seeded farm shell refreshes.
+    merged.sites = ENV_RECORDS_ENABLED
+      ? { ...fresh.sites, ...parsed.sites }
+      : parsed.sites ?? {};
+    merged.selectedEnvironmentIds = ENV_RECORDS_ENABLED
+      ? { ...fresh.selectedEnvironmentIds, ...parsed.selectedEnvironmentIds }
+      : parsed.selectedEnvironmentIds ?? {};
     for (const key of Object.keys(fresh.plans)) {
-      const stored = parsed.plans?.[Number(key)];
-      // Demo plans are showcase content (re-seeded above), but keep the
-      // user's chosen surface: silently reverting an enclosure to the seed
-      // value swaps 3D shells/floor and sim shelter without warning (audit
-      // DES-005).
-      merged.plans[Number(key)] =
-        stored?.surface != null
-          ? { ...fresh.plans[Number(key)]!, surface: stored.surface }
-          : fresh.plans[Number(key)]!;
+      const farmId = Number(key);
+      const storedSite = parsed.sites?.[farmId];
+      const storedPlan = parsed.plans?.[farmId];
+      if (ENV_RECORDS_ENABLED && storedSite?.environments.length === 1) {
+        merged.plans[farmId] = legacyPlanForEnvironment(storedSite.environments[0]!);
+      } else if (!ENV_RECORDS_ENABLED && storedSite?.environments.length === 1) {
+        // A v2 blob opened with the flag off keeps its stored single-world
+        // plan and old surface behavior through the legacy adapter.
+        merged.plans[farmId] = legacyPlanForEnvironment(storedSite.environments[0]!);
+      } else if (!ENV_RECORDS_ENABLED) {
+        // Preserve the legacy demo re-seed contract while the feature is off.
+        merged.plans[farmId] = storedPlan?.surface != null
+          ? { ...fresh.plans[farmId]!, surface: storedPlan.surface }
+          : fresh.plans[farmId]!;
+      }
     }
 
     // Sim runs are additive user data (never seeded): keep the stored list
@@ -109,7 +144,7 @@ function load(): AppState {
     // collide with the seed range or itself.
     const maxFarmId = merged.farms.reduce((m, f) => Math.max(m, f.id), 0);
     merged.counters.farm = Math.max(merged.counters.farm, maxFarmId + 1);
-    return merged;
+    return ENV_RECORDS_ENABLED ? { ...merged, version: 2 } : merged;
   } catch (err) {
     // Quarantine the corrupt blob (best-effort) so the data survives for
     // inspection instead of being silently overwritten by the reseed.

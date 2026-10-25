@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { LayoutTemplate } from 'lucide-react';
-import { toast } from 'sonner';
 
 import {
   AlertDialog,
@@ -16,8 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { templates, type GardenTemplate } from '@/data/templates';
-import { parseKey, planCols, planRows } from '@/lib/plan';
-import type { PlanState } from '@/types';
+import { archetypes } from '@/creative/archetypes';
 import type { PlanEditor } from './usePlanEditor';
 
 const templateCellCount = (tpl: GardenTemplate): number =>
@@ -25,6 +23,11 @@ const templateCellCount = (tpl: GardenTemplate): number =>
 
 export function TemplatesCard({ editor }: { editor: PlanEditor }) {
   const [pending, setPending] = useState<GardenTemplate | null>(null);
+  const racksAvailable = editor.archetype ? archetypes[editor.archetype].tierPlanningAvailable : true;
+  const availableTemplates = editor.planningProfile
+    ? templates.filter((tpl) => editor.planningProfile!.compatibleTemplates.includes(tpl.id) &&
+      (racksAvailable || !Object.values(tpl.ground).includes('plant-rack')))
+    : templates;
 
   const requestApply = (tpl: GardenTemplate) => {
     const plan = editor.planRef.current;
@@ -35,68 +38,8 @@ export function TemplatesCard({ editor }: { editor: PlanEditor }) {
     else setPending(tpl);
   };
 
-  // Single seam crossing: ONE replacePlan call carries the prior plan as the
-  // history snapshot (one undo entry restores it) and `save: true` routes the
-  // write through the standard autosave debounce. Never touches planRef.
   const applyTemplate = (tpl: GardenTemplate) => {
-    const plan = editor.planRef.current;
-    if (!plan) return;
-    const before: PlanState = {
-      ...plan,
-      planting: { ...plan.planting },
-      ground: { ...plan.ground },
-      ...(plan.plantedAt ? { plantedAt: { ...plan.plantedAt } } : {}),
-    };
-    // Resolve crop NAME -> catalog id at apply time; custom crops and catalog
-    // edits can never invalidate the data file. Unknown names are skipped.
-    const nameToId = new Map(editor.crops.map((crop) => [crop.name.toLowerCase(), crop.id]));
-    // Enclosed templates carry their own canvas (surface + dims): bounds are
-    // checked against the INCOMING canvas, not the current one.
-    const widthM = tpl.widthM ?? plan.widthM;
-    const heightM = tpl.heightM ?? plan.heightM;
-    const cols = planCols({ ...plan, widthM });
-    const rows = planRows({ ...plan, heightM });
-    const inBounds = (key: string) => {
-      const [x, y] = parseKey(key);
-      return x >= 0 && y >= 0 && x < cols && y < rows;
-    };
-    const plantedAtIso = new Date().toISOString();
-    const planting: Record<string, number> = {};
-    const ground: Record<string, string> = {};
-    const plantedAt: Record<string, string> = {};
-    let skippedCrops = 0;
-    for (const [key, slug] of Object.entries(tpl.ground)) {
-      if (!inBounds(key)) continue;
-      ground[key] = slug;
-    }
-    for (const [key, cropName] of Object.entries(tpl.planting)) {
-      if (!inBounds(key)) continue;
-      const id = nameToId.get(cropName.toLowerCase());
-      if (id === undefined) {
-        skippedCrops += 1;
-        continue;
-      }
-      planting[key] = id;
-      const daysAgo = tpl.plantedAtDaysAgo?.[cropName] ?? 0;
-      plantedAt[key] = daysAgo > 0 ? new Date(Date.now() - daysAgo * 86_400_000).toISOString() : plantedAtIso;
-    }
-    const next: PlanState = {
-      ...plan,
-      widthM,
-      heightM,
-      ...(tpl.surface ? { surface: tpl.surface } : {}),
-      planting,
-      ground,
-      plantedAt,
-      updatedAt: new Date().toISOString(),
-    };
-    editor.replacePlan(next, { save: true, recordHistory: before });
-    setPending(null);
-    toast.success(
-      skippedCrops > 0
-        ? `Applied “${tpl.name}” · ${skippedCrops} unknown crop${skippedCrops === 1 ? '' : 's'} skipped`
-        : `Applied “${tpl.name}”`,
-    );
+    if (editor.applyTemplate(tpl)) setPending(null);
   };
 
   return (
@@ -107,7 +50,10 @@ export function TemplatesCard({ editor }: { editor: PlanEditor }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {templates.map((tpl) => (
+        {availableTemplates.length === 0 && (
+          <p className="text-xs text-muted-foreground">No floor starter is available for this profile yet.</p>
+        )}
+        {availableTemplates.map((tpl) => (
           <div key={tpl.id} className="rounded-md border border-border p-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 text-sm font-medium">{tpl.name}</div>

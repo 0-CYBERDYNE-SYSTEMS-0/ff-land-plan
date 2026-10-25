@@ -13,10 +13,11 @@ import { parseKey, planCols, planRows } from '@/lib/plan';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
 import { projectPlant, stageCountFor, type PlantViewParams } from '@/lib/sim/view';
 import { envToWeatherCurrent } from '@/lib/sim/runWeather';
+import { archetypes, LEGACY_SURFACE_FOR_ARCHETYPE } from '@/creative/archetypes';
 import type { DailyEnvironment } from '@/lib/sim/types';
 import type { CellState } from '@/lib/sim/types';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
-import type { PlanState, PlanSurface, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
+import type { ArchetypeId, PlanState, PlanSurface, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
 import type { RunRecord, SimEvent, SimState } from '@/lib/sim';
 import {
   buildCellDiagnostics,
@@ -33,6 +34,7 @@ import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dre
 import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
 import { createClouds, type Clouds } from '@/three/clouds';
 import { createEngine, setEngineOrbitEnabled, type Engine } from '@/three/engine';
+import { fitCameraToBounds, worldFrameBounds } from '@/three/cameraFrame';
 import { createFlightCamera, type FlightCamera } from '@/three/flight';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
 import { __padProbe, advancePlantGrowth, buildPlants, disposePlants, type PlantBatch, type PlantUpdateOptions, swayPlants, updatePlants } from '@/three/plants';
@@ -284,7 +286,7 @@ function reconcileGhostRunBatches(
       }
       const crop = args.cropById.get(cell.cropId);
       if (!crop) continue;
-      const fullHeight = ghostPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
+      const fullHeight = ghostPlantHeight(crop) * runPlantScale(args.record);
       const geometry = getGhostTemplate(crop, cell.stage, fullHeight * ghostTemplateScaleT(cell.stage));
       if (!geometry) continue; // unmapped-name crop: no ghost (documented v1 gap)
       w = { geometry, crop, stage: cell.stage, keys: [] };
@@ -407,11 +409,13 @@ function disposeGhostRunBatches(batches: GhostRunBatch[]): void {
   ghostVisualPByCell.clear(); // ghosts are gone — no carry state to preserve
 }
 
-/** Home camera framing — the load-in view and the dock's Reset target share
- * one source of truth so "Reset view" restores exactly the initial shot. */
-function homeFrame(plan: { widthM: number; heightM: number }) {
-  const dist = Math.max(plan.widthM, plan.heightM) * 0.75 + 2;
-  return { dist, x: dist * 0.7, y: Math.max(dist * 0.55, 3), z: dist * 0.7 };
+/** The load-in view and dock Reset fit the actual floor and built shell. */
+function homeFrame(
+  plan: { widthM: number; heightM: number },
+  shell: THREE.Object3D | null,
+  aspect: number,
+) {
+  return fitCameraToBounds(worldFrameBounds(plan.widthM, plan.heightM, shell), aspect);
 }
 
 interface World3DProps {
@@ -460,6 +464,28 @@ const DEFAULT_WEATHER: WeatherCurrent = {
   weatherCode: 0,
   weatherDesc: 'Clear',
 };
+
+function planWithSurface(plan: PlanState, surface: PlanSurface): PlanState {
+  return plan.surface === surface ? plan : { ...plan, surface };
+}
+
+function archetypePlantScale(archetype: unknown): number | undefined {
+  return typeof archetype === 'string' && Object.prototype.hasOwnProperty.call(archetypes, archetype)
+    ? archetypes[archetype as ArchetypeId].plantScale
+    : undefined;
+}
+
+function runSurface(record: RunRecord): PlanSurface {
+  const archetype = record.config.environment?.archetype;
+  return typeof archetype === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_SURFACE_FOR_ARCHETYPE, archetype)
+    ? LEGACY_SURFACE_FOR_ARCHETYPE[archetype]
+    : record.config.basePlan.surface ?? 'outdoor';
+}
+
+function runPlantScale(record: RunRecord): number {
+  return archetypePlantScale(record.config.environment?.archetype)
+    ?? SURFACE_PLANT_SCALE[runSurface(record)];
+}
 
 /** Ambient-light multiplier per surface — enclosed interiors read dimmer; the
  * shells' own glow reads (unlit strips in the creative shells) provide the
@@ -634,6 +660,8 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // instead of capturing render-time values.
   const cropByIdRef = useRef(editor.cropById);
   cropByIdRef.current = editor.cropById;
+  const surfaceRef = useRef(editor.surface);
+  surfaceRef.current = editor.surface;
   const scrubDateRef = useRef(scrubDate);
   scrubDateRef.current = scrubDate;
   const scenarioRef = useRef<ScenarioType>(scenario);
@@ -687,7 +715,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     if (!engine || !plan || !record || !st) return;
     const plantedAtShim: Record<string, string> = {};
     for (const key of Object.keys(plan.planting)) plantedAtShim[key] = FAR_FUTURE_ISO;
-    const shimPlan: PlanState = { ...plan, plantedAt: plantedAtShim };
+    const shimPlan = planWithSurface({ ...plan, plantedAt: plantedAtShim }, runSurface(record));
     // View projection (SPEC-GROWTH-VISUAL §2.1): per-cell growth, stage, wilt
     // and stress tint all derive from the pure seam — the aggregation (MAX of
     // the four stress terms + pest × 0.8) lives in view.ts effectiveStress.
@@ -710,7 +738,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       runDate,
       undefined,
       growthCtxRef.current,
-      { viewByCell },
+      { viewByCell, plantScale: runPlantScale(record) },
     );
   };
 
@@ -799,7 +827,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       setHoverInfo(null);
       return;
     }
-    const mod = scenarioGrowthMod(crop, scenarioRef.current, plan.surface ?? 'outdoor', growthCtxForBuilders());
+    const mod = scenarioGrowthMod(crop, scenarioRef.current, surfaceRef.current, growthCtxForBuilders());
     const prog = growthProgress(crop, plan.plantedAt?.[cell.key], new Date(scrubDateRef.current), mod.rate);
     // Same plantedAt parsing as the cropProgress memo: date-only scrub input
     // vs full ISO (seed data) must never read "Invalid Date".
@@ -963,12 +991,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     weatherFXRef.current = weatherFX;
 
     // 3D voxel ground blocks (replaces flat texture plane)
-    groundBatchesRef.current = buildGround(plan, engine.scene);
+    groundBatchesRef.current = buildGround(plan, engine.scene, editor.archetype);
 
     // Enclosure shell for non-outdoor surfaces (tent / warehouse / greenhouse).
     // A shell failure must not take the whole view down — log + go shell-less.
     try {
-      shellRef.current = buildShell(plan, engine.scene);
+      shellRef.current = buildShell(plan, engine.scene, editor.archetype);
     } catch (err) {
       console.error('shell build failed', err);
       shellRef.current = null;
@@ -976,7 +1004,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
 
     // Structures, plants, water
     structureBatchesRef.current = buildStructures(plan, engine.scene);
-    plantBatchesRef.current = buildPlants(plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders());
+    plantBatchesRef.current = buildPlants(
+      planWithSurface(plan, editor.surface), cropById, engine.scene,
+      new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders(),
+      { plantScale: archetypePlantScale(editor.archetype) },
+    );
     waterPlanesRef.current = buildWaterPlanes(plan, engine.scene);
 
     // Animals
@@ -995,20 +1027,19 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     // Audio
     audioRef.current = createAudioAtmosphere();
 
-    // Camera — isometric angle like Tiny World Builder. Framed for everything
-    // from a 3 m tent interior to a 60 m field: pulled back + high enough to
-    // look down into enclosed canvas shells. Shared with the dock's Reset.
-    const home = homeFrame(plan);
-    engine.camera.position.set(home.x, home.y, home.z);
-    engine.camera.lookAt(0, 0, 0);
-    engine.controls.setTarget(0, 0, 0);
-    engine.controls.azimuthAngle = -Math.PI / 4;
-    engine.controls.polarAngle = Math.PI / 3.5;
-    engine.controls.distance = home.dist;
+    // Fit both the floor footprint and the shell's real height, including
+    // narrow container floors and small cold frames. CameraControls owns the
+    // resulting pose, so its wheel, drag, and Reset interactions stay aligned.
+    const home = homeFrame(plan, shellRef.current?.root ?? null, engine.camera.aspect);
+    engine.controls.setLookAt(
+      home.position.x, home.position.y, home.position.z,
+      home.target.x, home.target.y, home.target.z,
+      false,
+    );
     // Clamp camera so it can't dive under the ground plane or fly into the void.
     engine.setBounds({
       minDistance: 2,
-      maxDistance: home.dist * 4,
+      maxDistance: home.distance * 4,
       maxPolarAngle: THREE.MathUtils.degToRad(88),
     });
     engine.controls.update(0);
@@ -1096,7 +1127,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         // with a legible night floor. The single sun directional is driven
         // inside sky.update() itself (position/color/intensity). Enclosed
         // surfaces dim the ambient so the shell's LED bars carry the light.
-        const surface = editor.planRef.current?.surface ?? 'outdoor';
+        const surface = surfaceRef.current;
         ambientLight.color.copy(sky.state.ambientColor);
         ambientLight.intensity = sky.state.ambientIntensity * SURFACE_AMBIENT[surface];
       }
@@ -1108,7 +1139,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       clouds.update(dt, w.windSpeedKmh, w.cloudCover);
 
       // Weather — rain/snow only outdoors; enclosed canvases are climate-controlled.
-      if ((editor.planRef.current?.surface ?? 'outdoor') === 'outdoor') {
+      if (surfaceRef.current === 'outdoor') {
         weatherFX.update(dt, w);
       }
 
@@ -1380,9 +1411,9 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     // Rebuild 3D ground blocks + enclosure shell (surface / dims may have
     // changed). buildShell is idempotent on a cache hit — no pre-dispose, so
     // brush dabs don't detach/reattach the cached shell.
-    groundBatchesRef.current = updateGround(groundBatchesRef.current, plan, engine.scene);
+    groundBatchesRef.current = updateGround(groundBatchesRef.current, plan, engine.scene, editor.archetype);
     try {
-      shellRef.current = buildShell(plan, engine.scene);
+      shellRef.current = buildShell(plan, engine.scene, editor.archetype);
     } catch (err) {
       console.error('shell build failed', err);
       shellRef.current = null;
@@ -1395,7 +1426,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       // of the scene rebuilds (next run commit would restore them anyway).
       applyRunGrowth();
     } else {
-      plantBatchesRef.current = updatePlants(plantBatchesRef.current, plan, cropById, engine.scene, new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders());
+      plantBatchesRef.current = updatePlants(
+        plantBatchesRef.current, planWithSurface(plan, editor.surface), cropById, engine.scene,
+        new Date(scrubDateRef.current), scenarioRef.current, growthCtxForBuilders(),
+        { plantScale: archetypePlantScale(editor.archetype) },
+      );
     }
 
     // Water planes
@@ -1421,10 +1456,18 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       const undoStack = editor.undoRef.current;
       const redoStack = editor.redoRef.current;
       if (undoStack.length > 0) {
-        undoGhostsRef.current = buildGhostPlants(undoStack[undoStack.length - 1], cropById, engine.scene, '#22c55e', 0.25);
+        const entry = undoStack[undoStack.length - 1]!;
+        const snapshot = entry.kind === 'legacy' ? entry.snapshot
+          : entry.kind === 'environment' ? entry.snapshot.plan
+            : null;
+        if (snapshot) undoGhostsRef.current = buildGhostPlants(snapshot, cropById, engine.scene, '#22c55e', 0.25);
       }
       if (redoStack.length > 0) {
-        redoGhostsRef.current = buildGhostPlants(redoStack[redoStack.length - 1], cropById, engine.scene, '#3b82f6', 0.25);
+        const entry = redoStack[redoStack.length - 1]!;
+        const snapshot = entry.kind === 'legacy' ? entry.snapshot
+          : entry.kind === 'environment' ? entry.snapshot.plan
+            : null;
+        if (snapshot) redoGhostsRef.current = buildGhostPlants(snapshot, cropById, engine.scene, '#3b82f6', 0.25);
       }
     }
 
@@ -1515,7 +1558,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       for (const [key, cropId] of Object.entries(plan.planting)) {
         const crop = editor.cropById.get(cropId);
         if (!crop) continue;
-        const mod = scenarioGrowthMod(crop, scenarioRef.current, plan.surface ?? 'outdoor', ctx);
+        const mod = scenarioGrowthMod(crop, scenarioRef.current, surfaceRef.current, ctx);
         const p = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
         const prev = clamp.get(key);
         if (prev === undefined || p > prev) clamp.set(key, p);
@@ -1528,13 +1571,13 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
 
     plantBatchesRef.current = updatePlants(
       plantBatchesRef.current,
-      plan,
+      planWithSurface(plan, surfaceRef.current),
       editor.cropById,
       engine.scene,
       new Date(scrubDate),
       scenario,
       { ...ctx, dliMol: scrubDliMol },
-      opts,
+      { ...opts, plantScale: archetypePlantScale(editor.archetype) },
     );
   }, [scrubDate, scenario, ambientTempC, climateBaseline, scrubDliMol, editor.cropById, runActive]);
 
@@ -1655,13 +1698,13 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     }
     plantBatchesRef.current = updatePlants(
       plantBatchesRef.current,
-      { ...plan, plantedAt: plantedAtShim },
+      planWithSurface({ ...plan, plantedAt: plantedAtShim }, surfaceRef.current),
       editor.cropById,
       engine.scene,
       new Date(),
       undefined,
       growthCtxRef.current,
-      { viewByCell },
+      { viewByCell, plantScale: archetypePlantScale(editor.archetype) },
     );
     return () => {
       if (visDroughtDemo || visRainDemo) {
@@ -1914,7 +1957,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       datedCells++;
       const crop = cropByIdRef.current.get(cropId);
       if (!crop) continue;
-      const mod = scenarioGrowthMod(crop, scenarioRef.current, plan.surface ?? 'outdoor', growthCtxRef.current);
+      const mod = scenarioGrowthMod(crop, scenarioRef.current, surfaceRef.current, growthCtxRef.current);
       if (growthProgress(crop, plantedAt, date, mod.rate) < 1) {
         allMature = false;
         break;
@@ -1978,7 +2021,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       seen.add(dedupeKey);
       const crop = editor.cropById.get(cropId);
       if (!crop) continue;
-      const mod = scenarioGrowthMod(crop, scenario, plan.surface ?? 'outdoor', ctx);
+      const mod = scenarioGrowthMod(crop, scenario, surfaceRef.current, ctx);
       const prog = growthProgress(crop, plan.plantedAt?.[key], date, mod.rate);
       rows.push({
         id: cropId,
@@ -2065,12 +2108,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const engine = engineRef.current;
     const plan = editor.planRef.current;
     if (!engine || !plan) return;
-    const home = homeFrame(plan);
-    engine.controls.setPosition(home.x, home.y, home.z, false);
-    engine.controls.setTarget(0, 0, 0, false);
-    engine.controls.azimuthAngle = -Math.PI / 4;
-    engine.controls.polarAngle = Math.PI / 3.5;
-    engine.controls.distance = home.dist;
+    const home = homeFrame(plan, shellRef.current?.root ?? null, engine.camera.aspect);
+    engine.controls.setLookAt(
+      home.position.x, home.position.y, home.position.z,
+      home.target.x, home.target.y, home.target.z,
+      false,
+    );
     engine.controls.update(0);
   };
 

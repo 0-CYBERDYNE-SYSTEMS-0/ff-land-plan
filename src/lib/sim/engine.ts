@@ -13,6 +13,7 @@
 //   - Water bucket + GDD are the living memory: droughts and heat carry over.
 
 import { cropLibrary } from '@/data/crops';
+import { ARCHETYPE_FOR_SURFACE, LEGACY_SURFACE_FOR_ARCHETYPE } from '@/creative/archetypes';
 import { plantsForArea } from '@/lib/plan';
 import type { SoilProfile } from '@/lib/soil';
 import type { Crop } from '@/types';
@@ -135,9 +136,15 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
     const offset = iso !== undefined ? isoDayNumber(iso) - start : 0;
     cells[key] = initialCell(planting[key], Math.max(0, offset), ctx);
   }
+  const archetype = config.environment?.archetype
+    ?? ARCHETYPE_FOR_SURFACE[config.basePlan.surface ?? 'outdoor'];
+  const surface = config.environment
+    ? LEGACY_SURFACE_FOR_ARCHETYPE[archetype]
+    : config.basePlan.surface ?? 'outdoor';
   return {
     dayIndex: 0,
-    surface: config.basePlan.surface ?? 'outdoor',
+    archetype,
+    surface,
     cells,
     neighbors: buildNeighborCache(cells, cropGet),
     creatures: creaturesFromCells(cells, cropGet),
@@ -266,6 +273,7 @@ export function stepDay(
     }
   };
   let surface = state.surface;
+  let archetype = state.archetype;
   // Neighbor cache: built at createRun; rebuilt here only when a 'plant'
   // intervention adds a cell (O(cells × 24), rare).
   let neighbors = state.neighbors;
@@ -372,6 +380,7 @@ export function stepDay(
       }
       case 'surface': {
         surface = iv.surface;
+        archetype = ARCHETYPE_FOR_SURFACE[iv.surface];
         break;
       }
       case 'weather':
@@ -650,6 +659,7 @@ export function stepDay(
   const nextState: SimState = {
     dayIndex: dayIndex + 1,
     surface,
+    archetype,
     cells, // previous ref when nothing changed; owned copy otherwise
     neighbors,
     creatures: creaturesEqual ? state.creatures : nextCreatures,

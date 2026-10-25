@@ -141,6 +141,8 @@ export interface PlantBatch {
 }
 
 export interface PlantUpdateOptions {
+  /** Archetype-specific ceiling scale; omitted keeps the legacy surface map. */
+  plantScale?: number;
   /**
    * Per-cell growth-progress override ("x,y" → 0..1). When present for a cell
    * it is clamped against the computed progress (max of both) — World3D uses
@@ -1238,7 +1240,7 @@ export function buildPlants(
   for (const [cropId, keys] of cellsByCropId) {
     const crop = cropById.get(cropId);
     if (!crop) continue;
-    const fullHeight = getPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
+    const fullHeight = getPlantHeight(crop) * (opts?.plantScale ?? SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor']);
     const batch = createBatch(cropId, crop, plan, fullHeight, scene);
     if (batch.fallback) {
       reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
@@ -1290,7 +1292,7 @@ export function updatePlants(
     const crop = cropById.get(cropId);
     if (!crop) continue;
 
-    const fullHeight = getPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
+    const fullHeight = getPlantHeight(crop) * (opts?.plantScale ?? SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor']);
     let batch = reusable.get(cropId);
     reusable.delete(cropId);
 

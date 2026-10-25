@@ -9,6 +9,12 @@ export function BlueprintCanvas({ editor }: { editor: PlanEditor }) {
   const {
     canvasRef,
     shellRef,
+    planRef,
+    viewportRef,
+    viewportVersion,
+    planVersion,
+    environment,
+    placementMessage,
     handlePointerDown,
     handlePointerMove,
     finishStroke,
@@ -35,6 +41,9 @@ export function BlueprintCanvas({ editor }: { editor: PlanEditor }) {
 
   // P0-4: cursor derives from STATE (re-renders live), not bare refs.
   const grabCursor = spaceHeld || isPanning;
+  const plan = planRef.current;
+  const layout = environment?.layout;
+  const meterScale = plan ? viewportRef.current.cellPx / plan.cellM : 1;
 
   // P1-10: rect HUD chip — reuses the shared area/plants helpers.
   let rectHud: string | null = null;
@@ -69,10 +78,62 @@ export function BlueprintCanvas({ editor }: { editor: PlanEditor }) {
         onContextMenu={(e) => e.preventDefault()}
       />
 
+      {plan && layout && (
+        <svg
+          key={`${planVersion}:${viewportVersion}`}
+          viewBox={`0 0 ${viewportRef.current.viewW} ${viewportRef.current.viewH}`}
+          preserveAspectRatio="none"
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          aria-hidden="true"
+        >
+          <g transform={`translate(${viewportRef.current.offsetX} ${viewportRef.current.offsetY}) scale(${meterScale})`}>
+            {layout.reservations.map((reservation) => (
+              <g key={reservation.id}>
+                <rect
+                  x={reservation.x}
+                  y={reservation.y}
+                  width={reservation.widthM}
+                  height={reservation.depthM}
+                  fill="#f59e0b"
+                  fillOpacity=".18"
+                  stroke="#b45309"
+                  strokeOpacity=".8"
+                  strokeDasharray=".12 .08"
+                  strokeWidth=".025"
+                />
+              </g>
+            ))}
+            {layout.access.map((access) => {
+              const horizontal = access.edge === 'north' || access.edge === 'south';
+              const x = horizontal ? access.offsetM : access.edge === 'east' ? environment!.widthM : 0;
+              const y = horizontal ? access.edge === 'south' ? environment!.heightM : 0 : access.offsetM;
+              return (
+                <line
+                  key={access.id}
+                  x1={x}
+                  y1={y}
+                  x2={x + (horizontal ? access.widthM : 0)}
+                  y2={y + (horizontal ? 0 : access.widthM)}
+                  stroke="#dc2626"
+                  strokeWidth={plan.cellM * .7}
+                  strokeOpacity=".85"
+                />
+              );
+            })}
+          </g>
+        </svg>
+      )}
+
       {/* P1-10: rectangle-drag HUD */}
       {rectHud && (
         <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md border border-border bg-background/90 px-2.5 py-1 text-xs font-medium tabular-nums text-foreground shadow-sm">
           {rectHud}
+        </div>
+      )}
+
+      {placementMessage && (
+        <div role="status" className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md border border-amber-600/40 bg-background/95 px-3 py-1.5 text-xs font-medium text-amber-900 shadow-sm dark:text-amber-200">
+          {placementMessage}
         </div>
       )}
 

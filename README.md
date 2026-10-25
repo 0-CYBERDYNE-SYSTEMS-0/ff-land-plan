@@ -81,7 +81,8 @@ The notes below are the developer contract. They are not the farmer guide.
 The app runs without a server. `src/lib/api.ts` exports the single API seam used
 by pages; it currently points at `src/lib/localApi.ts`, backed by:
 
-- `src/lib/store.ts` — persistent localStorage state under `ff-pro:v1`.
+- `src/lib/store.ts` — persistent localStorage state under `ff-pro:v1`; its
+  payload is versioned and contains site plans with independent growing worlds.
 - `src/data/crops.ts` — real crop library with spacing, frost, yield, companion,
   and rotation metadata.
 - `src/data/assets.ts` — placeable garden assets with real-world footprints.
@@ -91,8 +92,9 @@ by pages; it currently points at `src/lib/localApi.ts`, backed by:
 Legacy cell, sensor, and NDVI APIs remain for Monitoring and Dashboard. The
 Simulations page is a run manager over the deterministic engine (`src/lib/sim/`):
 old slider-`Simulation` records stay readable/deletable, but creation is gone —
-new what-ifs are `createSimRun` runs. Plot Designer uses `getPlan`/`savePlan`
-and the sparse `PlanState` model instead of legacy `FarmCell`.
+new what-ifs are `createSimRun` runs. Plot Designer uses `getSitePlan` and
+environment-targeted plan reads/writes; every growing world owns a sparse
+`PlanState` independent of the other worlds on its farm.
 
 The API seam mirrors these logical endpoints:
 
@@ -116,6 +118,18 @@ The API seam mirrors these logical endpoints:
 - `POST   /api/farms/:id/cells`
 - `GET    /api/farms/:id/plan`
 - `POST   /api/farms/:id/plan`
+- `GET    /api/farms/:id/site-plan`
+- `POST   /api/farms/:id/site-plan`
+- `GET    /api/farms/:id/environments`
+- `POST   /api/farms/:id/environments`
+- `GET    /api/farms/:id/environments/:environmentId`
+- `PATCH  /api/farms/:id/environments/:environmentId`
+- `DELETE /api/farms/:id/environments/:environmentId`
+- `POST   /api/farms/:id/environments/:environmentId/duplicate`
+- `GET    /api/farms/:id/environments/:environmentId/plan`
+- `POST   /api/farms/:id/environments/:environmentId/plan`
+- `GET    /api/farms/:id/selected-environment`
+- `PATCH  /api/farms/:id/selected-environment`
 - `GET    /api/farms/:id/ndvi-estimate`
 - `GET    /api/farms/:id/simulations` (legacy records, read-only)
 - `DELETE /api/simulations/:id` (legacy records)
@@ -124,6 +138,14 @@ The API seam mirrors these logical endpoints:
 - `DELETE /api/sim-runs/:id`
 - `GET    /api/crops`
 - `POST   /api/crops`
+
+The farm-level `/plan` routes remain a compatibility adapter for farms with
+exactly one growing world: `getPlan(farmId)` returns `null` when a farm has
+several worlds, and `savePlan(plan)` rejects an ambiguous target. New planner
+code always supplies an explicit `environmentId`; it never chooses an
+arbitrary world. Environment metadata owns canonical dimensions, and its
+nested plan mirrors those extents on save. A run freezes environment
+metadata plus one `basePlan` snapshot. Each run targets one growing world.
 
 ### Swapping in a backend
 

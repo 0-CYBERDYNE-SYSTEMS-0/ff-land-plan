@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Map as MapIcon, Search } from 'lucide-react';
 
 import { assetBySlug, assetLibrary } from '@/data/assets';
+import { archetypes } from '@/creative/archetypes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -35,7 +36,7 @@ const CATEGORY_LABELS: Record<AssetCategory, string> = {
 };
 
 export function AssetPalette({ editor }: { editor: PlanEditor }) {
-  const { activeAssetSlug, setActiveAssetSlug, tool, setTool, surface } = editor;
+  const { activeAssetSlug, setActiveAssetSlug, tool, setTool, surface, paletteCategories } = editor;
   const [assetSearch, setAssetSearch] = useState('');
   const [recentSlugs, setRecentSlugs] = useState<string[]>(loadRecentAssetSlugs);
 
@@ -53,11 +54,18 @@ export function AssetPalette({ editor }: { editor: PlanEditor }) {
   };
 
   const query = assetSearch.trim().toLowerCase();
+  const racksAvailable = editor.archetype ? archetypes[editor.archetype].tierPlanningAvailable : true;
+  const assetAllowed = (asset: GardenAsset) =>
+    (asset.slug !== 'plant-rack' || racksAvailable) &&
+    (!paletteCategories || paletteCategories.includes(asset.category)) &&
+    (!asset.surfaces || asset.surfaces.includes(surface));
   const filteredAssets = useMemo(() => {
     // Surface-aware palette: assets tagged with `surfaces` only appear when the
     // plan canvas matches (e.g. grow lights on tent/indoor/greenhouse).
     const onSurface = assetLibrary.filter(
-      (asset) => !asset.surfaces || asset.surfaces.includes(surface),
+      (asset) => (asset.slug !== 'plant-rack' || racksAvailable) &&
+        (!paletteCategories || paletteCategories.includes(asset.category)) &&
+        (!asset.surfaces || asset.surfaces.includes(surface)),
     );
     if (!query) return onSurface;
     return onSurface.filter((asset) =>
@@ -65,11 +73,11 @@ export function AssetPalette({ editor }: { editor: PlanEditor }) {
       asset.slug.toLowerCase().includes(query) ||
       asset.description.toLowerCase().includes(query),
     );
-  }, [query, surface]);
+  }, [paletteCategories, query, racksAvailable, surface]);
 
   const recentAssets = recentSlugs
     .map((slug) => assetBySlug(slug))
-    .filter((asset): asset is GardenAsset => !!asset && (!asset.surfaces || asset.surfaces.includes(surface)));
+    .filter((asset): asset is GardenAsset => !!asset && assetAllowed(asset));
 
   return (
     <Card>
@@ -109,6 +117,11 @@ export function AssetPalette({ editor }: { editor: PlanEditor }) {
           Animals ship with their structures — barn: cow · pig · sheep, coop: hens + rooster,
           hive: bees, pond: ducks; planted beds draw butterflies.
         </p>
+        {editor.planningProfile?.supportedSystems.includes('racks') && !racksAvailable && (
+          <p className="rounded bg-amber-500/10 px-2 py-1 text-[10px] text-amber-800 dark:text-amber-200">
+            Rack and tier editing is unavailable here; place a floor bench or hydro surface instead.
+          </p>
+        )}
         {ASSET_CATEGORIES.map((category) => {
           const entries = filteredAssets.filter((asset) => asset.category === category);
           if (entries.length === 0) return null;

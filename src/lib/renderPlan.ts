@@ -30,6 +30,8 @@ export interface RenderOptions {
   theme: 'light' | 'dark';
   /** Plan canvas surface — picks the floor color. Default 'outdoor'. */
   surface?: PlanSurface;
+  /** Archetype-specific floor colors; takes precedence over the legacy alias. */
+  background?: { dark: string; light: string };
   // --- Opt-in overlays (risk #1, shared-renderer leakage) ---------------------
   // Every field below defaults to OFF/undefined so drawPlan's pixels are
   // byte-identical for callers that don't pass it:
@@ -117,7 +119,7 @@ export function drawPlan(ctx: CanvasRenderingContext2D, plan: PlanState, opts: R
   // Plot background — the surface floor.
   const planW = cols * cellPx;
   const planH = rows * cellPx;
-  const bg = SURFACE_BG[surface] ?? SURFACE_BG.outdoor;
+  const bg = opts.background ?? (Object.prototype.hasOwnProperty.call(SURFACE_BG, surface) ? SURFACE_BG[surface] : SURFACE_BG.outdoor);
   ctx.fillStyle = dark ? bg.dark : bg.light;
   ctx.fillRect(offsetX, offsetY, planW, planH);
 
@@ -405,6 +407,7 @@ export function renderPlanToPng(
   plan: PlanState,
   crops: Crop[],
   title: string,
+  background?: { dark: string; light: string },
 ): Promise<Blob> {
   const cols = planCols(plan);
   const rows = planRows(plan);
@@ -461,6 +464,7 @@ export function renderPlanToPng(
     viewH: headerH + planH + 2,
     theme: 'light',
     surface: plan.surface ?? 'outdoor',
+    background,
   });
 
   // Scale bar: 1 m.

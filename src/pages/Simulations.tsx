@@ -15,12 +15,14 @@ import {
 } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
+import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
+import { archetypes, ARCHETYPE_FOR_SURFACE } from '@/creative/archetypes';
 import { useFarm } from '@/hooks/useFarms';
 import { useNavigation } from '@/hooks/useNavigation';
 import { SCENARIOS } from '@/lib/growth';
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim';
 import type { RunRecord, RunSummary } from '@/lib/sim/types';
-import type { ScenarioType, Simulation } from '@/types';
+import type { Environment, ScenarioType, Simulation } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +32,7 @@ import { Slider } from '@/components/ui/slider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const SCENARIO_COLOR: Record<ScenarioType, string> = {
   baseline: 'text-blue-600',
@@ -40,11 +43,18 @@ const SCENARIO_COLOR: Record<ScenarioType, string> = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const EMPTY_ENVIRONMENTS: Environment[] = [];
 
 function dateRange(run: RunRecord): string {
   const start = run.config.startDate;
   const end = isoFromDayNumber(isoDayNumber(start) + Math.max(0, run.config.dayCount - 1));
   return `${start} → ${end}`;
+}
+
+function runWorldContext(run: RunRecord): string {
+  return run.config.environment
+    ? `${run.config.environment.label} · ${archetypes[run.config.environment.archetype].label}`
+    : `Legacy · ${archetypes[ARCHETYPE_FOR_SURFACE[run.config.basePlan.surface ?? 'outdoor']].label}`;
 }
 
 /** Honest summary tiles — raw RunSummary numbers, no arbitrary scaling. */
@@ -131,6 +141,9 @@ function RunCard({
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 <Badge variant="outline" className={`text-xs ${SCENARIO_COLOR[run.config.scenario] ?? ''}`}>
                   {run.config.scenario.replace('_', ' ')}
+                </Badge>
+                <Badge variant="outline" className="max-w-[220px] truncate text-xs" title={runWorldContext(run)}>
+                  {runWorldContext(run)}
                 </Badge>
                 <span className="text-xs tabular-nums text-muted-foreground">{dateRange(run)}</span>
               </div>
@@ -371,6 +384,32 @@ export function Simulations({ farmId }: { farmId: number }) {
     queryKey: ['simulations', farmId],
     queryFn: () => apiFetch.listSimulations(farmId),
   });
+  const { data: sitePlan, isLoading: siteLoading } = useQuery({
+    queryKey: ['site-plan', farmId],
+    queryFn: () => apiFetch.getSitePlan(farmId),
+    enabled: ENV_RECORDS_ENABLED,
+  });
+  const { data: savedEnvironmentId } = useQuery({
+    queryKey: ['selected-environment', farmId],
+    queryFn: () => apiFetch.getSelectedEnvironmentId(farmId),
+    enabled: ENV_RECORDS_ENABLED,
+  });
+  const environments = sitePlan?.environments ?? EMPTY_ENVIRONMENTS;
+  const [runEnvironmentId, setRunEnvironmentId] = useState('');
+  useEffect(() => {
+    if (!ENV_RECORDS_ENABLED) return;
+    if (environments.some((environment) => environment.id === runEnvironmentId)) return;
+    if (savedEnvironmentId && environments.some((environment) => environment.id === savedEnvironmentId)) {
+      setRunEnvironmentId(savedEnvironmentId);
+      return;
+    }
+    if (environments.length === 1) {
+      setRunEnvironmentId(environments[0]!.id);
+      return;
+    }
+    setRunEnvironmentId('');
+  }, [environments, runEnvironmentId, savedEnvironmentId]);
+  const selectedEnvironment = environments.find((environment) => environment.id === runEnvironmentId) ?? null;
 
   // Multi-select comparison (Phase 4): selection ORDER matters — the first
   // selected run is the baseline, the second becomes the A/B ghost. Capped at
@@ -407,9 +446,13 @@ export function Simulations({ farmId }: { farmId: number }) {
   const [seed, setSeed] = useState(1);
 
   const create = useMutation({
-    mutationFn: () =>
-      apiFetch.createSimRun({
+    mutationFn: () => {
+      if (ENV_RECORDS_ENABLED && !selectedEnvironment) {
+        throw new Error('Choose a growing world before creating a run.');
+      }
+      return apiFetch.createSimRun({
         farmId,
+        ...(ENV_RECORDS_ENABLED ? { environmentId: selectedEnvironment!.id } : {}),
         label: label.trim() || undefined,
         startDate,
         dayCount,
@@ -417,14 +460,25 @@ export function Simulations({ farmId }: { farmId: number }) {
         tempDeltaC,
         precipMultiplier,
         seed,
-      }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sim-runs', farmId] });
       toast.success('Run created — open it in the world to watch it play');
       setFormOpen(false);
     },
-    onError: () => toast.error('Could not create the run'),
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not create the run'),
   });
+
+  const selectEnvironment = async (environmentId: string) => {
+    setRunEnvironmentId(environmentId);
+    try {
+      await apiFetch.setSelectedEnvironmentId(farmId, environmentId);
+      qc.setQueryData(['selected-environment', farmId], environmentId);
+    } catch {
+      toast.error('The run target could not be saved. It is still selected for this run.');
+    }
+  };
 
   const applyPreset = (s: ScenarioType) => {
     const p = SCENARIOS[s];
@@ -441,7 +495,7 @@ export function Simulations({ farmId }: { farmId: number }) {
         </Button>
         <PageHeader
           title="Simulation Runs"
-          subtitle={`${farm?.name ?? 'Farm'} — deterministic runs over this farm's plan, weather and soil`}
+          subtitle={`${farm?.name ?? 'Farm'} — deterministic runs over ${ENV_RECORDS_ENABLED ? 'a growing world' : 'this farm’s plan'}, weather and soil`}
           actions={
             <Button size="sm" onClick={() => setFormOpen((v) => !v)} className="gap-1.5" data-testid="btn-new-simulation">
               <Plus className="h-4 w-4" /> New Run
@@ -458,6 +512,39 @@ export function Simulations({ farmId }: { farmId: number }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {ENV_RECORDS_ENABLED && (
+              <div className="space-y-2 rounded-md border border-border bg-background p-3">
+                <Label className="text-xs">Growing world for this run</Label>
+                {siteLoading ? (
+                  <Skeleton className="h-9 w-full" />
+                ) : environments.length === 0 ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="text-muted-foreground">Set up a growing world before creating a run.</span>
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/farms/${farmId}/map`)}>
+                      Set up world
+                    </Button>
+                  </div>
+                ) : (
+                  <Select value={selectedEnvironment?.id ?? ''} onValueChange={(id) => void selectEnvironment(id)}>
+                    <SelectTrigger className="h-9" aria-label="Growing world for this run">
+                      <SelectValue placeholder="Choose a growing world" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {environments.map((environment) => (
+                        <SelectItem key={environment.id} value={environment.id}>
+                          {environment.label} · {archetypes[environment.archetype].label} ({environment.widthM} × {environment.heightM} m)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {selectedEnvironment && (
+                  <p className="text-xs text-muted-foreground">
+                    This run will use {selectedEnvironment.label} ({archetypes[selectedEnvironment.archetype].label}); the run keeps this world’s frozen context if you edit or delete it later.
+                  </p>
+                )}
+              </div>
+            )}
             <div>
               <p className="mb-2 text-xs text-muted-foreground">Scenario presets:</p>
               <div className="flex flex-wrap gap-2">
@@ -545,7 +632,7 @@ export function Simulations({ farmId }: { farmId: number }) {
               <Button
                 type="button"
                 size="sm"
-                disabled={create.isPending}
+                disabled={create.isPending || (ENV_RECORDS_ENABLED && (!selectedEnvironment || siteLoading))}
                 className="gap-1.5"
                 data-testid="btn-run-simulation"
                 onClick={() => create.mutate()}
@@ -583,6 +670,7 @@ export function Simulations({ farmId }: { farmId: number }) {
               <thead className="text-muted-foreground">
                 <tr className="border-b border-border">
                   <th className="py-1.5 pr-3 font-medium">Run</th>
+                  <th className="py-1.5 pr-3 font-medium">Growing world</th>
                   <th className="py-1.5 pr-3 font-medium">Scenario</th>
                   <th className="py-1.5 pr-3 font-medium text-right">Days</th>
                   <th className="py-1.5 pr-3 font-medium text-right">Yield (kg)</th>
@@ -596,6 +684,9 @@ export function Simulations({ farmId }: { farmId: number }) {
                   <tr key={r.id} className="border-b border-border/60 last:border-0">
                     <td className="max-w-[180px] truncate py-1.5 pr-3" title={r.label}>
                       {r.label}
+                    </td>
+                    <td className="max-w-[190px] truncate py-1.5 pr-3" title={runWorldContext(r)}>
+                      {runWorldContext(r)}
                     </td>
                     <td className={`py-1.5 pr-3 ${SCENARIO_COLOR[r.config.scenario] ?? ''}`}>
                       {r.config.scenario.replace('_', ' ')}

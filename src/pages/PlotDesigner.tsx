@@ -1,8 +1,9 @@
-import { ArrowLeft, Check, Map as MapIcon } from 'lucide-react';
+import { ArrowLeft, Check, Map as MapIcon, Redo2, Undo2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiFetch } from '@/lib/api';
+import { ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
 import { isInputCaptured } from '@/lib/inputArbiter';
 import type { SimEvent, SimState } from '@/lib/sim';
 import { runDayEnv } from '@/hooks/useSimRun';
@@ -13,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useSimRun } from '@/hooks/useSimRun';
+import { archetypes } from '@/creative/archetypes';
+import type { ArchetypeId } from '@/types';
 import { AssetPalette } from '@/components/designer/AssetPalette';
 import { BlueprintCanvas } from '@/components/designer/BlueprintCanvas';
 import { CropPalette } from '@/components/designer/CropPalette';
@@ -23,6 +26,9 @@ import { StatsPanel } from '@/components/designer/StatsPanel';
 import { TemplatesCard } from '@/components/designer/TemplatesCard';
 import { ViewToggle } from '@/components/designer/ViewToggle';
 import { FILL_CONFIRM_THRESHOLD, usePlanEditor } from '@/components/designer/usePlanEditor';
+import { GrowingWorldSetup } from '@/components/designer/GrowingWorldSetup';
+import { SiteOverview } from '@/components/designer/SiteOverview';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -170,10 +176,13 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   const vis2dDoneRef = useRef(false);
   useEffect(() => {
     if (!vis2d || vis2dDoneRef.current) return;
+    const environmentId = editor.scope.kind === 'env' ? editor.environment?.id : undefined;
+    if (ENV_RECORDS_ENABLED && !environmentId) return;
     let cancelled = false;
     apiFetch
       .createSimRun({
         farmId,
+        ...(ENV_RECORDS_ENABLED && environmentId ? { environmentId } : {}),
         scenario: vis2d === 'baseline' ? 'baseline' : 'drought',
         dayCount: 90,
         seed: 7,
@@ -198,7 +207,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     };
     // Launch params are read once per mount; the toggles are stable callbacks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [editor.environment?.id, editor.scope.kind, farmId, vis2d]);
 
   // Run list for the in-world Compare picker (Phase 4): explicit queryFn —
   // the QueryClient's hostile default + staleTime:Infinity make casual
@@ -208,6 +217,14 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     queryKey: ['sim-runs', farmId],
     queryFn: () => apiFetch.listSimRuns(farmId),
   });
+  const runCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const run of allRuns) {
+      const environmentId = run.config.environment?.id;
+      if (environmentId) counts[environmentId] = (counts[environmentId] ?? 0) + 1;
+    }
+    return counts;
+  }, [allRuns]);
 
   const [viewMode, setViewMode] = useState<'blueprint' | 'world'>(() => {
     // Test hook for headless verification (tools/appshot.mjs): ?ffview=world
@@ -216,7 +233,10 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
     return 'blueprint';
   });
 
-const [cinema, setCinema] = useState(false);
+  const [cinema, setCinema] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupArchetype, setSetupArchetype] = useState<ArchetypeId>('open-field');
+  const [creatingWorld, setCreatingWorld] = useState(false);
 
   // The 3D world claims left-drag for the camera only while the Select tool is
   // active (paint tools bind drag for strokes). The editor defaults to Brush,
@@ -253,6 +273,68 @@ const [cinema, setCinema] = useState(false);
   }
   if (!farm) return <div className="p-6">Farm not found.</div>;
   const currentPlan = planRef.current;
+  const siteScope = editor.featureEnabled && editor.scope.kind === 'site';
+  if (siteScope) {
+    const empty = editor.environments.length === 0;
+    const createWorld = async (input: Parameters<typeof editor.createWorld>[0], starter: Parameters<typeof editor.createWorld>[1]) => {
+      setCreatingWorld(true);
+      try {
+        await editor.createWorld(input, starter);
+        setSetupOpen(false);
+        setViewMode('blueprint');
+      } finally {
+        setCreatingWorld(false);
+      }
+    };
+    const openSetup = (initialArchetype: ArchetypeId = 'open-field') => {
+      setSetupArchetype(initialArchetype);
+      setSetupOpen(true);
+    };
+    return (
+      <div className="flex flex-col gap-4 p-4 lg:p-6 xl:h-full xl:min-h-0" data-testid="site-planner">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')}><ArrowLeft className="w-4 h-4" /></Button>
+          <div className="min-w-0 flex-1">
+            <h1 className="flex items-center gap-2 text-xl font-bold"><MapIcon className="h-5 w-5 text-primary" /> Site · {farm.name}</h1>
+            <p className="truncate text-sm text-muted-foreground">Choose a growing world or arrange the site footprint.</p>
+          </div>
+          <div className="flex items-center gap-1" role="group" aria-label="Site edit history">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={editor.undo} disabled={editor.undoRef.current.length === 0} aria-label="Undo site change" title="Undo (Ctrl+Z)">
+              <Undo2 className="h-3.5 w-3.5" /><span>Undo</span>
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={editor.redo} disabled={editor.redoRef.current.length === 0} aria-label="Redo site change" title="Redo (Ctrl+Shift+Z)">
+              <Redo2 className="h-3.5 w-3.5" /><span>Redo</span>
+            </Button>
+          </div>
+          {!empty && <Button size="sm" onClick={() => openSetup()}>Add growing world</Button>}
+        </div>
+        {editor.staleSelectionId && (
+          <div className="rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 text-sm" role="status">
+            The previously selected world “{editor.staleSelectionId}” is no longer on this site. Choose an existing world below.
+          </div>
+        )}
+        {empty ? (
+          <GrowingWorldSetup farmId={farmId} onCreate={createWorld} creating={creatingWorld} />
+        ) : (
+          <>
+            {setupOpen && <GrowingWorldSetup key={setupArchetype} farmId={farmId} onCreate={createWorld} onCancel={() => setSetupOpen(false)} creating={creatingWorld} initialArchetype={setupArchetype} />}
+            <SiteOverview
+              site={editor.sitePlan}
+              environments={editor.environments}
+              selectedEnvironmentId={editor.selectedEnvironmentId}
+              runCounts={runCounts}
+              onAddWorld={(initialArchetype) => openSetup(initialArchetype)}
+              onEnterWorld={editor.selectEnvironment}
+              onMoveWorld={editor.moveWorld}
+              onSaveWorld={editor.saveWorld}
+              onDuplicateWorld={editor.duplicateWorld}
+              onDeleteWorld={editor.deleteWorld}
+            />
+          </>
+        )}
+      </div>
+    );
+  }
   if (!currentPlan) return <div className="p-6">Plan not found.</div>;
   const cinemaOn = cinema && viewMode === 'world';
 
@@ -264,13 +346,33 @@ const [cinema, setCinema] = useState(false);
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <MapIcon className="w-5 h-5 text-primary" /> Plot Designer
+            <MapIcon className="w-5 h-5 text-primary" /> {editor.environment?.label ?? 'Plot Designer'}
           </h1>
           <p className="text-sm text-muted-foreground truncate">
-            {farm.name} · {currentPlan.widthM} m × {currentPlan.heightM} m · 25 cm cells
+            {editor.environment
+              ? `${farm.name} · ${archetypes[editor.environment.archetype].label} · ${editor.environment.widthM} × ${editor.environment.heightM} m · Floor · ${editor.environment.cellM * 100} cm cells`
+              : `${farm.name} · ${currentPlan.widthM} m × ${currentPlan.heightM} m · 25 cm cells`}
+            {editor.environment && !editor.environment.layout?.growingSpaces.length &&
+              (editor.archetype === 'warehouse-vertical' || editor.archetype === 'container-farm') && ' · Tier planning unavailable'}
             {cinemaOn && ' · Cinema (H to exit)'}
           </p>
         </div>
+        {editor.featureEnabled && editor.scope.kind === 'env' && editor.environment && (
+          <>
+            <Button size="sm" variant="outline" onClick={editor.showSite}>Site</Button>
+            <Select value={editor.environment.id} onValueChange={editor.selectEnvironment}>
+              <SelectTrigger className="h-9 w-[190px] text-xs" aria-label="Selected growing world">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {editor.environments.map((environment) => (
+                  <SelectItem key={environment.id} value={environment.id}>{environment.label} · {archetypes[environment.archetype].label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={() => { editor.showSite(); setSetupArchetype('open-field'); setSetupOpen(true); }}>Add world</Button>
+          </>
+        )}
         <ViewToggle mode={viewMode} onChange={setViewMode} />
         {!cinemaOn && (
           <Badge variant={saveState === 'error' ? 'destructive' : 'secondary'} className="gap-1">
