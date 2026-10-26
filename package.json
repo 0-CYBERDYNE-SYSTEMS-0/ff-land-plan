@@ -18,7 +18,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:demo": "VITE_FF_ENV_RECORDS=true VITE_FF_ENV_CLIMATE=true VITE_FF_ASSET_PHYSICS=true VITE_FF_TIMELINE=true VITE_FF_CAMPAIGN=true VITE_FF_TWIN=true vite",
     "build": "tsc -b && vite build",
+    "build:demo": "VITE_FF_ENV_RECORDS=true VITE_FF_ENV_CLIMATE=true VITE_FF_ASSET_PHYSICS=true VITE_FF_TIMELINE=true VITE_FF_CAMPAIGN=true VITE_FF_TWIN=true tsc -b && VITE_FF_ENV_RECORDS=true VITE_FF_ENV_CLIMATE=true VITE_FF_ASSET_PHYSICS=true VITE_FF_TIMELINE=true VITE_FF_CAMPAIGN=true VITE_FF_TWIN=true vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

@@ -16,7 +16,7 @@ import type {
 } from '@/types';
 import type { RunRecord } from '@/lib/sim/types';
 import { dispatchStorageFailed, getAllRecords, getRecord, putRecordIfAbsent } from '@/lib/db';
-import { legacyPlanForEnvironment, migrateEnvironmentStore, siteFromLegacyPlans } from '@/lib/environment-model';
+import { legacyPlanForEnvironment, migrateEnvironmentStore } from '@/lib/environment-model';
 import { CAMPAIGN_ENABLED, ENV_RECORDS_ENABLED, TIMELINE_ENABLED, TWIN_ENABLED } from '@/lib/featureFlags';
 import {
   seedCells,
@@ -27,6 +27,7 @@ import {
   seedSensors,
   seedSimulations,
 } from '@/data/seed';
+import { seedDemoSites } from '@/data/demoWorlds';
 import { estimateFrostDates } from '@/lib/frost';
 
 const STORAGE_KEY = 'ff-pro:v1';
@@ -66,7 +67,7 @@ function seedState(): AppState {
     elevationM: null,
     ...estimateFrostDates(f.lat),
   }));
-  const sites = ENV_RECORDS_ENABLED ? siteFromLegacyPlans(seedPlans) : {};
+  const sites = ENV_RECORDS_ENABLED ? seedDemoSites() : {};
   const selectedEnvironmentIds = ENV_RECORDS_ENABLED
     ? Object.fromEntries(Object.entries(sites).map(([farmId, site]) => [farmId, site.environments[0]!.id]))
     : {};

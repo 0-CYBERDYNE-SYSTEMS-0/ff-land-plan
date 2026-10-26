@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { assetBySlug, assetLibrary } from '@/data/assets';
+import { missingUpdatedDemoWorlds } from '@/data/demoWorlds';
 import { apiFetch } from '@/lib/api';
 import { archetypes, LEGACY_SURFACE_FOR_ARCHETYPE, planningProfiles } from '@/creative/archetypes';
 import type { GardenTemplate } from '@/data/templates';
+import { environmentForTemplate, planForTemplate } from '@/lib/template-plan';
 import { ASSET_PHYSICS_ENABLED, CAMPAIGN_ENABLED, ENV_CLIMATE_ENABLED, ENV_RECORDS_ENABLED } from '@/lib/featureFlags';
 import { clearEnvironmentPlanting } from '@/lib/campaign';
 import { layoutWithinBounds } from './layoutEditing';
@@ -128,7 +130,11 @@ function rectangleOverlaps(a: { x: number; y: number; widthM: number; depthM: nu
 }
 
 function instanceOverlapsReservedArea(environment: Environment, item: NonNullable<Environment['instances']>[number]): boolean {
-  if (item.mount.kind !== 'floor' || !environment.layout) return false;
+  return item.mount.kind === 'floor' && rectangleOverlapsReservedArea(environment, item);
+}
+
+function rectangleOverlapsReservedArea(environment: Environment, item: { x: number; y: number; widthM: number; depthM: number }): boolean {
+  if (!environment.layout) return false;
   const x0 = item.x;
   const y0 = item.y;
   const x1 = x0 + item.widthM;
@@ -1021,77 +1027,107 @@ export function usePlanEditor(farmId: number) {
     if (options.save) scheduleAutosave(nextPlan);
   }, [pushUndo, scheduleAutosave, snapshotPlanHistory, syncCanonicalPlan, updateStats]);
 
-  const applyTemplate = useCallback((tpl: GardenTemplate) => {
+  const applyTemplate = useCallback(async (tpl: GardenTemplate, recordHistory = true) => {
     const plan = planRef.current;
     if (!plan) return false;
     const activeEnvironment = environmentRef.current;
     const isEnvironmentScope = ENV_RECORDS_ENABLED && scopeRef.current.kind === 'env' && activeEnvironment;
     if (isEnvironmentScope) {
       const profile = planningProfiles[archetypes[activeEnvironment.archetype].planningProfile];
-      if (!profile.compatibleTemplates.includes(tpl.id)) {
+      if (!profile.compatibleTemplates.includes(tpl.id) || !tpl.archetypes.includes(activeEnvironment.archetype)) {
         toast.error(`“${tpl.name}” is not compatible with ${archetypes[activeEnvironment.archetype].label}.`);
         return false;
       }
-      if (!archetypes[activeEnvironment.archetype].tierPlanningAvailable && Object.values(tpl.ground).includes('plant-rack')) {
+      if (!archetypes[activeEnvironment.archetype].tierPlanningAvailable &&
+          (tpl.growingSpaces ?? []).some((space) => space.kind === 'rack' && space.levels.length > 1)) {
         toast.error('This layout contains rack planting. Tier planning is unavailable for this world yet.');
         return false;
       }
-      const requiredWidth = Math.max(tpl.widthM ?? 0, ...[...Object.keys(tpl.ground), ...Object.keys(tpl.planting)].map((key) => (parseKey(key)[0] + 1) * plan.cellM));
-      const requiredHeight = Math.max(tpl.heightM ?? 0, ...[...Object.keys(tpl.ground), ...Object.keys(tpl.planting)].map((key) => (parseKey(key)[1] + 1) * plan.cellM));
+      const floorKeys = [...Object.keys(tpl.ground), ...Object.keys(tpl.planting)];
+      const requiredWidth = Math.max(tpl.widthM ?? 0,
+        ...floorKeys.map((key) => (parseKey(key)[0] + 1) * plan.cellM),
+        ...(tpl.growingSpaces ?? []).map((space) => space.x + space.widthM),
+        ...(tpl.instances ?? []).map((instance) => instance.x + instance.widthM));
+      const requiredHeight = Math.max(tpl.heightM ?? 0,
+        ...floorKeys.map((key) => (parseKey(key)[1] + 1) * plan.cellM),
+        ...(tpl.growingSpaces ?? []).map((space) => space.y + space.depthM),
+        ...(tpl.instances ?? []).map((instance) => instance.y + instance.depthM));
       if (requiredWidth > plan.widthM || requiredHeight > plan.heightM) {
         toast.error(`“${tpl.name}” needs at least ${requiredWidth.toFixed(2)} m × ${requiredHeight.toFixed(2)} m. Resize the world before applying it.`);
         return false;
       }
-      if ([...Object.keys(tpl.ground), ...Object.keys(tpl.planting)].some((key) => cellOverlapsReservedArea(activeEnvironment, key))) {
+      const withinBounds = (rect: { x: number; y: number; widthM: number; depthM: number }) =>
+        rect.x >= 0 && rect.y >= 0 && rect.x + rect.widthM <= plan.widthM && rect.y + rect.depthM <= plan.heightM;
+      const spaces = tpl.growingSpaces ?? [];
+      const invalidTarget = (tpl.targets ?? []).some((target) => {
+        const space = spaces.find((entry) => entry.id === target.growingSpaceId);
+        if (!space || !space.levels.some((level) => level.id === target.levelId)) return true;
+        return Object.keys(target.planting).some((key) => {
+          const [x, y] = parseKey(key);
+          const x0 = x * plan.cellM;
+          const y0 = y * plan.cellM;
+          return !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 ||
+            x0 < space.x || y0 < space.y || x0 + plan.cellM > space.x + space.widthM || y0 + plan.cellM > space.y + space.depthM;
+        });
+      });
+      const invalidMount = (tpl.instances ?? []).some((instance) => {
+        const mount = instance.mount;
+        if (mount.kind !== 'growing-level') return false;
+        const space = spaces.find((entry) => entry.id === mount.growingSpaceId);
+        return !space || !space.levels.some((level) => level.id === mount.levelId);
+      });
+      const invalidFootprint = spaces.some((space) => !withinBounds(space)) ||
+        (tpl.instances ?? []).some((instance) => !withinBounds(instance));
+      const invalidFloorCell = floorKeys.some((key) => {
+        const [x, y] = parseKey(key);
+        return !Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= planCols(plan) || y >= planRows(plan);
+      });
+      if (invalidFootprint || invalidFloorCell) {
+        toast.error(`“${tpl.name}” does not fit inside this world. Resize the world before applying it.`);
+        return false;
+      }
+      if (invalidTarget || invalidMount) {
+        toast.error(`“${tpl.name}” has an invalid growing-space target or equipment mount.`);
+        return false;
+      }
+      if (spaces.some((space) => rectangleOverlapsReservedArea(activeEnvironment, space)) ||
+          floorKeys.some((key) => cellOverlapsReservedArea(activeEnvironment, key)) ||
+          (tpl.instances ?? []).some((instance) => instance.mount.kind === 'floor' && instanceOverlapsReservedArea(activeEnvironment, instance))) {
         toast.error(`“${tpl.name}” uses a reserved aisle, service area or access opening in this world.`);
         return false;
       }
+      const materialized = environmentForTemplate(activeEnvironment, tpl, crops);
+      await commitEnvironment(materialized.environment, recordHistory, cloneEnvironment(activeEnvironment), activeTargetRef.current);
+      toast.success(materialized.skippedCrops > 0
+        ? `Applied “${tpl.name}” · ${materialized.skippedCrops} unknown crop${materialized.skippedCrops === 1 ? '' : 's'} skipped`
+        : `Applied “${tpl.name}”`);
+      return true;
     }
-    const widthM = isEnvironmentScope ? plan.widthM : tpl.widthM ?? plan.widthM;
-    const heightM = isEnvironmentScope ? plan.heightM : tpl.heightM ?? plan.heightM;
+    if ((tpl.growingSpaces?.length ?? 0) > 0 || (tpl.instances?.length ?? 0) > 0 || (tpl.targets?.length ?? 0) > 0) {
+      toast.error('This starter needs a growing-world record to save its equipment and growing levels.');
+      return false;
+    }
+    const widthM = tpl.widthM ?? plan.widthM;
+    const heightM = tpl.heightM ?? plan.heightM;
     const cols = planCols({ ...plan, widthM });
     const rows = planRows({ ...plan, heightM });
     const inBounds = (key: string) => {
       const [x, y] = parseKey(key);
       return x >= 0 && y >= 0 && x < cols && y < rows;
     };
-    const nameToId = new Map(crops.map((crop) => [crop.name.toLowerCase(), crop.id]));
-    const plantedAtIso = new Date().toISOString();
-    const planting: Record<string, number> = {};
-    const ground: Record<string, string> = {};
-    const plantedAt: Record<string, string> = {};
-    let skippedCrops = 0;
-    for (const [key, slug] of Object.entries(tpl.ground)) {
-      if (!inBounds(key)) continue;
-      ground[key] = slug;
+    const { plan: templatedPlan, skippedCrops } = planForTemplate(plan, tpl, crops);
+    for (const key of Object.keys(templatedPlan.ground)) if (!inBounds(key)) delete templatedPlan.ground[key];
+    for (const key of Object.keys(templatedPlan.planting)) if (!inBounds(key)) {
+      delete templatedPlan.planting[key];
+      delete templatedPlan.plantedAt?.[key];
     }
-    for (const [key, cropName] of Object.entries(tpl.planting)) {
-      if (!inBounds(key)) continue;
-      const id = nameToId.get(cropName.toLowerCase());
-      if (id === undefined) {
-        skippedCrops += 1;
-        continue;
-      }
-      planting[key] = id;
-      const daysAgo = tpl.plantedAtDaysAgo?.[cropName] ?? 0;
-      plantedAt[key] = daysAgo > 0 ? new Date(Date.now() - daysAgo * 86_400_000).toISOString() : plantedAtIso;
-    }
-    const next: PlanState = {
-      ...plan,
-      widthM,
-      heightM,
-      ...(!isEnvironmentScope && tpl.surface ? { surface: tpl.surface } : {}),
-      planting,
-      ground,
-      plantedAt,
-      updatedAt: new Date().toISOString(),
-    };
+    const next = { ...templatedPlan, widthM, heightM, ...(!isEnvironmentScope && tpl.surface ? { surface: tpl.surface } : {}) };
     replacePlan(next, { save: true, recordHistory: clonePlan(plan) });
     toast.success(skippedCrops > 0
       ? `Applied “${tpl.name}” · ${skippedCrops} unknown crop${skippedCrops === 1 ? '' : 's'} skipped`
       : `Applied “${tpl.name}”`);
     return true;
-  }, [crops, replacePlan]);
+  }, [commitEnvironment, crops, replacePlan]);
 
   const getCellFromEvent = useCallback((event: Pick<ReactPointerEvent<HTMLCanvasElement>, 'clientX' | 'clientY'>) => {
     const canvas = canvasRef.current;
@@ -1772,9 +1808,19 @@ export function usePlanEditor(farmId: number) {
     queryClient.setQueryData(['selected-environment', farmId], created.id);
     setStaleSelectionId(null);
     activateEnvironment(created);
-    if (starter) applyTemplate(starter);
+    if (starter) await applyTemplate(starter, false);
     return created;
   }, [activateEnvironment, applyTemplate, farmId, finishStroke, flushAutosave, pushUndo, queryClient, selectedEnvironmentId, updateSiteCache]);
+
+  const loadUpdatedDemoWorlds = useCallback(async () => {
+    const site = siteRef.current;
+    if (!site) return 0;
+    const additions = missingUpdatedDemoWorlds(farmId, site);
+    if (additions.length === 0) return 0;
+    await commitSite({ ...site, environments: [...site.environments, ...additions] });
+    toast.success(`Loaded ${additions.length} updated demo world${additions.length === 1 ? '' : 's'}. Existing worlds were kept.`);
+    return additions.length;
+  }, [commitSite, farmId]);
 
   const moveWorld = useCallback(async (environmentId: string, x: number, y: number) => {
     const site = siteRef.current;
@@ -2672,6 +2718,7 @@ export function usePlanEditor(farmId: number) {
     startNextPlan,
     commitExternalEnvironmentMutation,
     createWorld,
+    loadUpdatedDemoWorlds,
     moveWorld,
     saveWorld,
     duplicateWorld,

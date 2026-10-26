@@ -30,37 +30,82 @@ const ICONS: Record<ArchetypeId, string> = {
 };
 
 function templateMinimum(tpl: GardenTemplate): { widthM: number; heightM: number } {
-  let maxX = -1;
-  let maxY = -1;
-  for (const key of [...Object.keys(tpl.ground), ...Object.keys(tpl.planting)]) {
+  let widthM = tpl.widthM ?? 0;
+  let heightM = tpl.heightM ?? 0;
+  for (const key of [...Object.keys(tpl.ground), ...Object.keys(tpl.planting), ...(tpl.targets ?? []).flatMap((target) => Object.keys(target.planting))]) {
     const [x, y] = key.split(',').map(Number);
     if (Number.isFinite(x) && Number.isFinite(y)) {
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
+      widthM = Math.max(widthM, (x + 1) * 0.25);
+      heightM = Math.max(heightM, (y + 1) * 0.25);
     }
   }
-  const cellM = 0.25;
-  return {
-    widthM: Math.max(tpl.widthM ?? 0, (maxX + 1) * cellM),
-    heightM: Math.max(tpl.heightM ?? 0, (maxY + 1) * cellM),
-  };
+  for (const space of tpl.growingSpaces ?? []) {
+    widthM = Math.max(widthM, space.x + space.widthM);
+    heightM = Math.max(heightM, space.y + space.depthM);
+  }
+  for (const instance of tpl.instances ?? []) {
+    widthM = Math.max(widthM, instance.x + instance.widthM);
+    heightM = Math.max(heightM, instance.y + instance.depthM);
+  }
+  return { widthM, heightM };
+}
+
+function templateOverlapsReservedArea(
+  tpl: GardenTemplate,
+  layout: NonNullable<ReturnType<typeof makeEnvironment>['layout']> | undefined,
+  widthM: number,
+  heightM: number,
+): boolean {
+  if (!layout) return false;
+  const reservations = [...layout.reservations, ...layout.access.map((access) => ({
+    x: access.edge === 'west' ? 0 : access.edge === 'east' ? widthM - 0.25 : access.offsetM,
+    y: access.edge === 'north' ? 0 : access.edge === 'south' ? heightM - 0.25 : access.offsetM,
+    widthM: access.edge === 'west' || access.edge === 'east' ? 0.25 : access.widthM,
+    depthM: access.edge === 'west' || access.edge === 'east' ? access.widthM : 0.25,
+  }))];
+  const overlaps = (a: { x: number; y: number; widthM: number; depthM: number }, b: { x: number; y: number; widthM: number; depthM: number }) =>
+    a.x < b.x + b.widthM && a.x + a.widthM > b.x && a.y < b.y + b.depthM && a.y + a.depthM > b.y;
+  const floorItems = [
+    ...[...Object.keys(tpl.ground), ...Object.keys(tpl.planting)].map((key) => {
+      const [x, y] = key.split(',').map(Number);
+      return { x: x! * 0.25, y: y! * 0.25, widthM: 0.25, depthM: 0.25 };
+    }),
+    ...(tpl.instances ?? []).filter((instance) => instance.mount.kind === 'floor'),
+    ...(tpl.growingSpaces ?? []),
+  ];
+  return floorItems.some((item) => reservations.some((area) => overlaps(item, area)));
 }
 
 function placedItems(tpl: GardenTemplate): string[] {
   const counts = new Map<string, number>();
   for (const slug of Object.values(tpl.ground)) counts.set(slug, (counts.get(slug) ?? 0) + 1);
-  return [...counts]
+  const placed = [...counts]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([slug, cells]) => {
       const asset = assetBySlug(slug);
       const area = (cells * 0.25 * 0.25).toFixed(2).replace(/\.00$/, '');
       return `${asset?.label ?? slug}: ${area} m² (${cells} cells)`;
     });
+  const installed = new Map<string, number>();
+  for (const instance of tpl.instances ?? []) installed.set(instance.slug, (installed.get(instance.slug) ?? 0) + 1);
+  for (const [slug, count] of [...installed].sort(([a], [b]) => a.localeCompare(b))) {
+    placed.push(`${count} installed ${assetBySlug(slug)?.label ?? slug}${count === 1 ? '' : 's'}`);
+  }
+  const spaces = tpl.growingSpaces ?? [];
+  if (spaces.length > 0) {
+    const kinds = new Map<string, number>();
+    for (const space of spaces) kinds.set(space.kind, (kinds.get(space.kind) ?? 0) + 1);
+    placed.push(`Growing spaces: ${[...kinds].map(([kind, count]) => `${count} ${kind}${count === 1 ? '' : 's'}`).join(', ')}`);
+  }
+  return placed;
 }
 
 function plantedItems(tpl: GardenTemplate): string[] {
   const counts = new Map<string, number>();
   for (const crop of Object.values(tpl.planting)) counts.set(crop, (counts.get(crop) ?? 0) + 1);
+  for (const target of tpl.targets ?? []) {
+    for (const crop of Object.values(target.planting)) counts.set(crop, (counts.get(crop) ?? 0) + 1);
+  }
   return [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([crop, cells]) => `${crop}: ${cells} cells`);
 }
 
@@ -146,12 +191,13 @@ export function GrowingWorldSetup({ farmId, onCreate, onCancel, creating = false
     () => profile.compatibleTemplates
       .map((id) => templates.find((tpl) => tpl.id === id))
       .filter((tpl): tpl is GardenTemplate => tpl !== undefined)
-      .filter((tpl) => archetype.tierPlanningAvailable || !Object.values(tpl.ground).includes('plant-rack')),
-    [archetype.tierPlanningAvailable, profile.compatibleTemplates],
+      .filter((tpl) => tpl.archetypes.includes(archetypeId))
+      .filter((tpl) => archetype.tierPlanningAvailable || !(tpl.growingSpaces ?? []).some((space) => space.kind === 'rack' && space.levels.length > 1)),
+    [archetype.tierPlanningAvailable, archetypeId, profile.compatibleTemplates],
   );
   const template = compatibleTemplates.find((item) => item.id === templateId);
   const min = template ? templateMinimum(template) : { widthM: 0, heightM: 0 };
-  const templateFits = !template || (setupWidthM >= min.widthM && setupDepthM >= min.heightM);
+  const templateDimensionsFit = !template || (setupWidthM >= min.widthM && setupDepthM >= min.heightM);
   const defaultAccessEdge = profile.accessDefaults[0]?.edge;
   const setupPreview = useMemo(() => makeEnvironment(farmId, {
     archetype: archetypeId,
@@ -162,6 +208,8 @@ export function GrowingWorldSetup({ farmId, onCreate, onCancel, creating = false
   }, 'setup-preview'), [archetype.shell, archetypeId, farmId, setupDepthM, setupWidthM, usableHeightM]);
   const selectedAccessLayout = layoutWithAccessOnEdge(setupPreview, accessEdge);
   const selectedAccess = selectedAccessLayout?.access[0];
+  const templateAccessFits = !template || !templateOverlapsReservedArea(template, selectedAccessLayout, setupWidthM, setupDepthM);
+  const templateFits = templateDimensionsFit && templateAccessFits;
 
   useEffect(() => {
     setLabel(archetypes[archetypeId].label);
@@ -182,8 +230,12 @@ export function GrowingWorldSetup({ farmId, onCreate, onCancel, creating = false
       setError('Enter usable interior height from 0.25 m to 20 m.');
       return;
     }
-    if (!templateFits) {
+    if (!templateDimensionsFit) {
       setError(`“${template?.name}” needs at least ${min.widthM.toFixed(2)} m × ${min.heightM.toFixed(2)} m to fit.`);
+      return;
+    }
+    if (!templateAccessFits) {
+      setError('The selected starter overlaps the access opening or a reserved service area. Choose another opening edge.');
       return;
     }
     setError(null);

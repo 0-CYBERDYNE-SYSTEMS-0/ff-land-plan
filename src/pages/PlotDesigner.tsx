@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { apiFetch } from '@/lib/api';
+import { missingUpdatedDemoWorlds } from '@/data/demoWorlds';
 import { buildSeasonPreview, makeSeasonRecord, rotationCellKey, rotationHint, rotationIndexFromSeasons } from '@/lib/campaign';
 import { CAMPAIGN_ENABLED, ENV_RECORDS_ENABLED, TIMELINE_ENABLED } from '@/lib/featureFlags';
 import { fetchSeasonEnsembles } from '@/lib/ensembles';
@@ -483,6 +484,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
   const siteScope = editor.featureEnabled && editor.scope.kind === 'site';
   if (siteScope) {
     const empty = editor.environments.length === 0;
+    const hasUpdatedDemoWorlds = missingUpdatedDemoWorlds(farmId, editor.sitePlan).length > 0;
     const createWorld = async (input: Parameters<typeof editor.createWorld>[0], starter: Parameters<typeof editor.createWorld>[1]) => {
       setCreatingWorld(true);
       try {
@@ -514,6 +516,15 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
             </Button>
           </div>
           {!empty && <Button size="sm" onClick={() => openSetup()}>Add growing world</Button>}
+          {!empty && hasUpdatedDemoWorlds && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { void editor.loadUpdatedDemoWorlds().catch((error) => toast.error((error as Error).message)); }}
+            >
+              Load updated demo worlds
+            </Button>
+          )}
         </div>
         {editor.staleSelectionId && (
           <div className="rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 text-sm" role="status">

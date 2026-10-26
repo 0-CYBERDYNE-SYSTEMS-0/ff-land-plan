@@ -326,7 +326,11 @@ export function buildEnvironmentAssets(environment: Environment, plan: PlanState
     const mount = instance.mount;
     const space = mount.kind === 'growing-level'
       ? environment.layout?.growingSpaces.find((entry) => entry.id === mount.growingSpaceId)
-      : undefined;
+      : instance.slug === 'plant-rack'
+        ? environment.layout?.growingSpaces.find((entry) => entry.kind === 'rack' &&
+          instance.x < entry.x + entry.widthM && instance.x + instance.widthM > entry.x &&
+          instance.y < entry.y + entry.depthM && instance.y + instance.depthM > entry.y)
+        : undefined;
     const level = mount.kind === 'growing-level'
       ? space?.levels.find((entry) => entry.id === mount.levelId)
       : undefined;

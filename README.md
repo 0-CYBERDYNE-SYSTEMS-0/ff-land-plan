@@ -35,6 +35,10 @@ npm run dev
 
 Open the address it prints. North Meadow is the farm in the picture.
 
+To run or build the full demo with all six core-loop feature flags enabled, use
+`npm run dev:demo` or `npm run build:demo`. The standard `dev` and `build`
+commands keep those opt-in features disabled.
+
 ## License
 
 [MIT](LICENSE).

@@ -1847,3 +1847,18 @@ snapshots changed, and no application implementation is claimed by this revision
   (30 files / 120 tests), `npm run typecheck` passes, and `npm run build` passes with the existing
   Vite large-chunk advisory. `npm run check:private` passed for 443 tracked files before the
   final exact staging pass; rerun it after staging to include newly added files.
+
+## 2026-10-25 — Demo worlds and starter templates
+
+- Fresh environment-record stores now seed the existing tent, mushroom, greenhouse, hoophouse
+  and warehouse demos with canonical growing spaces, target crops and mounted equipment. The
+  warehouse keeps its full crop inventory across four-level rack targets and a lit hydro raft.
+- Added stable, additive updated-demo worlds for old saved demo sites. Loading them preserves
+  existing layouts and selected worlds; repeated loads add nothing. Fresh garden, greenhouse and
+  cold-frame demos join the Backyard Homestead site.
+- Starter templates declare archetype compatibility and materialize floor plans, growing levels,
+  crops and equipment through the environment snapshot/undo seam. Setup preview includes elevated
+  crop counts and installed equipment. Standard scripts remain flag-off; `dev:demo` and
+  `build:demo` turn on all six core-loop flags.
+- Verification: `npm run typecheck`, `npm test` (31 files / 128 tests), `npm run build:demo`, and
+  `git diff --check` passed. Independent browser review is being completed before commit.
