@@ -1861,4 +1861,5 @@ snapshots changed, and no application implementation is claimed by this revision
   crop counts and installed equipment. Standard scripts remain flag-off; `dev:demo` and
   `build:demo` turn on all six core-loop flags.
 - Verification: `npm run typecheck`, `npm test` (31 files / 128 tests), `npm run build:demo`, and
-  `git diff --check` passed. Independent browser review is being completed before commit.
+  `git diff --check` passed. Independent browser review passed template apply/undo/reload,
+  container setup, and additive migration/update/reload.
