@@ -2021,3 +2021,8 @@ snapshots changed, and no application implementation is claimed by this revision
   builds, private-file guard, and `git diff --check` passed. This is A-07 software evidence only;
   the row remains UNVERIFIED until the broader spacing, mortality, management, target and golden
   matrix is covered across v2/v3/v4.
+- A-07 checkpoint `84d2eecf11b0f8763cc16e30e7c42b93994660fb` is pushed to PR #82. Actual CI run
+  [40542256309](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40542256309)
+  passed `test + typecheck + build`, `Playwright production Pages-path smoke`,
+  `secret + private-file scan`, and `GitGuardian Security Checks` on that exact SHA. The broader
+  A-07 matrix and 02A remain incomplete.
