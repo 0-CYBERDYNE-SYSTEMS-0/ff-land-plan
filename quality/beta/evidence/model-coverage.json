@@ -245,7 +245,7 @@
     },
     {
       "id": "WOFOST-7-2-SYSTEM-DESCRIPTION",
-      "citation": "de Wit et al., System description of the WOFOST 7.2 cropping systems model, Wageningen University & Research model documentation.",
+      "citation": "de Wit, A.J.W., Boogaard, H.L., Supit, I., and van den Berg, M. (editors), System description of the WOFOST 7.2 cropping systems model, Wageningen Environmental Research, May 2020.",
       "url": "https://wofost.readthedocs.io/en/stable/_downloads/a552f9d445b6dd13f7db99ec29b64f0b/WOFOST_system_description.pdf",
       "retrievedDate": "2026-10-27",
       "artifact": {
@@ -254,8 +254,8 @@
         "localPath": null,
         "status": "official document reviewed online; binary not retained in this repository"
       },
-      "licenseOrReuse": "Method reference only; no source code, crop parameters, or document text copied.",
-      "sourceVersion": "WOFOST 7.2 system description, ReadTheDocs stable download"
+      "licenseOrReuse": "Relicensed with permission under Creative Commons Attribution 4.0 International (CC BY 4.0), as stated in the document. Used as a method reference; no source code, crop parameters, or document text copied.",
+      "sourceVersion": "WOFOST 7.2 system description, May 2020; editors A.J.W. de Wit, H.L. Boogaard, I. Supit and M. van den Berg"
     }
   ],
   "evidenceRecords": [
@@ -916,7 +916,7 @@
         "sowing-depth and seedbed aggregate/crust inputs by field treatment",
         "raw treatment-level emergence trajectories and replicate counts"
       ],
-      "calibrationOrHoldout": "potential emergence-only holdout; not executable with current artifact/input availability; not a full-crop holdout",
+      "calibrationOrHoldout": "potential emergence-only holdout only if no FarmFriend emergence parameters are fitted or corrected against these outcomes; not executable with current artifact/input availability; not a full-crop holdout",
       "units": {
         "emergenceRate": "% of sown seed",
         "emergenceDuration": "days"
@@ -965,7 +965,7 @@
         "TSUMEM": "°C·day",
         "TBASEM": "°C",
         "TEFFMX": "°C",
-        "TDWI": "total crop dry weight; WOFOST-specific parameter units and partitioning apply"
+        "TDWI": "initial total crop dry weight, kg/ha; WOFOST partitions it at emergence according to its own crop-model parameters"
       },
       "startEvent": "Sowing, or an explicitly selected emergence start with known initial crop state.",
       "normalizedStartEvents": ["direct-sowing"],
@@ -978,7 +978,7 @@
       ],
       "sourceUrl": "https://wofost.readthedocs.io/en/stable/_downloads/a552f9d445b6dd13f7db99ec29b64f0b/WOFOST_system_description.pdf",
       "sourceRetrievedDate": "2026-10-27",
-      "sourceVersion": "WOFOST 7.2 system description, official ReadTheDocs PDF",
+      "sourceVersion": "WOFOST 7.2 system description, May 2020; editors A.J.W. de Wit, H.L. Boogaard, I. Supit and M. van den Berg",
       "sourceArtifactSha256": null,
       "sourceLicenseOrReuse": "Method reference only; parameter values, code, and document text are not copied.",
       "tolerance": "No numerical tolerance proposed; this is a structural method reference, not a source reproduction."
@@ -2526,15 +2526,15 @@
       },
       {
         "id": "establishment-event-gating",
-        "tolerance": "exact event-date gating; exactly zero pre-emergence photosynthetic DM increment and plant uptake/flux",
-        "status": "proposed-pending-independent-review",
-        "scope": "synthetic software invariant only; not emergence prediction accuracy; thermal clock follows its separately frozen source start event"
+        "tolerance": "exact event-date gating; exactly zero pre-emergence photosynthetic DM increment, plant root-zone uptake/transpiration, dynamic root-depth growth, and plant nutrient uptake",
+        "status": "approved-software-invariant",
+        "scope": "synthetic software invariant only; not emergence prediction accuracy; thermal clock follows its separately frozen source start event; delayed direct-sown dynamic roots require an emergence-relative initial root state"
       },
       {
         "id": "bean-field-emergence-prediction",
         "tolerance": "none proposed; no candidate comparison authorized",
         "status": "source-inputs-incomplete",
-        "condition": "acquire treatment-level emergence trajectories, counts, and complete daily seedbed temperature/water plus depth/structure inputs; then preregister a source-specific tolerance and obtain validator approval"
+        "condition": "acquire treatment-level emergence trajectories, counts, and complete daily seedbed temperature/water plus depth/structure inputs; do not fit or correct FarmFriend emergence parameters against the outcomes if used as holdout; then preregister a source-specific tolerance and obtain validator approval"
       },
       {
         "id": "bean-lab-germination-reproduction",
