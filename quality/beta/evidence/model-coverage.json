@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 harvest software checkpoints; candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -26,7 +26,8 @@
     "environmentV2TranspirationFixture": "quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json",
     "sourceEquationOnlyFixture": "BROCCOLI-OHAYOU-SPRING-CONTROL-SYNTHETIC-SOLAR-EQUATION-01",
     "v3HarvestPayoutSoftwareFixture": "V3-FROZEN-DM-HARVEST-PAYOUT-SYNTHETIC-01",
-    "v2AutoHarvestPayoutSoftwareFixture": "V2-AUTO-DM-HARVEST-PAYOUT-SYNTHETIC-01"
+    "v2AutoHarvestPayoutSoftwareFixture": "V2-AUTO-DM-HARVEST-PAYOUT-SYNTHETIC-01",
+    "v3TerminalFrostFreezeSoftwareFixture": "V3-POST-TERMINAL-FROST-THERMAL-FREEZE-SYNTHETIC-01"
   },
   "sources": [
     {
@@ -1305,6 +1306,46 @@
       "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\"",
       "candidateComparison": false,
       "status": "One synthetic v2 automatic harvest payout software regression only. A-07 and 02A remain UNVERIFIED overall; this fixture establishes no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive accuracy."
+    },
+    {
+      "id": "V3-POST-TERMINAL-FROST-THERMAL-FREEZE-SYNTHETIC-01",
+      "classification": "synthetic frozen-input software regression; not a crop benchmark",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "not asserted; catalog identity is fixture routing only and production, soil, and establishment values are synthetic"
+      },
+      "environment": "synthetic three-day floor-cell reducer sequence; no weather reproduction or observed site inputs",
+      "modelVersion": "crop-model-v3 with frozen crop, soil, per-cell transplant establishment, and synthetic thermal inputs",
+      "syntheticInputs": {
+        "initialAboveGroundDryMatterGPerM2": 10,
+        "startEvent": "transplanting",
+        "plantedAtDate": "2026-10-01",
+        "environmentDates": [
+          "2026-10-01",
+          "2026-10-02",
+          "2026-10-03"
+        ],
+        "dailyTMinTMaxC": [
+          [20, 25],
+          [-2, 3],
+          [20, 25]
+        ],
+        "sequence": "warm living tick, terminal-frost tick, warm post-death tick",
+        "warmDayGddBase10C": 12.5,
+        "weatherProvenance": "deterministic test-helper defaults; not observed weather"
+      },
+      "expected": {
+        "livingThermalProgress": "gddAccumC and sourceThermalCdays are both positive after the first warm tick and remain positive at terminal-frost death",
+        "terminalFrost": "cell is dead after the -2 to 3 C second tick",
+        "postDeathFreeze": "gddAccumC and sourceThermalCdays exactly equal their death-state values after the third, positive-GDD tick",
+        "postDeathDryMatter": "exactly equals the death-state value",
+        "postDeathWaterUseMm": 0,
+        "tolerance": "Exact state equality for this deterministic software invariant; no fitted or empirical tolerance."
+      },
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"applies qualified heat response and terminal frost mortality after establishment\"",
+      "candidateComparison": false,
+      "status": "One synthetic v3 post-terminal-frost thermal-freeze software regression only. A-07 and 02A remain UNVERIFIED overall; this fixture establishes no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive accuracy."
     }
   ],
   "coverageSummary": {

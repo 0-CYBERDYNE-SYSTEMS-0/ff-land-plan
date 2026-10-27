@@ -653,11 +653,26 @@ describe('frozen crop model inputs and replay support', () => {
     expect(hotCell.dryMatterGPerM2).toBeGreaterThan(10);
     expect(hotCell.dryMatterGPerM2).toBeLessThan(mild.state.cells[key]!.dryMatterGPerM2!);
 
-    const frostEnv = day('2026-10-01', -2, 3);
-    const frost = stepDay(createRun(activeRun), frostEnv, activeRun);
-    const afterDeath = stepDay(frost.state, day('2026-10-02', 20, 25), activeRun);
-    expect(frost.state.cells[key]?.dead).toBe(true);
-    expect(afterDeath.state.cells[key]?.dryMatterGPerM2).toBe(frost.state.cells[key]?.dryMatterGPerM2);
+    const warmLivingEnv = day('2026-10-01', 20, 25);
+    expect(warmLivingEnv.gddBase10C).toBeGreaterThan(0);
+    const living = stepDay(createRun(activeRun), warmLivingEnv, activeRun);
+    const frostEnv = day('2026-10-02', -2, 3);
+    const frost = stepDay(living.state, frostEnv, activeRun);
+    const postDeathWarmEnv = day('2026-10-03', 20, 25);
+    expect(postDeathWarmEnv.gddBase10C).toBeGreaterThan(0);
+    const afterDeath = stepDay(frost.state, postDeathWarmEnv, activeRun);
+    const livingCell = living.state.cells[key]!;
+    const frostCell = frost.state.cells[key]!;
+    const afterDeathCell = afterDeath.state.cells[key]!;
+
+    expect(livingCell.gddAccumC).toBeGreaterThan(0);
+    expect(livingCell.sourceThermalCdays).toBeGreaterThan(0);
+    expect(frostCell.dead).toBe(true);
+    expect(frostCell.gddAccumC).toBeGreaterThan(0);
+    expect(frostCell.sourceThermalCdays).toBeGreaterThan(0);
+    expect(afterDeathCell.dryMatterGPerM2).toBe(frostCell.dryMatterGPerM2);
+    expect(afterDeathCell.gddAccumC).toBe(frostCell.gddAccumC);
+    expect(afterDeathCell.sourceThermalCdays).toBe(frostCell.sourceThermalCdays);
     expect(afterDeath.dayStats.waterUseMm).toBe(0);
   });
 
