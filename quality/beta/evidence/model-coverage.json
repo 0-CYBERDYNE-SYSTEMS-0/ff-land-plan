@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down preregistered after independent review but not executed; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -1591,6 +1591,24 @@
       "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v3 elevated-target harvest mass without harvesting its floor sibling\"",
       "candidateComparison": false,
       "status": "Implemented and independently reviewed. The focused regression passed; local verification passed 46 test files / 244 tests, typecheck, standard/demo/Pages builds, private-file guard (521 tracked files), whitespace check, and production Playwright (3/3 Pages journeys in 3.8m). Exact-head PR #82 run [40598278532](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40598278532) on SHA 627550fb7289d04136a8824c0ad43e7e1d7e91e6 passed all four named contexts: test + typecheck + build (32s), Playwright production Pages-path smoke (3/3 in 2.9m; job 3m23s), secret + private-file scan (18s), and GitGuardian Security Checks (2s). Pages cases: production build boots under the GitHub Pages project base path; unsupported environment-v2 run opens under Pages and retains its stored summary; unsupported v4 crop lifecycle is explained in World and retains its stored summary. This remains synthetic A-07 target-scoped harvest-mass software evidence only; the second simulateRun is not durable-storage serialization and no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive validity is established. A-07 and 02A remain UNVERIFIED overall."
+    },
+    {
+      "id": "FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01",
+      "classification": "synthetic v2 frozen-input reducer integration; not a crop benchmark",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "not asserted; catalog identity is fixture routing only"
+      },
+      "environment": "ten-day synthetic dry/wet single-cell open-field control; no measured weather or site soil profile",
+      "modelVersion": "crop-model-v2 with frozen synthetic production parameters and a synthetic AWC profile using an FAO-56 Example 37 reference value",
+      "syntheticInputs": "AWC 2 mm/cm, fixed effective depth 80 cm, TAW 160 mm, pTable 0.40, ETo 5 mm/day, Kc 1.2, reducer-adjusted p 0.36, zero external inflows (precipitation, irrigation, and capillary rise), zero runoff/root-growth storage, dry initial depletion 55 mm, paired wet initial depletion 0 mm, DLI 18 mol/m²/day, RUE 2 g/MJ intercepted PAR, interception 0.5, and fixed thermal/N inputs; actual transpiration is nonzero. Full inputs and daily trajectory are frozen in the linked fixture.",
+      "expected": "The dry branch follows the preregistered 10-day Ks/transpiration/storage/DM trajectory; the wet branch has Ks=1 and 40 g/m² cumulative DM gain. Both branches remain active and unharvested and replay exactly.",
+      "tolerance": "p and RAW: ≤1e-12 absolute; Ks: ≤1e-12; water flux/storage/depletion/residual: ≤1e-9 mm per day and ≤1e-8 mm signed cumulative residual; daily DM increment: ≤1e-9 g/m²; cumulative DM gain: ≤1e-8 g/m². Arithmetic only, not biological or predictive error.",
+      "evidence": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json",
+      "reproduction": "Planned: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\"",
+      "candidateComparison": false,
+      "status": "Preregistered after independent tolerance and evidence-boundary review; no reducer candidate executed; A-05 and 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
@@ -3175,6 +3193,14 @@
         "basis": "Per-cell arithmetic is 12 g DM/m² × 0.4² m² × synthetic harvest index 0.5 / 1000 = 0.00096 kg; six cells sum to 0.00576 kg before the existing two-decimal summary rounding. The 1e-12 kg bound checks JavaScript arithmetic only; it is not a model or prediction tolerance.",
         "scope": "Synthetic crop-model-v3 frozen-input regression with known zero light: manual established/live/mature payout, unestablished/dead/immature gates, repeated same-date manual request suppression, actual source maturity endpoint auto-payout, next-day no-repeat, aggregate rounding, and deterministic replay. One manually seeded impossible mature-but-unestablished state isolates an eligibility guard; no mortality model behavior is inferred.",
         "evidence": "src/lib/sim/model-inputs.test.ts"
+      },
+      {
+        "id": "fao56-v2-adjusted-p-root-drydown-integration",
+        "tolerance": "p and RAW ≤1e-12 absolute; Ks ≤1e-12; daily ET/storage/depletion/residual ≤1e-9 mm and signed cumulative residual ≤1e-8 mm; daily DM gain ≤1e-9 g/m² and cumulative gain ≤1e-8 g/m²",
+        "status": "approved by independent GPT-6 Luna max review for synthetic software arithmetic only; preregistered, not executed; candidate comparison not authorized",
+        "basis": "Independent recurrence from the frozen FAO-56 p-adjustment and root-zone equations plus the v2 RUE equation; bounds account for double-precision operation order and ten daily state updates only, not model error.",
+        "scope": "Synthetic v2 reducer integration with source-derived reference inputs adapted to v2 p adjustment (p 0.40→0.36), zero inflows, fixed depth, a paired wet control, and synthetic known-light production response. No Example 37 reproduction, drainage/root-depth/media/nutrient coverage, measured validation, or reference agreement.",
+        "evidence": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json"
       }
     ]
   },

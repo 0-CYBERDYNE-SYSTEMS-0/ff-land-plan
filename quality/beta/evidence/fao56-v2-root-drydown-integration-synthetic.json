@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01",
+  "classification": "synthetic v2 reducer integration; not a crop benchmark",
+  "status": "preregistered after independent tolerance and evidence-boundary review; not executed",
+  "preparedDate": "2026-10-27",
+  "sourceContext": {
+    "evidenceId": "FAO-56-1998",
+    "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Example 37 and the general depletion-fraction adjustment.",
+    "url": "https://www.fao.org/4/x0490e/x0490e0e.htm",
+    "retrievedDate": "2026-10-27",
+    "sourceVersion": "FAO-56 (1998), Chapter 8; official HTML chapter page",
+    "artifactSha256": null,
+    "artifactStatus": "Official HTML source reviewed online; no local snapshot or digest captured.",
+    "licenseOrReuse": "FAO publication; records derived input values and equations only, without copied table text or substantial prose.",
+    "borrowedExample37Inputs": [
+      "available water 2 mm/cm",
+      "effective root depth 0.8 m",
+      "initial depletion 55 mm",
+      "table depletion fraction p=0.40",
+      "reference ET0 5 mm/day",
+      "crop coefficient Kc=1.2",
+      "zero precipitation, irrigation, capillary rise, and runoff"
+    ],
+    "methodAdaptation": "The FAO-56 Example 37 table holds p=0.40 at ETc=6 mm/day. The crop-model-v2 reducer applies its general p adjustment, producing p=0.36. The fixture tests this reducer path and does not reuse Example 37 expected rows or claim source agreement."
+  },
+  "frozenModelInputs": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsModel": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "soilSourceTag": "unknown; numeric soil values are synthetic test inputs, not an observed profile",
+    "cropLifecycle": "plant",
+    "productionStatus": "qualified with explicit synthetic limitations",
+    "rootZoneStatus": "qualified with explicit software-domain limitations"
+  },
+  "candidateComparison": false,
+  "syntheticInputs": {
+    "crop": {
+      "catalogCropId": 1,
+      "slug": "tomato",
+      "cultivar": "not asserted; catalog identity routes the software fixture only",
+      "startEvent": "transplanting",
+      "stressTraits": {
+        "category": "vegetable",
+        "family": "Solanaceae",
+        "minimumTemperatureC": 10,
+        "maximumTemperatureC": 32,
+        "nitrogenNeedClass": "high",
+        "seasonalNitrogenNeedKgHa": 180
+      },
+      "thermalParameters": {
+        "tBaseC": 7.2,
+        "tUpperC": 33.3,
+        "gddToMaturityCdays": [1024, 1117],
+        "startEvents": ["transplanting"],
+        "accumulationStart": "Transplanting at 3–5 true leaves",
+        "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
+        "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6",
+        "sourceCitation": "Andrews et al., OSU Extension EM 9305, Tomato degree-days, Table 6 (four cultivars; 1844–2010 °F·days).",
+        "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-models-introduction-farmers-gardeners",
+        "useLimit": "Frozen only to keep the reducer crop active and below maturity for ten days; cultivar and maturity accuracy are not asserted."
+      },
+      "initialDryMatterGPerM2": 0,
+      "autoHarvest": false,
+      "cell": "0,0"
+    },
+    "soil": {
+      "awcMmPerCm": 2,
+      "organicMatterPct": 2.4,
+      "sourceStatus": "Synthetic software inputs. AWC reuses an Example 37 reference value; no site soil profile or measured soil is asserted. The frozen v2 source tag remains unknown.",
+      "effectiveRootDepthCm": 80,
+      "totalAvailableWaterMm": 160,
+      "nitrogenPoolInitialization": {
+        "initialPoolKgHa": 600,
+        "basis": "2.4% organic matter × 250 kg N/ha per percent organic matter, clamped to the existing 200..1200 kg/ha range",
+        "dailyMineralizationKgHa": 1.2,
+        "seasonalNeedKgHa": 180,
+        "maximumDailyDemandKgHa": 2.417188899,
+        "conservativePoolLowerBoundAfterTenDaysKgHa": 587.7,
+        "stressThresholdMaximumKgHa": 216,
+        "expectedNitrogenStress": 0,
+        "limit": "Bound is a software isolation check from existing reducer constants, not a soil fertility claim."
+      }
+    },
+    "rootZone": {
+      "method": "FAO-56 root-zone balance as integrated by crop-model-v2",
+      "tableDepletionFractionP": 0.4,
+      "dailyPotentialETcAdjustment": "clamp(pTable + 0.04 * (5 - ETc), 0.1, 0.8)",
+      "expectedAdjustedDepletionFractionP": 0.36,
+      "referenceEvapotranspirationMmDay": 5,
+      "cropCoefficient": 1.2,
+      "potentialTranspirationMmDay": 6,
+      "readilyAvailableWaterMm": 57.6,
+      "dryControlInitialDepletionMm": 55,
+      "dryControlInitialStorageMm": 105,
+      "dryControlInitialStorageFraction": 0.65625,
+      "wetControlInitialDepletionMm": 0,
+      "wetControlInitialStorageMm": 160,
+      "wetControlInitialStorageFraction": 1,
+      "rootDevelopment": "none; fixed 80 cm effective depth",
+      "dailyExternalInflowsMm": {
+        "precipitation": 0,
+        "irrigation": 0,
+        "capillaryRise": 0
+      },
+      "otherWaterBalanceTermsMm": {
+        "surfaceRunoff": 0,
+        "deepDrainage": 0,
+        "rootGrowthStorage": 0,
+        "actualTranspiration": "nonzero, expected in each daily row"
+      },
+      "status": "qualified",
+      "missing": [],
+      "limitations": [
+        "This is a synthetic reducer integration, not a site soil profile or crop prediction.",
+        "The source-derived Example 37 values are not used as reducer output expectations."
+      ],
+      "evidence": {
+        "evidenceId": "FAO56-EXAMPLE37-ROOT-ZONE-ARITHMETIC-REPRODUCTION-01",
+        "sourceCitation": "Allen et al. (1998), FAO-56, Chapter 8, Example 37, and the general depletion-fraction adjustment.",
+        "sourceUrl": "https://www.fao.org/4/x0490e/x0490e0e.htm",
+        "validDomain": "Synthetic v2 reducer inputs only; no Example 37 output reproduction or crop accuracy claim."
+      }
+    },
+    "production": {
+      "equationFamily": "LINTUL-net-RUE",
+      "dailyLightIntegralMolM2": 18,
+      "parMolPerMj": 4.5,
+      "interceptedParFraction": 0.5,
+      "rueGPerMjInterceptedPar": 2,
+      "harvestIndex": 0.5,
+      "expectedUnstressedGainGPerM2Day": 4,
+      "initialDryMatterGPerM2": 0,
+      "status": "qualified",
+      "missing": [],
+      "limitations": ["Synthetic production inputs used only to exercise v2 water-stress coupling to dry matter."],
+      "evidence": {
+        "evidenceId": "A05-FAO56-ADJUSTED-P-SYNTHETIC-PRODUCTION-INPUTS",
+        "sourceCitation": "Synthetic software fixture; no biological claim.",
+        "sourceUrl": "test-only:fao56-v2-adjusted-p-root-drydown",
+        "validDomain": "Software integration only; not a source parameter, cultivar estimate, or prediction."
+      },
+      "purpose": "Synthetic inputs isolate the existing v2 water-stress multiplier in the RUE production path; no crop parameter accuracy is claimed."
+    },
+    "dailyEnvironment": {
+      "startDate": "2026-10-01",
+      "dayCount": 10,
+      "intervalDays": 1,
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipMm": 0,
+      "etoMm": 5,
+      "dliNaturalMol": 18,
+      "gddBase10C": 15,
+      "runtimeProvenanceTags": "default; the current test-environment tag union has no synthetic value. The committed fixture itself identifies every daily value as synthetic."
+    },
+    "pairedControl": "The dry and wet configs are identical except rootZone.initialStorageFraction: 105/160 for dry and 1 for wet. Both use the same frozen crop, soil, production parameters, ten-day weather, start event, and management settings."
+  },
+  "expected": {
+    "recurrence": "pAdj=0.36; RAW=pAdj*TAW=57.6 mm; Ks=1 when starting depletion <= RAW, otherwise clamp((TAW-depletion)/(TAW-RAW),0,1); actual transpiration=min(storage, ETc*Ks); next storage=storage-actual transpiration; next depletion=TAW-next storage; daily DM gain=4*Ks g/m².",
+    "dryDailyRows": [
+      { "day": 1, "startDepletionMm": 55, "stressCoefficient": 1, "actualTranspirationMm": 6, "endDepletionMm": 61, "endStorageMm": 99, "dryMatterIncrementGPerM2": 4, "cumulativeDryMatterGPerM2": 4 },
+      { "day": 2, "startDepletionMm": 61, "stressCoefficient": 0.966796875, "actualTranspirationMm": 5.80078125, "endDepletionMm": 66.80078125, "endStorageMm": 93.19921875, "dryMatterIncrementGPerM2": 3.8671875, "cumulativeDryMatterGPerM2": 7.8671875 },
+      { "day": 3, "startDepletionMm": 66.80078125, "stressCoefficient": 0.9101486206054688, "actualTranspirationMm": 5.4608917236328125, "endDepletionMm": 72.26167297363281, "endStorageMm": 87.73832702636719, "dryMatterIncrementGPerM2": 3.640594482421875, "cumulativeDryMatterGPerM2": 11.507781982421875 },
+      { "day": 4, "startDepletionMm": 72.26167297363281, "stressCoefficient": 0.8568195998668671, "actualTranspirationMm": 5.140917599201202, "endDepletionMm": 77.40259057283401, "endStorageMm": 82.59740942716599, "dryMatterIncrementGPerM2": 3.4272783994674683, "cumulativeDryMatterGPerM2": 14.935060381889343 },
+      { "day": 5, "startDepletionMm": 77.40259057283401, "stressCoefficient": 0.8066153264371678, "actualTranspirationMm": 4.839691958623007, "endDepletionMm": 82.24228253145702, "endStorageMm": 77.75771746854298, "dryMatterIncrementGPerM2": 3.2264613057486713, "cumulativeDryMatterGPerM2": 18.161521687638015 },
+      { "day": 6, "startDepletionMm": 82.24228253145702, "stressCoefficient": 0.75935270965374, "actualTranspirationMm": 4.55611625792244, "endDepletionMm": 86.79839878937946, "endStorageMm": 73.20160121062054, "dryMatterIncrementGPerM2": 3.03741083861496, "cumulativeDryMatterGPerM2": 21.198932526252975 },
+      { "day": 7, "startDepletionMm": 86.79839878937946, "stressCoefficient": 0.7148593868224662, "actualTranspirationMm": 4.289156320934797, "endDepletionMm": 91.08755511031426, "endStorageMm": 68.91244488968574, "dryMatterIncrementGPerM2": 2.8594375472898648, "cumulativeDryMatterGPerM2": 24.05837007354284 },
+      { "day": 8, "startDepletionMm": 91.08755511031426, "stressCoefficient": 0.6729730946258373, "actualTranspirationMm": 4.037838567755024, "endDepletionMm": 95.12539367806929, "endStorageMm": 64.87460632193071, "dryMatterIncrementGPerM2": 2.6918923785033493, "cumulativeDryMatterGPerM2": 26.75026245204619 },
+      { "day": 9, "startDepletionMm": 95.12539367806929, "stressCoefficient": 0.6335410773626046, "actualTranspirationMm": 3.8012464641756276, "endDepletionMm": 98.92664014224492, "endStorageMm": 61.07335985775508, "dryMatterIncrementGPerM2": 2.5341643094504183, "cumulativeDryMatterGPerM2": 29.284426761496608 },
+      { "day": 10, "startDepletionMm": 98.92664014224492, "stressCoefficient": 0.5964195298608894, "actualTranspirationMm": 3.5785171791653365, "endDepletionMm": 102.50515732141025, "endStorageMm": 57.49484267858975, "dryMatterIncrementGPerM2": 2.385678119443558, "cumulativeDryMatterGPerM2": 31.670104880940166 }
+    ],
+    "wetControl": {
+      "stressCoefficientEachDay": 1,
+      "actualTranspirationMmEachDay": 6,
+      "day10EndDepletionMm": 60,
+      "day10EndStorageMm": 100,
+      "cumulativeDryMatterGainGPerM2": 40
+    },
+    "dryCumulativeDryMatterGainGPerM2": 31.670104880940166,
+    "wetMinusDryDryMatterGainGPerM2": 8.329895119059834,
+    "nonWaterStressTerms": "Heat and cold are zero because 20–30°C stays inside the frozen tomato 10–32°C range. Nitrogen starts at 600 kg/ha and has a conservative post-run lower bound above 587.7 kg/ha versus a maximum stress threshold of 216 kg/ha; assert heat, cold, and nitrogen stress are zero each day. Open-field v2 RUE production uses water stress as its production multiplier."
+  },
+  "tolerances": {
+    "adjustedPAndReadilyAvailableWater": "absolute deviation <=1e-12 for dimensionless p and RAW in mm; direct double-precision arithmetic only",
+    "stressCoefficient": "absolute deviation <=1e-12; equation output only",
+    "dailyTranspirationStorageAndDepletion": "absolute deviation <=1e-9 mm; ten-step double-precision recurrence only",
+    "dailyWaterBalanceResidual": "absolute deviation <=1e-9 mm/cell-day; ten-day signed cumulative residual absolute value <=1e-8 mm",
+    "dailyDryMatterIncrement": "absolute deviation <=1e-9 g/m²/day; ten additions accumulated from the preregistered RUE equation only",
+    "cumulativeDryMatterGain": "absolute deviation <=1e-8 g/m²; arithmetic accumulation only",
+    "exactChecks": "Initial dry/wet storage, frozen pTable, active/live/unharvested state, zero heat/cold/nitrogen stress, event counts, summaries, and replayed events/final state/summary are exact; dry gain is strictly below wet gain.",
+    "scope": "These bounds cover software arithmetic only. They are not source-display bounds, crop-model error tolerances, prediction thresholds, or evidence of FAO-56 reference agreement."
+  },
+  "notCovered": [
+    "Positive drainage, infiltration/runoff, capillary rise, and irrigation delivery",
+    "Root-depth development or alternative root-depth values",
+    "Soil/media variants and full nutrient response",
+    "Measured trials or independent reference-model comparison",
+    "Crop accuracy, prediction validity, or full A-05 acceptance"
+  ],
+  "reproduction": "Planned: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\"",
+  "review": {
+    "independentToleranceReviewer": "GPT-6 Luna max; approved arithmetic-only tolerances on 2026-10-27",
+    "redTeamReviewer": "GPT-6 Luna max; approved evidence-boundary wording on 2026-10-27"
+  }
+}
