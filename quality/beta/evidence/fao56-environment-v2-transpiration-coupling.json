@@ -164,5 +164,23 @@
     "testFiles": 2,
     "testsPassed": 8,
     "limits": "The local API test mocks IndexedDB operations and the REST test mocks server responses. No native browser transaction or live-server persistence was tested; unsupported-record browser-load summary retention remains UNVERIFIED."
+  },
+  "pullRequestCI": {
+    "pullRequest": 82,
+    "url": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/pull/82",
+    "state": "open-draft",
+    "baseBranch": "main",
+    "baseSha": "59a93ee6ee26e98b728f84420bba7750f04ab5fe",
+    "headSha": "f7396b2f5ca18fa3a4d7dea02054d8af019d4532",
+    "workflow": "CI",
+    "runId": 40539695978,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40539695978",
+    "status": "success",
+    "namedChecks": [
+      { "name": "test + typecheck + build", "status": "success" },
+      { "name": "Playwright production Pages-path smoke", "status": "success" },
+      { "name": "secret + private-file scan", "status": "success" },
+      { "name": "GitGuardian Security Checks", "status": "success" }
+    ]
   }
 }

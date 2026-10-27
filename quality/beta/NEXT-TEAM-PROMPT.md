@@ -1,6 +1,6 @@
-# Prompt for the next FarmFriend development team
+# Prompt to resume the FarmFriend development team
 
-Paste the following prompt into the next development session when ready to authorize implementation.
+Implementation through the ordered beta stages is already authorized by the active task. Use this prompt to resume from the verified checkpoint below, after checking that it is still current.
 
 ---
 
@@ -21,11 +21,12 @@ Do not reopen the planner-only versus simulator product question, omit World, im
 
 ## Read first, in order
 
-1. Current `AGENTS.md`, `HANDOFF.md`, `SPEC.md`, `ROADMAP.md` and relevant existing core-loop/environment/simulation contracts. Some roadmap status is stale: inspect actual code and implementation notes.
-2. `quality/beta/README.md` for binding decisions, precedence, status and ownership.
-3. `quality/beta/SPEC-01-PERSISTENCE.md` and implementation commit `8962bef`, if still present. Preserve its save/rollback/conflict/recovery behavior; revalidate after integration rather than blindly reimplementing it.
-4. `quality/beta/SPEC-02-RELEASE-SCOPE.md`, then each of 02A through 02E top to bottom as its stage begins.
-5. BETA-03, BETA-04 and BETA-05 individually, in order, after their dependencies are met.
+1. Current `AGENTS.md`.
+2. `quality/beta/README.md`, then this prompt.
+3. `HANDOFF.md`, `SPEC.md`, `ROADMAP.md`, and the relevant existing core-loop, simulator, and environment contracts. Some roadmap status is stale: inspect actual code and implementation notes.
+4. `quality/beta/SPEC-01-PERSISTENCE.md` and implementation commit `8962bef`, if still present. Preserve its save/rollback/conflict/recovery behavior; revalidate after integration rather than blindly reimplementing it.
+5. `quality/beta/SPEC-02-RELEASE-SCOPE.md`, followed by each substage contract in full immediately before that stage.
+6. BETA-03, BETA-04 and BETA-05 individually, in order, after their dependencies are met.
 
 The package includes:
 - `SPEC-02A-CROP-MODEL-EVIDENCE.md`
@@ -40,12 +41,14 @@ Use a GPT-6 Luna worker at max reasoning and a separate GPT-6 Luna validator at 
 
 Use applicable skills. Herdr is preferred only when available inside `HERDR_ENV=1`; read its skill and verify before control. If unavailable, state that and use available collaboration agents without attempting to control someone else's session. If requested model/tool cannot be selected, report the exact limitation and available fallback rather than claiming the requested team was used. Use primary scientific/model documentation and inspect open-source implementation/license before reuse. User does not need to supply research we can retrieve.
 
-## First concrete work
+## Resume from the verified checkpoint
 
-- Inspect `git status`, branches, remote PR #79/#81 and named checks/current SHAs. At handoff `feat/beta-readiness` contained `8962bef` atop core-loop `ce349e8`; main had diverged, PR #81 was conflicted and only GitGuardian was reported. These facts may have changed. No GitHub CI completion was established.
-- Preserve pre-existing `implementation-notes.md` additions, the initially untracked `quality/beta/` package and `marketing/farmfriend-demo/`. Review/specify what is committed; never `git add .`, erase user work or include marketing captures in release inputs. The revised package is intentional handoff material, not runtime implementation.
-- Prepare a clean isolated integration branch/worktree based on current intended release code; resolve main/foundation conflicts preserving both behaviors. Coordinate with open PRs rather than assuming they are merged. Do not silently downgrade dependencies or drop core-loop code to get CI green. Run actual repo gates and PR CI once mergeable. Keep schema/model changes separate from unrelated upgrades.
-- Produce the 02A model/evidence decision record and fixtures, then implement the biology/version contracts. Keep a source/crop/environment/metric confidence matrix. Do not stop all engineering because an external measured dataset or human sign-off is pending; acquire public data and record remaining claim limitations honestly.
+- Recheck all worktrees, branches, current SHAs, PR #82 and its named checks before acting. At the 2026-10-27 checkpoint, the integration worktree is `/Users/scrimwiggins/Dev/ff-land-plan-beta-integration` on `integration/beta-readiness-main-20261027`; draft PR [#82](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/pull/82) targets `main` at `59a93ee6ee26e98b728f84420bba7750f04ab5fe` and points to `f7396b2f5ca18fa3a4d7dea02054d8af019d4532`. Actual CI run [40539695978](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40539695978) passed all four named checks on that exact SHA. These facts can change; requery them.
+- The separate root worktree `/Users/scrimwiggins/Dev/ff-land-plan` is on `feat/beta-readiness` at `820281142fd8fa85cd157cdbd8167b39fab8dbdb`; its only dirty item is the pre-existing untracked `marketing/farmfriend-demo/`. Preserve it and never stage marketing captures as release inputs.
+- `f7396b2` is a reviewed partial 02A checkpoint: it adds opt-in, frozen environment-v2 enclosure water/transpiration coupling and persistence regressions. Local gates at that commit included 45 test files / 233 tests, typecheck, standard/demo/Pages builds, private-file guard, whitespace checks, and BETA-01 durability retests (6 files / 40 tests). The full detail and limitations are in `quality/beta/02A-MODEL-DECISION.md`, `quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json`, and `implementation-notes.md`.
+- 02A is not complete; continue its remaining acceptance rows before 02B. A-05 remains UNVERIFIED overall, and the unsupported environment-v2 browser-load retention journey remains UNVERIFIED. The synthetic water fixture is software evidence only: no candidate comparison, measured-trial validation, biological accuracy, or live-server persistence was established. Keep the current ordinary-run model at v1 until 02A acceptance authorizes a change.
+- Do not recreate the decision record or water-coupling fixture. Read the full 02A contract and current decision/evidence, choose the next bounded unmet 02A unit, report the worker estimate and assumptions, then implement and independently review it. Preserve the required preregistration and calibration/holdout rules before any candidate comparison or retuning.
+- Continue in the existing integration branch/PR when its state allows; preserve both foundation and BETA-01 behavior. Do not stage broadly, discard user work, force-push, merge, push to main, deploy, publish, invite participants, or contact others.
 
 ## Required stages and verification
 

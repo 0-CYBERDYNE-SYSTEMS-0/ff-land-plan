@@ -1,8 +1,8 @@
 # FarmFriend full simulator beta — development package
 
-Status: ready for the next development stage; implementation and release qualification remain incomplete.
-Decision authority: user answers in this session (1–8 and 10 = C), followed by approval to prepare these contracts. This authorizes specification preparation; the next implementation team starts only after the user instructs it to begin. No merge, deployment, publication or invitations are authorized by this package.
-Baseline inspected: `8962bef` on `feat/beta-readiness`, built on core-loop `ce349e8`. Reinspect the worktree and GitHub before work; recorded branch/CI facts are historical evidence, not permanent state.
+Status: implementation is authorized and in progress; release qualification remains incomplete.
+Decision authority: the user answers in this session (1–8 and 10 = C) establish the binding product direction, and the active task explicitly authorizes implementation, review, verification, documentation, stage commits, and draft-PR CI. No merge, deployment, publication or invitations are authorized.
+Baseline: the current integration checkpoint is recorded below. Reinspect the worktree and GitHub before relying on any branch, commit, PR or CI fact.
 
 ## Binding product direction
 
@@ -29,7 +29,15 @@ Synthetic CSV is software/test evidence. It cannot establish real crop accuracy,
 
 ## Current state and work packages
 
-BETA-01 implementation is committed as `8962bef`; local evidence reports 35 test files / 156 tests, typecheck, build, private-file guard and targeted production-browser checks. This is not release approval. At inspection, PR #81 targeted main and had conflicts/only GitGuardian reported; foundation PR #79 was also open. Requery all states. Preserve unrelated work, including the existing notes, `marketing/farmfriend-demo/`, and these initially untracked specification files.
+Initial package snapshot before the 2026-10-27 integration reconciliation: BETA-01 implementation is committed as `8962bef`; its original local evidence reported 35 test files / 156 tests, typecheck, build, private-file guard and targeted production-browser checks. PR #81 and foundation PR #79 were listed then; those statuses are historical, not the current integration PR. Preserve unrelated work, including the existing notes, `marketing/farmfriend-demo/`, and the beta specification package.
+
+### Verified integration checkpoint — 2026-10-27
+
+- The integration branch is `integration/beta-readiness-main-20261027`. Draft PR [#82](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/pull/82) is open, based on `main` at `59a93ee6ee26e98b728f84420bba7750f04ab5fe` at this checkpoint. Recheck branch, base, head and checks before relying on these values.
+- Commit `f7396b2f5ca18fa3a4d7dea02054d8af019d4532` adds the opt-in, frozen `environment-v2` enclosure water/transpiration coupling and focused persistence regressions. PR CI run [40539695978](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40539695978) passed all four named checks on that exact SHA. This is a reviewed 02A checkpoint, not 02A completion or release approval.
+- The current local gates at `f7396b2` were 45 test files / 233 tests, typecheck, standard/demo/Pages builds, private-file guard, BETA-01 durability regressions and whitespace checks. The environment fixture is synthetic software evidence only; no candidate, measured-output, or live-server comparison was run.
+- 02A remains active. A-05 overall is UNVERIFIED; A-03, A-04, A-06 and A-07 remain UNVERIFIED, and A-08 end-to-end retention for an unsupported environment-v2 browser load has not been tested. Continue 02A before 02B.
+- The root `feat/beta-readiness` worktree remains at `8202811`; its only dirty item is the preserved untracked `marketing/farmfriend-demo/`. Do not stage it or include marketing captures in release inputs.
 
 | Contract | Accountable role | Work and dependencies |
 |---|---|---|
