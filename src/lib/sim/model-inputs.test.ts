@@ -1737,6 +1737,8 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
   const immatureCell = '8,0';
   const startDate = '2026-10-01';
   const target = { kind: 'floor' as const };
+  const elevatedTarget = { kind: 'growing-level' as const, growingSpaceId: 'space-a', levelId: 'high' };
+  const floorSiblingCell = '0,0';
   const maturityTarget = thermal.gddToMaturityCdays[1];
   const expectedPayoutKg = initialDryMatterGPerM2 * cellM ** 2 * harvestIndex / 1000;
 
@@ -1766,10 +1768,15 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
 
   function frozenRun(options: {
     cells: string[];
+    elevatedCells?: string[];
     autoHarvest: boolean;
     interventions?: RunConfig['interventions'];
   }): RunConfig {
-    const cellKeys = options.cells.map((cell) => targetCellKey(target, cell));
+    const elevatedCells = options.elevatedCells ?? [];
+    const cellKeys = [
+      ...options.cells.map((cell) => targetCellKey(target, cell)),
+      ...elevatedCells.map((cell) => targetCellKey(elevatedTarget, cell)),
+    ];
     const establishmentEvidence = {
       classification: 'synthetic' as const,
       evidenceId: 'TEST-V3-HARVEST-PAYOUT',
@@ -1781,11 +1788,21 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
       interventions: options.interventions ?? [],
       basePlan: {
         ...config().basePlan,
-        widthM: options.cells.length * cellM,
+        widthM: Math.max(options.cells.length, elevatedCells.length) * cellM,
         heightM: cellM,
         cellM,
         planting: Object.fromEntries(options.cells.map((cell) => [cell, crop.id])),
         plantedAt: Object.fromEntries(options.cells.map((cell) => [cell, startDate])),
+        ...(elevatedCells.length > 0 ? {
+          targets: {
+            [growingTargetKey(elevatedTarget)]: {
+              growingSpaceId: elevatedTarget.growingSpaceId,
+              levelId: elevatedTarget.levelId,
+              planting: Object.fromEntries(elevatedCells.map((cell) => [cell, crop.id])),
+              plantedAt: Object.fromEntries(elevatedCells.map((cell) => [cell, startDate])),
+            },
+          },
+        } : {}),
       },
       cropStartEvents: Object.fromEntries(cellKeys.map((key) => [key, 'transplanting' as const])),
     });
@@ -1801,27 +1818,24 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
           },
         },
       ],
-      cropEstablishmentByCell: Object.fromEntries(options.cells.map((_cell, index) => {
-        const key = cellKeys[index]!;
-        return [key, {
-          startEvent: 'transplanting' as const,
-          establishedAtDate: startDate,
-          initialAboveGroundDryMatterGPerM2: initialDryMatterGPerM2,
-          evidence: establishmentEvidence,
-        }];
-      })),
+      cropEstablishmentByCell: Object.fromEntries(cellKeys.map((key) => [key, {
+        startEvent: 'transplanting' as const,
+        establishedAtDate: startDate,
+        initialAboveGroundDryMatterGPerM2: initialDryMatterGPerM2,
+        evidence: establishmentEvidence,
+      }])),
     });
     return { ...run, modelInputs };
   }
 
-  function findMaturity(run: RunConfig, cells: string[]): { dayIndex: number; envSeries: ReturnType<typeof dailyEnvironment>[] } {
+  function findMaturity(run: RunConfig, cellKeys: string[]): { dayIndex: number; envSeries: ReturnType<typeof dailyEnvironment>[] } {
     let state = createRun(run);
     const envSeries: ReturnType<typeof dailyEnvironment>[] = [];
     for (let offset = 0; offset < 500; offset++) {
       const env = dailyEnvironment(offset);
       envSeries.push(env);
       state = stepDay(state, env, run).state;
-      if (cells.every((cell) => state.cells[targetCellKey(target, cell)]?.biomassFrac === 1)) {
+      if (cellKeys.every((key) => state.cells[key]?.biomassFrac === 1)) {
         envSeries.push(dailyEnvironment(offset + 1));
         return { dayIndex: offset, envSeries };
       }
@@ -1925,7 +1939,7 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
     expect(harvested.some((event) => event.cell === targetCellKey(target, deadCell))).toBe(false);
 
     const baseline = frozenRun({ cells: eligibleCells, autoHarvest: false });
-    const maturity = findMaturity(baseline, eligibleCells);
+    const maturity = findMaturity(baseline, eligibleCells.map((cell) => targetCellKey(target, cell)));
     const actualHarvestDate = maturity.envSeries[maturity.dayIndex + 1]!.date;
     const manualInterventions = eligibleCells.flatMap((cell, index) => {
       const request = { kind: 'harvest' as const, date: actualHarvestDate, cell };
@@ -1956,9 +1970,74 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
     expect(record.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
   });
 
+  it('reconciles v3 elevated-target harvest mass without harvesting its floor sibling', () => {
+    const elevatedCellKeys = eligibleCells.map((cell) => targetCellKey(elevatedTarget, cell));
+    const baseline = frozenRun({
+      cells: [floorSiblingCell],
+      elevatedCells: eligibleCells,
+      autoHarvest: false,
+    });
+    const allCellKeys = [targetCellKey(target, floorSiblingCell), ...elevatedCellKeys];
+    const maturity = findMaturity(baseline, allCellKeys);
+    const harvestDate = maturity.envSeries[maturity.dayIndex + 1]!.date;
+    const manualRun = {
+      ...baseline,
+      interventions: eligibleCells.map((cell) => ({
+        kind: 'harvest' as const,
+        date: harvestDate,
+        cell,
+        target: elevatedTarget,
+      })),
+    };
+    const original = simulateRun(manualRun, maturity.envSeries);
+    const record = runRecord('run:v3:elevated-target-manual-harvest', manualRun, maturity.envSeries, original.summary);
+    const replay = simulateRun(record.config, record.envSeries);
+    const harvested = original.events.filter((event) => event.kind === 'harvested');
+
+    expect(manualRun.interventions).toHaveLength(6);
+    expect(manualRun.interventions.every((intervention) => (
+      intervention.kind === 'harvest' && intervention.target?.kind === 'growing-level'
+    ))).toBe(true);
+    expect(harvested).toHaveLength(6);
+    expect(harvested.map((event) => event.cell).sort()).toEqual([...elevatedCellKeys].sort());
+    expect(harvested.every((event) => event.dayIndex === maturity.dayIndex + 1)).toBe(true);
+    expect(harvested.every((event) => (
+      event.target?.kind === 'growing-level' &&
+      event.target.growingSpaceId === elevatedTarget.growingSpaceId &&
+      event.target.levelId === elevatedTarget.levelId
+    ))).toBe(true);
+    for (const event of harvested) {
+      if (event.kind === 'harvested') {
+        expect(Math.abs(event.data.yieldKg - 0.00096)).toBeLessThanOrEqual(1e-12);
+      }
+    }
+    const elevatedYieldKg = harvested.reduce((sum, event) => (
+      sum + (event.kind === 'harvested' ? event.data.yieldKg : 0)
+    ), 0);
+    expect(Math.abs(elevatedYieldKg - 0.00576)).toBeLessThanOrEqual(1e-12);
+    expect(harvested.some((event) => event.cell === floorSiblingCell)).toBe(false);
+
+    const floorSibling = original.finalState.cells[floorSiblingCell];
+    expect(floorSibling).toMatchObject({
+      biomassFrac: 1,
+      dryMatterGPerM2: initialDryMatterGPerM2,
+      sourceThermalCdays: maturityTarget,
+      establishmentApplied: true,
+    });
+    expect(floorSibling?.dead).not.toBe(true);
+    expect(floorSibling?.harvested).not.toBe(true);
+    expect(original.summary.totalYieldKg).toBe(0.01);
+    expect(original.summary.yieldKgByCrop).toEqual({ [String(crop.id)]: 0.01 });
+    expect(record.summary.totalYieldKg).toBe(0.01);
+    expect(record.summary.yieldKgByCrop).toEqual({ [String(crop.id)]: 0.01 });
+    expect(replay.events).toEqual(original.events);
+    expect(replay.finalState).toEqual(original.finalState);
+    expect(replay.summary).toEqual(record.summary);
+  });
+
   it('auto-harvests v3 on the actual frozen maturity endpoint once and replays the saved summary', () => {
     const baseline = frozenRun({ cells: eligibleCells, autoHarvest: false });
-    const maturity = findMaturity(baseline, eligibleCells);
+    const maturity = findMaturity(baseline, eligibleCells.map((cell) => targetCellKey(target, cell)));
     const autoRun = { ...baseline, autoHarvest: true };
     const original = simulateRun(autoRun, maturity.envSeries);
     const record = runRecord('run:v3:auto-harvest-payout', autoRun, maturity.envSeries, original.summary);

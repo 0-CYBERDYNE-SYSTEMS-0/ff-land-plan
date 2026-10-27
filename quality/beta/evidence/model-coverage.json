@@ -1590,7 +1590,7 @@
       },
       "reproduction": "proposed: npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v3 elevated-target harvest mass without harvesting its floor sibling\"",
       "candidateComparison": false,
-      "status": "Pre-registered only; not implemented or run. This is synthetic A-07 target-scoped harvest-mass software evidence only; it does not establish durable storage, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive validity. A-07 and 02A remain UNVERIFIED overall."
+      "status": "Implemented and independently reviewed. The focused regression passed; local verification passed 46 test files / 244 tests, typecheck, standard/demo/Pages builds, private-file guard (521 tracked files), whitespace check, and production Playwright (3/3 Pages journeys in 3.8m). Exact-head PR CI is pending. This remains synthetic A-07 target-scoped harvest-mass software evidence only; the second simulateRun is not durable-storage serialization and no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive validity is established. A-07 and 02A remain UNVERIFIED overall."
     }
   ],
   "coverageSummary": {
