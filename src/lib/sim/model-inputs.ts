@@ -831,7 +831,20 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
       ...establishment.issues,
       ...environmentIssues,
       ...(usesSoillessTarget(config) ? ['Soilless targets require the separate 02B resource model.'] : []),
-      ...invalidParameters.map((parameter) => `Crop ${parameter.cropId}: one or more frozen v4 parameter values are missing, invalid, or unsupported.`),
+      ...invalidParameters.flatMap((parameter) => {
+        const hasInvalidValues = !thermalParametersComplete(parameter.thermal)
+          || !productionParametersV4Complete(parameter.production)
+          || !rootZoneParametersComplete(parameter.rootZone);
+        const nonPlantLifecycle = parameter.lifecycle !== 'plant';
+        return [
+          ...(nonPlantLifecycle
+            ? [`Crop ${parameter.cropId}: lifecycle '${parameter.lifecycle}' cannot use crop-model-v4 plant canopy interception, dry-matter production, or canopy/harvestable-pool allocation calculations.`]
+            : []),
+          ...(!nonPlantLifecycle || hasInvalidValues
+            ? [`Crop ${parameter.cropId}: one or more frozen v4 parameter values are missing, invalid, or unsupported.`]
+            : []),
+        ];
+      }),
     ];
     const complete = hasCompleteCropSnapshot
       && missingParameters.length === 0

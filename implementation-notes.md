@@ -2095,3 +2095,35 @@ snapshots changed, and no application implementation is claimed by this revision
   local-storage listing. It does not establish IndexedDB migration, server persistence, unsupported
   crop-trait handling, crop accuracy, human validation, or predictive validity. A-08 remains
   UNVERIFIED, 02A remains incomplete, and ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-08 unsupported lifecycle handling
+
+- The A-08 contract requires a useful explanation for an unsupported crop trait without fabricating
+  a pass or an observed claim. S1 initially estimated 90–150 minutes assuming a missing K_PAR field;
+  the lead selected the explicit `lifecycle: 'unsupported'` sentinel instead because it represents
+  unsupported lifecycle support rather than another missing-parameter case. The correction estimate
+  was 35–50 minutes. The synthetic case uses one planted broccoli cell, matching frozen v4 crop,
+  parameter, and establishment records, and a valid frozen environment-v2 snapshot.
+- The v4 classifier now explains the crop-specific lifecycle (`fungus` or `unsupported`) and the
+  plant canopy-interception, dry-matter-production, and pool-allocation calculations that cannot be
+  replayed. It still rejects replay and preserves the saved summary; the generic parameter reason
+  remains when another crop parameter is invalid. Unit coverage includes a complete plant control and
+  each non-plant lifecycle. Independent reviews found and drove fixes for the fungus explanation and
+  the browser summary assertions.
+- The Pages journey checks the trait-specific World reason, disabled Replay, absent Play/Seek
+  controls, and hidden unsupported yield/duration values. It reads and compares the complete summary
+  in the active durable store before World navigation and after list return/reload; the synthetic
+  stored summary is explicitly marked unsupported and not a model result.
+- Local non-browser gates passed `npm test` (45 files / 236 tests), `npm run typecheck`, `npm run build`,
+  `npm run build:demo`, `npm run build:pages`, `npm run check:private` (519 tracked files),
+  evidence-manifest JSON parsing, Playwright test discovery (3 Pages tests listed), and
+  `git diff --check`. Local Pages runtime could not start because the preview server returned
+  `listen EPERM` on `127.0.0.1:4173`; the browser assertions therefore remain UNVERIFIED locally.
+- Prior PR-head check snapshot `gh pr checks 82` showed all four named check contexts green on exact
+  head `de04d4e444e0c2fe8a3702776a16b2e165df4507`: the three Actions jobs in run
+  [40553243061](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40553243061)
+  and the separate `GitGuardian Security Checks` context. That head predates this change. The stage
+  commit must be pushed to draft PR #82 for actual CI, and the exact named results recorded afterward.
+  A-08 is UNVERIFIED pending that browser run; 02A remains
+  incomplete and ordinary new runs remain v1. This synthetic fixture does not establish trait
+  validity, crop accuracy, measured-trial agreement, site observations, or predictive validity.

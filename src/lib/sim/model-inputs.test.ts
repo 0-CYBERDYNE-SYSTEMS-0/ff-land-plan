@@ -4,8 +4,22 @@ import { lettuceRosalbaRUEReference, lettuceYumaRootProfileReference } from '@/d
 import { cropThermalParams } from '@/data/cropThermalParams';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
 import type { Observation } from '@/types';
-import type { CropEstablishmentInput, FrozenCropModelParametersV2, RunConfig, RunModelInputsV2, RunRecord } from './types';
-import { freezeRunModelInputs, freezeRunModelInputsV2, freezeRunModelInputsV3, inspectRunModelSupport } from './model-inputs';
+import type {
+  CropEstablishmentInput,
+  FrozenCropModelParametersV2,
+  FrozenCropModelParametersV4,
+  RunConfig,
+  RunModelInputsV2,
+  RunRecord,
+} from './types';
+import {
+  freezeEnvironmentModelInputsV2,
+  freezeRunModelInputs,
+  freezeRunModelInputsV2,
+  freezeRunModelInputsV3,
+  freezeRunModelInputsV4,
+  inspectRunModelSupport,
+} from './model-inputs';
 import { NO_CLIMATE_EQUIPMENT } from './environment-climate';
 import { createRun, simulateRun, stepDay } from './engine';
 import { collectRunPredictionPairs } from './scorecard';
@@ -1453,5 +1467,110 @@ describe('frozen crop model inputs and replay support', () => {
     const support = inspectRunModelSupport({ ...config(), cropModelVersion: 'crop-model-v5' as never });
     expect(support).toMatchObject({ model: 'unknown', status: 'unsupported', canReplay: false });
     expect(support.preserveStoredSummary).toBe(true);
+  });
+
+  it('names the unsupported v4 lifecycle and keeps replay fail-closed with otherwise complete inputs', () => {
+    const crop = cropLibrary.find((entry) => entry.slug === 'broccoli')!;
+    const cellKey = targetCellKey({ kind: 'floor' }, '0,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v4',
+      climateModel: 'environment-v2',
+      environment: {
+        id: 'environment:1:v4-lifecycle-test',
+        farmId: 1,
+        archetype: 'greenhouse-glass',
+        label: 'Synthetic greenhouse fixture',
+        x: 0,
+        y: 0,
+        widthM: 1,
+        heightM: 1,
+        cellM: 0.25,
+      },
+      basePlan: { ...config().basePlan, planting: { '0,0': crop.id } },
+      cropStartEvents: { [cellKey]: 'transplanting' },
+    });
+    const evidence = {
+      evidenceId: 'v4-lifecycle-classifier-test',
+      sourceCitation: 'Synthetic classifier fixture; no crop-performance claim',
+      sourceUrl: 'test-only:v4-lifecycle-classifier',
+      validDomain: 'software classifier test only',
+    };
+    const parameterFor = (lifecycle: 'plant' | 'fungus' | 'unsupported'): FrozenCropModelParametersV4 => ({
+      cropId: crop.id,
+      thermal: cropThermalParams.find((entry) => entry.cropId === crop.id)!,
+      rootZone: {
+        method: 'FAO-56',
+        effectiveRootDepthCm: 20,
+        depletionFraction: 0.5,
+        cropCoefficient: 1,
+        initialStorageFraction: 0.7,
+        status: 'qualified',
+        missing: [],
+        limitations: ['Synthetic root-zone inputs isolate classifier behavior.'],
+        evidence,
+      },
+      lifecycle,
+      production: {
+        equationFamily: 'LINTUL-net-RUE',
+        rueGPerMjInterceptedPar: 2,
+        status: 'qualified',
+        missing: [],
+        limitations: ['Synthetic production inputs isolate classifier behavior.'],
+        evidence,
+        canopy: {
+          kPar: 0.65,
+          specificLeafAreaM2PerKg: 20,
+          leafStemPartitionParameterM2PerKg: 1,
+          evidence,
+        },
+        allocation: {
+          canopyShare: 0.7,
+          harvestableShare: 0.3,
+          classification: 'synthetic',
+          evidenceId: evidence.evidenceId,
+          validDomain: evidence.validDomain,
+        },
+      },
+    });
+    const sourceFor = (lifecycle: 'plant' | 'fungus' | 'unsupported') => ({
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 5, source: 'usda-sda' as const },
+      crops: [crop],
+      cropParametersV4: [parameterFor(lifecycle)],
+      cropCanopyEstablishmentByCell: {
+        [cellKey]: {
+          startEvent: 'transplanting' as const,
+          establishedAtDate: run.startDate,
+          initialCanopyDryMatterGPerM2: 10,
+          initialHarvestableDryMatterGPerM2: 5,
+          evidence: { classification: 'synthetic' as const, evidenceId: evidence.evidenceId, validDomain: evidence.validDomain },
+        },
+      },
+    });
+    const environmentModelInputs = freezeEnvironmentModelInputsV2(run);
+    expect(environmentModelInputs).toBeDefined();
+    if (!environmentModelInputs) throw new Error('Expected frozen environment-v2 test inputs');
+
+    const supportedInputs = freezeRunModelInputsV4(run, sourceFor('plant'));
+    expect(inspectRunModelSupport({ ...run, modelInputs: supportedInputs, environmentModelInputs }))
+      .toMatchObject({ status: 'qualified', canReplay: true, preserveStoredSummary: false });
+
+    for (const lifecycle of ['fungus', 'unsupported'] as const) {
+      const nonPlantInputs = freezeRunModelInputsV4(run, sourceFor(lifecycle));
+      expect(nonPlantInputs.qualification.status).toBe('unsupported');
+      expect(nonPlantInputs.cropParameters[0]?.lifecycle).toBe(lifecycle);
+      const support = inspectRunModelSupport({ ...run, modelInputs: nonPlantInputs, environmentModelInputs });
+      expect(support).toMatchObject({
+        model: 'crop-model-v4',
+        status: 'unsupported',
+        canReplay: false,
+        preserveStoredSummary: true,
+      });
+      expect(support.reasons).toContain(
+        `Crop ${crop.id}: lifecycle '${lifecycle}' cannot use crop-model-v4 plant canopy interception, dry-matter production, or canopy/harvestable-pool allocation calculations.`,
+      );
+      expect(support.reasons).not.toContain(
+        `Crop ${crop.id}: one or more frozen v4 parameter values are missing, invalid, or unsupported.`,
+      );
+    }
   });
 });
