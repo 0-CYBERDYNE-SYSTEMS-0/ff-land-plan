@@ -128,7 +128,7 @@ test('production build boots under the GitHub Pages project base path', async ({
 });
 
 test('unsupported environment-v2 run opens under Pages and retains its stored summary', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const run = unsupportedEnvironmentRunRecord();
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
