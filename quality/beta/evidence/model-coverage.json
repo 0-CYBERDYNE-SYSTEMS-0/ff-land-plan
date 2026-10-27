@@ -214,6 +214,48 @@
       "licenseOrReuse": "Citation metadata only in this inventory; source table was not retained as a local artifact and has not been independently transcribed.",
       "sourceLicense": "Journal/article license was not verified; citation metadata only; no content reproduced.",
       "sourceVersion": "1998 Field Crops Research 56(3), pages 301–307; citation metadata only, artifact not acquired"
+    },
+    {
+      "id": "RAVENEAU-2011-SEED-SCI-21-205",
+      "citation": "Raveneau et al. (2011), Pea and bean germination and seedling responses to temperature and water potential, Seed Science Research 21(3), 205–213.",
+      "url": "https://doi.org/10.1017/S0960258511000067",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "publisher abstract page",
+        "sha256": null,
+        "localPath": null,
+        "status": "primary abstract reviewed; full article artifact not acquired"
+      },
+      "licenseOrReuse": "Publisher article terms apply; cite reported values only, with no article text or code reproduced.",
+      "sourceVersion": "2011 Seed Science Research 21(3), 205–213; DOI 10.1017/S0960258511000067"
+    },
+    {
+      "id": "MOREAU-VALANCOGNE-2008-EJA-28-309",
+      "citation": "Moreau-Valancogne et al. (2008), Assessing emergence of bean (Phaseolus vulgaris L.) seed lots in France: Field observations and simulations, European Journal of Agronomy 28(3), 309–320.",
+      "url": "https://doi.org/10.1016/j.eja.2007.09.003",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "publisher article landing page",
+        "sha256": null,
+        "localPath": null,
+        "status": "publisher article page reviewed; full trial input tables not acquired as a local artifact"
+      },
+      "licenseOrReuse": "Publisher article terms apply; cite observed ranges and methods only, with no article text or code reproduced.",
+      "sourceVersion": "2008 European Journal of Agronomy 28(3), 309–320; DOI 10.1016/j.eja.2007.09.003"
+    },
+    {
+      "id": "WOFOST-7-2-SYSTEM-DESCRIPTION",
+      "citation": "de Wit et al., System description of the WOFOST 7.2 cropping systems model, Wageningen University & Research model documentation.",
+      "url": "https://wofost.readthedocs.io/en/stable/_downloads/a552f9d445b6dd13f7db99ec29b64f0b/WOFOST_system_description.pdf",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "official model documentation PDF page",
+        "sha256": null,
+        "localPath": null,
+        "status": "official document reviewed online; binary not retained in this repository"
+      },
+      "licenseOrReuse": "Method reference only; no source code, crop parameters, or document text copied.",
+      "sourceVersion": "WOFOST 7.2 system description, ReadTheDocs stable download"
     }
   ],
   "evidenceRecords": [
@@ -798,6 +840,148 @@
       "sourceVersion": "UC IPM page updated 2026-04; page cites Coop, Croft & Drapek (1993)",
       "sourceArtifactSha256": "3fa493befb33dfa864b7f254a289acff440f407cd84f5aad5719d25ba6dd5e28",
       "sourceLicenseOrReuse": "Page copyright/reuse terms apply; cite only the derived method and threshold; no page content copied."
+    },
+    {
+      "id": "BEAN-RAVENEAU-2011-LAB-GERMINATION-LOT-RESPONSE",
+      "sourceId": "RAVENEAU-2011-SEED-SCI-21-205",
+      "classification": "measured-laboratory seed-lot-specific germination and seedling response; not field emergence parameters",
+      "crop": {
+        "slug": "bush-bean",
+        "cultivar": "common bean genotypes/seed lots in the article; exact Booster lot values require full article tables"
+      },
+      "environment": "Laboratory temperature and water-potential treatments; not a field seedbed.",
+      "inputs": {
+        "temperatureRangeC": [5, 40],
+        "waterPotentialRangeMpa": [-1.5, -0.2],
+        "reportedBeanGerminationBaseTemperatureCByLot": [5.1, 9.6],
+        "reportedGerminationBaseWaterPotentialMpa": -2,
+        "shootElongationBaseTemperatureOffsetC": [3, 6]
+      },
+      "endpoint": "Seed germination and seedling shoot elongation responses measured separately.",
+      "metric": "Germination and early seedling response to temperature and water potential",
+      "expected": "Bean germination base temperature varied from 5.1 to 9.6 °C among seed lots; shoot-elongation base temperatures were 3–6 °C higher than germination bases.",
+      "sampleSize": "Multiple common-bean genotypes and seed production lots; exact per-treatment sample counts not available from the publisher abstract.",
+      "status": "primary laboratory evidence; values are lot-specific and cannot be used as generic field emergence thresholds",
+      "missing": [
+        "full article tables and exact seed-lot-to-value mapping",
+        "field seedbed temperature and water potential",
+        "sowing depth and soil aggregate/crust conditions",
+        "field emergence rate and timing for these laboratory lots"
+      ],
+      "calibrationOrHoldout": "laboratory response reference only; not a field-emergence holdout",
+      "units": {
+        "temperature": "°C",
+        "waterPotential": "MPa"
+      },
+      "startEvent": "Seed imbibition/germination; distinct from field emergence and later crop thermal development.",
+      "normalizedStartEvents": ["direct-sowing"],
+      "endEvent": "Germination or shoot elongation endpoints; not emergence above field soil.",
+      "validDomain": "The tested common-bean seed genotypes/lots and controlled laboratory temperature/water-potential treatments only.",
+      "sourceMethod": "Laboratory response curves separate germination from shoot elongation; seed-lot variation is reported.",
+      "missingData": [
+        "per-lot data needed to freeze an executable bean parameter set",
+        "complete field seedbed inputs and emergence observations"
+      ],
+      "sourceUrl": "https://doi.org/10.1017/S0960258511000067",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "2011 Seed Science Research 21(3), 205–213; publisher abstract",
+      "sourceArtifactSha256": null,
+      "sourceLicenseOrReuse": "Publisher article terms apply; values summarized from the primary abstract only.",
+      "tolerance": "No numerical reproduction tolerance proposed; exact lot-level source table values and display precision are unavailable."
+    },
+    {
+      "id": "BEAN-MOREAU-VALANCOGNE-2008-FIELD-BOOSTER-EMERGENCE",
+      "sourceId": "MOREAU-VALANCOGNE-2008-EJA-28-309",
+      "classification": "measured-field-emergence observation and seedbed-dependent crop-emergence model evaluation",
+      "crop": {
+        "slug": "bush-bean",
+        "cultivar": "Booster; four contrasting seed lots"
+      },
+      "environment": "2004–2005 field observations at Mons (North France) and Angers (West France) under varying sowing conditions, including cold/wet and dry/crusted seedbeds.",
+      "inputs": {
+        "seedLots": 4,
+        "fieldSites": 2,
+        "fieldYears": [2004, 2005],
+        "observedFinalEmergenceRatePercent": [56, 90],
+        "observedEmergenceDurationDays": [9, 28]
+      },
+      "endpoint": "Observed seedling emergence from field seedbed; final emergence rate and duration.",
+      "metric": "Final field emergence rate and duration of emergence",
+      "expected": "Across reported field situations, final emergence varied from 56% to 90%, with emergence lasting 9–28 days.",
+      "sampleSize": "Four seed lots × field situations; the publisher abstract does not give counts per field situation.",
+      "status": "measured field evidence; potential independent emergence-specific target only if the complete daily seedbed inputs and exact treatment observations are acquired",
+      "missing": [
+        "daily seedbed temperature by depth",
+        "daily soil water potential by depth",
+        "sowing-depth and seedbed aggregate/crust inputs by field treatment",
+        "raw treatment-level emergence trajectories and replicate counts"
+      ],
+      "calibrationOrHoldout": "potential emergence-only holdout; not executable with current artifact/input availability; not a full-crop holdout",
+      "units": {
+        "emergenceRate": "% of sown seed",
+        "emergenceDuration": "days"
+      },
+      "startEvent": "Sowing into a specified field seedbed.",
+      "normalizedStartEvents": ["direct-sowing"],
+      "endEvent": "Seedling emergence at soil surface; distinct from germination and post-emergence crop growth.",
+      "validDomain": "French canning bean cv Booster, four reported seed lots, and the observed Mons/Angers 2004–2005 field seedbeds only; no generic bean threshold is inferred.",
+      "sourceMethod": "Field observations compared against SIMPLE emergence simulations; the method uses seed-lot properties, sowing depth/seedbed structure, and layered soil temperature and water-potential inputs.",
+      "missingData": [
+        "source tables and complete per-treatment input/output series in a local fixture",
+        "inputs needed to reproduce SIMPLE predictions"
+      ],
+      "sourceUrl": "https://doi.org/10.1016/j.eja.2007.09.003",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "2008 European Journal of Agronomy 28(3), 309–320; publisher article page/abstract",
+      "sourceArtifactSha256": null,
+      "sourceLicenseOrReuse": "Publisher article terms apply; values summarized from the primary article page only.",
+      "tolerance": "No predictive error tolerance proposed before acquiring raw treatment-level observations and source precision; current software checks will assert event-date gating only."
+    },
+    {
+      "id": "CROP-ESTABLISHMENT-WOFOST-METHOD-ONLY",
+      "sourceId": "WOFOST-7-2-SYSTEM-DESCRIPTION",
+      "classification": "crop-model-method reference; parameter values not transferred",
+      "crop": {
+        "slug": "crop-model-method",
+        "cultivar": "not crop-specific; WOFOST requires crop-specific emergence parameters"
+      },
+      "environment": "WOFOST daily crop model methodology, not a measured crop trial.",
+      "inputs": {
+        "emergenceParameters": ["TSUMEM", "TBASEM", "TEFFMX"],
+        "initialDryWeightParameter": "TDWI"
+      },
+      "endpoint": "Emergence from a source-defined sowing event, followed by post-emergence crop state initialization.",
+      "metric": "Structural method for sowing-to-emergence timing and initial crop dry weight",
+      "expected": "The source specifies crop-specific temperature-sum emergence parameters and describes TDWI as total crop dry weight; it is not a generic parameter table.",
+      "sampleSize": "Not applicable; model documentation.",
+      "status": "method reference only; no WOFOST parameter values or source code transferred",
+      "missing": [
+        "crop-specific validated emergence parameter sets",
+        "seed-lot, seedbed and emergence observations for FarmFriend crops",
+        "crop-specific TDWI component partitioning and applicable units/domain"
+      ],
+      "calibrationOrHoldout": "not a measured holdout",
+      "units": {
+        "TSUMEM": "°C·day",
+        "TBASEM": "°C",
+        "TEFFMX": "°C",
+        "TDWI": "total crop dry weight; WOFOST-specific parameter units and partitioning apply"
+      },
+      "startEvent": "Sowing, or an explicitly selected emergence start with known initial crop state.",
+      "normalizedStartEvents": ["direct-sowing"],
+      "endEvent": "Crop emergence as defined by the model; not a source measurement for a FarmFriend crop.",
+      "validDomain": "WOFOST crop-specific model configurations only; method structure is referenced without transferring parameters or implementation.",
+      "sourceMethod": "The model accumulates effective temperature from sowing to a crop-specific TSUMEM using TBASEM and TEFFMX, then initializes crop growth from source-defined state/TDWI.",
+      "missingData": [
+        "crop-specific parameterization for current catalog crops",
+        "an executable FarmFriend emergence trial fixture"
+      ],
+      "sourceUrl": "https://wofost.readthedocs.io/en/stable/_downloads/a552f9d445b6dd13f7db99ec29b64f0b/WOFOST_system_description.pdf",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "WOFOST 7.2 system description, official ReadTheDocs PDF",
+      "sourceArtifactSha256": null,
+      "sourceLicenseOrReuse": "Method reference only; parameter values, code, and document text are not copied.",
+      "tolerance": "No numerical tolerance proposed; this is a structural method reference, not a source reproduction."
     }
   ],
   "fixtures": [
@@ -1638,6 +1822,14 @@
             "THERMAL-OSU-SNAP-BEAN-HARVEST"
           ]
         },
+        "establishment": {
+          "status": "UNVERIFIED; source-domain evidence only",
+          "sourceEvidence": [
+            "BEAN-RAVENEAU-2011-LAB-GERMINATION-LOT-RESPONSE",
+            "BEAN-MOREAU-VALANCOGNE-2008-FIELD-BOOSTER-EMERGENCE"
+          ],
+          "parameterCoverage": "Raveneau reports seed-lot-specific controlled germination and shoot-elongation responses; Moreau-Valancogne reports Booster field-emergence ranges under seedbed-specific conditions. No generic threshold or executable crop parameter set is frozen."
+        },
         "production": {
           "status": "UNVERIFIED",
           "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
@@ -2331,6 +2523,30 @@
         "tolerance": "none universal",
         "status": "source-specific threshold pending",
         "condition": "lock and independently review before any comparison; incomplete input record remains UNVERIFIED"
+      },
+      {
+        "id": "establishment-event-gating",
+        "tolerance": "exact event-date gating; exactly zero pre-emergence photosynthetic DM increment and plant uptake/flux",
+        "status": "proposed-pending-independent-review",
+        "scope": "synthetic software invariant only; not emergence prediction accuracy; thermal clock follows its separately frozen source start event"
+      },
+      {
+        "id": "bean-field-emergence-prediction",
+        "tolerance": "none proposed; no candidate comparison authorized",
+        "status": "source-inputs-incomplete",
+        "condition": "acquire treatment-level emergence trajectories, counts, and complete daily seedbed temperature/water plus depth/structure inputs; then preregister a source-specific tolerance and obtain validator approval"
+      },
+      {
+        "id": "bean-lab-germination-reproduction",
+        "tolerance": "none proposed",
+        "status": "source-detail-incomplete",
+        "condition": "acquire full article lot-to-value tables and source precision; do not transfer lot-specific lab values to field emergence"
+      },
+      {
+        "id": "transplant-initial-mass",
+        "tolerance": "none proposed; no candidate comparison authorized",
+        "status": "measured-state-required",
+        "condition": "freeze measured per-cell above-ground DM with units, precision, cultivar, nursery age/size and endpoint; do not transfer WOFOST TDWI or infer from an unrelated study"
       },
       {
         "id": "lettuce-marketable-area-yield-rounding",
