@@ -451,6 +451,7 @@
         "wiltingPointM3PerM3": 0.12,
         "availableWaterMmPerCm": 2
       },
+      "soilQualification": "Example 37 explicitly uses field capacity 0.32 and wilting point 0.12 m³/m³. Do not substitute the generic Table 19 silt wilting point 0.15 m³/m³.",
       "rootDepthM": 0.8,
       "totalAvailableWaterMm": 160,
       "tableDepletionFractionP": 0.4,
@@ -458,10 +459,12 @@
       "referenceEvapotranspirationMmDay": 5,
       "cropCoefficient": 1.2,
       "potentialCropEvapotranspirationMmDay": 6,
-      "precipitationMmDay": 0,
-      "irrigationMmDay": 0,
-      "capillaryRiseMmDay": 0,
-      "runoffMmDay": 0,
+      "dailyFluxes": {
+        "precipitationMm": 0,
+        "irrigationMm": 0,
+        "capillaryRiseMm": 0,
+        "runoffMm": 0
+      },
       "dailyPAdjustmentApplied": false
     },
     "pTreatment": "Freeze the Example 37 stated p=0.40 for this example reproduction. Although ETc is 6 mm/day, this source example does not substitute the general Table 22 p adjustment. The separate FAO p-adjustment helper remains covered at ETc=6 by its own arithmetic test.",
