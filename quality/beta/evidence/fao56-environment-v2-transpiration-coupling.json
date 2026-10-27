@@ -113,7 +113,7 @@
     "measuredOutputComparison": false
   },
   "toleranceReview": {
-    "status": "requested; no comparison authorized until independent review",
+    "status": "approved by independent GPT-6 Luna max validator for synthetic software invariants only; implementation comparison not run",
     "requestedScope": "FAO-56 Ks arithmetic, one-use per-cell transpiration, mm×m² to kg/day conversion, fixed-point avoidance through explicit one-day lag, root-zone residual, and wet/dry directional climate response only",
     "proposedTolerances": {
       "KsArithmetic": "≤1e-12 dimensionless absolute deviation",
@@ -121,8 +121,8 @@
       "rootZoneResidual": "≤1e-6 mm/cell-day, existing reviewed allowance",
       "climateDirection": "strict inequalities only; not an RH accuracy band"
     },
-    "reviewedBy": null,
-    "reviewedDate": null
+    "reviewedBy": "GPT-6 Luna max independent validator (Herdr beta_validator)",
+    "reviewedDate": "2026-10-27"
   },
   "implementationStatus": "not implemented; no reducer fixture comparison run"
 }

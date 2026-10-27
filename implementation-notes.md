@@ -1961,3 +1961,12 @@ snapshots changed, and no application implementation is claimed by this revision
   `npm run typecheck`, `npm run build`, `npm run check:private` (499 tracked files), and
   `git diff --check` passed. The build retained existing Vite config-loader and large-chunk
   advisories.
+
+## 2026-10-27 — BETA-02A water-coupling preregistration review
+
+- An independent GPT-6 Luna max validator reviewed the FAO-56 Ks arithmetic, one-use transpiration
+  flux, mm·m²-to-kg/day conversion, one-day lag, residual bound and wet/dry direction checks for
+  the preregistered `environment-v2` fixture. All stated tolerances were approved for synthetic
+  software invariants only; this does not validate climate accuracy or crop predictions.
+- The validator did not run the fixture. Implementation and candidate comparison remain pending;
+  no engine tests or comparison results are claimed in this review entry.
