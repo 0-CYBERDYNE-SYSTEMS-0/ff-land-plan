@@ -1095,7 +1095,7 @@
     "cropSpecificProductionReferenceCrops": 4,
     "reviewedSourceParameterTranscriptionSets": 1,
     "preregisteredSyntheticCanopyEquationFixtures": 1,
-    "executedSyntheticCanopyEquationFixtures": 0,
+    "executedSyntheticCanopyEquationFixtures": 1,
     "executableSyntheticParameterFixtures": 1,
     "measuredEmpiricallyValidatedCrops": 0,
     "measuredValidationClaims": 0,
