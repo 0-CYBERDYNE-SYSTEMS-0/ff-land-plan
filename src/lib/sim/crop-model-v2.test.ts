@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { cropLibrary } from '@/data/crops';
 import { cropThermalParams } from '@/data/cropThermalParams';
+import rootReferenceCoverageRecord from '../../../quality/beta/evidence/fao56-root-reference-coverage.json';
 import {
   dailyDryMatterProduction,
   dailyThermalUnits,
@@ -7,7 +9,40 @@ import {
   fao56AdjustedDepletionFraction,
   stepFao56RootZone,
   thermalDevelopmentRange,
+  type RootZoneState,
 } from './crop-model-v2';
+
+const rootReferenceCoverage = rootReferenceCoverageRecord as {
+  catalogCoverage: Array<{
+    cropId: number;
+    cropSlug: string;
+    status: string;
+    maximumEffectiveRootDepthRangeM?: [number, number];
+    depletionFractionAtEtc5MmDay?: number;
+  }>;
+  sourceArithmeticFixture: {
+    inputs: {
+      soil: { availableWaterMmPerCm: number };
+      rootDepthM: number;
+      totalAvailableWaterMm: number;
+      tableDepletionFractionP: number;
+      initialDepletionMm: number;
+      potentialCropEvapotranspirationMmDay: number;
+    };
+    expectedDisplayedRows: Array<{
+      day: number;
+      ks: number;
+      adjustedEtMmDay: number;
+      endDepletionMm: number;
+    }>;
+    tolerances: {
+      endDepletionMm: { maximumDeviation: number; unit: string };
+      ks: { maximumDeviation: number; unit: string };
+      adjustedEtMmDay: { maximumDeviation: number; unit: string };
+    };
+    candidateComparison: boolean;
+  };
+};
 
 describe('crop model v2 equation helpers', () => {
   it('produces exactly zero photosynthetic dry matter at known zero usable light', () => {
@@ -153,8 +188,60 @@ describe('crop model v2 equation helpers', () => {
   it('adjusts FAO-56 depletion fraction around ETc of 5 mm/day', () => {
     expect(fao56AdjustedDepletionFraction(0.4, 2)).toBeCloseTo(0.52, 12);
     expect(fao56AdjustedDepletionFraction(0.4, 5)).toBe(0.4);
+    expect(fao56AdjustedDepletionFraction(0.4, 6)).toBeCloseTo(0.36, 12);
     expect(fao56AdjustedDepletionFraction(0.4, 10)).toBeCloseTo(0.2, 12);
     expect(fao56AdjustedDepletionFraction(0.4, 30)).toBe(0.1);
+  });
+
+  it('reproduces FAO-56 Example 37 displayed root-zone arithmetic with its fixed p', () => {
+    const fixture = rootReferenceCoverage.sourceArithmeticFixture;
+    const { inputs, expectedDisplayedRows, tolerances } = fixture;
+    const depthCm = inputs.rootDepthM * 100;
+    expect(inputs.soil.availableWaterMmPerCm * depthCm).toBe(inputs.totalAvailableWaterMm);
+    expect(fixture.candidateComparison).toBe(false);
+
+    const params = {
+      awcMmPerCm: inputs.soil.availableWaterMmPerCm,
+      effectiveRootDepthCm: depthCm,
+      depletionFraction: inputs.tableDepletionFractionP,
+    };
+    let state: RootZoneState = { waterMm: inputs.totalAvailableWaterMm - inputs.initialDepletionMm };
+    for (const expected of expectedDisplayedRows) {
+      const result = stepFao56RootZone(state, params, {
+        precipMm: 0,
+        irrigationMm: 0,
+        capillaryRiseMm: 0,
+        runoffMm: 0,
+        potentialTranspirationMm: inputs.potentialCropEvapotranspirationMmDay,
+      });
+      const endDepletionMm = result.capacityMm - result.state.waterMm;
+      expect(Math.abs(result.stressCoefficient - expected.ks), `day ${expected.day} Ks`)
+        .toBeLessThanOrEqual(tolerances.ks.maximumDeviation);
+      expect(Math.abs(result.actualTranspirationMm - expected.adjustedEtMmDay), `day ${expected.day} adjusted ET`)
+        .toBeLessThanOrEqual(tolerances.adjustedEtMmDay.maximumDeviation);
+      expect(Math.abs(endDepletionMm - expected.endDepletionMm), `day ${expected.day} depletion`)
+        .toBeLessThanOrEqual(tolerances.endDepletionMm.maximumDeviation);
+      expect(result.deepDrainageMm).toBe(0);
+      expect(Math.abs(result.residualMm)).toBeLessThanOrEqual(1e-6);
+      state = result.state;
+    }
+    expect(state.residualAccumulatedMm).toBeCloseTo(0, 12);
+  });
+
+  it('covers every built-in catalog crop with a Table 22 reference or explicit unresolved status', () => {
+    const entries = rootReferenceCoverage.catalogCoverage;
+    expect(entries.map((entry) => entry.cropId).sort((a, b) => a - b))
+      .toEqual(cropLibrary.map((crop) => crop.id).sort((a, b) => a - b));
+    expect(new Set(entries.map((entry) => entry.cropSlug)).size).toBe(cropLibrary.length);
+    expect(entries.filter((entry) => entry.status === 'reference-only')).toHaveLength(19);
+    expect(entries.filter((entry) => entry.status === 'unverified-no-direct-match')).toHaveLength(31);
+    for (const entry of entries.filter((candidate) => candidate.status === 'reference-only')) {
+      expect(entry.maximumEffectiveRootDepthRangeM).toHaveLength(2);
+      expect(entry.maximumEffectiveRootDepthRangeM![0]).toBeGreaterThan(0);
+      expect(entry.maximumEffectiveRootDepthRangeM![1]).toBeGreaterThanOrEqual(entry.maximumEffectiveRootDepthRangeM![0]);
+      expect(entry.depletionFractionAtEtc5MmDay).toBeGreaterThan(0);
+      expect(entry.depletionFractionAtEtc5MmDay).toBeLessThanOrEqual(1);
+    }
   });
 
   it('accounts for explicitly assumed storage entering as the root front expands', () => {
