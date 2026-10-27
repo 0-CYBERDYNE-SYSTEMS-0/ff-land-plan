@@ -54,14 +54,31 @@ export interface FrozenCropModelParametersV2 {
     harvestIndex: number | null;
     status: 'unsupported' | 'qualified' | 'supported';
     missing: string[];
+    /** Explicit domain/measurement assumptions; these qualify, but do not prevent replay. */
+    limitations?: string[];
     evidence: { evidenceId: string | null; sourceCitation: string | null; sourceUrl: string | null; validDomain: string | null };
   };
   rootZone: {
     method: 'FAO-56';
+    /** Maximum effective depth for static profiles; cap for rootDevelopment profiles. */
     effectiveRootDepthCm: number | null;
     depletionFraction: number | null;
     cropCoefficient: number | null;
     initialStorageFraction: number | null;
+    /** Optional versioned root-depth trajectory; absent on historical static v2 inputs. */
+    rootDevelopment?: {
+      methodVersion: 'thermal-linear-root-depth-v1';
+      storageExpansionMethod: 'uniform-initial-awc-fraction-v1';
+      initialRootDepthCm: number;
+      growthStartsAfterCdays: number;
+      growthMmPerCday: number;
+      thermalBaseC: number;
+      thermalUpperC?: number;
+      thermalAccumulationMethod: string;
+      evidence: { evidenceId: string; sourceCitation: string; sourceUrl: string; validDomain: string };
+    };
+    /** Explicit assumptions are retained and surfaced when replayed. */
+    limitations?: string[];
     status: 'unsupported' | 'qualified' | 'supported';
     missing: string[];
     evidence: { evidenceId: string | null; sourceCitation: string | null; sourceUrl: string | null; validDomain: string | null };
@@ -206,6 +223,11 @@ export interface CellState {
   dryMatterGPerM2?: number;
   /** v2 FAO-56 effective root-zone storage and accumulated closure residual, mm. */
   rootZoneWaterMm?: number;
+  /** v2 root-growth thermal clock and effective rooting depth. */
+  rootThermalCdays?: number;
+  rootZoneDepthCm?: number;
+  /** Cumulative storage entering as newly rooted subsoil is added to the bucket, mm. */
+  rootZoneExpansionInflowMm?: number;
   rootZoneResidualAccumulatedMm?: number;
   rootZoneResidualMaxAbsMm?: number;
   /** v2 water removed when a replant shrinks effective root-zone capacity, mm. */
@@ -438,6 +460,8 @@ export interface RunSummary {
   rootZoneBalanceResidualMaxAbsMm?: number;
   /** v2 water counted as drainage when replanting shrinks root-zone capacity, mm. */
   rootZoneReplantDrainageMm?: number;
+  /** v2 water brought into the moving root-zone control volume, mm. */
+  rootZoneExpansionInflowMm?: number;
 }
 
 /** Persist run inputs (config, frozen envSeries, optional observations) + summary.

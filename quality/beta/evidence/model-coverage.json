@@ -220,7 +220,7 @@
     {
       "id": "LETTUCE-MICHELON-2020-EXP1-HS50",
       "sourceId": "MICHELON-2020-AGR-10-668",
-      "classification": "measured-field-observation / potential production holdout",
+      "classification": "measured-field-observation / thermal parameter reference; full-model holdout prohibited",
       "crop": {
         "slug": "lettuce",
         "cultivar": "Green Wave"
@@ -246,14 +246,14 @@
         "marketableYieldKgM2": 1.9
       },
       "sampleSize": "Statistical n = 3 replicate plots; 12 plants sampled within each plot. Each experimental unit was a 5.4 m² plot with 72 plants; the 12 plant measurements are subsamples, not independent replicates.",
-      "status": "Measured observation; potential holdout only if no parameter is fitted to this record; not executable without daily inputs.",
+      "status": "Measured observation and current source for the lettuce thermal target; no full-model holdout claim is permitted. A metric-specific production holdout would require a separate preregistered claim and complete daily inputs, which are not available.",
       "missing": [
         "daily weather and temperature series",
         "daily DLI series (only the reported experiment mean is available here)",
         "complete soil/root-zone state and inputs",
         "raw plot-level means and between-replicate variance; reported table provides treatment means and significance letters"
       ],
-      "calibrationOrHoldout": "Potential production holdout; do not fit parameters to this record.",
+      "calibrationOrHoldout": "Thermal target is a parameter reference. The record is not an independent full-model holdout; production-only use would require separate metric-specific preregistration and complete inputs.",
       "units": {
         "airTemperature": "°C",
         "meanDLI": "mol PAR m⁻² day⁻¹",
@@ -304,6 +304,7 @@
         "cultivar": "Rosalba; butterhead (Lactuca sativa var. capitata)"
       },
       "environment": "Plastic greenhouse, Perugia, Central Italy (43°N, 165 m); natural daylight; two seasons in 1996 and 1999–2000; four planting densities (5, 10, 15, 30 plants/m²).",
+      "sampleSize": "Two seasonal experiments and four density treatments; replicate plot count is not reported in the accessible source record.",
       "metric": "Above-ground dry-weight slope against cumulative intercepted PAR (radiation-use efficiency)",
       "parameter": {
         "value": 2.71,
@@ -793,14 +794,23 @@
   "fixtures": [
     {
       "id": "LETTUCE-REFERENCE-PARAM-SYNTHETIC-INTEGRATION-01",
-      "classification": "synthetic software fixture using separately sourced parameter references",
+      "classification": "synthetic software fixture using separately sourced thermal, production and root parameter references",
       "crop": {
         "slug": "lettuce",
         "catalogCropId": 2,
-        "cultivar": "not asserted; production and root references come from different cultivar/domain studies"
+        "cultivar": "not asserted; Green Wave thermal, Rosalba production and Yuma iceberg/romaine root references come from different cultivar/domain studies"
       },
       "environment": "synthetic outdoor single-cell reducer input; not a reproduction of the Perugia greenhouse or Yuma field weather",
       "sourceParameters": {
+        "thermalDevelopment": {
+          "baseC": 4,
+          "targetCdays": [662, 731],
+          "startEvent": "transplanting",
+          "endpoint": "harvest",
+          "method": "study thermal-time accumulation, base 4 °C",
+          "sourceEvidenceId": "LETTUCE-MICHELON-2020-EXP1-HS50",
+          "qualification": "Green Wave transplant field reference from Yezin; this source is also used by the catalog thermal table, so this fixture is not independent full-model holdout evidence."
+        },
         "aboveGroundNetRue": {
           "value": 2.71,
           "unit": "g above-ground dry matter per MJ intercepted PAR",
@@ -809,6 +819,8 @@
           "transcriptionTolerance": "±0.005 g/MJ, rounding only; reported ±0.030 retained separately and is not treated as a confidence interval"
         },
         "rootDevelopment": {
+          "methodVersion": "thermal-linear-root-depth-v1",
+          "storageExpansionMethod": "uniform-initial-awc-fraction-v1",
           "initialRootDepthCm": 12,
           "growthStartsAfterCdays": 200,
           "growthMmPerCday": 1.2,
@@ -847,7 +859,7 @@
       },
       "reproduction": "npx vitest run src/lib/sim/crop-model-v2.test.ts src/lib/sim/model-inputs.test.ts",
       "candidateComparison": false,
-      "status": "software integration evidence only; not measured validation, external reference agreement, or prediction accuracy"
+      "status": "software integration evidence only; not measured validation, external reference agreement, or prediction accuracy. Michelon thermal target is a parameter reference and bars full-model holdout claims from that source."
     }
   ],
   "coverageSummary": {

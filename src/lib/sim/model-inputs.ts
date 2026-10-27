@@ -75,7 +75,8 @@ function productionParametersComplete(parameter: FrozenCropModelParametersV2['pr
   if (!evidence || ![evidence.evidenceId, evidence.sourceCitation, evidence.sourceUrl, evidence.validDomain]
     .every((value) => typeof value === 'string' && value.trim().length > 0)) return false;
   return parameter.equationFamily === 'LINTUL-net-RUE'
-    && parameter.status === 'supported'
+    && (parameter.status === 'supported'
+      || (parameter.status === 'qualified' && (parameter.limitations?.length ?? 0) > 0))
     && parameter.missing.length === 0
     && parameter.rueGPerMjInterceptedPar !== null
     && Number.isFinite(parameter.rueGPerMjInterceptedPar)
@@ -90,13 +91,38 @@ function productionParametersComplete(parameter: FrozenCropModelParametersV2['pr
     && parameter.harvestIndex <= 1;
 }
 
+function rootDevelopmentParametersComplete(
+  development: FrozenCropModelParametersV2['rootZone']['rootDevelopment'],
+): boolean {
+  if (development === undefined) return true;
+  if (!development || typeof development !== 'object') return false;
+  const evidence = development.evidence;
+  if (!evidence || typeof evidence !== 'object'
+    || ![evidence.evidenceId, evidence.sourceCitation, evidence.sourceUrl, evidence.validDomain]
+      .every((value) => typeof value === 'string' && value.trim().length > 0)) return false;
+  return development.methodVersion === 'thermal-linear-root-depth-v1'
+    && development.storageExpansionMethod === 'uniform-initial-awc-fraction-v1'
+    && Number.isFinite(development.initialRootDepthCm)
+    && development.initialRootDepthCm > 0
+    && Number.isFinite(development.growthStartsAfterCdays)
+    && development.growthStartsAfterCdays >= 0
+    && Number.isFinite(development.growthMmPerCday)
+    && development.growthMmPerCday >= 0
+    && Number.isFinite(development.thermalBaseC)
+    && (development.thermalUpperC === undefined
+      || (Number.isFinite(development.thermalUpperC) && development.thermalUpperC > development.thermalBaseC))
+    && typeof development.thermalAccumulationMethod === 'string'
+    && development.thermalAccumulationMethod.toLowerCase().includes('single sine');
+}
+
 function rootZoneParametersComplete(parameter: FrozenCropModelParametersV2['rootZone']): boolean {
   if (!parameter || !Array.isArray(parameter.missing)) return false;
   const evidence = parameter.evidence;
   if (!evidence || ![evidence.evidenceId, evidence.sourceCitation, evidence.sourceUrl, evidence.validDomain]
     .every((value) => typeof value === 'string' && value.trim().length > 0)) return false;
   return parameter.method === 'FAO-56'
-    && parameter.status === 'supported'
+    && (parameter.status === 'supported'
+      || (parameter.status === 'qualified' && (parameter.limitations?.length ?? 0) > 0))
     && parameter.missing.length === 0
     && parameter.effectiveRootDepthCm !== null
     && Number.isFinite(parameter.effectiveRootDepthCm)
@@ -111,7 +137,10 @@ function rootZoneParametersComplete(parameter: FrozenCropModelParametersV2['root
     && parameter.initialStorageFraction !== null
     && Number.isFinite(parameter.initialStorageFraction)
     && parameter.initialStorageFraction >= 0
-    && parameter.initialStorageFraction <= 1;
+    && parameter.initialStorageFraction <= 1
+    && (parameter.rootDevelopment === undefined
+      || (rootDevelopmentParametersComplete(parameter.rootDevelopment)
+        && parameter.rootDevelopment.initialRootDepthCm <= parameter.effectiveRootDepthCm));
 }
 
 function soilQualificationReasons(
@@ -177,7 +206,8 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
       && inputs.cropParameters.length === parameterIds.size
       && (inputs.soil?.awcMmPerCm ?? 0) > 0
       && !usesSoillessTarget(config)
-      && inputs.qualification.status === 'supported'
+      && (inputs.qualification.status === 'supported'
+        || (inputs.qualification.status === 'qualified' && inputs.qualification.reasons.length > 0))
       && inputs.cropParameters.every((parameter) =>
         thermalParametersComplete(parameter.thermal)
         && productionParametersComplete(parameter.production)
@@ -188,6 +218,7 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
       return {
         model: 'crop-model-v2', status: 'qualified', canReplay: true, preserveStoredSummary: false,
         reasons: [
+          ...inputs.qualification.reasons,
           'Empirical v2 crop-model accuracy remains UNVERIFIED for this parameter set.',
           'v2 dry-matter production currently applies the FAO-56 water stress coefficient; nutrient and temperature production stress factors are not parameterized.',
           'PAR interception is a fixed fraction; dynamic canopy/LAI development is not modeled.',
@@ -196,7 +227,9 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
             ? ['Enclosed v2 climate transpiration is lagged potential ET using frozen, stage-independent root-zone Kc and the previous climate ET factor; it is not reduced by current root-zone Ks. CO₂ uptake uses thermal progress times fixed PAR interception as a qualified leaf-area proxy, not measured LAI.']
             : []),
           'Surface runoff is assumed to be 0 mm/day because the run has no frozen runoff input; infiltration and runoff uncertainty remain unmodeled.',
-          'Effective root depth is held at the frozen value; root growth and rooting barriers are not modeled.',
+          ...(inputs.cropParameters.some((parameter) => parameter.rootZone.rootDevelopment)
+            ? ['Root development uses a frozen source profile; new subsoil storage is added at the frozen initial available-water fraction as an explicit root-growth inflow. Vertical soil-water layering and rooting barriers are not modeled.']
+            : ['Effective root depth is held at the frozen value; root growth and rooting barriers are not modeled.']),
           ...(config.environment && config.climateModel !== 'environment-v1'
             && archetypes[config.environment.archetype]?.kind !== 'open'
             && archetypes[config.environment.archetype]?.dliMode !== 'supplement-only'
@@ -358,8 +391,16 @@ export function freezeRunModelInputsV2(
     ...(parameter.thermal ? [] : [`Crop ${parameter.cropId}: missing source-backed thermal development parameters`]),
     ...parameter.production.missing.map((missing) => `Crop ${parameter.cropId}: missing ${missing}`),
     ...parameter.rootZone.missing.map((missing) => `Crop ${parameter.cropId}: missing ${missing}`),
+    ...(parameter.production.limitations ?? []).map((limitation) => `Crop ${parameter.cropId}: ${limitation}`),
+    ...(parameter.rootZone.limitations ?? []).map((limitation) => `Crop ${parameter.cropId}: ${limitation}`),
     ...(parameter.lifecycle === 'fungus' ? [`Crop ${parameter.cropId}: separate fungus lifecycle is unsupported`] : []),
   ]);
+  const unsupported = cropParameters.some((parameter) => !parameter.thermal
+    || parameter.production.missing.length > 0
+    || parameter.rootZone.missing.length > 0
+    || parameter.production.status === 'unsupported'
+    || parameter.rootZone.status === 'unsupported'
+    || parameter.lifecycle !== 'plant');
   return {
     model: 'run-inputs-v2',
     parameterSetVersion: 'crop-parameters-v2',
@@ -367,7 +408,7 @@ export function freezeRunModelInputsV2(
     crops,
     cropParameters,
     qualification: {
-      status: reasons.length === 0 ? 'supported' : 'unsupported',
+      status: unsupported ? 'unsupported' : reasons.length > 0 ? 'qualified' : 'supported',
       reasons: [...new Set(reasons)],
     },
   };

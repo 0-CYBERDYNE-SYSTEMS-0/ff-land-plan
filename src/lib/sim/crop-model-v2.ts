@@ -113,6 +113,8 @@ export interface RootZoneFluxes {
   irrigationMm: number;
   capillaryRiseMm?: number;
   runoffMm?: number;
+  /** Water in the newly reached subsoil slice, based on the frozen profile assumption. */
+  rootGrowthStorageMm?: number;
   potentialTranspirationMm: number;
 }
 
@@ -125,7 +127,43 @@ export interface RootZoneStepResult {
   stressCoefficient: number;
   actualTranspirationMm: number;
   deepDrainageMm: number;
+  rootGrowthStorageMm: number;
   residualMm: number;
+}
+
+export interface RootDevelopmentParams {
+  initialRootDepthCm: number;
+  maximumRootDepthCm: number;
+  growthStartsAfterCdays: number;
+  growthMmPerCday: number;
+}
+
+/** Source-based effective root-depth trajectory, with the source domain's explicit cap. */
+export function effectiveRootDepthCmAtThermalTime(
+  accumulatedCdays: number,
+  params: RootDevelopmentParams,
+): number {
+  const values = [accumulatedCdays, params.initialRootDepthCm, params.maximumRootDepthCm,
+    params.growthStartsAfterCdays, params.growthMmPerCday];
+  if (!values.every(Number.isFinite) || accumulatedCdays < 0
+    || params.initialRootDepthCm <= 0 || params.maximumRootDepthCm < params.initialRootDepthCm
+    || params.growthStartsAfterCdays < 0 || params.growthMmPerCday < 0) {
+    throw new RangeError('Root-development inputs must be finite and physically bounded.');
+  }
+  const growingCdays = Math.max(0, accumulatedCdays - params.growthStartsAfterCdays);
+  return Math.min(
+    params.maximumRootDepthCm,
+    params.initialRootDepthCm + growingCdays * params.growthMmPerCday / 10,
+  );
+}
+
+/** FAO-56 p adjustment around the reference ETc of 5 mm/day. */
+export function fao56AdjustedDepletionFraction(pAt5MmDay: number, etcMmDay: number): number {
+  if (![pAt5MmDay, etcMmDay].every(Number.isFinite)
+    || pAt5MmDay < 0 || pAt5MmDay > 1 || etcMmDay < 0) {
+    throw new RangeError('FAO-56 depletion adjustment inputs must be finite and within their physical bounds.');
+  }
+  return Math.max(0.1, Math.min(0.8, pAt5MmDay + 0.04 * (5 - etcMmDay)));
 }
 
 /** FAO-56 single effective root-zone balance with explicit boundary fluxes. */
@@ -136,12 +174,13 @@ export function stepFao56RootZone(
 ): RootZoneStepResult {
   const values = [params.awcMmPerCm, params.effectiveRootDepthCm, params.depletionFraction,
     state.waterMm, fluxes.precipMm, fluxes.irrigationMm, fluxes.capillaryRiseMm ?? 0,
-    fluxes.runoffMm ?? 0, fluxes.potentialTranspirationMm];
+    fluxes.runoffMm ?? 0, fluxes.rootGrowthStorageMm ?? 0, fluxes.potentialTranspirationMm];
   if (!values.every(Number.isFinite)
     || params.awcMmPerCm <= 0 || params.effectiveRootDepthCm <= 0
     || params.depletionFraction < 0 || params.depletionFraction > 1
     || fluxes.precipMm < 0 || fluxes.irrigationMm < 0
     || (fluxes.capillaryRiseMm ?? 0) < 0 || (fluxes.runoffMm ?? 0) < 0
+    || (fluxes.rootGrowthStorageMm ?? 0) < 0
     || fluxes.potentialTranspirationMm < 0) {
     throw new RangeError('FAO-56 root-zone inputs must be finite and within their physical bounds.');
   }
@@ -149,7 +188,8 @@ export function stepFao56RootZone(
   if (state.waterMm < 0 || state.waterMm > capacityMm) {
     throw new RangeError('Root-zone water storage must be within 0..TAW.');
   }
-  const inflowMm = fluxes.precipMm + fluxes.irrigationMm + (fluxes.capillaryRiseMm ?? 0);
+  const rootGrowthStorageMm = fluxes.rootGrowthStorageMm ?? 0;
+  const inflowMm = fluxes.precipMm + fluxes.irrigationMm + (fluxes.capillaryRiseMm ?? 0) + rootGrowthStorageMm;
   const runoffMm = fluxes.runoffMm ?? 0;
   if (runoffMm > inflowMm) throw new RangeError('Runoff cannot exceed daily water inflow.');
   const beforeDrainage = state.waterMm + inflowMm - runoffMm;
@@ -175,6 +215,7 @@ export function stepFao56RootZone(
     stressCoefficient,
     actualTranspirationMm,
     deepDrainageMm,
+    rootGrowthStorageMm,
     residualMm,
   };
 }

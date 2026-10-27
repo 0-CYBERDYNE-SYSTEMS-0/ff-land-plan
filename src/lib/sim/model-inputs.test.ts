@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { cropLibrary } from '@/data/crops';
+import { lettuceRosalbaRUEReference, lettuceYumaRootProfileReference } from '@/data/cropModelV2LettuceReferences';
 import { cropThermalParams } from '@/data/cropThermalParams';
 import { growingTargetKey } from '@/lib/growingTargets';
-import type { RunConfig, RunModelInputsV2 } from './types';
+import type { FrozenCropModelParametersV2, RunConfig, RunModelInputsV2 } from './types';
 import { freezeRunModelInputs, freezeRunModelInputsV2, inspectRunModelSupport } from './model-inputs';
 import { NO_CLIMATE_EQUIPMENT } from './environment-climate';
 import { createRun, simulateRun, stepDay } from './engine';
@@ -28,6 +29,75 @@ function config(overrides: Partial<RunConfig> = {}): RunConfig {
     precipMultiplier: 1,
     interventions: [],
     ...overrides,
+  };
+}
+
+function lettuceSourceParameterFixture(): FrozenCropModelParametersV2 {
+  const lettuce = cropLibrary.find((crop) => crop.id === 2)!;
+  const thermal = cropThermalParams.find((parameter) => parameter.cropId === lettuce.id)!;
+  const rue = lettuceRosalbaRUEReference;
+  const root = lettuceYumaRootProfileReference;
+  const sourceLimitations = [
+    'Synthetic integration fixture composes Michelon Green Wave transplant thermal targets with greenhouse Rosalba production RUE and direct-seeded Yuma iceberg/romaine root parameters; it is not a validated cultivar/environment set.',
+    'The Michelon thermal target is used only to satisfy the frozen daily engine contract; it shares a source with the potential holdout record and is not independent holdout evidence.',
+    'The source RUE is for above-ground dry matter; the fixed 0.5 PAR interception fraction and 0.5 harvest index are synthetic fixture values.',
+  ];
+  return {
+    cropId: lettuce.id,
+    thermal,
+    production: {
+      equationFamily: 'LINTUL-net-RUE',
+      rueGPerMjInterceptedPar: rue.value,
+      interceptedParFraction: 0.5,
+      harvestIndex: 0.5,
+      status: 'qualified',
+      missing: [],
+      limitations: sourceLimitations,
+      evidence: {
+        evidenceId: rue.evidenceId,
+        sourceCitation: rue.sourceCitation,
+        sourceUrl: rue.sourceUrl,
+        validDomain: rue.validDomain,
+      },
+    },
+    rootZone: {
+      method: 'FAO-56',
+      effectiveRootDepthCm: root.maximumRootDepthCm,
+      depletionFraction: root.depletionFractionAtEtc5MmDay,
+      cropCoefficient: 1,
+      initialStorageFraction: 0.7,
+      rootDevelopment: {
+        methodVersion: root.methodVersion,
+        storageExpansionMethod: root.storageExpansionMethod,
+        initialRootDepthCm: root.initialRootDepthCm,
+        growthStartsAfterCdays: root.growthStartsAfterCdays,
+        growthMmPerCday: root.growthMmPerCday,
+        thermalBaseC: root.thermalBaseC,
+        thermalUpperC: root.thermalUpperC,
+        thermalAccumulationMethod: root.thermalAccumulationMethod,
+        evidence: {
+          evidenceId: root.evidenceId,
+          sourceCitation: root.sourceCitation,
+          sourceUrl: root.sourceUrl,
+          validDomain: root.validDomain,
+        },
+      },
+      status: 'qualified',
+      missing: [],
+      limitations: [
+        'This source root profile is for direct-seeded Yuma field lettuce; it does not define transplanted root development.',
+        'The 90 cm maximum is a site-specific inferred effective depth, not a measured or generic maximum.',
+        'Newly reached soil is initialized at the synthetic 0.7 available-water fraction; root expansion is a single-bucket boundary assumption, not a layered soil profile.',
+        'The fixed crop coefficient 1.0 is a synthetic test value, not a stage-specific source coefficient.',
+      ],
+      evidence: {
+        evidenceId: root.evidenceId,
+        sourceCitation: root.sourceCitation,
+        sourceUrl: root.sourceUrl,
+        validDomain: root.validDomain,
+      },
+    },
+    lifecycle: 'plant',
   };
 }
 
@@ -116,6 +186,32 @@ describe('frozen crop model inputs and replay support', () => {
     const legacy = freezeRunModelInputs(config(), { soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 }, crops: [cropLibrary[0]!] });
     const converted = freezeRunModelInputsV2(run, { soil, crops: [cropLibrary[0]!] }, legacy);
     expect(converted.soil).toEqual({ awcMmPerCm: 1.7, organicMatterPct: 2.4, source: 'unknown' });
+  });
+
+  it('preserves malformed persisted root-development records without throwing during inspection', () => {
+    const lettuce = cropLibrary.find((crop) => crop.id === 2)!;
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      basePlan: { ...config().basePlan, planting: { '0,0': lettuce.id } },
+    });
+    const valid = freezeRunModelInputsV2(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [lettuce],
+      cropParametersV2: [lettuceSourceParameterFixture()],
+    });
+
+    for (const malformedEvidence of [null, undefined]) {
+      const malformed = structuredClone(valid);
+      const rootDevelopment = malformed.cropParameters[0]!.rootZone.rootDevelopment as unknown as Record<string, unknown>;
+      if (malformedEvidence === null) rootDevelopment.evidence = null;
+      else delete rootDevelopment.evidence;
+
+      expect(inspectRunModelSupport({ ...run, modelInputs: malformed })).toMatchObject({
+        status: 'unsupported',
+        canReplay: false,
+        preserveStoredSummary: true,
+      });
+    }
   });
 
   it('does not repair an incomplete v2 record from the current crop catalog', () => {
@@ -471,6 +567,106 @@ describe('frozen crop model inputs and replay support', () => {
     expect(dormantRun.summary.stressCellDays).toBe(0);
     expect(dormantRun.summary.stressDays.water).toBe(0);
     expect(dormantRun.events.filter((event) => event.kind === 'stress-onset')).toEqual([]);
+  });
+
+  it('runs the source-parameter lettuce fixture with synthetic inputs and closes root expansion water', () => {
+    const lettuce = cropLibrary.find((crop) => crop.id === 2)!;
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      basePlan: { ...config().basePlan, planting: { '0,0': lettuce.id } },
+      dayCount: 20,
+    });
+    const modelInputs = freezeRunModelInputsV2(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [lettuce],
+      cropParametersV2: [lettuceSourceParameterFixture()],
+    });
+    const frozenRun = { ...run, modelInputs };
+    expect(modelInputs.qualification.status).toBe('qualified');
+    const support = inspectRunModelSupport(frozenRun);
+    expect(support).toMatchObject({ status: 'qualified', canReplay: true });
+
+    const series = Array.from({ length: 20 }, (_, index) => ({
+      date: new Date(Date.parse('2026-10-01T00:00:00Z') + index * 86_400_000).toISOString().slice(0, 10),
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 0,
+      dliNaturalMol: 0,
+      gddBase10C: 15,
+      provenance: {
+        tMinC: 'default' as const,
+        tMaxC: 'default' as const,
+        precipMm: 'default' as const,
+        etoMm: 'default' as const,
+        dliNaturalMol: 'default' as const,
+      },
+    }));
+    const result = simulateRun(frozenRun, series);
+    const cell = result.finalState.cells['0,0']!;
+    const initialStorageMm = 1.5 * lettuceYumaRootProfileReference.initialRootDepthCm * 0.7;
+
+    expect(cell.rootZoneDepthCm).toBeGreaterThan(lettuceYumaRootProfileReference.initialRootDepthCm);
+    expect(cell.rootZoneExpansionInflowMm).toBeGreaterThan(0);
+    expect(result.summary.rootZoneExpansionInflowMm).toBeCloseTo(cell.rootZoneExpansionInflowMm!, 12);
+    expect(cell.rootZoneWaterMm).toBeCloseTo(initialStorageMm + cell.rootZoneExpansionInflowMm!, 10);
+    expect(result.summary.rootZoneBalanceResidualAccumulatedMm).toBeCloseTo(0, 10);
+    expect(result.summary.rootZoneBalanceResidualMaxAbsMm).toBeLessThanOrEqual(1e-6);
+    expect(cell.dryMatterGPerM2).toBe(0);
+    expect(result.summary.modelQualification?.reasons).toContain(
+      'Crop 2: Synthetic integration fixture composes Michelon Green Wave transplant thermal targets with greenhouse Rosalba production RUE and direct-seeded Yuma iceberg/romaine root parameters; it is not a validated cultivar/environment set.',
+    );
+
+    const oneDayRun = simulateRun(frozenRun, [
+      { ...series[0]!, dliNaturalMol: 18 },
+    ]);
+    expect(oneDayRun.finalState.cells['0,0']?.dryMatterGPerM2).toBeCloseTo(5.42, 12);
+  });
+
+  it('stops source root expansion at maturity and after manual harvest', () => {
+    const lettuce = cropLibrary.find((crop) => crop.id === 2)!;
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      autoHarvest: false,
+      basePlan: { ...config().basePlan, planting: { '0,0': lettuce.id } },
+    });
+    const modelInputs = freezeRunModelInputsV2(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [lettuce],
+      cropParametersV2: [lettuceSourceParameterFixture()],
+    });
+    const frozenRun = { ...run, modelInputs };
+    const initial = createRun(frozenRun);
+
+    for (const endpoint of [{ biomassFrac: 1, harvested: false }, { biomassFrac: 0.5, harvested: true }]) {
+      const state = structuredClone(initial);
+      state.dayIndex = 20;
+      state.cells['0,0'] = {
+        ...state.cells['0,0']!,
+        gddAccumC: 731,
+        biomassFrac: endpoint.biomassFrac,
+        harvested: endpoint.harvested,
+        rootThermalCdays: 300,
+        rootZoneDepthCm: 24,
+        rootZoneExpansionInflowMm: 12.6,
+        rootZoneWaterMm: 25.2,
+      };
+      const result = stepDay(state, {
+        date: '2026-10-21',
+        tMinC: 20,
+        tMaxC: 30,
+        precipMm: 0,
+        etoMm: 0,
+        dliNaturalMol: 0,
+        gddBase10C: 15,
+        provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default', dliNaturalMol: 'default' },
+      }, frozenRun);
+      expect(result.state.cells['0,0']).toMatchObject({
+        rootThermalCdays: 300,
+        rootZoneDepthCm: 24,
+        rootZoneExpansionInflowMm: 12.6,
+      });
+    }
   });
 
   it('rejects an unknown persisted model version without attempting replay', () => {

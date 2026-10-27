@@ -3,6 +3,8 @@ import { cropThermalParams } from '@/data/cropThermalParams';
 import {
   dailyDryMatterProduction,
   dailyThermalUnits,
+  effectiveRootDepthCmAtThermalTime,
+  fao56AdjustedDepletionFraction,
   stepFao56RootZone,
   thermalDevelopmentRange,
 } from './crop-model-v2';
@@ -132,5 +134,46 @@ describe('crop model v2 equation helpers', () => {
       { awcMmPerCm: 1, effectiveRootDepthCm: 10, depletionFraction: 0.5 },
       { precipMm: 0, irrigationMm: 0, potentialTranspirationMm: 0 },
     )).toThrow(RangeError);
+  });
+
+  it('applies the frozen lettuce root-depth trajectory with its source-specific cap', () => {
+    const params = {
+      initialRootDepthCm: 12,
+      growthStartsAfterCdays: 200,
+      growthMmPerCday: 1.2,
+      maximumRootDepthCm: 90,
+    };
+
+    expect(effectiveRootDepthCmAtThermalTime(0, params)).toBe(12);
+    expect(effectiveRootDepthCmAtThermalTime(200, params)).toBe(12);
+    expect(effectiveRootDepthCmAtThermalTime(300, params)).toBe(24);
+    expect(effectiveRootDepthCmAtThermalTime(1000, params)).toBe(90);
+  });
+
+  it('adjusts FAO-56 depletion fraction around ETc of 5 mm/day', () => {
+    expect(fao56AdjustedDepletionFraction(0.4, 2)).toBeCloseTo(0.52, 12);
+    expect(fao56AdjustedDepletionFraction(0.4, 5)).toBe(0.4);
+    expect(fao56AdjustedDepletionFraction(0.4, 10)).toBeCloseTo(0.2, 12);
+    expect(fao56AdjustedDepletionFraction(0.4, 30)).toBe(0.1);
+  });
+
+  it('accounts for explicitly assumed storage entering as the root front expands', () => {
+    const previousStorageMm = 1.5 * 12 * 0.7;
+    const rootGrowthStorageMm = 1.5 * (13.2 - 12) * 0.7;
+    const result = stepFao56RootZone(
+      { waterMm: previousStorageMm },
+      { awcMmPerCm: 1.5, effectiveRootDepthCm: 13.2, depletionFraction: 0.5 },
+      {
+        precipMm: 0,
+        irrigationMm: 0,
+        rootGrowthStorageMm,
+        potentialTranspirationMm: 0,
+      },
+    );
+
+    expect(result.rootGrowthStorageMm).toBeCloseTo(1.26, 12);
+    expect(result.capacityMm).toBeCloseTo(19.8, 12);
+    expect(result.state.waterMm).toBeCloseTo(previousStorageMm + rootGrowthStorageMm, 12);
+    expect(result.residualMm).toBeCloseTo(0, 12);
   });
 });

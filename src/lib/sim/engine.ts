@@ -77,7 +77,14 @@ import {
 } from './ecosystem';
 import { isoDayNumber } from './environment';
 import { inspectRunModelSupport } from './model-inputs';
-import { dailyDryMatterProduction, dailyThermalUnits, stepFao56RootZone, thermalDevelopmentRange } from './crop-model-v2';
+import {
+  dailyDryMatterProduction,
+  dailyThermalUnits,
+  effectiveRootDepthCmAtThermalTime,
+  fao56AdjustedDepletionFraction,
+  stepFao56RootZone,
+  thermalDevelopmentRange,
+} from './crop-model-v2';
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -123,11 +130,13 @@ function initialCell(
 ): CellState {
   const rootZone = modelParameters?.rootZone;
   const awc = soil?.awcMmPerCm;
+  const initialRootDepthCm = rootZone?.rootDevelopment?.initialRootDepthCm
+    ?? rootZone?.effectiveRootDepthCm;
   const rootZoneWaterMm = rootZone
-    && typeof rootZone.effectiveRootDepthCm === 'number'
+    && typeof initialRootDepthCm === 'number'
     && typeof rootZone.initialStorageFraction === 'number'
     && typeof awc === 'number' && Number.isFinite(awc) && awc > 0
-    ? awc * rootZone.effectiveRootDepthCm * rootZone.initialStorageFraction
+    ? awc * initialRootDepthCm * rootZone.initialStorageFraction
     : undefined;
   return {
     cropId,
@@ -139,6 +148,11 @@ function initialCell(
     biomassFrac: 0,
     ...(modelParameters ? { dryMatterGPerM2: 0 } : {}),
     ...(rootZoneWaterMm !== undefined ? { rootZoneWaterMm } : {}),
+    ...(rootZone?.rootDevelopment ? {
+      rootThermalCdays: 0,
+      rootZoneDepthCm: rootZone.rootDevelopment.initialRootDepthCm,
+      rootZoneExpansionInflowMm: 0,
+    } : {}),
     stage: 0,
     floweringFrac: 0,
     pestPressure: 0,
@@ -485,6 +499,9 @@ function sameCell(a: CellState, b: CellState): boolean {
       a.biomassFrac === b.biomassFrac &&
       a.dryMatterGPerM2 === b.dryMatterGPerM2 &&
       a.rootZoneWaterMm === b.rootZoneWaterMm &&
+      a.rootThermalCdays === b.rootThermalCdays &&
+      a.rootZoneDepthCm === b.rootZoneDepthCm &&
+      a.rootZoneExpansionInflowMm === b.rootZoneExpansionInflowMm &&
       a.rootZoneResidualAccumulatedMm === b.rootZoneResidualAccumulatedMm &&
       a.rootZoneResidualMaxAbsMm === b.rootZoneResidualMaxAbsMm &&
       a.rootZoneReplantDrainageMm === b.rootZoneReplantDrainageMm &&
@@ -615,8 +632,12 @@ export function stepDay(
         );
         if (isV2 && existing?.rootZoneWaterMm !== undefined && nextParameters) {
           const awc = soil?.awcMmPerCm;
-          const previousDepthCm = v2ParametersFor(config, existing.cropId)?.rootZone.effectiveRootDepthCm;
-          const nextDepthCm = nextParameters.rootZone.effectiveRootDepthCm;
+          const previousRoot = v2ParametersFor(config, existing.cropId)?.rootZone;
+          const previousDepthCm = existing.rootZoneDepthCm
+            ?? previousRoot?.rootDevelopment?.initialRootDepthCm
+            ?? previousRoot?.effectiveRootDepthCm;
+          const nextDepthCm = nextParameters.rootZone.rootDevelopment?.initialRootDepthCm
+            ?? nextParameters.rootZone.effectiveRootDepthCm;
           if (typeof awc === 'number' && Number.isFinite(awc) && awc > 0
             && typeof previousDepthCm === 'number' && typeof nextDepthCm === 'number') {
             const previousCapacityMm = awc * previousDepthCm;
@@ -632,6 +653,9 @@ export function stepDay(
                 ? { rootZoneResidualMaxAbsMm: existing.rootZoneResidualMaxAbsMm }
                 : {}),
               rootZoneReplantDrainageMm: (existing.rootZoneReplantDrainageMm ?? 0) + replantDrainageMm,
+              ...(existing.rootZoneExpansionInflowMm !== undefined
+                ? { rootZoneExpansionInflowMm: existing.rootZoneExpansionInflowMm }
+                : {}),
             };
             if (previousCapacityMm !== nextCapacityMm) {
               modelQualificationReasons.add(
@@ -860,6 +884,9 @@ export function stepDay(
     const kc = kcForBiomass(prev.biomassFrac);
     const modelParameters = isV2 ? v2ParametersFor(config, prev.cropId) : undefined;
     let rootZoneWaterMm = prev.rootZoneWaterMm;
+    let rootThermalCdays = prev.rootThermalCdays;
+    let rootZoneDepthCm = prev.rootZoneDepthCm;
+    let rootZoneExpansionInflowMm = prev.rootZoneExpansionInflowMm;
     let rootZoneResidualAccumulatedMm = prev.rootZoneResidualAccumulatedMm;
     let rootZoneResidualMaxAbsMm = prev.rootZoneResidualMaxAbsMm;
     const rootZoneReplantDrainageMm = prev.rootZoneReplantDrainageMm;
@@ -872,20 +899,47 @@ export function stepDay(
         throw new Error(`Crop-model-v2 root-zone storage is unavailable for crop ${prev.cropId}.`);
       }
       const root = modelParameters.rootZone;
+      let rootGrowthStorageMm = 0;
+      if (root.rootDevelopment && growing && prev.biomassFrac < 1 && !prev.harvested) {
+        const development = root.rootDevelopment;
+        const rootThermalToday = dailyThermalUnits(env2.tMinC, env2.tMaxC, {
+          tBaseC: development.thermalBaseC,
+          tUpperC: development.thermalUpperC,
+          accumulationMethod: development.thermalAccumulationMethod,
+        });
+        if (rootThermalToday === null) {
+          modelQualificationReasons.add(dailyModelQualification(prev.cropId, 'Frozen root-development thermal method could not be evaluated.'));
+        } else {
+          rootThermalCdays = (prev.rootThermalCdays ?? 0) + rootThermalToday;
+          const previousDepthCm = prev.rootZoneDepthCm ?? development.initialRootDepthCm;
+          rootZoneDepthCm = effectiveRootDepthCmAtThermalTime(rootThermalCdays, {
+            initialRootDepthCm: development.initialRootDepthCm,
+            maximumRootDepthCm: root.effectiveRootDepthCm!,
+            growthStartsAfterCdays: development.growthStartsAfterCdays,
+            growthMmPerCday: development.growthMmPerCday,
+          });
+          rootGrowthStorageMm = awc * Math.max(0, rootZoneDepthCm - previousDepthCm)
+            * root.initialStorageFraction!;
+          rootZoneExpansionInflowMm = (prev.rootZoneExpansionInflowMm ?? 0) + rootGrowthStorageMm;
+        }
+      }
+      const effectiveRootDepthCm = rootZoneDepthCm
+        ?? root.rootDevelopment?.initialRootDepthCm
+        ?? root.effectiveRootDepthCm!;
+      const potentialTranspirationMm = growing ? env2.etoMm * root.cropCoefficient! : 0;
       const result = stepFao56RootZone(
         { waterMm: rootZoneWaterMm, residualAccumulatedMm: rootZoneResidualAccumulatedMm },
         {
           awcMmPerCm: awc,
-          effectiveRootDepthCm: root.effectiveRootDepthCm!,
-          depletionFraction: root.depletionFraction!,
+          effectiveRootDepthCm,
+          depletionFraction: fao56AdjustedDepletionFraction(root.depletionFraction!, potentialTranspirationMm),
         },
         {
           precipMm: env2.precipMm,
           irrigationMm: irrigationByCell.get(key) ?? 0,
           runoffMm: 0,
-          potentialTranspirationMm: growing
-            ? env2.etoMm * root.cropCoefficient!
-            : 0,
+          rootGrowthStorageMm,
+          potentialTranspirationMm,
         },
       );
       rootZoneWaterMm = result.state.waterMm;
@@ -1087,6 +1141,9 @@ export function stepDay(
       biomassFrac,
       ...(dryMatterGPerM2 !== undefined ? { dryMatterGPerM2 } : {}),
       ...(rootZoneWaterMm !== undefined ? { rootZoneWaterMm } : {}),
+      ...(rootThermalCdays !== undefined ? { rootThermalCdays } : {}),
+      ...(rootZoneDepthCm !== undefined ? { rootZoneDepthCm } : {}),
+      ...(rootZoneExpansionInflowMm !== undefined ? { rootZoneExpansionInflowMm } : {}),
       ...(rootZoneResidualAccumulatedMm !== undefined ? { rootZoneResidualAccumulatedMm } : {}),
       ...(rootZoneResidualMaxAbsMm !== undefined ? { rootZoneResidualMaxAbsMm } : {}),
       ...(rootZoneReplantDrainageMm !== undefined ? { rootZoneReplantDrainageMm } : {}),
@@ -1377,6 +1434,10 @@ export function simulateRun(
           ),
           rootZoneReplantDrainageMm: finalKeys.reduce(
             (sum, key) => sum + (st.cells[key]?.rootZoneReplantDrainageMm ?? 0),
+            0,
+          ),
+          rootZoneExpansionInflowMm: finalKeys.reduce(
+            (sum, key) => sum + (st.cells[key]?.rootZoneExpansionInflowMm ?? 0),
             0,
           ),
         }
