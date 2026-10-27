@@ -428,6 +428,9 @@ export function SimDrawer({
   const days = Math.max(1, runTimeline?.days ?? 1);
   const comparisonYieldUnit = yieldMassUnit(runComparison?.yieldBasis);
   const comparisonYieldLabel = comparisonYieldUnit === 'kg DM' ? 'Harvestable dry matter' : 'Yield';
+  const cropModelLabel = runModelSupport?.model === 'crop-model-v2' ? 'v2'
+    : runModelSupport?.model === 'crop-model-v3' ? 'v3'
+      : runModelSupport?.model === 'crop-model-v4' ? 'v4' : undefined;
   const eventDots = (runTimeline?.events ?? []).filter(
     (e) => e.kind === 'stress-onset' || e.kind === 'harvest-ready',
   );
@@ -472,16 +475,16 @@ export function SimDrawer({
         {runModelSupport && (!runModelSupport.canReplay || runModelSupport.status === 'qualified') && (
           <div role="status" className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[11px] text-amber-900 dark:text-amber-100">
             <div className="font-semibold">
-              {(runModelSupport.model === 'crop-model-v2' || runModelSupport.model === 'crop-model-v3') && runModelSupport.canReplay
-                ? `Qualified ${runModelSupport.model === 'crop-model-v3' ? 'v3' : 'v2'} estimate`
-                : runModelSupport.model === 'crop-model-v2' || runModelSupport.model === 'crop-model-v3'
+              {cropModelLabel && runModelSupport.canReplay
+                ? `Qualified ${cropModelLabel} estimate`
+                : cropModelLabel
                   ? 'Crop estimate unavailable'
                   : 'Saved summary preserved'}
             </div>
             <p className="mt-0.5">
-              {(runModelSupport.model === 'crop-model-v2' || runModelSupport.model === 'crop-model-v3') && runModelSupport.canReplay
-                ? `This ${runModelSupport.model === 'crop-model-v3' ? 'v3' : 'v2'} dry-matter estimate is qualified; independent measured accuracy remains UNVERIFIED.`
-                : runModelSupport.model === 'crop-model-v2' || runModelSupport.model === 'crop-model-v3'
+              {cropModelLabel && runModelSupport.canReplay
+                ? `This ${cropModelLabel} dry-matter estimate is qualified; independent measured accuracy remains UNVERIFIED.`
+                : cropModelLabel
                   ? 'This model version cannot replay these frozen inputs; its saved summary is left unchanged.'
                 : 'This saved record has no supported frozen model version or complete inputs; its stored summary is unchanged.'}
             </p>

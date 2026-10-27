@@ -123,10 +123,18 @@ export function assimilateObservations(
     }
   };
   const events: SimEvent[] = [];
+  let modelQualificationReasons: string[] | undefined;
   for (const observation of todays) {
     const target = observationTarget(observation);
     const matchedCells = observationCells({ ...inputState, cells }, observation);
     if (matchedCells.length === 0) continue;
+    if (observation.metric === 'stage'
+      && (config.cropModelVersion === 'crop-model-v3' || config.cropModelVersion === 'crop-model-v4')) {
+      modelQualificationReasons ??= [...(inputState.modelQualificationReasons ?? [])];
+      const reason = `Stage observations are not assimilated for ${config.cropModelVersion}: no source-supported intermediate-stage mapping exists, and biomassFrac only marks the source maturity endpoint.`;
+      if (!modelQualificationReasons.includes(reason)) modelQualificationReasons.push(reason);
+      continue;
+    }
     const values = matchedCells.map(([, cell]) => observation.metric === 'soilMoistureFrac' ? cell.moistureFrac : cell.biomassFrac);
     const predicted = values.reduce((sum, value) => sum + value, 0) / values.length;
     const observed = Math.min(1, Math.max(0, observation.value));
@@ -178,5 +186,13 @@ export function assimilateObservations(
     });
   }
 
-  return cellsOwned ? { state: { ...inputState, cells }, events } : { state: inputState, events };
+  if (!cellsOwned && !modelQualificationReasons) return { state: inputState, events };
+  return {
+    state: {
+      ...inputState,
+      ...(cellsOwned ? { cells } : {}),
+      ...(modelQualificationReasons ? { modelQualificationReasons } : {}),
+    },
+    events,
+  };
 }

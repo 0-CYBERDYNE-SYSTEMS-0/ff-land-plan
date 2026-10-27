@@ -170,7 +170,7 @@ export function ensembleUnavailableReason(
 ): string | null {
   const support = inspectRunModelSupport(config, persistedConfig);
   if (!support.canReplay) return `Run model unavailable: ${support.reasons.join(' ')}`;
-  if (config.cropModelVersion === 'crop-model-v2' || config.cropModelVersion === 'crop-model-v3') {
+  if (config.cropModelVersion === 'crop-model-v2' || config.cropModelVersion === 'crop-model-v3' || config.cropModelVersion === 'crop-model-v4') {
     return `Historical ensemble bands currently report fresh-matter yield and cannot represent ${config.cropModelVersion} dry-matter output.`;
   }
   if (!naturalLightRequired(config)) return null;
@@ -200,7 +200,8 @@ export function runEnsembleYear(
 ): EnsembleSample | null {
   if (!inspectRunModelSupport(config, persistedConfig).canReplay
     || config.cropModelVersion === 'crop-model-v2'
-    || config.cropModelVersion === 'crop-model-v3') return null;
+    || config.cropModelVersion === 'crop-model-v3'
+    || config.cropModelVersion === 'crop-model-v4') return null;
   const window = historicalWindow(config, ensembles, year);
   if (!window) return null;
   const yearConfig = configForHistoricalYear(config, window.startDate);

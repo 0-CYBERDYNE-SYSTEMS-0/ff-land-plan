@@ -220,6 +220,9 @@ export function TwinObservationsPanel({ farmId }: { farmId: number }) {
     () => latestTwinRun ? collectRunPredictionPairs(latestTwinRun) : [],
     [latestTwinRun],
   );
+  const hasUnavailableStageObservations = !!latestTwinRun
+    && (latestTwinRun.config.cropModelVersion === 'crop-model-v3' || latestTwinRun.config.cropModelVersion === 'crop-model-v4')
+    && predictionPairs.some((pair) => pair.metric === 'stage' && pair.predicted === null);
   const latestTwinSupport = latestTwinRun ? inspectRunModelSupport(latestTwinRun.config) : null;
   const hasDryMatterYieldObservations = latestTwinRun?.summary.yieldBasis === 'dry-matter'
     && latestTwinRun.observations?.some((observation) => observation.metric === 'yieldKg');
@@ -449,6 +452,7 @@ export function TwinObservationsPanel({ farmId }: { farmId: number }) {
             <div className="space-y-2 rounded-md border border-border p-2">
               <p className="text-[10px] text-muted-foreground">{latestTwinRun.label} · last 30 days through {scoreAsOfDate}</p>
               {hasDryMatterYieldObservations && <p className="text-[10px] text-muted-foreground">Yield observations use fresh mass; this run reports dry matter, so those values are not scored together.</p>}
+              {hasUnavailableStageObservations && <p className="text-[10px] text-muted-foreground">Stage observations are saved but not assimilated or scored because this model has no source-supported intermediate-stage mapping; its biomass field marks only the source maturity endpoint.</p>}
               {scorecards.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground">
                   {latestTwinSupport && !latestTwinSupport.canReplay

@@ -3,10 +3,12 @@ import { cropLibrary } from '@/data/crops';
 import { lettuceRosalbaRUEReference, lettuceYumaRootProfileReference } from '@/data/cropModelV2LettuceReferences';
 import { cropThermalParams } from '@/data/cropThermalParams';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
-import type { CropEstablishmentInput, FrozenCropModelParametersV2, RunConfig, RunModelInputsV2 } from './types';
+import type { Observation } from '@/types';
+import type { CropEstablishmentInput, FrozenCropModelParametersV2, RunConfig, RunModelInputsV2, RunRecord } from './types';
 import { freezeRunModelInputs, freezeRunModelInputsV2, freezeRunModelInputsV3, inspectRunModelSupport } from './model-inputs';
 import { NO_CLIMATE_EQUIPMENT } from './environment-climate';
 import { createRun, simulateRun, stepDay } from './engine';
+import { collectRunPredictionPairs } from './scorecard';
 
 function config(overrides: Partial<RunConfig> = {}): RunConfig {
   return {
@@ -401,6 +403,45 @@ describe('frozen crop model inputs and replay support', () => {
     expect(preTransplant.finalState.cells[tomatoKey]?.gddAccumC).toBe(0);
     expect(transplant.finalState.cells[tomatoKey]?.establishmentApplied).toBe(true);
     expect(transplant.finalState.cells[tomatoKey]?.dryMatterGPerM2).toBeGreaterThan(7);
+
+    const stageObservation: Observation = {
+      id: 'v3-stage-without-map',
+      farmId: activeTransplantRun.farmId,
+      date: days[0]!.date,
+      metric: 'stage',
+      value: 1,
+      unit: 'fraction',
+      source: 'manual',
+    };
+    const baseline = simulateRun(activeTransplantRun, days);
+    const withStageObservation = simulateRun(activeTransplantRun, days, {}, [stageObservation]);
+    expect(withStageObservation.finalState.cells[tomatoKey]).toMatchObject({
+      biomassFrac: baseline.finalState.cells[tomatoKey]?.biomassFrac,
+      gddAccumC: baseline.finalState.cells[tomatoKey]?.gddAccumC,
+      sourceThermalCdays: baseline.finalState.cells[tomatoKey]?.sourceThermalCdays,
+      readyAtDay: baseline.finalState.cells[tomatoKey]?.readyAtDay,
+    });
+    expect(withStageObservation.finalState.modelQualificationReasons).toContain(
+      'Stage observations are not assimilated for crop-model-v3: no source-supported intermediate-stage mapping exists, and biomassFrac only marks the source maturity endpoint.',
+    );
+    const stageRecord: RunRecord = {
+      id: 'run:v3:stage-observation',
+      farmId: activeTransplantRun.farmId,
+      label: 'V3 stage observation',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      config: activeTransplantRun,
+      envSeries: days,
+      observations: [stageObservation],
+      summary: withStageObservation.summary,
+      status: 'complete',
+    };
+    expect(collectRunPredictionPairs(stageRecord)).toEqual([{
+      observationId: stageObservation.id,
+      metric: 'stage',
+      date: stageObservation.date,
+      observed: stageObservation.value,
+      predicted: null,
+    }]);
   });
 
   it('validates intervention establishment evidence and v3 qualification status', () => {
@@ -1409,7 +1450,7 @@ describe('frozen crop model inputs and replay support', () => {
   });
 
   it('rejects an unknown persisted model version without attempting replay', () => {
-    const support = inspectRunModelSupport({ ...config(), cropModelVersion: 'crop-model-v4' as never });
+    const support = inspectRunModelSupport({ ...config(), cropModelVersion: 'crop-model-v5' as never });
     expect(support).toMatchObject({ model: 'unknown', status: 'unsupported', canReplay: false });
     expect(support.preserveStoredSummary).toBe(true);
   });

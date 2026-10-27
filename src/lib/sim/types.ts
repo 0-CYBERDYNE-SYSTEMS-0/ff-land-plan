@@ -24,7 +24,7 @@ export interface RunAssetPhysicsSnapshot {
   hydroRequiredCells: Partial<Record<GrowingTargetKey, string[]>>;
 }
 
-export type CropModelVersion = 'crop-model-v1' | 'crop-model-v2' | 'crop-model-v3';
+export type CropModelVersion = 'crop-model-v1' | 'crop-model-v2' | 'crop-model-v3' | 'crop-model-v4';
 
 /** Minimum crop/soil inputs frozen by the legacy reducer. */
 export interface RunModelInputsV1 {
@@ -96,6 +96,30 @@ export type FrozenCropModelParametersV3 = Omit<FrozenCropModelParametersV2, 'pro
   production: Omit<FrozenCropModelParametersV2['production'], 'initialDryMatterGPerM2'>;
 };
 
+export type FrozenCropModelParametersV4 = Omit<FrozenCropModelParametersV3, 'production'> & {
+  production: {
+    equationFamily: 'LINTUL-net-RUE';
+    rueGPerMjInterceptedPar: number | null;
+    status: 'unsupported' | 'qualified' | 'supported';
+    missing: string[];
+    limitations?: string[];
+    evidence: FrozenCropModelParametersV2['production']['evidence'];
+    canopy: {
+      kPar: number | null;
+      specificLeafAreaM2PerKg: number | null;
+      leafStemPartitionParameterM2PerKg: number | null;
+      evidence: FrozenCropModelParametersV2['production']['evidence'];
+    };
+    allocation: {
+      canopyShare: number | null;
+      harvestableShare: number | null;
+      classification: 'measured' | 'explicit-assumption' | 'synthetic';
+      evidenceId: string;
+      validDomain: string;
+    };
+  };
+};
+
 export interface CropEstablishmentInput {
   startEvent: CropStartEvent;
   /** Emergence date for direct-sowing; transplant date for transplanting. */
@@ -106,6 +130,15 @@ export interface CropEstablishmentInput {
     evidenceId: string;
     validDomain: string;
   };
+}
+
+/** V4 freezes canopy and harvestable dry matter as separate establishment pools. */
+export interface CropCanopyEstablishmentInput {
+  startEvent: CropStartEvent;
+  establishedAtDate: string;
+  initialCanopyDryMatterGPerM2: number;
+  initialHarvestableDryMatterGPerM2: number;
+  evidence: CropEstablishmentInput['evidence'];
 }
 
 /** Complete v2 snapshot shape, including explicit missing-parameter status. */
@@ -130,7 +163,18 @@ export interface RunModelInputsV3 {
   qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
 }
 
-export type RunModelInputs = RunModelInputsV1 | RunModelInputsV2 | RunModelInputsV3;
+/** V4 adds canopy-derived interception and a single-pass two-pool DM balance. */
+export interface RunModelInputsV4 {
+  model: 'run-inputs-v4';
+  parameterSetVersion: 'crop-parameters-v5';
+  soil: RunModelInputsV2['soil'];
+  crops: Crop[];
+  cropParameters: FrozenCropModelParametersV4[];
+  establishmentByCell: Record<string, CropCanopyEstablishmentInput>;
+  qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
+}
+
+export type RunModelInputs = RunModelInputsV1 | RunModelInputsV2 | RunModelInputsV3 | RunModelInputsV4;
 
 export interface FarmCalibration {
   version: 'farm-calibration-v1';
@@ -211,7 +255,7 @@ export type Intervention =
   | { kind: 'irrigate'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; mm: number }
   | { kind: 'fertilize'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; nKgHa: number }
   | { kind: 'refill-water'; date: string; litres: number }
-  | { kind: 'plant'; date: string; cell: string; target?: GrowingTargetRef; cropId: number; startEvent?: CropStartEvent; establishment?: CropEstablishmentInput }
+  | { kind: 'plant'; date: string; cell: string; target?: GrowingTargetRef; cropId: number; startEvent?: CropStartEvent; establishment?: CropEstablishmentInput | CropCanopyEstablishmentInput }
   | { kind: 'harvest'; date: string; cell: string; target?: GrowingTargetRef }
   | { kind: 'surface'; date: string; surface: PlanSurface } // greenhouse/tent/etc.
   | { kind: 'weather'; fromDate: string; tempDeltaC?: number; precipMultiplier?: number };
@@ -254,8 +298,11 @@ export interface CellState {
   /** V1/v2 development clock; in v3 this is establishment-relative physiology, not source maturity time. */
   gddAccumC: number;
   biomassFrac: number; // v1/v2 thermal progress; v3 source-maturity endpoint latch, not mass fraction
-  /** v2/v3 above-ground dry matter, g DM/m² of planted cell area. */
+  /** v2-v4 total above-ground dry matter, g DM/m² of planted cell area. */
   dryMatterGPerM2?: number;
+  /** V4 pools; total dryMatterGPerM2 is their exact sum. */
+  canopyDryMatterGPerM2?: number;
+  harvestableDryMatterGPerM2?: number;
   /** v2 FAO-56 effective root-zone storage and accumulated closure residual, mm. */
   rootZoneWaterMm?: number;
   /** Frozen establishment event whose date is represented by plantedAtDay. */
@@ -350,7 +397,7 @@ export type SimEventKind =
   | 'outbreak' // pestPressure crossed 0.6 upward (hysteresis: ends below 0.3)
   | 'outbreak-end'
   | 'assimilated'
-  | 'harvest-too-early' // manual harvest below the 0.8 biomass minimum
+  | 'harvest-too-early' // manual harvest before the model-specific maturity threshold
   | 'water-short'
   | 'water-refilled';
 
@@ -448,7 +495,7 @@ export interface RunConfig {
   assetPhysics?: RunAssetPhysicsSnapshot;
   /** New records freeze model-driving soil values and the crops they use; absent on legacy runs. */
   modelInputs?: RunModelInputs;
-  /** v2 event keyed by canonical targetCellKey; basePlan.plantedAt supplies its date. */
+  /** v2-v4 event keyed by canonical targetCellKey; basePlan.plantedAt supplies its date. */
   cropStartEvents?: Record<string, CropStartEvent>;
   /** Frozen equipment contribution used by the climate solver during replay. */
   climateEquipment?: ClimateEquipmentInput;
@@ -484,7 +531,7 @@ export interface RunSummary {
   irrigatedMm: number;
   etoMmTotal: number;
   totalYieldKg: number;
-  /** v1 catalog yields are fresh-mass estimates; v2/v3 harvest-index output is dry mass. */
+  /** v1 catalog yields are fresh-mass estimates; v2/v3/v4 outputs are dry mass. */
   yieldBasis?: 'fresh-matter' | 'dry-matter';
   /** cropId → kg (JSON keys are strings). */
   yieldKgByCrop: Record<string, number>;

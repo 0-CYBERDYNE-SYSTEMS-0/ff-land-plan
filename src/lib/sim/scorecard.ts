@@ -110,6 +110,9 @@ export function collectRunPredictionPairs(record: RunRecord, ctx: SimRunCtx = {}
         observed: observation.value,
         predicted: observation.metric === 'yieldKg' && record.summary.yieldBasis === 'dry-matter'
           ? null
+          : observation.metric === 'stage'
+            && (record.config.cropModelVersion === 'crop-model-v3' || record.config.cropModelVersion === 'crop-model-v4')
+            ? null
           : predict(observation, before, result.events, result.effectiveEnv, outdoorDliAvailable),
       });
     }

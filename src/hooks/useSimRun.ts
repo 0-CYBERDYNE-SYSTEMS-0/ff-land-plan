@@ -262,10 +262,10 @@ function aggregateCells(state: SimState, layout?: EnvironmentLayout, config?: Ru
     const targetLabel = targetLabelFor(target, layout);
     const key = `${cell.cropId}|${cell.plantedAtDay}|${targetKey}`;
     const inputs = config?.modelInputs;
-    const modelParameters = inputs?.model === 'run-inputs-v2' || inputs?.model === 'run-inputs-v3'
+    const modelParameters = inputs?.model === 'run-inputs-v2' || inputs?.model === 'run-inputs-v3' || inputs?.model === 'run-inputs-v4'
       ? inputs.cropParameters.find((parameter) => parameter.cropId === cell.cropId)
       : undefined;
-    const awcMmPerCm = inputs?.model === 'run-inputs-v2' || inputs?.model === 'run-inputs-v3'
+    const awcMmPerCm = inputs?.model === 'run-inputs-v2' || inputs?.model === 'run-inputs-v3' || inputs?.model === 'run-inputs-v4'
       ? inputs.soil?.awcMmPerCm
       : undefined;
     const rootDepthCm = cell.rootZoneDepthCm
@@ -380,12 +380,12 @@ export function buildCellDiagnostics(
 ): CellDiagnosticRow[] {
   const params = soilWaterParams(soil?.awcMmPerCm);
   const capacity = bucketCapacityMm(params);
-  const v3 = record.config.cropModelVersion === 'crop-model-v3';
-  const env = v3
+  const sourceThermalModel = record.config.cropModelVersion === 'crop-model-v3' || record.config.cropModelVersion === 'crop-model-v4';
+  const env = sourceThermalModel
     ? state.dayIndex > 0 ? dayEnv : null
     : dayEnv ?? record.envSeries[0] ?? null;
   const start = isoDayNumber(record.config.startDate);
-  const thermalEnv = v3 && state.dayIndex === 0
+  const thermalEnv = sourceThermalModel && state.dayIndex === 0
     ? null
     : state.climate
     ? { tMinC: state.climate.tMinC, tMaxC: state.climate.tMaxC }
@@ -396,10 +396,10 @@ export function buildCellDiagnostics(
   for (const g of aggregateCells(state, record.config.environment?.layout, record.config)) {
     const crop = cropById.get(g.cropId);
     if (!crop) continue;
-    const thermal = record.config.modelInputs?.model === 'run-inputs-v3'
+    const thermal = record.config.modelInputs?.model === 'run-inputs-v3' || record.config.modelInputs?.model === 'run-inputs-v4'
       ? record.config.modelInputs.cropParameters.find((parameter) => parameter.cropId === g.cropId)?.thermal
       : undefined;
-    const sourceThermalToday = !v3
+    const sourceThermalToday = !sourceThermalModel
       ? env?.gddBase10C ?? 0
       : g.sourceThermalActiveCount === 0
         ? 0
@@ -408,7 +408,8 @@ export function buildCellDiagnostics(
           : dailyThermalUnits(thermalEnv.tMinC, thermalEnv.tMaxC, thermal);
     const hasFrozenRootZone = g.rootZoneCellCount === g.count && g.rootZoneCellCount > 0;
     const frozenRootModel = record.config.cropModelVersion === 'crop-model-v2'
-      || record.config.cropModelVersion === 'crop-model-v3';
+      || record.config.cropModelVersion === 'crop-model-v3'
+      || record.config.cropModelVersion === 'crop-model-v4';
     const hasRootDiagnostics = hasFrozenRootZone || !frozenRootModel;
     const rootDepthCm = hasFrozenRootZone ? g.rootZoneDepthSum / g.rootZoneCellCount : hasRootDiagnostics ? params.rootDepthCm : null;
     const awcMmPerCm = hasFrozenRootZone ? g.rootZoneAwcSum / g.rootZoneCellCount : hasRootDiagnostics ? params.awcMmPerCm : null;
@@ -419,15 +420,15 @@ export function buildCellDiagnostics(
     const moistureFrac = bucketMm !== null && awcCapMm !== null && awcCapMm > 0
       ? bucketMm / awcCapMm
       : hasRootDiagnostics && g.count > 0 ? g.moistureSum / g.count : null;
-    const temperatures = v3 ? thermalEnv ?? env : env;
+    const temperatures = sourceThermalModel ? thermalEnv ?? env : env;
     rows.push({
       cropId: g.cropId,
       targetKey: g.targetKey,
       targetLabel: g.targetLabel,
       plantedAt: isoFromDayNumber(start + g.plantedAtDay),
       cropName: crop.name,
-      gddLabel: v3 ? 'Source thermal' : 'GDD',
-      gddAccumC: v3 ? g.sourceThermal : g.gddAccum,
+      gddLabel: sourceThermalModel ? 'Source thermal' : 'GDD',
+      gddAccumC: sourceThermalModel ? g.sourceThermal : g.gddAccum,
       gddRequiredC: thermal?.gddToMaturityCdays[1] ?? gddRequiredC(crop, record.config.meanDailyGddC),
       moistureFrac,
       awcMmPerCm,
@@ -738,8 +739,8 @@ export function useSimRun(opts: {
     if (!support.canReplay) {
       return {
         ok: false,
-        error: support.model === 'crop-model-v2' || support.model === 'crop-model-v3'
-          ? `This run has no supported ${support.model === 'crop-model-v3' ? 'v3' : 'v2'} daily reducer. ${support.reasons.join(' ')}`
+        error: support.model === 'crop-model-v2' || support.model === 'crop-model-v3' || support.model === 'crop-model-v4'
+          ? `This run has no supported ${support.model === 'crop-model-v2' ? 'v2' : support.model === 'crop-model-v3' ? 'v3' : 'v4'} daily reducer. ${support.reasons.join(' ')}`
           : 'This run’s model inputs are unsupported; its stored summary is preserved.',
       };
     }
