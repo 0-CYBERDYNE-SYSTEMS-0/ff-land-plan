@@ -20,7 +20,8 @@
     "selectedProductionFamily": "LINTUL-family intercepted PAR × net RUE; crop parameters remain UNVERIFIED until source-backed",
     "selectedSoilWaterMethod": "FAO-56 root-zone balance within explicitly supported soil domain",
     "noFrameworkCodeCopied": true,
-    "rootZoneReferenceCoverage": "quality/beta/evidence/fao56-root-reference-coverage.json"
+    "rootZoneReferenceCoverage": "quality/beta/evidence/fao56-root-reference-coverage.json",
+    "cropProductionReferenceCoverage": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json"
   },
   "sources": [
     {
@@ -82,6 +83,20 @@
       "retrievedDate": "2026-10-27",
       "artifact": null,
       "licenseOrReuse": "FAO publication; cited as method reference, no code or substantial text copied."
+    },
+    {
+      "id": "VAHRMEIJER-2018-WATER-SA-44-4-02",
+      "citation": "Vahrmeijer, J.T., Annandale, J.G., Steyn, J.M. and Bristow, K.L. (2018), Model parameters of four important vegetable crops for improved water use and yield estimation, Water SA 44(4), 528–538.",
+      "doi": "10.4314/wsa.v44i4.02",
+      "url": "https://scielo.org.za/pdf/wsa/v44n4/02.pdf",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "publisher PDF, 11 pages",
+        "sha256": "fdbb613d00ccef4873200c01ab8dbb02e0caed0375988ce20b21cb9d6297adeb",
+        "localPath": null
+      },
+      "licenseOrReuse": "The publisher PDF states the article is under a Creative Commons Attribution Licence; the retrieved PDF does not state a license version. Only derived parameter values and method equations are recorded.",
+      "sourceVersion": "Water SA, Vol. 44, No. 4, October 2018; version of record"
     },
     {
       "id": "BECCAFICHI-2003-ACTAHORT-614-75",
@@ -1076,6 +1091,11 @@
     "sourceBackedReferenceParameterSets": 2,
     "fao56Table22DirectCommonRootReferenceCrops": 19,
     "fao56Table22ExplicitlyUnmatchedBuiltInCrops": 31,
+    "sourceBackedCropProductionReferenceStudies": 1,
+    "cropSpecificProductionReferenceCrops": 4,
+    "reviewedSourceParameterTranscriptionSets": 1,
+    "preregisteredSyntheticCanopyEquationFixtures": 1,
+    "executedSyntheticCanopyEquationFixtures": 0,
     "executableSyntheticParameterFixtures": 1,
     "measuredEmpiricallyValidatedCrops": 0,
     "measuredValidationClaims": 0,
