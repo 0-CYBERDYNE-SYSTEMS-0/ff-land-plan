@@ -1204,6 +1204,20 @@ describe('frozen crop model inputs and replay support', () => {
     expect(productive.summary.rootZoneBalanceResidualMaxAbsMm).toBeLessThanOrEqual(1e-6);
     expect(productive.summary.rootZoneBalanceResidualAccumulatedMm).toBeCloseTo(0, 8);
 
+    const autoHarvestDisabledRun = { ...run, autoHarvest: false, modelInputs: inputs };
+    expect(autoHarvestDisabledRun.interventions).toEqual([]);
+    const autoHarvestDisabled = simulateRun(autoHarvestDisabledRun, sunnySeries);
+    const autoHarvestDisabledReplay = simulateRun(autoHarvestDisabledRun, sunnySeries);
+    const disabledHarvestEvents = autoHarvestDisabled.events.filter((event) => event.kind === 'harvested');
+    expect(autoHarvestDisabled.summary.harvestReadyDay).toBe(62);
+    expect(autoHarvestDisabled.finalState.cells['0,0']?.biomassFrac).toBe(1);
+    expect(autoHarvestDisabled.finalState.cells['0,0']?.harvested ?? false).toBe(false);
+    expect(disabledHarvestEvents).toHaveLength(0);
+    expect(autoHarvestDisabled.summary.totalYieldKg).toBe(0);
+    expect(autoHarvestDisabledReplay.events).toEqual(autoHarvestDisabled.events);
+    expect(autoHarvestDisabledReplay.finalState).toEqual(autoHarvestDisabled.finalState);
+    expect(autoHarvestDisabledReplay.summary).toEqual(autoHarvestDisabled.summary);
+
     const replacementCrop = cropLibrary.find((entry) => entry.id !== crop.id && entry.category !== 'fungus')!;
     const replantInputs = structuredClone(inputs) as RunModelInputsV2;
     replantInputs.crops.push(replacementCrop);

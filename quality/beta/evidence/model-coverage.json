@@ -27,7 +27,8 @@
     "sourceEquationOnlyFixture": "BROCCOLI-OHAYOU-SPRING-CONTROL-SYNTHETIC-SOLAR-EQUATION-01",
     "v3HarvestPayoutSoftwareFixture": "V3-FROZEN-DM-HARVEST-PAYOUT-SYNTHETIC-01",
     "v2AutoHarvestPayoutSoftwareFixture": "V2-AUTO-DM-HARVEST-PAYOUT-SYNTHETIC-01",
-    "v3TerminalFrostFreezeSoftwareFixture": "V3-POST-TERMINAL-FROST-THERMAL-FREEZE-SYNTHETIC-01"
+    "v3TerminalFrostFreezeSoftwareFixture": "V3-POST-TERMINAL-FROST-THERMAL-FREEZE-SYNTHETIC-01",
+    "v2MatureWithoutAutoHarvestSoftwareFixture": "V2-MATURE-WITHOUT-AUTO-HARVEST-SYNTHETIC-01"
   },
   "sources": [
     {
@@ -1346,6 +1347,47 @@
       "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"applies qualified heat response and terminal frost mortality after establishment\"",
       "candidateComparison": false,
       "status": "One synthetic v3 post-terminal-frost thermal-freeze software regression only. A-07 and 02A remain UNVERIFIED overall; this fixture establishes no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive accuracy."
+    },
+    {
+      "id": "V2-MATURE-WITHOUT-AUTO-HARVEST-SYNTHETIC-01",
+      "classification": "synthetic frozen-input software regression; not a crop benchmark",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "not asserted; catalog identity is fixture routing only and production/root parameters are synthetic"
+      },
+      "environment": "synthetic 80-day single floor-cell reducer sequence; no weather reproduction or observed site inputs",
+      "modelVersion": "crop-model-v2 with the existing frozen crop/soil/production/root inputs and synthetic daily weather",
+      "syntheticInputs": {
+        "initialAboveGroundDryMatterGPerM2": 0,
+        "cellM": 0.25,
+        "autoHarvest": false,
+        "environmentSeriesDays": 80,
+        "environmentSeriesStartDate": "2026-10-01",
+        "environmentSeriesIntervalDays": 1,
+        "dailyWeather": {
+          "tMinC": 20,
+          "tMaxC": 30,
+          "precipMm": 3,
+          "etoMm": 2,
+          "dliNaturalMol": 18,
+          "gddBase10C": 15
+        },
+        "onlyChangedManagementInput": "autoHarvest=false; same frozen inputs and daily series as the paired autoHarvest=true case",
+        "manualInterventions": []
+      },
+      "expected": {
+        "zeroBasedHarvestReadyDayIndex": 62,
+        "harvestReadyDaySummary": 62,
+        "finalBiomassFrac": 1,
+        "harvestedEvents": 0,
+        "totalYieldKg": 0,
+        "replay": "events, final state, and summary exactly equal for identical frozen config and environment series",
+        "tolerance": "Exact event count, zero total payout, and replay equality for this deterministic software invariant; no fitted or empirical tolerance."
+      },
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\"",
+      "candidateComparison": false,
+      "status": "One synthetic v2 no-auto-harvest management software regression only. A-07 and 02A remain UNVERIFIED overall; this fixture establishes no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive accuracy."
     }
   ],
   "coverageSummary": {
