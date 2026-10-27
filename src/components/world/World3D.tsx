@@ -766,6 +766,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // --- Run mode mirrors (SPEC-SIM-ECOSYSTEM Phase 1/2) ---
   const runActive = simRun?.record != null;
   const runRecord = simRun?.record ?? null;
+  const runReplayUnavailable = runActive && simRun?.modelSupport?.canReplay === false;
   const runTickVersion = simRun?.tickVersion ?? 0;
   const runDayIndex = simRun?.dayIndex ?? 0;
   // Ghost comparison (Phase 4): stable dep values for the day-keyed ghost
@@ -2400,7 +2401,9 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-md bg-background/90 px-2 py-1.5 shadow-sm">
           <button
             type="button"
+            disabled={runReplayUnavailable}
             onClick={() => {
+              if (runReplayUnavailable) return;
               if (runActive) {
                 // Run transport: the legacy season clock stays parked.
                 if (runPlaying) simRunRef.current?.pause();
@@ -2409,11 +2412,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
                 setPlaying((p) => !p);
               }
             }}
-            aria-pressed={runActive ? runPlaying : playing}
-            title={runActive ? 'Play/pause the simulation run' : 'Play the growing season forward'}
-            className={`min-w-[96px] rounded px-2 py-1 text-xs font-medium ${runActive ? (runPlaying ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground') : playing ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+            aria-pressed={runReplayUnavailable ? false : runActive ? runPlaying : playing}
+            title={runReplayUnavailable ? 'Replay unavailable: this run cannot replay its frozen inputs' : runActive ? 'Play/pause the simulation run' : 'Play the growing season forward'}
+            className={`min-w-[96px] rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60 ${runReplayUnavailable ? 'bg-muted text-muted-foreground' : runActive ? (runPlaying ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground') : playing ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
           >
-            {runActive ? (runPlaying ? '⏸ Pause' : '▶ Run') : playing ? '⏸ Pause' : '▶ Simulate'}
+            {runReplayUnavailable ? 'Replay unavailable' : runActive ? (runPlaying ? '⏸ Pause' : '▶ Run') : playing ? '⏸ Pause' : '▶ Simulate'}
           </button>
           <button
             type="button"

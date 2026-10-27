@@ -243,7 +243,7 @@ const MAX_COMPARE = 6;
 
 function openInWorldUrl(run: RunRecord): string {
   // Query params BEFORE the hash (wouter hash routing — see HANDOFF trap 9).
-  return `/?ffrun=${encodeURIComponent(run.id)}#/farms/${run.farmId}/map`;
+  return `${import.meta.env.BASE_URL}?ffrun=${encodeURIComponent(run.id)}&ffview=world#/farms/${run.farmId}/map`;
 }
 
 /** A/B launch: primary = first selected, ghost = second (Phase 4). */

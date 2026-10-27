@@ -2026,3 +2026,31 @@ snapshots changed, and no application implementation is claimed by this revision
   passed `test + typecheck + build`, `Playwright production Pages-path smoke`,
   `secret + private-file scan`, and `GitGuardian Security Checks` on that exact SHA. The broader
   A-07 matrix and 02A remain incomplete.
+
+## 2026-10-27 — BETA-02A unsupported environment-v2 browser journey
+
+- `Simulations` now builds the “Open in world” URL from Vite `BASE_URL`, puts `ffrun` and
+  `ffview=world` before the hash, and preserves the farm map hash. This fixes the Pages project-base
+  route and opens the run in World mode.
+- S1 estimated about 0.5 engineer-day for the route, unsupported dock action, and browser assertions,
+  followed by 20–30 minutes for the focused timeout/locator optimization. Assumptions: only an active
+  explicitly non-replayable run disables the dock; supported-run transport is unchanged; the
+  continuous World renderer needs a scoped browser-test budget.
+- The synthetic browser record is a typed `RunRecord` with complete v4 crop inputs and a frozen
+  greenhouse snapshot; it omits only `environmentModelInputs`. The Pages journey confirms the exact
+  unsupported explanation/reason, no drawer Play/Seek transport, a disabled World dock action labelled
+  “Replay unavailable,” and the distinctive 42.42 kg DM / 73-day summary before and after World
+  navigation, return to the run list, and reload. The seed is guarded against reseeding after the
+  first document load.
+- Independent review approved the fixture isolation and route/readiness/transport assertions. The
+  lead-shell production browser run passed `tests/pages-smoke.spec.ts` (2 tests) in about 1.5 minutes.
+  Lead local gates passed: `npm test` (45 files / 235 tests), `npm run typecheck`, `npm run build`,
+  `npm run build:demo`, `npm run build:pages`, `npm run check:private` (519 tracked files),
+  evidence-manifest JSON parsing, and `git diff --check`. Existing Vite config-loader and chunk-size
+  advisories remain. No persistence schema or persistence implementation changed, so BETA-01 durability
+  suites were not repeated for this route/UI change.
+- Evidence boundary: this browser fixture covers the missing frozen environment-input case through the
+  normal local-storage list path. It does not establish IndexedDB migration, server persistence, crop
+  trait handling, crop accuracy, biology, or predictive validity. A-08 remains UNVERIFIED overall
+  until unsupported crop-trait handling is also evidenced; 02A remains incomplete. PR CI is pending for
+  this checkpoint.
