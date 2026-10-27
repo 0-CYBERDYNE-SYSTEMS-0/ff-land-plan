@@ -1500,7 +1500,7 @@
     },
     {
       "id": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01",
-      "classification": "pre-registered synthetic frozen-input software regression; not a crop benchmark",
+      "classification": "synthetic frozen-input software regression; not a crop benchmark",
       "crop": {
         "slug": "tomato",
         "catalogCropId": 1,
@@ -1588,9 +1588,9 @@
         "replay": "events, final state, and summary exactly equal for a second simulateRun(record.config, record.envSeries); does not exercise durable storage serialization",
         "tolerance": "Each event yield and the six-event unrounded sum are within 1e-12 kg for arithmetic/conversion only; target keys, event count, floor sibling eligibility/state, rounded total/per-crop summaries, and frozen-input replay are exact. Formula is 12 g/m² × 0.4² m² × 0.5 / 1000 = 0.00096 kg per cell; 6 × 0.00096 = 0.00576 kg."
       },
-      "reproduction": "proposed: npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v3 elevated-target harvest mass without harvesting its floor sibling\"",
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v3 elevated-target harvest mass without harvesting its floor sibling\"",
       "candidateComparison": false,
-      "status": "Implemented and independently reviewed. The focused regression passed; local verification passed 46 test files / 244 tests, typecheck, standard/demo/Pages builds, private-file guard (521 tracked files), whitespace check, and production Playwright (3/3 Pages journeys in 3.8m). Exact-head PR CI is pending. This remains synthetic A-07 target-scoped harvest-mass software evidence only; the second simulateRun is not durable-storage serialization and no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive validity is established. A-07 and 02A remain UNVERIFIED overall."
+      "status": "Implemented and independently reviewed. The focused regression passed; local verification passed 46 test files / 244 tests, typecheck, standard/demo/Pages builds, private-file guard (521 tracked files), whitespace check, and production Playwright (3/3 Pages journeys in 3.8m). Exact-head PR #82 run [40598278532](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40598278532) on SHA 627550fb7289d04136a8824c0ad43e7e1d7e91e6 passed all four named contexts: test + typecheck + build (32s), Playwright production Pages-path smoke (3/3 in 2.9m; job 3m23s), secret + private-file scan (18s), and GitGuardian Security Checks (2s). Pages cases: production build boots under the GitHub Pages project base path; unsupported environment-v2 run opens under Pages and retains its stored summary; unsupported v4 crop lifecycle is explained in World and retains its stored summary. This remains synthetic A-07 target-scoped harvest-mass software evidence only; the second simulateRun is not durable-storage serialization and no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive validity is established. A-07 and 02A remain UNVERIFIED overall."
     }
   ],
   "coverageSummary": {
