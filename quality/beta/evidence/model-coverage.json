@@ -30,7 +30,8 @@
     "v3TerminalFrostFreezeSoftwareFixture": "V3-POST-TERMINAL-FROST-THERMAL-FREEZE-SYNTHETIC-01",
     "v2MatureWithoutAutoHarvestSoftwareFixture": "V2-MATURE-WITHOUT-AUTO-HARVEST-SYNTHETIC-01",
     "v2DuplicateManualHarvestSoftwareFixture": "V2-DUPLICATE-MANUAL-HARVEST-SYNTHETIC-01",
-    "v2EarlyManualHarvestRetrySoftwareFixture": "V2-EARLY-MANUAL-HARVEST-RETRY-SYNTHETIC-01"
+    "v2EarlyManualHarvestRetrySoftwareFixture": "V2-EARLY-MANUAL-HARVEST-RETRY-SYNTHETIC-01",
+    "v3ElevatedTargetManualHarvestPreregisteredFixture": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01"
   },
   "sources": [
     {
@@ -1496,6 +1497,100 @@
       "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\"",
       "candidateComparison": false,
       "status": "One synthetic v2 early-manual-harvest rejection and later-retry software regression only. It does not establish crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive validity. A-07 and 02A remain UNVERIFIED overall."
+    },
+    {
+      "id": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01",
+      "classification": "pre-registered synthetic frozen-input software regression; not a crop benchmark",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "not asserted; catalog identity is fixture routing only and crop parameters are synthetic"
+      },
+      "environment": "synthetic dual-target v3 run using the existing daily fixture; no weather reproduction or observed site inputs",
+      "modelVersion": "crop-model-v3 with the existing synthetic frozen crop, soil, production and root inputs",
+      "syntheticInputs": {
+        "startDate": "2026-10-01",
+        "cellM": 0.4,
+        "basePlanWidthM": 2.4,
+        "basePlanHeightM": 0.4,
+        "initialAboveGroundDryMatterGPerM2": 12,
+        "harvestIndex": 0.5,
+        "autoHarvest": false,
+        "soil": {
+          "awcMmPerCm": 1.5,
+          "organicMatterPct": 2.4,
+          "source": "usda-sda; provenance label only, synthetic fixture values"
+        },
+        "productionParameters": "syntheticStartEventParameter(cropId, thermal), with production.harvestIndex overridden to 0.5",
+        "establishment": "transplanting; all seven target-qualified cells established 2026-10-01 with 12 g/m² initial above-ground dry matter and synthetic evidence ID TEST-V3-HARVEST-PAYOUT",
+        "elevatedTarget": {
+          "kind": "growing-level",
+          "growingSpaceId": "space-a",
+          "levelId": "high"
+        },
+        "elevatedLocalCells": [
+          "0,0",
+          "1,0",
+          "2,0",
+          "3,0",
+          "4,0",
+          "5,0"
+        ],
+        "elevatedCellKeys": [
+          "level/space-a/high|0,0",
+          "level/space-a/high|1,0",
+          "level/space-a/high|2,0",
+          "level/space-a/high|3,0",
+          "level/space-a/high|4,0",
+          "level/space-a/high|5,0"
+        ],
+        "floorSiblingLocalCell": "0,0",
+        "floorSiblingCellKey": "0,0",
+        "floorSiblingEligibility": "must be established, mature, alive, and payout-ready with the same frozen dry matter as the elevated cells",
+        "thermalParameters": "cropThermalParams record for catalog crop id 1, copied into the frozen v3 model inputs; species/cultivar accuracy is not asserted",
+        "environmentSeriesRule": "generate consecutive dailyEnvironment(offset) entries from startDate until all seven target-qualified cells first have biomassFrac=1, then include the following daily tick for the manual-harvest intervention",
+        "environmentSeriesIntervalDays": 1,
+        "dailyWeather": {
+          "tMinC": 20,
+          "tMaxC": 30,
+          "precipMm": 0,
+          "etoMm": 0,
+          "dliNaturalMol": 0,
+          "gddBase10C": 15
+        },
+        "dailyWeatherProvenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "manualHarvest": "one intervention per elevated cell using target {growingSpaceId: space-a, levelId: high}, on the first eligible post-maturity date; no floor sibling intervention"
+      },
+      "expected": {
+        "elevatedHarvestedEvents": 6,
+        "elevatedEventCellKeys": [
+          "level/space-a/high|0,0",
+          "level/space-a/high|1,0",
+          "level/space-a/high|2,0",
+          "level/space-a/high|3,0",
+          "level/space-a/high|4,0",
+          "level/space-a/high|5,0"
+        ],
+        "elevatedEventYieldKg": 0.00096,
+        "elevatedEventSumKg": 0.00576,
+        "floorSiblingEvents": 0,
+        "floorSiblingMatureEligibleAndUnharvested": true,
+        "totalYieldKg": 0.01,
+        "yieldKgByCrop": {
+          "1": 0.01
+        },
+        "replay": "events, final state, and summary exactly equal for a second simulateRun(record.config, record.envSeries); does not exercise durable storage serialization",
+        "tolerance": "Each event yield and the six-event unrounded sum are within 1e-12 kg for arithmetic/conversion only; target keys, event count, floor sibling eligibility/state, rounded total/per-crop summaries, and frozen-input replay are exact. Formula is 12 g/m² × 0.4² m² × 0.5 / 1000 = 0.00096 kg per cell; 6 × 0.00096 = 0.00576 kg."
+      },
+      "reproduction": "proposed: npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v3 elevated-target harvest mass without harvesting its floor sibling\"",
+      "candidateComparison": false,
+      "status": "Pre-registered only; not implemented or run. This is synthetic A-07 target-scoped harvest-mass software evidence only; it does not establish durable storage, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive validity. A-07 and 02A remain UNVERIFIED overall."
     }
   ],
   "coverageSummary": {
