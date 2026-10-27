@@ -102,10 +102,10 @@
     "This fixture does not validate broccoli growth, harvest timing, water response, or model accuracy."
   ],
   "toleranceReview": {
-    "status": "preregistered; pending independent validator review of the explicit units, production equation, and unrounded pool invariants",
+    "status": "limited synthetic arithmetic and closure approved; no predictive comparison authorized",
     "requestedScope": "Canopy g/m² to kg/m² conversion, LAI/FI_PAR equations, DLI-to-intercepted-PAR conversion, synthetic net-production arithmetic, zero/unknown light behavior, exact pool-sum invariant, and unrounded two-pool daily dry-matter closure only. No climate integration, measured, or candidate comparison is authorized.",
-    "reviewedBy": null,
-    "reviewedDate": null
+    "reviewedBy": "independent integration validator",
+    "reviewedDate": "2026-10-27"
   },
   "implementationStatus": "not implemented; no candidate comparison run"
 }
