@@ -81,6 +81,34 @@ describe('tab-level plan save queue', () => {
     expect(queue.getPendingPlanWorkSnapshot()).toEqual([]);
   });
 
+  it('acknowledges the requested revision even if an unrelated later save fails', async () => {
+    const { queue } = await loadQueue();
+    const importedTarget = { farmId: 4, environmentId: 'env:4:1' };
+    const unrelatedTarget = { farmId: 5, environmentId: null };
+    queue.stagePlanSave(importedTarget, plan(4, 7));
+    const importedRevision = queue.getPendingPlanWorkSnapshot(4)[0]!;
+    queue.stagePlanSave(unrelatedTarget, plan(5, 8));
+    mocks.savePlan.mockImplementationOnce(async (saved: PlanState) => structuredClone(saved))
+      .mockRejectedValueOnce(new Error('Unrelated plan failed'));
+
+    expect(await queue.flushPlanSaveRevision(importedRevision)).toBe(true);
+    expect(queue.getPendingPlanWorkSnapshot(4)).toEqual([]);
+    expect(queue.getPendingPlanWorkSnapshot(5)).toMatchObject([{ status: 'failed' }]);
+  });
+
+  it('does not acknowledge an import revision that was superseded before it reached storage', async () => {
+    const { queue } = await loadQueue();
+    const target = { farmId: 4, environmentId: 'env:4:1' };
+    const importedRevision = queue.stagePlanSave(target, plan(4, 7));
+    queue.stagePlanSave(target, plan(4, 9));
+    mocks.savePlan.mockImplementation(async (saved: PlanState) => structuredClone(saved));
+
+    expect(await queue.flushPlanSaveRevision(importedRevision)).toBe(false);
+    expect(await queue.flushPendingPlanSaves()).toBe(true);
+    expect(mocks.savePlan).toHaveBeenCalledTimes(1);
+    expect(mocks.savePlan.mock.calls[0]?.[0].planting['0,0']).toBe(9);
+  });
+
   it('keeps a failed snapshot available after navigation and retries through the tab handler', async () => {
     const { queue, queryClient, retryHandler } = await loadQueue();
     const target = { farmId: 8, environmentId: 'env:8:1' };

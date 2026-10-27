@@ -7,6 +7,7 @@ import { missingUpdatedDemoWorlds } from '@/data/demoWorlds';
 import { apiFetch } from '@/lib/api';
 import {
   deleteWorldAfterPlanSave,
+  flushPlanSaveRevision,
   flushPendingPlanSaves,
   getPendingPlanWorkSnapshot,
   getPlanSaveStatus,
@@ -39,6 +40,7 @@ import {
 } from '@/lib/plan';
 import { growingTargetKey, planForTarget, planWithTarget } from '@/lib/growingTargets';
 import { drawPlan, renderPlanToPng, type RenderOptions, type SimOverlayChannels } from '@/lib/renderPlan';
+import { parsePlanJson, serializePlanJson } from '@/lib/planTransfer';
 import { isInputCaptured } from '@/lib/inputArbiter';
 import { useFarm } from '@/hooks/useFarms';
 import { useTheme } from '@/hooks/useTheme';
@@ -972,7 +974,7 @@ export function usePlanEditor(farmId: number) {
       farmId: nextPlan.farmId,
       environmentId: scopeRef.current.kind === 'env' ? scopeRef.current.id : null,
     };
-    stagePlanSave(target, clonePlan(syncCanonicalPlan(nextPlan)));
+    return stagePlanSave(target, clonePlan(syncCanonicalPlan(nextPlan)));
   }, [syncCanonicalPlan]);
 
   const getPendingWorkSnapshot = useCallback(
@@ -1049,7 +1051,7 @@ export function usePlanEditor(farmId: number) {
     updateStats(nextPlan);
     setPlanVersion((v) => v + 1);
     if (options.recordHistory) pushUndo(snapshotPlanHistory(options.recordHistory));
-    if (options.save) scheduleAutosave(nextPlan);
+    return options.save ? scheduleAutosave(nextPlan) : null;
   }, [pushUndo, scheduleAutosave, snapshotPlanHistory, syncCanonicalPlan, updateStats]);
 
   const applyTemplate = useCallback(async (tpl: GardenTemplate, recordHistory = true) => {
@@ -2390,6 +2392,53 @@ export function usePlanEditor(farmId: number) {
     downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${fileBase}-${scope}-shopping-list.csv`);
   }, [activeTargetLabel, environment?.label, farm?.name, stats]);
 
+  const exportJson = useCallback(() => {
+    const plan = planRef.current;
+    if (!plan) return;
+    const fileBase = (farm?.name ?? 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const fileScope = environment
+      ? `${environment.label}-${activeTargetLabel}`.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+      : 'plan';
+    const filename = `${fileBase}-${fileScope}.json`;
+    downloadBlob(
+      new Blob([serializePlanJson(plan)], { type: 'application/json;charset=utf-8' }),
+      filename,
+    );
+    toast.success(`Exported ${filename}`);
+  }, [activeTargetLabel, environment, farm?.name]);
+
+  const importJson = useCallback(async (file: File) => {
+    try {
+      const imported = parsePlanJson(await file.text(), farmId);
+      const previous = planRef.current;
+      if (!previous) throw new Error('Select a saved plan before importing.');
+      const environmentScope = ENV_RECORDS_ENABLED && scopeRef.current.kind === 'env' && environmentRef.current;
+      const next = environmentScope
+        ? stripInvalidPlants(clampPlan({
+            ...imported,
+            widthM: previous.widthM,
+            heightM: previous.heightM,
+            cellM: previous.cellM,
+            allowOutsideBeds: previous.allowOutsideBeds,
+            ...(previous.surface ? { surface: previous.surface } : {}),
+          }))
+        : imported;
+      const saveSnapshot = replacePlan(next, { save: true, recordHistory: clonePlan(previous) });
+      if (!environmentScope) {
+        setDraftWidth(imported.widthM);
+        setDraftHeight(imported.heightM);
+        setDraftAllowOutsideBeds(imported.allowOutsideBeds);
+        setDraftSurface(imported.surface ?? 'outdoor');
+      }
+      setSettingsOpen(false);
+      fitToView();
+      if (saveSnapshot && await flushPlanSaveRevision(saveSnapshot)) toast.success('Plan imported and saved locally.');
+      else toast.error('Plan imported, but could not be saved locally. Retry the save before leaving.');
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }, [farmId, fitToView, flushPlanSaveRevision, replacePlan]);
+
   const recordLoading = ENV_RECORDS_ENABLED ? siteLoading || selectionLoading : planLoading;
   const isLoading = farmLoading || cropsLoading || recordLoading || initializedFarmRef.current !== farmId;
 
@@ -2765,6 +2814,8 @@ export function usePlanEditor(farmId: number) {
     getCellFromEvent,
     exportPng,
     exportCsv,
+    exportJson,
+    importJson,
     updateStats,
   };
 }

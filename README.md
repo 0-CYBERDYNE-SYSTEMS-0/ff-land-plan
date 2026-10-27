@@ -4,7 +4,7 @@
 
 # FarmFriend Land Plan
 
-Draw the beds the way they sit on the ground. The plan stays on your computer.
+FarmFriend is a farm planner and simulator for gardens and small farms. Draw the beds the way they sit on the ground. The plan stays on your computer.
 
 ![Plot Designer, with North Meadow open. The header says 18 m by 12 m, 25 cm cells.](docs/readme/plot-designer.png)
 
@@ -29,7 +29,7 @@ You need [Node.js](https://nodejs.org) 20 or newer.
 ```sh
 git clone https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan.git
 cd ff-land-plan
-npm install
+npm ci
 npm run dev
 ```
 
@@ -54,7 +54,7 @@ The notes below are the developer contract. They are not the farmer guide.
 ## Stack
 
 
-- **React 18** + **TypeScript** + **Vite 5**
+- **React 19** + **TypeScript** + **Vite 8**
 - **Tailwind CSS 3** (Plus Jakarta Sans + JetBrains Mono)
 - **Wouter** — lightweight client-side router (hash mode)
 - **TanStack Query v5** — data fetching & cache
@@ -187,7 +187,7 @@ Open-Meteo weather (`src/lib/localApi.ts`) stays exactly as before.
 Requires Node 20+.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -207,6 +207,20 @@ npm run preview
 ```
 
 Build artifacts land in `dist/`. The legacy build drop is preserved at `../ff-voxel-twin-legacy/` for reference.
+
+### GitHub Pages
+
+The repository-project deployment uses `/ff-land-plan/` as Vite's base path:
+
+```bash
+npm run build:pages
+npm run preview:pages
+```
+
+`npm run test:e2e` builds that production variant, serves it under the project path,
+and runs the Playwright smoke check. The Pages workflow is manual-only; its
+`deploy_to_pages` input defaults to false. Pages must be enabled separately in
+repository settings, and deployment requires an explicit approved workflow run.
 
 ## Smoke-testing (headless)
 

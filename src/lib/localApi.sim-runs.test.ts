@@ -100,10 +100,8 @@ async function loadApi(timeline: boolean, campaign = false) {
   vi.stubEnv('VITE_FF_CAMPAIGN', String(campaign));
   vi.resetModules();
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: new MemoryStorage() });
-  const [{ localApi }, { state }] = await Promise.all([
-    import('@/lib/localApi'),
-    import('@/lib/store'),
-  ]);
+  const { localApi } = await import('@/lib/localApi');
+  const { state } = await import('@/lib/store');
   return { localApi, state };
 }
 

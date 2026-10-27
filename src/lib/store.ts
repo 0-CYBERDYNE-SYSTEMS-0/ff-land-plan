@@ -40,6 +40,7 @@ import { estimateFrostDates } from '@/lib/frost';
 const STORAGE_KEY = 'ff-pro:v1';
 const RUN_MIGRATION_KEY = 'ff-pro:idb-runs-authoritative:v1';
 const LOCAL_STORAGE_OPERATION = 'localStorage persist';
+const DEMO_SEEDS_VERSION = 1;
 
 export interface StoreRecoveryState {
   message: string;
@@ -67,6 +68,8 @@ export interface AppState {
   version?: 2;
   /** True after legacy profiles have received their missing sample records. */
   sampleDataInitialized: true;
+  /** Version of the one-time demo farm/plan seed migration applied to this store. */
+  demoSeedsVersion: number;
   /** Seed farm IDs explicitly removed by the user. */
   deletedSampleFarmIds: number[];
   farms: Farm[];
@@ -100,6 +103,7 @@ function seedState(): AppState {
   return {
     ...(ENV_RECORDS_ENABLED ? { version: 2 as const } : {}),
     sampleDataInitialized: true,
+    demoSeedsVersion: DEMO_SEEDS_VERSION,
     deletedSampleFarmIds: [],
     farms,
     customCrops: [],
@@ -170,7 +174,12 @@ function load(): AppState {
           selectedEnvironmentIds: rawParsed.selectedEnvironmentIds ?? {},
         };
     const parsed = { ...rawParsed, ...migrated } as AppState;
-    const seedMissingSamples = parsed.sampleDataInitialized !== true;
+    const storedDemoSeedsVersion = typeof parsed.demoSeedsVersion === 'number' && Number.isInteger(parsed.demoSeedsVersion)
+      ? parsed.demoSeedsVersion
+      : 0;
+    const demoSeedMigrationPending = typeof parsed.demoSeedsVersion === 'number' && storedDemoSeedsVersion < DEMO_SEEDS_VERSION;
+    const seedMissingSamples = demoSeedMigrationPending ||
+      (parsed.sampleDataInitialized !== true && storedDemoSeedsVersion < DEMO_SEEDS_VERSION);
     const deletedSampleFarmIds = Array.isArray(parsed.deletedSampleFarmIds)
       ? parsed.deletedSampleFarmIds.filter((id): id is number => Number.isInteger(id))
       : [];
@@ -224,6 +233,7 @@ function load(): AppState {
     merged.sites = sites;
     merged.selectedEnvironmentIds = selectedEnvironmentIds;
     merged.sampleDataInitialized = true;
+    merged.demoSeedsVersion = Math.max(DEMO_SEEDS_VERSION, storedDemoSeedsVersion);
     merged.deletedSampleFarmIds = deletedSampleFarmIds;
 
     // Sim runs are additive user data (never seeded): keep the stored list

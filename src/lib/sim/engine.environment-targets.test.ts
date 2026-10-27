@@ -252,6 +252,33 @@ describe('environment target simulation', () => {
     expect(legacy.effectiveEnv.climate).toBeUndefined();
   });
 
+  it('uses equipped indoor temperatures for drought growth in an enclosed world', () => {
+    const tomato = cropLibrary.find((crop) => crop.slug === 'tomato')!;
+    const runConfig = config({
+      basePlan: plan({ planting: { '0,0': tomato.id } }),
+      scenario: 'drought',
+      tempDeltaC: 2,
+      precipMultiplier: 0.5,
+      environment: {
+        ...environment('greenhouse-glass', layout()),
+        setpoints: { heatC: 18 },
+      },
+      climateModel: 'environment-v1',
+      climateEquipment: { ...emptyTerms, heatingKw: 20 },
+    });
+    const coldOutdoor = day('2026-05-01', {
+      tMinC: -8,
+      tMaxC: -3,
+      gddBase10C: 0,
+      raw: { tMinC: -10, tMaxC: -5, precipMm: 0, source: 'default' },
+    });
+    const result = stepDay(createRun(runConfig, { crops: [tomato] }), coldOutdoor, runConfig, { crops: [tomato] });
+
+    expect(result.effectiveEnv.climate).toBeDefined();
+    expect(result.effectiveEnv.tMinC).toBeGreaterThan(0);
+    expect(result.state.cells['0,0']?.gddAccumC).toBeGreaterThan(0);
+  });
+
   it('applies supplemental DLI only to its mounted target', () => {
     const tomato = cropLibrary.find((crop) => crop.slug === 'tomato')!;
     const lower: GrowingTargetRef = { kind: 'growing-level', growingSpaceId: 'space-a', levelId: 'low' };

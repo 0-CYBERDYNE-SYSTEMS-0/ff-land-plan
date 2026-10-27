@@ -1,6 +1,6 @@
 import { apiFetch } from '@/lib/api';
 import { dispatchStorageFailed, dispatchStorageSaved } from '@/lib/db';
-import { PlanSaveLedger, type PendingPlanSaveSnapshot, type PlanSaveTarget } from '@/lib/planSaveLedger';
+import { PlanSaveLedger, planSaveTargetKey, type PendingPlanSaveSnapshot, type PlanSaveTarget } from '@/lib/planSaveLedger';
 import { queryClient } from '@/lib/queryClient';
 import { persistNow, registerStorageRetryHandler, setEditorPendingWork } from '@/lib/store';
 import type { PlanState, SitePlan } from '@/types';
@@ -30,6 +30,28 @@ const errorByFarm = new Map<number, string>();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let flushPromise: Promise<boolean> | null = null;
 let flushingForPagehide = false;
+const revisionWaiters = new Map<string, Map<number, Array<(saved: boolean) => void>>>();
+
+function settleRevision(target: PlanSaveTarget, revision: number, saved: boolean): void {
+  const key = planSaveTargetKey(target);
+  const byRevision = revisionWaiters.get(key);
+  const waiters = byRevision?.get(revision);
+  if (!waiters) return;
+  byRevision!.delete(revision);
+  if (byRevision!.size === 0) revisionWaiters.delete(key);
+  for (const resolve of waiters) resolve(saved);
+}
+
+function waitForRevision(target: PlanSaveTarget, revision: number): Promise<boolean> {
+  const key = planSaveTargetKey(target);
+  return new Promise((resolve) => {
+    const byRevision = revisionWaiters.get(key) ?? new Map<number, Array<(saved: boolean) => void>>();
+    const waiters = byRevision.get(revision) ?? [];
+    waiters.push(resolve);
+    byRevision.set(revision, waiters);
+    revisionWaiters.set(key, byRevision);
+  });
+}
 
 function pendingForFarm(farmId: number): PendingPlanSaveSnapshot[] {
   return ledger.getPendingWorkSnapshot().filter((entry) => entry.target.farmId === farmId);
@@ -97,7 +119,12 @@ export function siteWithPendingPlanSnapshots(site: SitePlan): SitePlan {
 }
 
 export function stagePlanSave(target: PlanSaveTarget, plan: PlanState): PendingPlanSaveSnapshot {
+  const key = planSaveTargetKey(target);
+  const previous = ledger.getPendingWorkSnapshot().find((entry) => planSaveTargetKey(entry.target) === key);
   const snapshot = ledger.stage(target, plan);
+  if (previous && previous.revision !== snapshot.revision && previous.status !== 'saving') {
+    settleRevision(previous.target, previous.revision, false);
+  }
   setEditorPendingWork(ledger.hasPending());
   publish(target.farmId);
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -124,6 +151,7 @@ export function flushPendingPlanSaves(): Promise<boolean> {
         if (flushingForPagehide) persistNow();
         const saved = await saving;
         const current = ledger.acknowledge(pending.target, pending.revision);
+        settleRevision(pending.target, pending.revision, true);
         if (current) {
           if (pending.target.environmentId === null) {
             queryClient.setQueryData(['plan', pending.target.farmId], saved);
@@ -149,6 +177,7 @@ export function flushPendingPlanSaves(): Promise<boolean> {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         ledger.markFailed(pending.target, pending.revision);
+        settleRevision(pending.target, pending.revision, false);
         errorByFarm.set(pending.target.farmId, message);
         setEditorPendingWork(ledger.hasPending());
         publish(pending.target.farmId);
@@ -164,6 +193,19 @@ export function flushPendingPlanSaves(): Promise<boolean> {
     if (flushPromise === current) flushPromise = null;
   });
   return current;
+}
+
+/** Flush until this edit revision has a durable acknowledgement. */
+export async function flushPlanSaveRevision(
+  snapshot: Pick<PendingPlanSaveSnapshot, 'target' | 'revision'>,
+): Promise<boolean> {
+  const key = planSaveTargetKey(snapshot.target);
+  const pending = ledger.getPendingWorkSnapshot().find((entry) => planSaveTargetKey(entry.target) === key);
+  if (!pending || pending.revision !== snapshot.revision) return false;
+  const acknowledgement = waitForRevision(snapshot.target, snapshot.revision);
+  await flushPendingPlanSaves();
+  settleRevision(snapshot.target, snapshot.revision, false);
+  return acknowledgement;
 }
 
 /** Keep destructive world removal behind a successful acknowledgement of all pending plans. */

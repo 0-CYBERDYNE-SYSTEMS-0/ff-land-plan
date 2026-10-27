@@ -94,6 +94,24 @@ describe('BETA-01 local persistence', () => {
     expect(reloaded.state.plans[2]).toBeUndefined();
   });
 
+  it('honors the main demo seed version when the BETA sample marker is absent', async () => {
+    const storage = installStorage();
+    const { state: seeded } = await import('@/lib/store');
+    const farms = seeded.farms.filter((farm) => farm.id !== 9);
+    const plans = { ...seeded.plans };
+    delete plans[9];
+    const mainFormatStore = { demoSeedsVersion: 1, farms, plans };
+    const original = JSON.stringify(mainFormatStore);
+    storage.setItem('ff-pro:v1', original);
+    vi.resetModules();
+
+    const { state } = await import('@/lib/store');
+    expect(state.farms.some((farm) => farm.id === 9)).toBe(false);
+    expect(state.plans[9]).toBeUndefined();
+    expect(state.sampleDataInitialized).toBe(true);
+    expect(storage.getItem('ff-pro:v1')).toBe(original);
+  });
+
   it('preserves canonical v2 worlds and selected-world preference when flag-off', async () => {
     vi.stubEnv('VITE_FF_ENV_RECORDS', 'false');
     const storage = installStorage();

@@ -742,6 +742,20 @@ export function stepDay(
   // One effective environment per day feeds every consumer in the pass below.
   const climateResult = climateInputsFor(config, state, env, crops, archetype, surface, cells);
   const env2 = climateResult.env;
+  // The drought preset includes a +2 °C scenario delta. Without a guard, that
+  // extra warmth can accelerate crops past their harvest threshold before the
+  // rainfall deficit becomes limiting. Keep drought growth's thermal pace no
+  // faster than the same day's raw climate while retaining water/heat stress.
+  const growthEnv =
+    config.scenario === 'drought' && surface === 'outdoor' && !climateResult.climate && env.raw
+      ? {
+          ...env2,
+          gddBase10C: Math.min(
+            env2.gddBase10C,
+            Math.max(0, (env.raw.tMinC + env.raw.tMaxC) / 2 - 10),
+          ),
+        }
+      : env2;
 
   for (const key of Object.keys(cells)) {
     const prev = cells[key]!;
@@ -823,7 +837,7 @@ export function stepDay(
         1,
         Math.max(water, heat, cold, nitrogen, light ?? 0) + antagonistStressAdd(nb),
       );
-      const dailyGdd = gddGain(env2, maxStress, companionRateBonus(nb));
+      const dailyGdd = gddGain(growthEnv, maxStress, companionRateBonus(nb));
       const soilborneFactor = carry
         ? soilborneGrowthFactor(crop.family, carry.inoculum, dayIndex - prev.plantedAtDay, prev.biomassFrac)
         : 1;

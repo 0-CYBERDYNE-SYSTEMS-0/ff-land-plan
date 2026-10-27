@@ -26,7 +26,7 @@ export function Sidebar() {
         </div>
         <div>
           <div className="font-bold text-sm leading-tight">FarmFriend</div>
-          <div className="text-xs text-muted-foreground">Digital Twin</div>
+          <div className="text-xs text-muted-foreground">Farm planner and simulator</div>
         </div>
         <div className="ml-auto flex items-center gap-1">
           <span className="live-pulse w-2 h-2 rounded-full bg-primary block" />
