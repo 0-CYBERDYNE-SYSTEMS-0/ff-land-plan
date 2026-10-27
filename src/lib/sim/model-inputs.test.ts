@@ -949,7 +949,10 @@ describe('frozen crop model inputs and replay support', () => {
   });
 
   it('runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified', () => {
-    const run = config({ cropModelVersion: 'crop-model-v2' });
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      basePlan: { ...config().basePlan, cellM: 0.25 },
+    });
     const crop = cropLibrary.find((entry) => entry.id === 1)!;
     const thermal = cropThermalParams.find((entry) => entry.cropId === crop.id)!;
     const inputs = {
@@ -1158,14 +1161,30 @@ describe('frozen crop model inputs and replay support', () => {
       gddBase10C: 15,
       provenance: { tMinC: 'default' as const, tMaxC: 'default' as const, precipMm: 'default' as const, etoMm: 'default' as const, dliNaturalMol: 'default' as const },
     }));
-    const productive = simulateRun({ ...run, modelInputs: inputs }, sunnySeries);
+    const productiveRun = { ...run, autoHarvest: true, modelInputs: inputs };
+    const productive = simulateRun(productiveRun, sunnySeries);
+    const productiveReplay = simulateRun(productiveRun, sunnySeries);
 
     expect(productive.finalState.cells['0,0']?.dryMatterGPerM2).toBeCloseTo(252, 8);
-    expect(productive.summary.totalYieldKg).toBeGreaterThan(0);
+    const harvestedEvents = productive.events.filter((event) => event.kind === 'harvested');
+    expect(harvestedEvents).toHaveLength(1);
+    expect(harvestedEvents[0]?.dayIndex).toBe(62);
+    const harvestIndex = inputs.cropParameters[0]!.production.harvestIndex;
+    const expectedPayoutKg = 252 * 0.25 * 0.25 * harvestIndex / 1000;
+    expect(harvestIndex).toBe(0.5);
+    expect(expectedPayoutKg).toBe(0.007875);
+    const harvestedEvent = harvestedEvents[0];
+    if (harvestedEvent?.kind === 'harvested') {
+      expect(Math.abs(harvestedEvent.data.yieldKg - expectedPayoutKg)).toBeLessThanOrEqual(1e-12);
+    }
     expect(productive.summary.yieldBasis).toBe('dry-matter');
     expect(productive.summary.harvestReadyDay).toBe(62);
-    const harvestedEvent = productive.events.find((event) => event.kind === 'harvested');
-    expect(harvestedEvent?.dayIndex).toBe(62);
+    expect(productive.finalState.cells['0,0']?.harvested).toBe(true);
+    expect(productive.summary.totalYieldKg).toBe(0.01);
+    expect(productive.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+    expect(productiveReplay.events).toEqual(productive.events);
+    expect(productiveReplay.finalState).toEqual(productive.finalState);
+    expect(productiveReplay.summary).toEqual(productive.summary);
     expect(productive.finalState.cells['0,0']?.gddAccumC).toBe(1117);
     expect(productive.summary.rootZoneBalanceResidualMaxAbsMm).toBeLessThanOrEqual(1e-6);
     expect(productive.summary.rootZoneBalanceResidualAccumulatedMm).toBeCloseTo(0, 8);

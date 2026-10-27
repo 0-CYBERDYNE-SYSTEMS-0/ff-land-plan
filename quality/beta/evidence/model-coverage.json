@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v3 harvest software checkpoints; candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 harvest software checkpoints; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -25,7 +25,8 @@
     "dynamicCanopyEngineFixture": "quality/beta/evidence/water-sa-2018-dynamic-canopy-engine-fixture.json",
     "environmentV2TranspirationFixture": "quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json",
     "sourceEquationOnlyFixture": "BROCCOLI-OHAYOU-SPRING-CONTROL-SYNTHETIC-SOLAR-EQUATION-01",
-    "v3HarvestPayoutSoftwareFixture": "V3-FROZEN-DM-HARVEST-PAYOUT-SYNTHETIC-01"
+    "v3HarvestPayoutSoftwareFixture": "V3-FROZEN-DM-HARVEST-PAYOUT-SYNTHETIC-01",
+    "v2AutoHarvestPayoutSoftwareFixture": "V2-AUTO-DM-HARVEST-PAYOUT-SYNTHETIC-01"
   },
   "sources": [
     {
@@ -1273,6 +1274,37 @@
       "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"crop-model-v3 frozen-input harvest payout\"",
       "candidateComparison": false,
       "status": "Synthetic v3 payout, eligibility-gate, and replay software evidence only. A-07 remains UNVERIFIED overall; this fixture does not establish crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive accuracy."
+    },
+    {
+      "id": "V2-AUTO-DM-HARVEST-PAYOUT-SYNTHETIC-01",
+      "classification": "synthetic frozen-input software regression; not a crop benchmark",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "not asserted; catalog identity is fixture routing only and production/root values are synthetic"
+      },
+      "environment": "synthetic 80-day single floor-cell reducer sequence with daily DLI 18 mol PAR/m²/day; no weather reproduction or observed site inputs",
+      "modelVersion": "crop-model-v2 with frozen crop, thermal, soil, production, and root-zone inputs",
+      "syntheticInputs": {
+        "initialAboveGroundDryMatterGPerM2": 0,
+        "harvestIndex": 0.5,
+        "cellM": 0.25,
+        "autoHarvest": true,
+        "environmentSeriesDays": 80,
+        "zeroBasedHarvestDayIndex": 62
+      },
+      "expected": {
+        "simulatedMaturityPoolGPerM2": 252,
+        "payoutKgPerEvent": 0.007875,
+        "roundedSummaryTotalYieldKg": 0.01,
+        "roundedSummaryYieldKgByCrop": 0.01,
+        "automaticPayoutTiming": "exactly one event on maturity-crossing dayIndex 62 (the 63rd tick) during the 80-day run",
+        "replay": "events, final state, and summary exactly equal for identical frozen config and environment series",
+        "tolerance": "Event payout within 1e-12 kg; this bounds floating-point arithmetic/conversion only. Total and per-crop summaries exactly 0.01 kg under the reducer's two-decimal aggregate rounding; replay equality exact. Software tolerances only."
+      },
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\"",
+      "candidateComparison": false,
+      "status": "One synthetic v2 automatic harvest payout software regression only. A-07 and 02A remain UNVERIFIED overall; this fixture establishes no crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive accuracy."
     }
   ],
   "coverageSummary": {
@@ -2864,6 +2896,6 @@
     "calibrationRecords": [],
     "holdoutRecords": [],
     "candidateComparisonRuns": [],
-    "note": "Evidence records above separate published source availability, synthetic parameter/equation fixtures, and software regressions. The environment-v2 fixture checks synthetic enclosure coupling; the v3 harvest fixture checks payout/gate/replay behavior only. No candidate has been evaluated; the Michelon measured record remains non-executable and no predictive comparison is authorized."
+    "note": "Evidence records above separate published source availability, synthetic parameter/equation fixtures, and software regressions. The environment-v2 fixture checks synthetic enclosure coupling; the v2 and v3 harvest fixtures check payout/gate/replay behavior only. No candidate has been evaluated; the Michelon measured record remains non-executable and no predictive comparison is authorized."
   }
 }
