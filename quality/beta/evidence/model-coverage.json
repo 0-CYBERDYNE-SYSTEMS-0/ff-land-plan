@@ -83,6 +83,48 @@
       "licenseOrReuse": "FAO publication; cited as method reference, no code or substantial text copied."
     },
     {
+      "id": "BECCAFICHI-2003-ACTAHORT-614-75",
+      "citation": "Beccafichi, C., Benincasa, P., Guiducci, M. & Tei, F. (2003), Effect of crop density on growth and light interception in greenhouse lettuce, Acta Horticulturae 614, 507–513.",
+      "url": "https://doi.org/10.17660/ActaHortic.2003.614.75",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "publisher record plus author-uploaded full-text indexing",
+        "sha256": null,
+        "localPath": null,
+        "status": "publisher record and University of Perugia repository metadata verified; full-text parameter transcription visible in author-uploaded indexing, but publisher PDF retrieval was blocked and no binary digest was captured"
+      },
+      "licenseOrReuse": "No open license identified; cite the derived RUE value only. No article text, table, or figure is redistributed.",
+      "sourceVersion": "2003 Acta Horticulturae 614; DOI version of record"
+    },
+    {
+      "id": "FRENCH-2024-IRRIGSCI-42-1245",
+      "citation": "French, A.N., Sanchez, C.A., Hunsaker, D.J. et al. (2024), Lettuce evapotranspiration and crop coefficients using eddy covariance and remote sensing observations, Irrigation Science 42, 1245–1272.",
+      "url": "https://doi.org/10.1007/s00271-024-00921-x",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "open-access version-of-record HTML",
+        "sha256": null,
+        "localPath": null,
+        "status": "full text and version metadata accessed on the publisher page; direct binary retrieval was blocked in this environment, so no artifact digest was captured"
+      },
+      "licenseOrReuse": "Creative Commons Attribution 4.0 International, as stated on the publisher page; only derived parameter values are recorded.",
+      "sourceVersion": "Version of record published 2024-04-01; DOI 10.1007/s00271-024-00921-x"
+    },
+    {
+      "id": "THORUP-KRISTENSEN-2006-SOILUSEMAN-22-29",
+      "citation": "Thorup-Kristensen, K. (2006), Root growth and nitrogen uptake of carrot, early cabbage, onion and lettuce following a range of green manures, Soil Use and Management 22, 29–38.",
+      "url": "https://doi.org/10.1111/j.1475-2743.2005.00012.x",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "publisher abstract and French et al. (2024) cited implementation description",
+        "sha256": null,
+        "localPath": null,
+        "status": "publisher abstract reports lettuce root-depth development rate; full publisher page returned 403, so no binary digest was captured"
+      },
+      "licenseOrReuse": "No open license identified; cite the reported root-rate parameter only.",
+      "sourceVersion": "2006 Soil Use and Management 22(1), 29–38; DOI 10.1111/j.1475-2743.2005.00012.x"
+    },
+    {
       "id": "SPITTERS-1990-LINTUL",
       "citation": "Spitters (1990), Crop growth models: their usefulness and limitations, Acta Horticulturae 267, 349–368.",
       "url": "https://doi.org/10.17660/ActaHortic.1990.267.42",
@@ -252,6 +294,66 @@
       "sourceDisplay": {
         "marketableYield": "1.90 kg/m²"
       }
+    },
+    {
+      "id": "LETTUCE-ROSALBA-GREENHOUSE-RUE-2003",
+      "sourceId": "BECCAFICHI-2003-ACTAHORT-614-75",
+      "classification": "measured-study / production-parameter-reference; not validation fixture",
+      "crop": {
+        "slug": "lettuce",
+        "cultivar": "Rosalba; butterhead (Lactuca sativa var. capitata)"
+      },
+      "environment": "Plastic greenhouse, Perugia, Central Italy (43°N, 165 m); natural daylight; two seasons in 1996 and 1999–2000; four planting densities (5, 10, 15, 30 plants/m²).",
+      "metric": "Above-ground dry-weight slope against cumulative intercepted PAR (radiation-use efficiency)",
+      "parameter": {
+        "value": 2.71,
+        "unit": "g above-ground dry matter per MJ intercepted PAR",
+        "reported": "2.71 ± 0.030 g MJ⁻¹",
+        "transcriptionTolerance": "±0.005 g/MJ, source-display rounding only; ±0.030 retained as reported and not interpreted as a confidence interval"
+      },
+      "method": "Crop PAR interception was computed on a crop ground-cover basis. RUE is the slope of the regression of dry weight on cumulative intercepted PAR; source figure reports y = -1.82 + 2.71x, R² = 0.99. The RUE was not significantly affected by density in this experiment.",
+      "limitations": [
+        "This value applies to above-ground dry matter, not whole-plant biomass or harvested marketable mass.",
+        "No source-independent generic canopy interception fraction/trajectory is supplied by this parameter record.",
+        "This parameter reference is calibration evidence only; it does not validate a prediction."
+      ],
+      "sourceUrl": "https://doi.org/10.17660/ActaHortic.2003.614.75",
+      "sourceVersion": "2003 Acta Horticulturae 614, pages 507–513",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": null,
+      "sourceLicenseOrReuse": "No open license identified; only the parameter value and bibliographic metadata are recorded."
+    },
+    {
+      "id": "LETTUCE-YUMA-ROOT-PROFILE-2024",
+      "sourceId": "FRENCH-2024-IRRIGSCI-42-1245",
+      "classification": "measured-field study / root-zone parameterization reference; derived cap is site-specific",
+      "crop": {
+        "slug": "lettuce",
+        "cultivar": "iceberg and romaine; no single cultivar named for the root-profile method"
+      },
+      "environment": "Twelve field sites in Yuma, Arizona, under commercial irrigation management; the cited soil-water analysis used observed weather/irrigation, eddy-covariance ET, and site soil water properties.",
+      "metric": "Daily effective rooting depth used in a root-zone water-balance analysis",
+      "parameter": {
+        "initialRootDepth": { "value": 0.12, "unit": "m at direct seeding/planting", "transcriptionTolerance": "±0.005 m, displayed precision only" },
+        "growthLag": { "value": 200, "unit": "°C·day cumulative GDD", "transcriptionTolerance": "±0.5 °C·day, displayed precision only" },
+        "rootDepthGrowthRate": { "value": 1.2, "unit": "mm per °C·day after lag", "transcriptionTolerance": "±0.05 mm/°C·day, displayed precision only; original Thorup-Kristensen source independently reports approximately this lettuce rate" },
+        "thermalMethod": "Single-sine horizontal cutoff, basal 4.5°C and upper 28°C, per the source's Yuma lettuce GDD method.",
+        "maximumRootDepth": { "value": 0.90, "unit": "m", "status": "inferred site-specific effective depth; selected by the authors' water-balance analysis for 11 sites, not a generic or directly measured maximum" },
+        "depletionFraction": { "value": 0.40, "unit": "fraction of TAW at ETc 5 mm/day", "method": "adjust daily with FAO-56 Table 22 footnote 2" }
+      },
+      "sampleSize": "12 field sites; 0.90 m was judged a reasonable effective-depth assumption for 11 sites based on inferred water-stress behavior; no raw root-depth trajectory is supplied for independent validation.",
+      "startEvent": "Direct seeding/planting; the source's soil-water balance begins at seed wet-up. Do not infer this initial profile for transplanted lettuce.",
+      "validDomain": "Managed Yuma field iceberg/romaine production and its measured water-balance context only; not greenhouse Rosalba and not a generic crop-depth validation.",
+      "limitations": [
+        "The 0.90 m maximum is inferred from a managed-field water-balance analysis, not a direct measurement of maximum lettuce root depth.",
+        "The direct-seeded initial depth and GDD lag do not establish a transplant root profile.",
+        "The study reports its data are available from the corresponding author on reasonable request; daily source files are not included here."
+      ],
+      "sourceUrl": "https://doi.org/10.1007/s00271-024-00921-x",
+      "sourceVersion": "Version of record published 2024-04-01",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": null,
+      "sourceLicenseOrReuse": "CC BY 4.0 according to publisher; only derived parameter values are recorded."
     },
     {
       "id": "THERMAL-CABBAGE-STORAGE-MATURITY",
@@ -688,13 +790,74 @@
       "sourceLicenseOrReuse": "Page copyright/reuse terms apply; cite only the derived method and threshold; no page content copied."
     }
   ],
-  "fixtures": [],
+  "fixtures": [
+    {
+      "id": "LETTUCE-REFERENCE-PARAM-SYNTHETIC-INTEGRATION-01",
+      "classification": "synthetic software fixture using separately sourced parameter references",
+      "crop": {
+        "slug": "lettuce",
+        "catalogCropId": 2,
+        "cultivar": "not asserted; production and root references come from different cultivar/domain studies"
+      },
+      "environment": "synthetic outdoor single-cell reducer input; not a reproduction of the Perugia greenhouse or Yuma field weather",
+      "sourceParameters": {
+        "aboveGroundNetRue": {
+          "value": 2.71,
+          "unit": "g above-ground dry matter per MJ intercepted PAR",
+          "reportedSourceValue": "2.71 ± 0.030 g MJ⁻¹",
+          "sourceEvidenceId": "LETTUCE-ROSALBA-GREENHOUSE-RUE-2003",
+          "transcriptionTolerance": "±0.005 g/MJ, rounding only; reported ±0.030 retained separately and is not treated as a confidence interval"
+        },
+        "rootDevelopment": {
+          "initialRootDepthCm": 12,
+          "growthStartsAfterCdays": 200,
+          "growthMmPerCday": 1.2,
+          "thermalBaseC": 4.5,
+          "thermalUpperC": 28,
+          "thermalMethod": "single-sine horizontal cutoff",
+          "maximumRootDepthCm": 90,
+          "depletionFractionAtEtc5MmDay": 0.4,
+          "sourceEvidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024",
+          "qualification": "Direct-seeded Yuma iceberg/romaine water-balance profile. The 90 cm maximum was an inferred, site-specific model choice to match managed-field water balance, not a generic measured depth. No transplant inference."
+        }
+      },
+      "syntheticInputs": {
+        "dliMolParM2Day": 18,
+        "interceptedParFraction": 0.5,
+        "waterStressFactor": 1,
+        "initialAvailableWaterFraction": 0.7,
+        "harvestIndex": 0.5,
+        "note": "Synthetic equation-driving values only; intercepted fraction, initial soil storage, harvest index and crop trajectory are not sourced by the cited records."
+      },
+      "expected": {
+        "interceptedParMjM2": 2,
+        "aboveGroundDryMatterIncrementGM2": 5.42,
+        "tolerance": "equation-level assertion; exact helper result within 1e-12 in implementation arithmetic, not a candidate/reference comparison"
+      },
+      "rootDepthChecks": [
+        { "cumulativeRootThermalCdays": 0, "expectedDepthCm": 12 },
+        { "cumulativeRootThermalCdays": 200, "expectedDepthCm": 12 },
+        { "cumulativeRootThermalCdays": 300, "expectedDepthCm": 24 },
+        { "cumulativeRootThermalCdays": 1000, "expectedDepthCm": 90 }
+      ],
+      "waterClosure": {
+        "tolerance": "≤1e-6 mm/cell-day",
+        "equation": "start storage + precipitation + irrigation + explicit root-growth storage - uptake - drainage - runoff - end storage",
+        "scope": "synthetic root-zone mechanics only; expansion storage is an explicit assumed inflow from the frozen initial subsoil fraction"
+      },
+      "reproduction": "npx vitest run src/lib/sim/crop-model-v2.test.ts src/lib/sim/model-inputs.test.ts",
+      "candidateComparison": false,
+      "status": "software integration evidence only; not measured validation, external reference agreement, or prediction accuracy"
+    }
+  ],
   "coverageSummary": {
     "builtInCatalogCrops": 50,
     "existingThermalTableEntries": 9,
     "thermalEntriesWithRetrievedSourceArtifact": 8,
     "completeV2ProductionParameterSets": 0,
     "completeV2RootZoneParameterSets": 0,
+    "sourceBackedReferenceParameterSets": 2,
+    "executableSyntheticParameterFixtures": 1,
     "measuredEmpiricallyValidatedCrops": 0,
     "measuredValidationClaims": 0,
     "referenceAgreementClaims": 0,
@@ -749,12 +912,20 @@
           ]
         },
         "production": {
-          "status": "UNVERIFIED",
-          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+          "status": "source-backed RUE reference; synthetic executable equation fixture only",
+          "sourceEvidence": [
+            "LETTUCE-ROSALBA-GREENHOUSE-RUE-2003",
+            "LETTUCE-REFERENCE-PARAM-SYNTHETIC-INTEGRATION-01"
+          ],
+          "parameterCoverage": "above-ground dry-matter RUE 2.71 g/MJ intercepted PAR for greenhouse butterhead cv Rosalba; no sourced generic interception trajectory or harvest-index set; no biological prediction claim"
         },
         "rootZone": {
-          "status": "UNVERIFIED",
-          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+          "status": "source-backed Yuma direct-seeded profile; qualified synthetic integration fixture only",
+          "sourceEvidence": [
+            "LETTUCE-YUMA-ROOT-PROFILE-2024",
+            "LETTUCE-REFERENCE-PARAM-SYNTHETIC-INTEGRATION-01"
+          ],
+          "parameterCoverage": "12 cm at planting, 1.2 mm/°C-day after 200 CGDD, Yuma-specific inferred 90 cm cap and p=0.40 at ETc 5 mm/day; no transplant inference or measured root-depth claim"
         },
         "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
         "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
@@ -2073,7 +2244,7 @@
   ],
   "toleranceReview": {
     "reviewedBy": "independent integration validator",
-    "status": "approved with stated display-rounding and numerical-closure conditions; no candidate comparison authorized by approval alone",
+    "status": "prior checks approved; lettuce parameter transcription and synthetic-fixture conditions reviewed preliminarily; no candidate comparison authorized",
     "checks": [
       {
         "id": "supported-frozen-replay",
@@ -2134,6 +2305,36 @@
         "tolerance": "±0.005 kg/m²",
         "status": "approved-display-only",
         "basis": "half of the article narrative display increment (1.90 kg/m², two decimal places); table rounding only, not predictive accuracy"
+      },
+      {
+        "id": "lettuce-rosalba-rue-transcription",
+        "tolerance": "±0.005 g above-ground DM/MJ intercepted PAR",
+        "status": "preliminarily-reviewed-transcription-only",
+        "basis": "half the two-decimal displayed RUE increment (2.71); preserve source-reported ±0.030 separately and do not reinterpret it as a confidence interval or prediction tolerance"
+      },
+      {
+        "id": "lettuce-yuma-root-rate-transcription",
+        "tolerance": "±0.05 mm/°C·day",
+        "status": "preliminarily-reviewed-transcription-only",
+        "basis": "half the source-reported one-decimal increment for the 1.2 mm/°C·day lettuce root-depth growth rate"
+      },
+      {
+        "id": "lettuce-yuma-root-lag-transcription",
+        "tolerance": "±0.5 °C·day",
+        "status": "preliminarily-reviewed-transcription-only",
+        "basis": "half the integer display increment for the Yuma source's 200 °C·day root-growth lag"
+      },
+      {
+        "id": "lettuce-yuma-root-initial-depth-transcription",
+        "tolerance": "±0.005 m",
+        "status": "preliminarily-reviewed-transcription-only",
+        "basis": "half the source-reported 0.01 m display increment for 0.12 m initial root depth"
+      },
+      {
+        "id": "lettuce-yuma-root-maximum-depth",
+        "tolerance": "none; source value is an inferred site-specific effective-depth choice, not a directly measured parameter",
+        "status": "excluded-from-transcription-accuracy",
+        "basis": "The Yuma study selected 0.90 m as reasonable for 11 sites after water-balance analysis; it is not a generic root maximum and is not a held-out reference target."
       }
     ]
   },
@@ -2141,6 +2342,6 @@
     "calibrationRecords": [],
     "holdoutRecords": [],
     "candidateComparisonRuns": [],
-    "note": "Evidence records above describe source availability and published reference points. No candidate has been evaluated; records lacking complete daily inputs are not executable fixtures."
+    "note": "Evidence records above describe source availability and published reference points. The synthetic parameter fixture checks only reducer arithmetic and closure. No candidate has been evaluated; the Michelon measured record remains non-executable and no predictive comparison is authorized."
   }
 }
