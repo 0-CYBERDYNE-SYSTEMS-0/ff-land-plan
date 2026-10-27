@@ -145,13 +145,19 @@ test('unsupported environment-v2 run opens under Pages and retains its stored su
   await expect(page.getByText(new RegExp(storedSummaryDays))).toBeVisible();
 
   await page.getByRole('button', { name: 'Open in world' }).click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe('/ff-land-plan/');
+  await expect(page).toHaveURL((url) =>
+    url.pathname === '/ff-land-plan/' &&
+    url.searchParams.get('ffrun') === unsupportedRunId &&
+    url.searchParams.get('ffview') === 'world' &&
+    url.hash === '#/farms/1/map',
+  );
   const worldUrl = new URL(page.url());
   expect(worldUrl.pathname).toBe('/ff-land-plan/');
   expect(worldUrl.searchParams.get('ffrun')).toBe(unsupportedRunId);
   expect(worldUrl.searchParams.get('ffview')).toBe('world');
   expect(worldUrl.hash).toBe('#/farms/1/map');
-  const worldMode = page.getByRole('button', { name: /world/i });
+  const worldMode = page.getByRole('button', { name: 'World', exact: true });
+  await expect(worldMode).toBeVisible({ timeout: 30_000 });
   await expect(worldMode).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText('Loading 3D world…')).toHaveCount(0);
