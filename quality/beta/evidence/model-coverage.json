@@ -19,7 +19,8 @@
     "record": "quality/beta/02A-MODEL-DECISION.md",
     "selectedProductionFamily": "LINTUL-family intercepted PAR × net RUE; crop parameters remain UNVERIFIED until source-backed",
     "selectedSoilWaterMethod": "FAO-56 root-zone balance within explicitly supported soil domain",
-    "noFrameworkCodeCopied": true
+    "noFrameworkCodeCopied": true,
+    "rootZoneReferenceCoverage": "quality/beta/evidence/fao56-root-reference-coverage.json"
   },
   "sources": [
     {
@@ -1073,6 +1074,8 @@
     "completeV2ProductionParameterSets": 0,
     "completeV2RootZoneParameterSets": 0,
     "sourceBackedReferenceParameterSets": 2,
+    "fao56Table22DirectCommonRootReferenceCrops": 19,
+    "fao56Table22ExplicitlyUnmatchedBuiltInCrops": 31,
     "executableSyntheticParameterFixtures": 1,
     "measuredEmpiricallyValidatedCrops": 0,
     "measuredValidationClaims": 0,

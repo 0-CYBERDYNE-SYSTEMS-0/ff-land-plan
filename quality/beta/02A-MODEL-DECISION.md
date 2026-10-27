@@ -47,6 +47,8 @@ For soil-grown crops, use the FAO-56 root-zone balance as the method reference: 
 
 This is a single effective root-zone storage model, not a layered Richards solver. If a necessary soil/media, root-depth, runoff, or water input is unavailable, expose the estimate/fallback and uncertainty. Do not call the current coarse nitrogen pool a solution-chemistry, pH, salinity or oxygen model. Soilless resource balance requires the 02B hydro/resource contract and must not be silently mapped to a soil bucket.
 
+`quality/beta/evidence/fao56-root-reference-coverage.json` records the FAO-56 Table 22 maximum effective root-depth ranges and depletion fractions for 19 exact/common catalog crop matches, plus explicit unresolved status for every other catalog crop. These are source-reference values only: the range is not an initial depth or growth trajectory, and the p value is listed at ETc approximately 5 mm/day. The source notes that p may shift 5–10% with soil texture; that adjustment is not inferred here. No source artifact digest was captured. The inventory does not create an active model default or establish crop-model completeness. It preregisters the source's ten-day Example 37 as a fixed-p arithmetic reproduction fixture; this checks the FAO-56 helper against source-displayed arithmetic, not the complete crop reducer or any prediction.
+
 ### D4. Reuse methods as scientific references; do not port a framework
 
 | Reference evaluated | Relevant method/evidence | Deployment, parameter and license fit | Decision |
