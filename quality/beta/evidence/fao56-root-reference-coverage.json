@@ -529,9 +529,9 @@
     ],
     "recurrence": "Use unrounded daily root-zone water storage/depletion internally, with no daily rain, irrigation, capillary rise, runoff or drainage; compare rounded displayed outputs only.",
     "tolerances": {
-      "endDepletionMm": "±0.05 mm, half the source displayed 0.1 mm increment; display reproduction only.",
-      "ks": "±0.005, half the source displayed 0.01 increment; display reproduction only.",
-      "adjustedEtMmDay": "±0.05 mm/day, half the source displayed 0.1 mm/day increment; display reproduction only."
+      "endDepletionMm": { "maximumDeviation": 0.05, "unit": "mm", "basis": "Half the source displayed 0.1 mm increment; display reproduction only." },
+      "ks": { "maximumDeviation": 0.005, "unit": "fraction", "basis": "Half the source displayed 0.01 increment; display reproduction only." },
+      "adjustedEtMmDay": { "maximumDeviation": 0.05, "unit": "mm/day", "basis": "Half the source displayed 0.1 mm/day increment; display reproduction only." }
     },
     "candidateComparison": false
   }
