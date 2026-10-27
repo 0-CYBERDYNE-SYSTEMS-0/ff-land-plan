@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2 software-integration checkpoint; candidate comparisons not run",
+  "status": "environment-v2 and partial source-equation software checkpoint; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -23,7 +23,8 @@
     "rootZoneReferenceCoverage": "quality/beta/evidence/fao56-root-reference-coverage.json",
     "cropProductionReferenceCoverage": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json",
     "dynamicCanopyEngineFixture": "quality/beta/evidence/water-sa-2018-dynamic-canopy-engine-fixture.json",
-    "environmentV2TranspirationFixture": "quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json"
+    "environmentV2TranspirationFixture": "quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json",
+    "sourceEquationOnlyFixture": "BROCCOLI-OHAYOU-SPRING-CONTROL-SYNTHETIC-SOLAR-EQUATION-01"
   },
   "sources": [
     {
@@ -289,6 +290,19 @@
       },
       "licenseOrReuse": "Relicensed with permission under Creative Commons Attribution 4.0 International (CC BY 4.0), as stated in the document. Used as a method reference; no source code, crop parameters, or document text copied.",
       "sourceVersion": "WOFOST 7.2 system description, May 2020; editors A.J.W. de Wit, H.L. Boogaard, I. Supit and M. van den Berg"
+    },
+    {
+      "id": "OHISHI-2023-HORTJ-OHAYOU",
+      "citation": "Ohishi, M., Takahashi, M., Fukuda, M., & Sato, F. (2023). Developing a Growth Model to Predict Dry Matter Production in Broccoli (Brassica oleracea L. var. italica) ‘Ohayou’. Horticulture Journal, 92(1), 77–87. https://doi.org/10.2503/hortj.QH-022",
+      "url": "https://www.jstage.jst.go.jp/article/hortj/92/1/92_QH-022/_html/-char/en",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "PDF",
+        "sha256": "0a35ee61c09774e9ef1523909030f03f6fad25a9ae1134cb69f46c32032c745b",
+        "localPath": null
+      },
+      "licenseOrReuse": "The publisher page states © 2023 Japanese Society for Horticultural Science and All rights reserved; no open reuse license was identified. This manifest records derived parameter facts and a citation; it does not redistribute article text, figures, tables, or raw data.",
+      "sourceVersion": "2023 version of record, Horticulture Journal 92(1), pages 77–87; J-STAGE PDF retrieved 2026-10-27"
     }
   ],
   "evidenceRecords": [
@@ -1015,6 +1029,77 @@
       "sourceArtifactSha256": null,
       "sourceLicenseOrReuse": "Method reference only; parameter values, code, and document text are not copied.",
       "tolerance": "No numerical tolerance proposed; this is a structural method reference, not a source reproduction."
+    },
+    {
+      "id": "BROCCOLI-OHAYOU-SPRING-CONTROL-LIGHT-PARAMETERS-2023",
+      "sourceId": "OHISHI-2023-HORTJ-OHAYOU",
+      "classification": "source-derived model parameter estimates; not measured validation of FarmFriend",
+      "crop": {
+        "slug": "broccoli",
+        "catalogCropId": 19,
+        "cultivar": "Ohayou"
+      },
+      "environment": "Outdoor field at NARO Institute of Vegetable and Floriculture Science, Tsukuba, Japan; spring-control treatment at 60 cm row × 35 cm plant spacing (4,761 plants per 10a).",
+      "inputs": {
+        "interceptionCoefficientK": {
+          "value": 1.09,
+          "unit": "dimensionless",
+          "basis": "spring-control treatment; photon-sensor interception fitted against LAI"
+        },
+        "radiationUseEfficiency": {
+          "value": 1.16,
+          "unit": "g above-ground dry matter per MJ intercepted total solar radiation",
+          "reportedR2": 0.98,
+          "reported95PercentConfidenceInterval": [
+            1.04,
+            1.27
+          ]
+        },
+        "radiationMethod": "Daily total solar radiation multiplied by 1 − exp(−K × LAI) to obtain intercepted solar radiation; RUE is the slope of total above-ground dry weight against accumulated intercepted solar radiation."
+      },
+      "endpoint": "Daily total above-ground dry-matter increment equation component; no observed crop endpoint is asserted.",
+      "metric": "Above-ground dry-matter response to intercepted total solar radiation",
+      "expected": {
+        "interceptionCoefficientK": 1.09,
+        "radiationUseEfficiencyGPerMjInterceptedTotalSolar": 1.16,
+        "radiationUseEfficiencyR2": 0.98,
+        "radiationUseEfficiency95PercentConfidenceInterval": [
+          1.04,
+          1.27
+        ]
+      },
+      "sampleSize": "The source reports four plants sampled in spring 2019 and nine in spring 2021, with repeated within-season sampling; the spring-control regression is source-derived from those study observations. Raw per-date series are not included here.",
+      "status": "Partial source-derived light-equation parameters only. The software fixture uses synthetic LAI and solar forcing; no FarmFriend candidate comparison or measured accuracy claim.",
+      "missing": [
+        "Underlying per-date solar, interception, and biomass series",
+        "Numeric initial above-ground dry mass at the first post-transplant sample",
+        "A complete crop-specific thermal-base, upper-threshold, and maturity endpoint set",
+        "A compatible root-zone water and nutrient parameter set",
+        "A source-supported daily crop-stress response"
+      ],
+      "calibrationOrHoldout": "The paper’s parameter estimates derive from its own field dataset. This record is not an independent FarmFriend holdout; no candidate comparison was performed.",
+      "units": {
+        "interceptionCoefficientK": "dimensionless",
+        "radiationUseEfficiency": "g above-ground dry matter per MJ intercepted total solar radiation",
+        "dailyTotalSolarRadiation": "MJ total solar radiation m⁻² day⁻¹",
+        "leafAreaIndex": "m² leaf m⁻² ground",
+        "dailyDryMatterGain": "g above-ground dry matter m⁻² day⁻¹"
+      },
+      "startEvent": "Transplanting for the source crop model; this isolated equation fixture does not model establishment.",
+      "endEvent": "No crop endpoint is tested by the isolated daily equation fixture.",
+      "validDomain": "The reported spring-control Ohayou field treatment in the Kanto region of Japan at the stated plant density; no transfer to other cultivars, seasons, environments, or FarmFriend predictions is established.",
+      "sourceMethod": "Ohishi et al. (2023), equations and spring-control results: extinction coefficient from canopy photon-sensor interception versus LAI; RUE from regression of total above-ground dry matter against accumulated intercepted total solar radiation.",
+      "missingData": [
+        "Raw daily source weather and radiation",
+        "Raw per-date canopy interception and biomass observations",
+        "Numeric initial transplant dry mass",
+        "Complete thermal, root-zone, nutrient, stress, and lifecycle inputs"
+      ],
+      "sourceUrl": "https://www.jstage.jst.go.jp/article/hortj/92/1/92_QH-022/_html/-char/en",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "2023 version of record, Horticulture Journal 92(1), pages 77–87",
+      "sourceArtifactSha256": "0a35ee61c09774e9ef1523909030f03f6fad25a9ae1134cb69f46c32032c745b",
+      "sourceLicenseOrReuse": "No open reuse license identified; derived parameters are cited without reproducing source text, tables, figures, or raw data."
     }
   ],
   "fixtures": [
@@ -1097,6 +1182,59 @@
       "reproduction": "npx vitest run src/lib/sim/crop-model-v2.test.ts src/lib/sim/model-inputs.test.ts",
       "candidateComparison": false,
       "status": "software integration evidence only; not measured validation, external reference agreement, or prediction accuracy. Michelon thermal target is a parameter reference and bars full-model holdout claims from that source."
+    },
+    {
+      "id": "BROCCOLI-OHAYOU-SPRING-CONTROL-SYNTHETIC-SOLAR-EQUATION-01",
+      "classification": "synthetic equation-level software fixture using source-derived spring-control parameters",
+      "crop": {
+        "slug": "broccoli",
+        "catalogCropId": 19,
+        "cultivar": "Ohayou (study cultivar; not a complete selectable simulator profile)"
+      },
+      "environment": "Synthetic daily equation inputs only; not a reproduction of the field study or a weather replay.",
+      "sourceParameters": {
+        "interceptionCoefficientK": {
+          "value": 1.09,
+          "unit": "dimensionless",
+          "sourceEvidenceId": "BROCCOLI-OHAYOU-SPRING-CONTROL-LIGHT-PARAMETERS-2023"
+        },
+        "radiationUseEfficiency": {
+          "value": 1.16,
+          "unit": "g above-ground dry matter per MJ intercepted total solar radiation",
+          "sourceEvidenceId": "BROCCOLI-OHAYOU-SPRING-CONTROL-LIGHT-PARAMETERS-2023"
+        }
+      },
+      "parameterSetVersion": "ohayou-spring-control-light-equation-v1",
+      "syntheticInputs": {
+        "leafAreaIndexM2PerM2": 1.2,
+        "totalSolarRadiationMJPerM2Day": [
+          0,
+          2,
+          18
+        ],
+        "higherFixtureValue": "18 MJ m⁻² day⁻¹ is a higher synthetic input than 2; the source and fixture define no sufficient-light threshold.",
+        "thermalContext": "Not consumed or varied by this isolated equation helper; no thermal-state acceptance is claimed."
+      },
+      "expected": {
+        "interceptedFractionAtSyntheticLai": 0.7296397635024909,
+        "dailyDryMatterGainGPerM2Day": {
+          "zeroSolar": 0,
+          "lowSolar2MJ": 1.6927642513257788,
+          "higherSolar18MJ": 15.23487826193201
+        },
+        "unknownOrInvalidInputs": "Unavailable without a numeric result.",
+        "tolerance": "Equation-level arithmetic assertion to 12 decimal places; no candidate/reference-model comparison tolerance is set."
+      },
+      "missingInputs": [
+        "Engine and frozen-run/replay integration",
+        "Source measured initial canopy and dry-matter state",
+        "Daily total-solar weather series",
+        "Complete thermal and root-zone inputs",
+        "Fungal lifecycle model"
+      ],
+      "reproduction": "npx vitest run src/lib/sim/ohayou-production.test.ts",
+      "candidateComparison": false,
+      "status": "Equation-only software behavior. A-03 remains UNVERIFIED; this fixture does not establish a complete source-backed crop profile, measured validation, or prediction accuracy."
     }
   ],
   "coverageSummary": {
@@ -1108,9 +1246,9 @@
     "sourceBackedReferenceParameterSets": 2,
     "fao56Table22DirectCommonRootReferenceCrops": 19,
     "fao56Table22ExplicitlyUnmatchedBuiltInCrops": 31,
-    "sourceBackedCropProductionReferenceStudies": 1,
-    "cropSpecificProductionReferenceCrops": 4,
-    "reviewedSourceParameterTranscriptionSets": 1,
+    "sourceBackedCropProductionReferenceStudies": 2,
+    "cropSpecificProductionReferenceCrops": 5,
+    "reviewedSourceParameterTranscriptionSets": 2,
     "preregisteredSyntheticCanopyEquationFixtures": 2,
     "executedSyntheticCanopyEquationFixtures": 2,
     "preregisteredDynamicCanopyEngineFixtures": 1,
@@ -1120,6 +1258,7 @@
     "measuredValidationClaims": 0,
     "referenceAgreementClaims": 0,
     "executableSourceFixtures": 0,
+    "executableSourceEquationFixtures": 1,
     "overallAccuracyStatus": "UNVERIFIED"
   },
   "cropCoverage": [
@@ -1642,7 +1781,7 @@
         },
         "production": {
           "status": "UNVERIFIED",
-          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+          "parameterCoverage": "one partial source-derived Ohayou spring-control light-equation reference (K and total-solar RUE); no complete crop-specific production, thermal, establishment, or root-zone parameter set"
         },
         "rootZone": {
           "status": "UNVERIFIED",
