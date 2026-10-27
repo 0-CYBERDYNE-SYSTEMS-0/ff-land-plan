@@ -54,10 +54,12 @@
     "dailyRunoffMm": 0,
     "rootZoneWaterStressCoefficient": 1,
     "syntheticDailyEnvironment": {
+      "classification": "synthetic software-test forcing; not measured or source-weather data",
       "tMinC": 15,
       "tMaxC": 20,
       "meanTemperatureC": 17.5,
       "gddBase10C": 7.5,
+      "gddClassification": "synthetic value derived from the synthetic 17.5 °C daily mean",
       "naturalDliMolParM2": 18,
       "etoMm": 0,
       "precipitationMm": 0,
