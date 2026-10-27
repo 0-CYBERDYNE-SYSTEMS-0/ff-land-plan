@@ -2075,3 +2075,23 @@ snapshots changed, and no application implementation is claimed by this revision
   local-storage list path. It does not cover IndexedDB migration, server persistence, unsupported
   crop-trait handling, crop accuracy, human validation, or predictive validity. A-08 remains
   UNVERIFIED overall, 02A remains incomplete, and ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-08 Pages smoke timeout CI retry
+
+- Evidence-doc commit `fef336166c7576a50d79e8c0e308b0e7e98f838f` had PR CI run
+  [40551200448](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40551200448)
+  fail only on Pages Playwright: the scoped 120-second test-wide deadline expired during the
+  Seek-slider count=0 assertion. The trace recorded no count mismatch, and the final list
+  return/reload and summary assertions were not reached. S2 approved a scoped timeout increase;
+  S3 independently diagnosed the cumulative test deadline.
+- Timeout-only test commit `3ee5a684bb0f8e7dd0f8761cebf717f90ce4c9fc` raises only this test's budget
+  from 120 to 180 seconds; its assertions and other timeouts are unchanged. Local Pages smoke passed
+  2/2; `npm test` (45 files / 235 tests), typecheck, standard/demo/Pages builds, private-file scan,
+  evidence-manifest JSON parse, and `git diff --check` passed. PR CI run
+  [40552573422](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40552573422)
+  passed `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file
+  scan`, and `GitGuardian Security Checks` on that exact SHA.
+- This remains synthetic evidence for the missing frozen environment-input case through normal
+  local-storage listing. It does not establish IndexedDB migration, server persistence, unsupported
+  crop-trait handling, crop accuracy, human validation, or predictive validity. A-08 remains
+  UNVERIFIED, 02A remains incomplete, and ordinary new runs remain v1.
