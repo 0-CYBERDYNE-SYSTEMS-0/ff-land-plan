@@ -5,7 +5,7 @@
  * grounding blob shadow.
  */
 import * as THREE from 'three';
-import { PALETTE, mixColor, fill, fillDither, rng, type Voxel } from '@/creative/voxel';
+import { PALETTE, mixColor, fill, rng, type Voxel } from '@/creative/voxel';
 import { put, mirr, meshOf, savePoses } from './build';
 
 function rootOf(name: string, ...meshes: THREE.Object3D[]): THREE.Group {
@@ -123,32 +123,34 @@ export function buildWheelbarrow(): THREE.Group {
 
 export function buildHoe(): THREE.Group {
   const v: Voxel[] = [];
-  fillDither(v, -3, 0, -3, 3, 0, 2, PALETTE.soilLight, PALETTE.soil, 131);
-  put(v, -2, 0.5, 0, PALETTE.stone, 0.7); // embedded clod
-  put(v, 2, 0.55, 1, PALETTE.gravelDark, 0.55);
-  // shaft with sparse dark grain flecks — runs UP INTO the D-grip so handle
-  // and shaft are one welded piece
-  fill(v, 0, 1.2, 0, 0, 20.6, 0, PALETTE.wood);
+  // long wooden handle on a shallow diagonal: the top end rises to the upper left
+  // and the lower end runs into a short socket just above the blade
+  const top = [-18, 12, -4];
+  const socket = [2, 2, 0];
+  const n = 22;
   const rg = rng(137);
-  for (let y = 3; y <= 19; y += 3) if (rg() > 0.4) put(v, rg() > 0.5 ? 0.52 : -0.52, y + 0.4, 0, PALETTE.woodDark, 0.28);
-  // D-grip: posts rise welded from the shaft top, crossbar caps them
-  mirr((s) => {
-    put(v, s * 0.72, 21.0, 0, PALETTE.woodDark, 0.75);
-    put(v, s * 0.78, 21.62, 0, PALETTE.woodDark, 0.72);
-  });
-  put(v, 0, 22.2, 0, PALETTE.wood, 1.9);
-  // head: collar on the shaft → short steel arm → broad L-shaped blade plate
-  // hung vertical (face toward the viewer), dark cutting lip along the bottom
-  put(v, 0, 2.3, 0, PALETTE.ironDark, 1.35); // socket collar
-  for (const ax of [0.9, 1.9]) put(v, ax, 2.15, 0, PALETTE.metalDark, 1.05); // arm
-  for (let bx = 2.45; bx <= 6.1; bx += 0.9)
-    for (let by = 0.8; by <= 3.6; by += 0.95)
-      put(v, bx, by, 0, PALETTE.metal, 1.05); // blade plate, face-on to camera
-  for (let bx = 2.45; bx <= 6.1; bx += 0.9) put(v, bx, 0.58, 0, PALETTE.metalDark, 1.2); // cutting lip
-  // a second clod and a tuft of grass keep the mound lively
-  put(v, 2.4, 0.5, -1.5, PALETTE.gravel, 0.5);
-  put(v, -1.4, 0.55, -2.1, PALETTE.grassLight, 0.42);
-  put(v, 2.8, 0.62, 2.4, PALETTE.stem, 0.32);
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const x = Math.round(top[0] + (socket[0] - top[0]) * t);
+    const y = Math.round(top[1] + (socket[1] - top[1]) * t);
+    const z = Math.round(top[2] + (socket[2] - top[2]) * t);
+    // last two cells are the dark iron socket gripping the handle foot
+    if (i >= n - 1) put(v, x, y, z, PALETTE.ironDark);
+    else put(v, x, y, z, PALETTE.wood);
+    if (i < n - 1 && rg() > 0.7) put(v, x, y + 0.5, z, PALETTE.woodDark, 0.3);
+  }
+  // short neck drops from the socket onto the blade
+  put(v, 2, 1, 0, PALETTE.metalDark);
+  // flat rectangular blade lying across the handle at ~90 degrees: 3 wide along
+  // the handle, 9 long across it. Far column is the cutting edge (lit steel);
+  // the column nearest the handle is the dark back
+  for (let bx = 1; bx <= 3; bx++)
+    for (let bz = -4; bz <= 4; bz++) {
+      let c: number = PALETTE.metal;
+      if (bx === 3) c = mixColor(PALETTE.metal, PALETTE.white, 0.5);
+      else if (bx === 1) c = PALETTE.ironDark;
+      put(v, bx, 0, bz, c);
+    }
 
   return rootOf('hoe', meshOf(v));
 }
@@ -171,22 +173,22 @@ export function buildPitchfork(): THREE.Group {
   const rs = rng(151);
   for (let x = -3; x <= 3; x++)
     for (let z = -4; z <= 0; z++) if (rs() > 0.5) put(v, x, 1.8 + rs() * 0.3, z, PALETTE.mulch, 0.5);
-  // shaft welded up into the D-grip, base buried in the bale top
-  fill(v, 0, 2, -0.3, 0, 20.8, -0.3, PALETTE.wood);
+  // crossbar head on the bale face: a bar with a socket rising from its middle
+  for (let x = -2; x <= 2; x++) put(v, x, 8, 0, PALETTE.metalDark, 1.0);
+  put(v, 0, 9, 0, PALETTE.ironDark, 1.2); // socket collar
+  // shaft welded up into the D-grip, socket seated on the crossbar
+  fill(v, 0, 10, 0, 0, 20.8, 0, PALETTE.wood);
   mirr((s) => {
-    put(v, s * 0.72, 21.0, -0.3, PALETTE.woodDark, 0.75);
-    put(v, s * 0.78, 21.62, -0.3, PALETTE.woodDark, 0.72);
+    put(v, s * 0.72, 21.0, 0, PALETTE.woodDark, 0.75);
+    put(v, s * 0.78, 21.62, 0, PALETTE.woodDark, 0.72);
   });
-  put(v, 0, 22.2, -0.3, PALETTE.wood, 1.9);
-  // ferrule bridging shaft to the head; crossbar proud of the bale face with
-  // four solid tines driving DOWN toward the ground — stabbed-in-the-bale read
-  fill(v, -1, 3.2, -0.5, 1, 4.4, 0.7, PALETTE.metal);
-  put(v, -1.55, 4.85, 0.75, PALETTE.metalDark, 1.5); // crossbar left
-  put(v, 0, 4.85, 0.75, PALETTE.metalDark, 1.7); // crossbar mid
-  put(v, 1.55, 4.85, 0.75, PALETTE.metalDark, 1.5); // crossbar right
-  for (const tx of [-1.9, -0.65, 0.65, 1.9]) {
-    for (let ty = 4.45; ty >= 1.15; ty -= 0.55) put(v, tx, ty, 0.55, PALETTE.metalDark, 0.62);
-    put(v, tx, 0.62, 0.55, PALETTE.iron, 0.56);
+  put(v, 0, 22.2, 0, PALETTE.wood, 1.9);
+  // four separated tines dropping from the crossbar into the bale, each
+  // tapering to a point; wide dark gaps between them
+  for (const tx of [-2.1, -0.7, 0.7, 2.1]) {
+    for (let ty = 7.5; ty >= 1.5; ty -= 0.5) put(v, tx, ty, 0, PALETTE.metal, 0.55);
+    put(v, tx, 1.0, 0, PALETTE.metal, 0.4);
+    put(v, tx, 0.6, 0, PALETTE.iron, 0.25); // point
   }
 
   return rootOf('pitchfork', meshOf(v));

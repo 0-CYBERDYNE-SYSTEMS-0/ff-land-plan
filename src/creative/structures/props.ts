@@ -228,25 +228,41 @@ export function makeIrrigationLine(): THREE.Object3D {
   const rand = rng(4501);
   const solid: Voxel[] = [];
   const LEN = 29;
+  const EMIT = [4, 9, 14, 19, 24];
+  const puddle = mixColor(PALETTE.waterDeep, PALETTE.soilWet, 0.35);
+  // wet discs centred on each emitter, clipped to the 5-wide channel
+  const isPuddle = (x: number, z: number): boolean =>
+    EMIT.some((ex) => (x - ex) ** 2 + z * z <= 4.5);
 
-  // main black poly line
-  for (let x = 0; x <= LEN; x++)
-    solid.push({ x, y: 0.45, z: 0, s: 0.72, color: x % 7 === 3 ? PALETTE.charcoal : C.pipeBlack });
-  // start elbow rising (to a tap) + end cap
-  solid.push({ x: -0.2, y: 1.1, z: 0, s: 0.66, color: C.pipeBlack });
-  solid.push({ x: -0.2, y: 1.8, z: 0, s: 0.6, color: PALETTE.metalDark });
-  solid.push({ x: LEN + 0.5, y: 0.45, z: 0, s: 0.8, color: PALETTE.metalDark });
+  // shallow channel: dark wet floor between two raised soil berms
+  for (let x = -1; x <= LEN + 1; x++)
+    for (let z = -4; z <= 4; z++) {
+      if (Math.abs(z) >= 3) {
+        solid.push({ x, y: 0, z, color: rand() < 0.5 ? PALETTE.soilLight : PALETTE.soil });
+        solid.push({ x, y: 1, z, color: rand() < 0.5 ? PALETTE.soilLight : PALETTE.soil });
+      } else if (isPuddle(x, z)) {
+        solid.push({ x, y: 0, z, color: puddle });
+      } else {
+        solid.push({ x, y: 0, z, color: rand() < 0.5 ? PALETTE.soilDark : PALETTE.soilWet });
+      }
+    }
 
-  // emitters every 5 voxels: nub + wet spot below
-  for (let x = 3; x <= LEN - 2; x += 5) {
-    solid.push({ x, y: 0.95, z: 0, s: 0.42, color: PALETTE.black });
-    solid.push({ x, y: 0.12, z: 0.9, s: 0.95, color: PALETTE.soilWet });
-    if (rand() < 0.6) solid.push({ x: x + 0.6, y: 0.1, z: 1.5, s: 0.5, color: mixColor(PALETTE.soilWet, PALETTE.black, 0.3) });
+  // dark drip tube lying in the channel, faint ridge every 7 voxels
+  for (let x = 1; x <= LEN; x++)
+    solid.push({ x, y: 0.85, z: 0, s: 0.7, color: x % 7 === 3 ? PALETTE.charcoal : C.pipeBlack });
+  solid.push({ x: LEN + 1, y: 0.85, z: 0, s: 0.7, color: PALETTE.metalDark }); // end plug
+
+  // emitter stakes rising off the tube, dark cap on top (plan-view dots)
+  for (const ex of EMIT) {
+    solid.push({ x: ex, y: 1.45, z: 0, s: 0.45, color: PALETTE.black });
+    solid.push({ x: ex, y: 1.95, z: 0, s: 0.35, color: PALETTE.charcoal });
   }
-  // wire ground staples holding the line
-  for (const sx of [0, 8, 16, 24])
-    for (const dz of [-0.55, 0.55])
-      solid.push({ x: sx, y: 0.5, z: dz, s: 0.3, color: PALETTE.metalDark });
+
+  // valve end: elbow fitting, short riser, valve body with blue handle
+  solid.push({ x: 0, y: 0.85, z: 0, s: 0.9, color: PALETTE.copper });
+  for (const y of [1.55, 2.15]) solid.push({ x: 0, y, z: 0, s: 0.6, color: C.pipeBlack });
+  solid.push({ x: 0, y: 2.9, z: 0, s: 0.9, color: PALETTE.copper });
+  for (const x of [-1, 0, 1]) solid.push({ x, y: 3.6, z: 0, s: 0.45, color: PALETTE.berryBlue });
   return solidMesh(solid);
 }
 
