@@ -176,76 +176,25 @@
   ],
   "evidenceRecords": [
     {
-      "id": "THERMAL-OSU-TOMATO-FIRST-RIPE",
-      "sourceId": "OSU-EM9305-2021",
-      "classification": "parameter-reference / model-development",
-      "crop": {
-        "slug": "tomato",
-        "cultivar": "four named cultivars; source range only"
-      },
-      "environment": "Oregon Extension crop model domain; detailed per-run weather unavailable in retrieved source artifact",
-      "inputs": {
-        "baseC": 7.2,
-        "upperC": 33.3,
-        "sourceRangeFday": [
-          1844,
-          2010
-        ],
-        "convertedRangeCday": [
-          1024,
-          1117
-        ]
-      },
-      "endpoint": "first ripe harvest, four or more fruits showing ripe color",
-      "metric": "thermal sum",
-      "expected": "1024–1117 °C·day after source conversion",
-      "sampleSize": "four cultivar values",
-      "status": "parameter reference only; not an executable fixture; not independent validation",
-      "missing": [
-        "daily weather series",
-        "per-cultivar trial observations and errors"
-      ],
-      "calibrationOrHoldout": "development/reference; not holdout",
-      "units": {
-        "baseTemperature": "°C",
-        "upperTemperature": "°C",
-        "sourceThermalRange": "°F·day",
-        "convertedThermalRange": "°C·day"
-      },
-      "startEvent": "Transplant at 3–5 true leaves",
-      "endEvent": "First ripe harvest (four or more fruits show ripe color)",
-      "validDomain": "Named OSU Croptime tomato cultivar values and transplant method; regional use outside the source domain is unverified.",
-      "expectedMetricRange": {
-        "min": 1024,
-        "max": 1117,
-        "unit": "°C·day"
-      },
-      "sourceMethod": "EM 9305 Table 6; single sine with horizontal cutoff",
-      "missingData": [
-        "complete daily weather/input series",
-        "raw independent observations and variance",
-        "independent validation records"
-      ],
-      "sourceVersion": "EM 9305, January 2021 PDF",
-      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
-      "sourceRetrievedDate": "2026-10-27",
-      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
-      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
-    },
-    {
-      "id": "THERMAL-OSU-LETTUCE-TRANSPLANT-HARVEST",
+      "id": "LETTUCE-MICHELON-2020-EXP1-HS50",
       "sourceId": "MICHELON-2020-AGR-10-668",
-      "classification": "measured-field-observation / candidate-holdout",
+      "classification": "measured-field-observation / potential production holdout",
       "crop": {
         "slug": "lettuce",
-        "cultivar": "HS50"
+        "cultivar": "Green Wave"
       },
-      "environment": "Myanmar field experiment 1; DLI 17.0 mol m-2 day-1",
+      "environment": "Open-field experiment 1 at the Soil and Water Research Station, Yezin, Central Dry Zone, Myanmar; the paper reports mean DLI 17.0 mol PAR m⁻² day⁻¹ (Table 1), not a daily DLI series.",
       "inputs": {
         "transplantDate": "2018-12-28",
         "GDDbaseC": 4,
         "GDDsumCday": 662,
-        "irrigationTreatment": "HS50; reported seasonal water 65.2 mm"
+        "meanDliMolM2Day": 17,
+        "irrigationTreatment": {
+          "name": "HS50",
+          "basis": "50% of ETc estimated with Hargreaves–Samani",
+          "seasonalIrrigationMm": 65.2
+        },
+        "harvestDateOffsetDays": 31
       },
       "endpoint": "31 days after transplant; marketable harvest",
       "metric": "fresh and dry mass per plant; area yield",
@@ -254,17 +203,18 @@
         "dryMassGPerPlant": 14,
         "marketableYieldKgM2": 1.9
       },
-      "sampleSize": "three replicate plots; 12 harvested plants per plot (article method)",
-      "status": "measured observation; potential holdout, not executable until daily weather and plot inputs are available",
+      "sampleSize": "Three replicate plots; each experimental unit was a 5.4 m² plot with 72 plants. The per-plant measurement subsample size is not verified in the retained extraction.",
+      "status": "Measured observation; potential holdout only if no parameter is fitted to this record; not executable without daily inputs.",
       "missing": [
-        "daily weather/light series",
-        "complete soil/root-zone inputs",
+        "daily weather and temperature series",
+        "daily DLI series (only the reported experiment mean is available here)",
+        "complete soil/root-zone state and inputs",
         "raw replicate measurements and variance"
       ],
-      "calibrationOrHoldout": "candidate holdout; no fitting to this record permitted",
+      "calibrationOrHoldout": "Potential production holdout; do not fit parameters to this record.",
       "units": {
         "airTemperature": "°C",
-        "DLI": "mol PAR m⁻² day⁻¹",
+        "meanDLI": "mol PAR m⁻² day⁻¹",
         "seasonalIrrigation": "mm",
         "thermalSum": "°C·day",
         "plantFreshMass": "g/plant",
@@ -273,7 +223,7 @@
       },
       "startEvent": "Transplanting; source thermal accumulation begins at transplant",
       "endEvent": "Harvest 31 days after transplant in experiment 1",
-      "validDomain": "One field experiment in the Central Dry Zone of Myanmar (Yezin), cultivar HS50, experiment-1 weather/treatment; no generalization beyond these conditions.",
+      "validDomain": "Open-field experiment 1 in the Central Dry Zone of Myanmar at Yezin; cultivar Green Wave; 50% ETc Hargreaves–Samani irrigation treatment; no generalization beyond these conditions.",
       "expectedMetricRange": {
         "plantFreshMass": {
           "value": 146,
@@ -288,7 +238,7 @@
           "unit": "kg/m²"
         }
       },
-      "sourceMethod": "Published field study; GDD base 4 °C; HS50 irrigation treatment",
+      "sourceMethod": "Michelon et al. field-study experiment 1; GDD base 4 °C; reported mean DLI from Table 1; HS50 denotes 50% ETc irrigation, not a cultivar.",
       "missingData": [
         "daily weather/light time series",
         "complete soil/root-zone state and inputs",
@@ -364,162 +314,6 @@
       "sourceVersion": "1975 JASHS 100(3), pages 313–316; retrieved PDF begins at article page 313",
       "sourceArtifactSha256": "0bbe44864df88faedb9abb22877b237223c500368a6d25eadf4bacd018d0a8f6",
       "sourceLicenseOrReuse": "No open license identified in the article artifact; cite and retain only derived parameter values, with no text/code reproduction."
-    },
-    {
-      "id": "THERMAL-UCIPM-SWEET-CORN-FRESH-MARKET",
-      "sourceId": "UC-IPM-SWEET-CORN",
-      "classification": "published-method-reference",
-      "crop": {
-        "slug": "corn",
-        "cultivar": "fresh-market sweet corn model domain; cultivars not enumerated in the page"
-      },
-      "environment": "UC IPM phenology model domain",
-      "inputs": {
-        "baseC": 10,
-        "upperC": 30,
-        "totalCday": 855
-      },
-      "endpoint": "mature for fresh market",
-      "metric": "thermal sum",
-      "expected": "855 °C·day; source says its specific single-sine method is preferred",
-      "sampleSize": "not reported on page",
-      "status": "method reference only; no executable measured fixture",
-      "missing": [
-        "cultivar identities",
-        "daily weather",
-        "trial observations and error"
-      ],
-      "calibrationOrHoldout": "reference; not holdout",
-      "units": {
-        "baseTemperature": "°C",
-        "upperTemperature": "°C",
-        "sourceThermalSum": "°F·day",
-        "thermalSum": "°C·day"
-      },
-      "startEvent": "Planting (biofix)",
-      "endEvent": "Mature for fresh market",
-      "validDomain": "Western Oregon field-study model domain for sweet corn; the source advises local field testing before use elsewhere.",
-      "expectedMetricRange": {
-        "value": 855,
-        "unit": "°C·day"
-      },
-      "sourceMethod": "Source reports max–min; UC IPM recommends single sine and horizontal cutoff; keep these method details distinct.",
-      "missingData": [
-        "cultivar identities and field-level outcomes",
-        "daily weather",
-        "replicate/error data"
-      ],
-      "sourceUrl": "https://ipm.ucanr.edu/weather/phenology-models-description/sweet-corn/",
-      "sourceRetrievedDate": "2026-10-27",
-      "sourceVersion": "UC IPM page updated 2026-04; page cites Coop, Croft & Drapek (1993)",
-      "sourceArtifactSha256": "3fa493befb33dfa864b7f254a289acff440f407cd84f5aad5719d25ba6dd5e28",
-      "sourceLicenseOrReuse": "Page copyright/reuse terms apply; cite only the derived method and threshold; no page content copied."
-    },
-    {
-      "id": "THERMAL-PEA-GREEN-MATURITY",
-      "sourceId": "PEA-THERMAL-TIME-1998",
-      "classification": "literature-parameter-reference / transcription-unverified",
-      "crop": {
-        "slug": "pea",
-        "cultivar": "study-specific green pea; cultivar not transcribed"
-      },
-      "environment": "source study domain unavailable in retained artifact",
-      "inputs": {
-        "baseC": 2.9,
-        "sourceRangeCday": [
-          1370,
-          1450
-        ]
-      },
-      "endpoint": "tenderometer reading 130",
-      "metric": "thermal sum",
-      "expected": "1370–1450 °C·day as represented in existing table",
-      "sampleSize": "not verified",
-      "status": "citation-only; source artifact and exact transcription unverified; do not use as executable fixture",
-      "missing": [
-        "source artifact",
-        "cultivar details",
-        "weather series",
-        "replicate observations and errors"
-      ],
-      "calibrationOrHoldout": "reference only; not holdout",
-      "units": {
-        "baseTemperature": "°C",
-        "thermalSum": "°C·day",
-        "endpointReading": "tenderometer units"
-      },
-      "startEvent": "Sowing",
-      "endEvent": "Green-pea maturity at tenderometer reading 130",
-      "validDomain": "Unverified until original paper is retrieved and its environment/cultivar/thermal method are checked.",
-      "expectedMetricRange": {
-        "min": 1370,
-        "max": 1450,
-        "unit": "°C·day"
-      },
-      "sourceMethod": "Unverified citation/transcription represented by current thermal table; do not treat as an executable parameter.",
-      "missingData": [
-        "source artifact and exact table transcription",
-        "cultivar/environment",
-        "weather and thermal calculation method",
-        "replicate/error data"
-      ],
-      "sourceUrl": "https://doi.org/10.1016/S0378-4290(97)00097-X",
-      "sourceRetrievedDate": "2026-10-27",
-      "sourceVersion": "1998 Field Crops Research 56(3), pages 301–307; citation metadata only, artifact not acquired",
-      "sourceArtifactSha256": null,
-      "sourceLicenseOrReuse": "Citation metadata only in this inventory; source table was not retained as a local artifact and has not been independently transcribed."
-    },
-    {
-      "id": "THERMAL-OSU-PEPPER-FIRST-RIPE",
-      "sourceId": "OSU-EM9305-2021",
-      "classification": "parameter-reference / model-development data",
-      "crop": {
-        "slug": "pepper",
-        "cultivar": "four named sweet pepper cultivars; source range only"
-      },
-      "environment": "OSU Croptime source domain; most source data were collected in the Willamette Valley in 2013–2015.",
-      "inputs": {
-        "baseTemperatureC": 11.1,
-        "upperTemperatureC": 37.8,
-        "sourceThermalRangeFday": [
-          1682,
-          1998
-        ],
-        "convertedThermalRangeCday": [
-          934,
-          1110
-        ],
-        "method": "single sine with horizontal cutoff"
-      },
-      "units": {
-        "baseTemperature": "°C",
-        "upperTemperature": "°C",
-        "sourceThermalRange": "°F·day",
-        "convertedThermalRange": "°C·day"
-      },
-      "sourceMethod": "EM 9305 Table 5 sweet pepper; single sine with horizontal cutoff",
-      "startEvent": "Transplant at 4–7 true leaves",
-      "endEvent": "First ripe harvest (four or more fruits show ripe color)",
-      "metric": "thermal sum to the stated development endpoint",
-      "expectedMetricRange": {
-        "min": 934,
-        "max": 1110,
-        "unit": "°C·day"
-      },
-      "sampleSize": "four cultivar values",
-      "validDomain": "Named OSU Croptime crop/cultivar and transplant or direct-seed method; regional use outside the source domain is unverified.",
-      "status": "parameter reference only; not an executable fixture and not independent validation",
-      "missingData": [
-        "complete daily weather/input series",
-        "raw independent observations and variance",
-        "independent validation records"
-      ],
-      "calibrationOrHoldout": "model-development/reference; not holdout",
-      "sourceVersion": "EM 9305, January 2021 PDF",
-      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
-      "sourceRetrievedDate": "2026-10-27",
-      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
-      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
     },
     {
       "id": "THERMAL-OSU-BROCCOLI-FIRST-HARVEST",
@@ -626,6 +420,58 @@
       "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
     },
     {
+      "id": "THERMAL-OSU-PEPPER-FIRST-RIPE",
+      "sourceId": "OSU-EM9305-2021",
+      "classification": "parameter-reference / model-development data",
+      "crop": {
+        "slug": "pepper",
+        "cultivar": "four named sweet pepper cultivars; source range only"
+      },
+      "environment": "OSU Croptime source domain; most source data were collected in the Willamette Valley in 2013–2015.",
+      "inputs": {
+        "baseTemperatureC": 11.1,
+        "upperTemperatureC": 37.8,
+        "sourceThermalRangeFday": [
+          1682,
+          1998
+        ],
+        "convertedThermalRangeCday": [
+          934,
+          1110
+        ],
+        "method": "single sine with horizontal cutoff"
+      },
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalRange": "°F·day",
+        "convertedThermalRange": "°C·day"
+      },
+      "sourceMethod": "EM 9305 Table 5 sweet pepper; single sine with horizontal cutoff",
+      "startEvent": "Transplant at 4–7 true leaves",
+      "endEvent": "First ripe harvest (four or more fruits show ripe color)",
+      "metric": "thermal sum to the stated development endpoint",
+      "expectedMetricRange": {
+        "min": 934,
+        "max": 1110,
+        "unit": "°C·day"
+      },
+      "sampleSize": "four cultivar values",
+      "validDomain": "Named OSU Croptime crop/cultivar and transplant or direct-seed method; regional use outside the source domain is unverified.",
+      "status": "parameter reference only; not an executable fixture and not independent validation",
+      "missingData": [
+        "complete daily weather/input series",
+        "raw independent observations and variance",
+        "independent validation records"
+      ],
+      "calibrationOrHoldout": "model-development/reference; not holdout",
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    },
+    {
       "id": "THERMAL-OSU-SNAP-BEAN-HARVEST",
       "sourceId": "OSU-EM9305-2021",
       "classification": "parameter-reference / model-development data",
@@ -676,6 +522,167 @@
       "sourceRetrievedDate": "2026-10-27",
       "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
       "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    },
+    {
+      "id": "THERMAL-OSU-TOMATO-FIRST-RIPE",
+      "sourceId": "OSU-EM9305-2021",
+      "classification": "parameter-reference / model-development",
+      "crop": {
+        "slug": "tomato",
+        "cultivar": "four named cultivars; source range only"
+      },
+      "environment": "Oregon Extension crop model domain; detailed per-run weather unavailable in retrieved source artifact",
+      "inputs": {
+        "baseC": 7.2,
+        "upperC": 33.3,
+        "sourceRangeFday": [
+          1844,
+          2010
+        ],
+        "convertedRangeCday": [
+          1024,
+          1117
+        ]
+      },
+      "endpoint": "first ripe harvest, four or more fruits showing ripe color",
+      "metric": "thermal sum",
+      "expected": "1024–1117 °C·day after source conversion",
+      "sampleSize": "four cultivar values",
+      "status": "parameter reference only; not an executable fixture; not independent validation",
+      "missing": [
+        "daily weather series",
+        "per-cultivar trial observations and errors"
+      ],
+      "calibrationOrHoldout": "development/reference; not holdout",
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalRange": "°F·day",
+        "convertedThermalRange": "°C·day"
+      },
+      "startEvent": "Transplant at 3–5 true leaves",
+      "endEvent": "First ripe harvest (four or more fruits show ripe color)",
+      "validDomain": "Named OSU Croptime tomato cultivar values and transplant method; regional use outside the source domain is unverified.",
+      "expectedMetricRange": {
+        "min": 1024,
+        "max": 1117,
+        "unit": "°C·day"
+      },
+      "sourceMethod": "EM 9305 Table 6; single sine with horizontal cutoff",
+      "missingData": [
+        "complete daily weather/input series",
+        "raw independent observations and variance",
+        "independent validation records"
+      ],
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    },
+    {
+      "id": "THERMAL-PEA-GREEN-MATURITY",
+      "sourceId": "PEA-THERMAL-TIME-1998",
+      "classification": "literature-parameter-reference / transcription-unverified",
+      "crop": {
+        "slug": "pea",
+        "cultivar": "study-specific green pea; cultivar not transcribed"
+      },
+      "environment": "source study domain unavailable in retained artifact",
+      "inputs": {
+        "baseC": 2.9,
+        "sourceRangeCday": [
+          1370,
+          1450
+        ]
+      },
+      "endpoint": "tenderometer reading 130",
+      "metric": "thermal sum",
+      "expected": "1370–1450 °C·day as represented in existing table",
+      "sampleSize": "not verified",
+      "status": "citation-only; source artifact and exact transcription unverified; do not use as executable fixture",
+      "missing": [
+        "source artifact",
+        "cultivar details",
+        "weather series",
+        "replicate observations and errors"
+      ],
+      "calibrationOrHoldout": "reference only; not holdout",
+      "units": {
+        "baseTemperature": "°C",
+        "thermalSum": "°C·day",
+        "endpointReading": "tenderometer units"
+      },
+      "startEvent": "Sowing",
+      "endEvent": "Green-pea maturity at tenderometer reading 130",
+      "validDomain": "Unverified until original paper is retrieved and its environment/cultivar/thermal method are checked.",
+      "expectedMetricRange": {
+        "min": 1370,
+        "max": 1450,
+        "unit": "°C·day"
+      },
+      "sourceMethod": "Unverified citation/transcription represented by current thermal table; do not treat as an executable parameter.",
+      "missingData": [
+        "source artifact and exact table transcription",
+        "cultivar/environment",
+        "weather and thermal calculation method",
+        "replicate/error data"
+      ],
+      "sourceUrl": "https://doi.org/10.1016/S0378-4290(97)00097-X",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "1998 Field Crops Research 56(3), pages 301–307; citation metadata only, artifact not acquired",
+      "sourceArtifactSha256": null,
+      "sourceLicenseOrReuse": "Citation metadata only in this inventory; source table was not retained as a local artifact and has not been independently transcribed."
+    },
+    {
+      "id": "THERMAL-UCIPM-SWEET-CORN-FRESH-MARKET",
+      "sourceId": "UC-IPM-SWEET-CORN",
+      "classification": "published-method-reference",
+      "crop": {
+        "slug": "corn",
+        "cultivar": "fresh-market sweet corn model domain; cultivars not enumerated in the page"
+      },
+      "environment": "UC IPM phenology model domain",
+      "inputs": {
+        "baseC": 10,
+        "upperC": 30,
+        "totalCday": 855
+      },
+      "endpoint": "mature for fresh market",
+      "metric": "thermal sum",
+      "expected": "855 °C·day; source says its specific single-sine method is preferred",
+      "sampleSize": "not reported on page",
+      "status": "method reference only; no executable measured fixture",
+      "missing": [
+        "cultivar identities",
+        "daily weather",
+        "trial observations and error"
+      ],
+      "calibrationOrHoldout": "reference; not holdout",
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalSum": "°F·day",
+        "thermalSum": "°C·day"
+      },
+      "startEvent": "Planting (biofix)",
+      "endEvent": "Mature for fresh market",
+      "validDomain": "Western Oregon field-study model domain for sweet corn; the source advises local field testing before use elsewhere.",
+      "expectedMetricRange": {
+        "value": 855,
+        "unit": "°C·day"
+      },
+      "sourceMethod": "Source reports max–min; UC IPM recommends single sine and horizontal cutoff; keep these method details distinct.",
+      "missingData": [
+        "cultivar identities and field-level outcomes",
+        "daily weather",
+        "replicate/error data"
+      ],
+      "sourceUrl": "https://ipm.ucanr.edu/weather/phenology-models-description/sweet-corn/",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "UC IPM page updated 2026-04; page cites Coop, Croft & Drapek (1993)",
+      "sourceArtifactSha256": "3fa493befb33dfa864b7f254a289acff440f407cd84f5aad5719d25ba6dd5e28",
+      "sourceLicenseOrReuse": "Page copyright/reuse terms apply; cite only the derived method and threshold; no page content copied."
     }
   ],
   "fixtures": [],
@@ -735,7 +742,7 @@
         "thermal": {
           "status": "literature-reference-only",
           "sourceEvidence": [
-            "THERMAL-OSU-LETTUCE-TRANSPLANT-HARVEST"
+            "LETTUCE-MICHELON-2020-EXP1-HS50"
           ]
         },
         "production": {
@@ -2063,7 +2070,7 @@
   ],
   "toleranceReview": {
     "reviewedBy": "independent integration validator",
-    "status": "approved with stated conditions; no candidate comparison authorized by approval alone",
+    "status": "existing numerical and plant-mass checks approved with stated conditions; marketable-area-yield display tolerance awaits independent review; no candidate comparison authorized yet",
     "checks": [
       {
         "id": "supported-frozen-replay",
@@ -2118,6 +2125,12 @@
         "tolerance": "none universal",
         "status": "source-specific threshold pending",
         "condition": "lock and independently review before any comparison; incomplete input record remains UNVERIFIED"
+      },
+      {
+        "id": "lettuce-marketable-area-yield-rounding",
+        "tolerance": "±0.005 kg/m²",
+        "status": "pending-independent-review",
+        "basis": "half of the article narrative display increment (1.90 kg/m², two decimal places); table rounding only, not predictive accuracy"
       }
     ]
   },
