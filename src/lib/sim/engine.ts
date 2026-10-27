@@ -23,9 +23,11 @@ import type { Observation } from '@/types';
 import type {
   CellState,
   CellStress,
+  CropEstablishmentInput,
   DailyEnvironment,
   DayStats,
   FrozenCropModelParametersV2,
+  FrozenCropModelParametersV3,
   Intervention,
   RunConfig,
   RunSummary,
@@ -41,6 +43,9 @@ import {
   waterStressFromMoisture,
 } from './soil-water';
 import {
+  DEAD_CHRONIC_DAYS,
+  DEAD_CHRONIC_STRESS,
+  DEAD_FROST_COLD,
   STRESS_ONSET,
   STRESS_RELIEF,
   antagonistStressAdd,
@@ -120,14 +125,25 @@ function displayCell(key: string): string {
   return parseTargetCellKey(key).localCellKey;
 }
 
+function isDryMatterModel(config: RunConfig): boolean {
+  return config.cropModelVersion === 'crop-model-v2' || config.cropModelVersion === 'crop-model-v3';
+}
+
+function isEstablishmentModel(config: RunConfig): boolean {
+  return config.cropModelVersion === 'crop-model-v3';
+}
+
 function initialCell(
   cropId: number,
   plantedAtDay: number,
   soil: SimRunCtx['soil'],
   target?: GrowingTargetRef,
   carry?: SoilCarry,
-  modelParameters?: FrozenCropModelParametersV2,
+  modelParameters?: FrozenCropModelParametersV2 | FrozenCropModelParametersV3,
   startEvent?: CropStartEvent,
+  establishment?: CropEstablishmentInput,
+  physiologyStartDay?: number,
+  establishmentModel = false,
 ): CellState {
   const rootZone = modelParameters?.rootZone;
   const awc = soil?.awcMmPerCm;
@@ -139,6 +155,10 @@ function initialCell(
     && typeof awc === 'number' && Number.isFinite(awc) && awc > 0
     ? awc * initialRootDepthCm * rootZone.initialStorageFraction
     : undefined;
+  const establishmentApplied = establishmentModel && physiologyStartDay === 0;
+  const initialDryMatter = modelParameters && 'initialDryMatterGPerM2' in modelParameters.production
+    ? modelParameters.production.initialDryMatterGPerM2 ?? 0
+    : 0;
   return {
     cropId,
     plantedAtDay,
@@ -147,9 +167,22 @@ function initialCell(
     nitrogenKgHa: initialNitrogenKgHa(carry?.organicMatterPct ?? soil?.organicMatterPct, carry?.nPoolKgHa),
     gddAccumC: 0,
     biomassFrac: 0,
-    ...(modelParameters ? { dryMatterGPerM2: modelParameters.production.initialDryMatterGPerM2 ?? 0 } : {}),
+    ...(modelParameters ? {
+      dryMatterGPerM2: establishmentModel
+        ? establishmentApplied ? establishment?.initialAboveGroundDryMatterGPerM2 ?? 0 : 0
+        : initialDryMatter,
+    } : {}),
     ...(rootZoneWaterMm !== undefined ? { rootZoneWaterMm } : {}),
     ...(startEvent ? { startEvent } : {}),
+    ...(establishmentModel && physiologyStartDay !== undefined
+      ? {
+          physiologyStartDay,
+          establishmentDryMatterGPerM2: establishment?.initialAboveGroundDryMatterGPerM2 ?? 0,
+          establishmentApplied,
+          sourceThermalCdays: 0,
+          stageEstimateAvailable: false,
+        }
+      : {}),
     ...(rootZone?.rootDevelopment ? {
       rootThermalCdays: 0,
       rootZoneDepthCm: rootZone.rootDevelopment.initialRootDepthCm,
@@ -165,14 +198,20 @@ function initialCell(
   };
 }
 
-function v2ParametersFor(config: RunConfig, cropId: number): FrozenCropModelParametersV2 | undefined {
-  return config.modelInputs?.model === 'run-inputs-v2'
+function cropModelParametersFor(config: RunConfig, cropId: number): FrozenCropModelParametersV2 | FrozenCropModelParametersV3 | undefined {
+  return config.modelInputs?.model === 'run-inputs-v2' || config.modelInputs?.model === 'run-inputs-v3'
     ? config.modelInputs.cropParameters.find((parameter) => parameter.cropId === cropId)
     : undefined;
 }
 
+function establishmentForCell(config: RunConfig, key: string): CropEstablishmentInput | undefined {
+  return config.modelInputs?.model === 'run-inputs-v3'
+    ? config.modelInputs.establishmentByCell[key]
+    : undefined;
+}
+
 function v2HarvestDryMatterKg(cell: CellState, config: RunConfig): number {
-  const harvestIndex = v2ParametersFor(config, cell.cropId)?.production.harvestIndex ?? 0;
+  const harvestIndex = cropModelParametersFor(config, cell.cropId)?.production.harvestIndex ?? 0;
   const cellM = Number.isFinite(config.basePlan.cellM) && config.basePlan.cellM > 0 ? config.basePlan.cellM : 0.25;
   return (cell.dryMatterGPerM2 ?? 0) * cellM * cellM * harvestIndex / 1000;
 }
@@ -256,14 +295,18 @@ function climateInputsFor(
   let transpirationKgDay = 0;
   let leafAreaM2 = 0;
   for (const cell of Object.values(cells)) {
-    if (config.cropModelVersion === 'crop-model-v2'
-      && (state.dayIndex < cell.plantedAtDay || cell.biomassFrac >= 1 || cell.harvested)) continue;
+    if (isDryMatterModel(config)
+      && (state.dayIndex < cell.plantedAtDay
+        || (isEstablishmentModel(config) && state.dayIndex < (cell.physiologyStartDay ?? cell.plantedAtDay))
+        || cell.biomassFrac >= 1 || cell.harvested || (isEstablishmentModel(config) && cell.dead))) continue;
     const crop = crops.get(cell.cropId);
     if (!crop) continue;
-    if (config.cropModelVersion === 'crop-model-v2') {
-      const parameters = v2ParametersFor(config, cell.cropId);
+    if (isDryMatterModel(config)) {
+      const parameters = cropModelParametersFor(config, cell.cropId);
       if (!parameters) continue;
-      const progress = Math.max(0, Math.min(1, cell.biomassFrac));
+      const progress = isEstablishmentModel(config)
+        ? cell.establishmentApplied ? 1 : 0
+        : Math.max(0, Math.min(1, cell.biomassFrac));
       const interception = parameters.production.interceptedParFraction ?? 0;
       const cropCoefficient = parameters.rootZone.cropCoefficient ?? 0;
       // v2 uses its frozen FAO-56 crop coefficient for climate water flux.
@@ -329,7 +372,7 @@ function targetDliForCell(
   outdoor: DailyEnvironment,
 ): number | undefined {
   const environment = config.environment;
-  if (!environment || (config.climateModel !== 'environment-v1' && config.cropModelVersion !== 'crop-model-v2')) return undefined;
+  if (!environment || (config.climateModel !== 'environment-v1' && !isDryMatterModel(config))) return undefined;
   const parsed = parseTargetCellKey(key);
   const target = parsed.target;
   const archetype = archetypes[environment.archetype];
@@ -373,12 +416,15 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
   const plantedAt = config.basePlan.plantedAt ?? {};
   const cropMap = cropMapOf(config, ctx);
   const soil = soilFor(config, ctx);
-  const parametersFor = (cropId: number) => v2ParametersFor(config, cropId);
+  const parametersFor = (cropId: number) => cropModelParametersFor(config, cropId);
   const cropGet = (id: number) => cropMap.get(id);
   const cells: Record<string, CellState> = {};
   for (const key of Object.keys(planting)) {
     const iso = plantedAt[key];
     const offset = iso !== undefined ? isoDayNumber(iso) - start : 0;
+    const cellKey = targetCellKey(FLOOR_TARGET, key);
+    const event = isDryMatterModel(config) ? config.cropStartEvents?.[cellKey] : undefined;
+    const establishment = establishmentForCell(config, cellKey);
     cells[key] = initialCell(
       planting[key],
       Math.max(0, offset),
@@ -386,9 +432,10 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
       FLOOR_TARGET,
       carryForCell(config, ctx, FLOOR_TARGET, key),
       parametersFor(planting[key]),
-      config.cropModelVersion === 'crop-model-v2'
-        ? config.cropStartEvents?.[targetCellKey(FLOOR_TARGET, key)]
-        : undefined,
+      event,
+      establishment,
+      establishment ? isoDayNumber(establishment.establishedAtDate) - start : undefined,
+      isEstablishmentModel(config),
     );
   }
   for (const targetPlan of Object.values(config.basePlan.targets ?? {})) {
@@ -400,16 +447,20 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
     for (const key of Object.keys(targetPlan.planting)) {
       const iso = targetPlan.plantedAt?.[key];
       const offset = iso !== undefined ? isoDayNumber(iso) - start : 0;
-      cells[targetCellKey(target, key)] = initialCell(
+      const cellKey = targetCellKey(target, key);
+      const event = isDryMatterModel(config) ? config.cropStartEvents?.[cellKey] : undefined;
+      const establishment = establishmentForCell(config, cellKey);
+      cells[cellKey] = initialCell(
         targetPlan.planting[key]!,
         Math.max(0, offset),
         soil,
         target,
         carryForCell(config, ctx, target, key),
         parametersFor(targetPlan.planting[key]!),
-        config.cropModelVersion === 'crop-model-v2'
-          ? config.cropStartEvents?.[targetCellKey(target, key)]
-          : undefined,
+        event,
+        establishment,
+        establishment ? isoDayNumber(establishment.establishedAtDate) - start : undefined,
+        isEstablishmentModel(config),
       );
     }
   }
@@ -515,6 +566,12 @@ function sameCell(a: CellState, b: CellState): boolean {
       a.rootZoneResidualAccumulatedMm === b.rootZoneResidualAccumulatedMm &&
       a.rootZoneResidualMaxAbsMm === b.rootZoneResidualMaxAbsMm &&
       a.rootZoneReplantDrainageMm === b.rootZoneReplantDrainageMm &&
+      a.physiologyStartDay === b.physiologyStartDay &&
+      a.establishmentDryMatterGPerM2 === b.establishmentDryMatterGPerM2 &&
+      a.establishmentApplied === b.establishmentApplied &&
+      a.sourceThermalCdays === b.sourceThermalCdays &&
+      a.stageEstimateAvailable === b.stageEstimateAvailable &&
+      a.dead === b.dead &&
       a.stage === b.stage &&
       a.floweringFrac === b.floweringFrac &&
       a.pestPressure === b.pestPressure &&
@@ -554,9 +611,9 @@ export function stepDay(
   ctx: SimRunCtx = {},
   observations: readonly Observation[] = [],
 ): { state: SimState; events: SimEvent[]; dayStats: DayStats; effectiveEnv: DailyEnvironment } {
-  if (config.cropModelVersion === 'crop-model-v2') {
+  if (isDryMatterModel(config)) {
     const support = inspectRunModelSupport(config, false);
-    if (!support.canReplay) throw new Error(support.reasons.join(' ') || 'This v2 run has unsupported frozen model inputs.');
+    if (!support.canReplay) throw new Error(support.reasons.join(' ') || 'This dry-matter run has unsupported frozen model inputs.');
   }
   const dayIndex = state.dayIndex;
   const date = env.date;
@@ -564,7 +621,8 @@ export function stepDay(
   const assimilation = assimilateObservations(state, config, observations, date, [...crops.values()]);
   state = assimilation.state;
   const soil = soilFor(config, ctx);
-  const isV2 = config.cropModelVersion === 'crop-model-v2';
+  const isV2 = isDryMatterModel(config);
+  const isV3 = isEstablishmentModel(config);
   const modelQualificationReasons = new Set(state.modelQualificationReasons ?? []);
   const params = soilWaterParams(soil?.awcMmPerCm);
   const capacity = bucketCapacityMm(params);
@@ -631,7 +689,11 @@ export function stepDay(
         if (existing) updateHarvestGroup(existing.cropId, cellKey, -1);
         ownCells();
         const target = iv.target ?? FLOOR_TARGET;
-        const nextParameters = v2ParametersFor(config, iv.cropId);
+        const nextParameters = cropModelParametersFor(config, iv.cropId);
+        const establishment = isV3 ? iv.establishment : undefined;
+        const physiologyStartDay = establishment
+          ? isoDayNumber(establishment.establishedAtDate) - isoDayNumber(config.startDate)
+          : undefined;
         let nextCell = initialCell(
           iv.cropId,
           dayIndex,
@@ -639,11 +701,14 @@ export function stepDay(
           target,
           carryForCell(config, ctx, target, iv.cell),
           nextParameters,
-          config.cropModelVersion === 'crop-model-v2' ? iv.startEvent : undefined,
+          isV2 ? iv.startEvent : undefined,
+          establishment,
+          physiologyStartDay,
+          isV3,
         );
         if (isV2 && existing?.rootZoneWaterMm !== undefined && nextParameters) {
           const awc = soil?.awcMmPerCm;
-          const previousRoot = v2ParametersFor(config, existing.cropId)?.rootZone;
+          const previousRoot = cropModelParametersFor(config, existing.cropId)?.rootZone;
           const previousDepthCm = existing.rootZoneDepthCm
             ?? previousRoot?.rootDevelopment?.initialRootDepthCm
             ?? previousRoot?.effectiveRootDepthCm;
@@ -696,13 +761,13 @@ export function stepDay(
         // 'harvest-too-early' event, no payout.
         const cellKey = targetCellKey(iv.target ?? FLOOR_TARGET, iv.cell);
         const c = cells[cellKey];
-        if (c && !c.harvested) {
+        if (c && !c.harvested && (!isV3 || (c.establishmentApplied && !c.dead))) {
           const crop = crops.get(c.cropId);
           const name = crop?.name ?? `crop ${c.cropId}`;
-          if (c.biomassFrac >= MIN_MANUAL_HARVEST_BIOMASS) {
+          if (c.biomassFrac >= MIN_MANUAL_HARVEST_BIOMASS && (!isV3 || c.establishmentApplied)) {
             const seasonMean =
               (c.stressDaysCount ?? 0) > 0 ? (c.stressSum ?? 0) / c.stressDaysCount! : meanStress(c.stress);
-            const kg = config.cropModelVersion === 'crop-model-v2'
+            const kg = isV2
               ? v2HarvestDryMatterKg(c, config)
               : (crop?.yieldKgPerPlant ?? 0) *
                 plantsPerCell(c.cropId, cellKey) *
@@ -717,7 +782,7 @@ export function stepDay(
               cell: cellKey,
               ...eventTarget(cellKey),
               cropId: c.cropId,
-              message: `Harvested ${name}${config.cropModelVersion === 'crop-model-v2' ? ' (dry matter)' : ''} at ${displayCell(cellKey)}`,
+              message: `Harvested ${name}${isV2 ? ' (dry matter)' : ''} at ${displayCell(cellKey)}`,
               data: { yieldKg: kg },
             });
           } else {
@@ -887,14 +952,17 @@ export function stepDay(
     const prev = cells[key]!;
     const crop = crops.get(prev.cropId);
     const inGround = crop !== undefined && dayIndex >= prev.plantedAtDay;
-    const growing = inGround && (!isV2 || (prev.biomassFrac < 1 && !prev.harvested));
+    const establishmentDue = isV3 && inGround && !prev.establishmentApplied
+      && dayIndex >= (prev.physiologyStartDay ?? Number.POSITIVE_INFINITY);
+    const established = inGround && (!isV3 || ((prev.establishmentApplied || establishmentDue) && !prev.dead));
+    const growing = established && (!isV2 || (prev.biomassFrac < 1 && !prev.harvested));
     const hydro = hydroCellsForRun(config, key);
     const target = parseTargetCellKey(key).target;
     const carry = hydro.required ? undefined : carryForTarget(config, ctx, target);
     const hydroAvailable = hydro.required && hydro.covered
       && ((waterStoreL ?? 0) > 0 || waterSuppliedToday.has(key));
     const kc = kcForBiomass(prev.biomassFrac);
-    const modelParameters = isV2 ? v2ParametersFor(config, prev.cropId) : undefined;
+    const modelParameters = isV2 ? cropModelParametersFor(config, prev.cropId) : undefined;
     let rootZoneWaterMm = prev.rootZoneWaterMm;
     let rootThermalCdays = prev.rootThermalCdays;
     let rootZoneDepthCm = prev.rootZoneDepthCm;
@@ -977,11 +1045,18 @@ export function stepDay(
     let gddAccumC = prev.gddAccumC;
     let biomassFrac = prev.biomassFrac;
     let dryMatterGPerM2 = prev.dryMatterGPerM2;
+    let establishmentApplied = prev.establishmentApplied;
+    let stageEstimateAvailable = prev.stageEstimateAvailable;
+    if (establishmentDue) {
+      dryMatterGPerM2 = prev.establishmentDryMatterGPerM2 ?? 0;
+      establishmentApplied = true;
+    }
     let stage = prev.stage;
     let floweringFrac = prev.floweringFrac;
     let heat = 0;
     let cold = 0;
     let frost = false;
+    let diedFromFrost = false;
     let pestPressure = prev.pestPressure;
     let light: number | undefined;
 
@@ -1016,6 +1091,20 @@ export function stepDay(
       nitrogenKgHa = r2(nitrogenKgHa * (1 - N_LEACH_FRACTION));
     }
 
+    let sourceThermalCdays = prev.sourceThermalCdays;
+    let sourceThermalToday: number | null | undefined;
+    if (isV3 && inGround && !prev.dead && prev.biomassFrac < 1 && modelParameters?.thermal) {
+      sourceThermalToday = dailyThermalUnits(env2.tMinC, env2.tMaxC, modelParameters.thermal);
+      if (sourceThermalToday === null) {
+        modelQualificationReasons.add(dailyModelQualification(prev.cropId, 'Frozen source-event thermal method could not be evaluated.'));
+      } else {
+        sourceThermalCdays = Math.min(
+          modelParameters.thermal.gddToMaturityCdays[1],
+          (prev.sourceThermalCdays ?? 0) + sourceThermalToday,
+        );
+      }
+    }
+
     // Growth only once the crop is actually in the ground (plantedAtDay);
     // water dynamics run from the day the cell exists. Nitrogen is now a
     // real term in the stress max; neighbors bend rate (companions) and
@@ -1027,6 +1116,7 @@ export function stepDay(
       heat = th.heat;
       cold = th.cold;
       frost = th.frost;
+      diedFromFrost = isV3 && cold >= DEAD_FROST_COLD;
       if (climateResult.climate) {
         light = lightStressFromDli(crop, targetDliForCell(key, config, env));
       }
@@ -1036,9 +1126,26 @@ export function stepDay(
         Math.max(water, heat, cold, nitrogen, light ?? 0) + antagonistStressAdd(nb),
       );
       if (isV2 && modelParameters?.thermal) {
-        const dailyThermal = dailyThermalUnits(env2.tMinC, env2.tMaxC, modelParameters.thermal);
+        const dailyThermal = isV3
+          ? sourceThermalToday ?? null
+          : dailyThermalUnits(env2.tMinC, env2.tMaxC, modelParameters.thermal);
         if (dailyThermal === null) {
           modelQualificationReasons.add(dailyModelQualification(prev.cropId, 'Source thermal method could not be evaluated.'));
+        } else if (isV3) {
+          // The source-event thermal clock determines the source maturity
+          // endpoint. This second accumulator begins only at observed
+          // establishment and is not mapped to intermediate crop stages.
+          gddAccumC = r2(prev.gddAccumC + dailyThermal);
+          const maturityTarget = modelParameters.thermal.gddToMaturityCdays[1];
+          if (sourceThermalCdays !== undefined && sourceThermalCdays >= maturityTarget) {
+            biomassFrac = 1;
+            stage = 0;
+            stageEstimateAvailable = false;
+          } else {
+            biomassFrac = 0;
+            stage = 0;
+            stageEstimateAvailable = false;
+          }
         } else {
           gddAccumC = Math.min(
             modelParameters.thermal.gddToMaturityCdays[1],
@@ -1063,15 +1170,17 @@ export function stepDay(
             'Known supplemental DLI is used as a lower bound because natural DLI is unknown.',
           ));
         }
-        if (prev.biomassFrac < 1 && !prev.harvested) {
+        if (prev.biomassFrac < 1 && !prev.harvested && !diedFromFrost) {
           const production = dailyDryMatterProduction({
             dliMolParM2: dli,
             interceptedParFraction: modelParameters.production.interceptedParFraction,
             rueGPerMjInterceptedPar: modelParameters.production.rueGPerMjInterceptedPar,
-            stressFactor: Math.max(0, 1 - water),
+            stressFactor: Math.max(0, 1 - (isV3
+              ? Math.max(maxStress, Math.min(1, pestPressure * 0.8))
+              : water)),
           });
           if (production.status === 'supported') {
-            dryMatterGPerM2 = (prev.dryMatterGPerM2 ?? 0) + production.dryMatterGainGM2;
+            dryMatterGPerM2 = (dryMatterGPerM2 ?? 0) + production.dryMatterGainGM2;
           } else {
             modelQualificationReasons.add(dailyModelQualification(prev.cropId, production.reason));
           }
@@ -1115,11 +1224,16 @@ export function stepDay(
     }
     const seasonMeanStress = stressDaysCount > 0 ? stressSum / stressDaysCount : 0;
 
+    const v3MortalityStress = Math.max(water, heat, cold, nitrogen, (light ?? 0), pestPressure * 0.8);
+    const dead = isV3
+      ? !!prev.dead || diedFromFrost || (stressDaysCount >= DEAD_CHRONIC_DAYS && v3MortalityStress >= DEAD_CHRONIC_STRESS)
+      : prev.dead;
+
     // Auto-harvest: biomass crossing 1.0 schedules payout HARVEST_GRACE_DAYS
     // later; the crop keeps standing, `harvested` keeps yield counting once.
     let readyAtDay = prev.readyAtDay;
     let harvested = prev.harvested;
-    if (config.autoHarvest !== false && !harvested) {
+    if (config.autoHarvest !== false && !harvested && !dead) {
       if (readyAtDay === undefined && prev.biomassFrac < 1 && biomassFrac >= 1) {
         readyAtDay = isV2 ? dayIndex : dayIndex + HARVEST_GRACE_DAYS;
       }
@@ -1154,6 +1268,14 @@ export function stepDay(
       ...(dryMatterGPerM2 !== undefined ? { dryMatterGPerM2 } : {}),
       ...(rootZoneWaterMm !== undefined ? { rootZoneWaterMm } : {}),
       ...(prev.startEvent ? { startEvent: prev.startEvent } : {}),
+      ...(prev.physiologyStartDay !== undefined ? { physiologyStartDay: prev.physiologyStartDay } : {}),
+      ...(prev.establishmentDryMatterGPerM2 !== undefined
+        ? { establishmentDryMatterGPerM2: prev.establishmentDryMatterGPerM2 }
+        : {}),
+      ...(isV3 ? { establishmentApplied: !!establishmentApplied } : {}),
+      ...(isV3 ? { sourceThermalCdays: sourceThermalCdays ?? 0 } : {}),
+      ...(isV3 ? { stageEstimateAvailable: !!stageEstimateAvailable } : {}),
+      ...(dead ? { dead: true } : {}),
       ...(rootThermalCdays !== undefined ? { rootThermalCdays } : {}),
       ...(rootZoneDepthCm !== undefined ? { rootZoneDepthCm } : {}),
       ...(rootZoneExpansionInflowMm !== undefined ? { rootZoneExpansionInflowMm } : {}),
@@ -1194,7 +1316,7 @@ export function stepDay(
         ...eventTarget(key),
         cropId: prev.cropId,
         message: `${name} at ${displayCell(key)} is harvest-ready`,
-        data: { gddAccumC },
+        data: { gddAccumC: isV3 ? sourceThermalCdays ?? gddAccumC : gddAccumC },
       });
     }
     if (frost) {
@@ -1316,7 +1438,7 @@ export function simulateRun(
   ctx: SimRunCtx = {},
   observations: readonly Observation[] = [],
 ): SimulateResult {
-  const modelSupport = config.cropModelVersion === 'crop-model-v2'
+  const modelSupport = isDryMatterModel(config)
     ? inspectRunModelSupport(config, false)
     : undefined;
   if (modelSupport && !modelSupport.canReplay) {
@@ -1427,7 +1549,7 @@ export function simulateRun(
     matureCells,
     cellCount: finalKeys.length,
     eventCounts: counts,
-    ...(config.cropModelVersion === 'crop-model-v2'
+    ...(isDryMatterModel(config)
       ? {
           yieldBasis: 'dry-matter' as const,
           modelQualification: {

@@ -22,6 +22,12 @@ export const STRESS_ONSET = 0.4;
 /** An "on" stress term falling below 0.2 emits a stress-end event. */
 export const STRESS_RELIEF = 0.2;
 
+/** Legacy visual mortality thresholds reused by crop-model-v3 as an explicitly
+ * qualified simulation heuristic; they are not crop-specific mortality data. */
+export const DEAD_FROST_COLD = 0.95;
+export const DEAD_CHRONIC_DAYS = 21;
+export const DEAD_CHRONIC_STRESS = 0.85;
+
 /** GDD needed for full biomass: catalog growthDays × climatological mean
  * daily GDD over the run window, floored at 1 °C·day so cold windows keep
  * downstream growth and nitrogen calculations finite. */

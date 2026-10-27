@@ -20,6 +20,8 @@ export interface CropProgressRow {
   targetKey?: string;
   targetLabel?: string;
   stage: number;
+  /** False when the run has only an endpoint and no sourced intermediate stage map. */
+  stageAvailable?: boolean;
   pct: number;
   stress: number;
 }
@@ -60,7 +62,8 @@ const TAG_TITLE: Record<EnvSourceTag, string> = {
   default: 'Built-in documented fallback (no site data)',
 };
 
-function SourceTag({ tag }: { tag: EnvSourceTag }) {
+function SourceTag({ tag }: { tag: EnvSourceTag | null }) {
+  if (tag === null) return null;
   return (
     <span
       title={TAG_TITLE[tag]}
@@ -325,16 +328,18 @@ function DiagnosticsPanel({ diag }: { diag: CellDiagnosticRow }) {
       <div className="font-medium text-foreground">{diag.cropName} · {diag.targetLabel} — drivers today</div>
       <ul className="mt-1 space-y-0.5 text-muted-foreground">
         <li>
-          GDD {r1(diag.gddAccumC)} / {r1(diag.gddRequiredC)} °C·day ({gddPct}%)
-          · +{r1(diag.todayGddC)} today
+          {diag.gddLabel} {r1(diag.gddAccumC)} / {r1(diag.gddRequiredC)} °C·day ({gddPct}%)
+          · +{diag.todayGddC === null ? '—' : r1(diag.todayGddC)} today
           <SourceTag tag={diag.sources.temp} />
         </li>
         <li>
-          bucket {r1(diag.bucketMm)} / {r1(diag.awcCapMm)} mm
-          · AWC {diag.awcMmPerCm} mm/cm × {diag.rootDepthCm} cm ({Math.round(diag.moistureFrac * 100)}%)
+          {diag.bucketMm === null || diag.awcCapMm === null || diag.awcMmPerCm === null
+            || diag.rootDepthCm === null || diag.moistureFrac === null
+            ? 'root-zone storage unavailable'
+            : <>bucket {r1(diag.bucketMm)} / {r1(diag.awcCapMm)} mm · AWC {diag.awcMmPerCm} mm/cm × {diag.rootDepthCm} cm ({Math.round(diag.moistureFrac * 100)}%)</>}
         </li>
         <li>
-          ET0 {r1(diag.todayEtMm)} mm
+          ET0 {diag.todayEtMm === null ? '—' : r1(diag.todayEtMm)} mm
           <SourceTag tag={diag.sources.eto} />
           · rain source
           <SourceTag tag={diag.sources.precip} />
@@ -342,17 +347,17 @@ function DiagnosticsPanel({ diag }: { diag: CellDiagnosticRow }) {
         <li>nitrogen {r1(diag.nitrogenKgHa)} kg/ha</li>
         {s.heat > 0 && (
           <li className="text-amber-600">
-            heat stress {r1(s.heat)} · tMax {r1(diag.todayTMaxC)} °C &gt; max {diag.cropMaxTempC} °C
+            heat stress {r1(s.heat)} · tMax {diag.todayTMaxC === null ? '—' : r1(diag.todayTMaxC)} °C &gt; max {diag.cropMaxTempC} °C
           </li>
         )}
         {s.cold > 0 && (
           <li className="text-sky-600">
-            cold stress {r1(s.cold)} · tMin {r1(diag.todayTMinC)} °C &lt; min {diag.cropMinTempC} °C
+            cold stress {r1(s.cold)} · tMin {diag.todayTMinC === null ? '—' : r1(diag.todayTMinC)} °C &lt; min {diag.cropMinTempC} °C
           </li>
         )}
         {s.water > 0 && (
           <li className="text-amber-600">
-            water stress {r1(s.water)} · bucket {Math.round(diag.moistureFrac * 100)}% full
+            water stress {r1(s.water)} · bucket {diag.moistureFrac === null ? 'unavailable' : `${Math.round(diag.moistureFrac * 100)}% full`}
           </li>
         )}
         {s.nitrogen > 0 && <li className="text-amber-600">nitrogen stress {r1(s.nitrogen)}</li>}
@@ -422,6 +427,7 @@ export function SimDrawer({
 
   const days = Math.max(1, runTimeline?.days ?? 1);
   const comparisonYieldUnit = yieldMassUnit(runComparison?.yieldBasis);
+  const comparisonYieldLabel = comparisonYieldUnit === 'kg DM' ? 'Harvestable dry matter' : 'Yield';
   const eventDots = (runTimeline?.events ?? []).filter(
     (e) => e.kind === 'stress-onset' || e.kind === 'harvest-ready',
   );
@@ -466,16 +472,16 @@ export function SimDrawer({
         {runModelSupport && (!runModelSupport.canReplay || runModelSupport.status === 'qualified') && (
           <div role="status" className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[11px] text-amber-900 dark:text-amber-100">
             <div className="font-semibold">
-              {runModelSupport.model === 'crop-model-v2' && runModelSupport.canReplay
-                ? 'Qualified v2 estimate'
-                : runModelSupport.model === 'crop-model-v2'
+              {(runModelSupport.model === 'crop-model-v2' || runModelSupport.model === 'crop-model-v3') && runModelSupport.canReplay
+                ? `Qualified ${runModelSupport.model === 'crop-model-v3' ? 'v3' : 'v2'} estimate`
+                : runModelSupport.model === 'crop-model-v2' || runModelSupport.model === 'crop-model-v3'
                   ? 'Crop estimate unavailable'
                   : 'Saved summary preserved'}
             </div>
             <p className="mt-0.5">
-              {runModelSupport.model === 'crop-model-v2' && runModelSupport.canReplay
-                ? 'This dry-matter estimate is qualified; independent measured accuracy remains UNVERIFIED.'
-                : runModelSupport.model === 'crop-model-v2'
+              {(runModelSupport.model === 'crop-model-v2' || runModelSupport.model === 'crop-model-v3') && runModelSupport.canReplay
+                ? `This ${runModelSupport.model === 'crop-model-v3' ? 'v3' : 'v2'} dry-matter estimate is qualified; independent measured accuracy remains UNVERIFIED.`
+                : runModelSupport.model === 'crop-model-v2' || runModelSupport.model === 'crop-model-v3'
                   ? 'This model version cannot replay these frozen inputs; its saved summary is left unchanged.'
                 : 'This saved record has no supported frozen model version or complete inputs; its stored summary is unchanged.'}
             </p>
@@ -696,7 +702,7 @@ export function SimDrawer({
                         <div className="mt-2 rounded-md bg-muted/50 p-2" title={`${runComparison.b.label} minus ${runComparison.a.label}`}>
                           <div className="mb-1 text-[10px] font-medium text-foreground/80">Delta · B − A ({runComparison.b.label} − {runComparison.a.label})</div>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
-                            <span className="text-muted-foreground">{comparisonYieldUnit ? `Yield (${comparisonYieldUnit})` : 'Yield (not comparable)'}</span><span className="text-right tabular-nums">{signedDelta(runComparison.totalYieldKg, comparisonYieldUnit ?? '')}</span>
+                            <span className="text-muted-foreground">{comparisonYieldUnit ? `${comparisonYieldLabel} (${comparisonYieldUnit})` : 'Yield (not comparable)'}</span><span className="text-right tabular-nums">{signedDelta(runComparison.totalYieldKg, comparisonYieldUnit ?? '')}</span>
                             <span className="text-muted-foreground">Water</span><span className="text-right tabular-nums">{signedDelta(runComparison.waterUseMm, 'mm')}</span>
                             <span className="text-muted-foreground">Stress cell-days</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressCellDays, 'days', 0)}</span>
                             <span className="text-muted-foreground">Harvest-ready day</span><span className="text-right tabular-nums">{signedDelta(runComparison.harvestReadyDay, 'days', 0)}</span>
@@ -1046,10 +1052,14 @@ export function SimDrawer({
                           <span className="min-w-0 flex-1 truncate">
                             {row.label ?? row.name}
                           </span>
-                          <span className="tracking-tighter text-foreground">
-                            {'●'.repeat(row.stage)}{'○'.repeat(5 - row.stage)}
-                          </span>
-                          <span className="tabular-nums">{row.pct}%</span>
+                          {row.stageAvailable === false ? (
+                            <span className="text-[10px] text-muted-foreground" title="No source-supported intermediate crop-stage map is available.">stage —</span>
+                          ) : (
+                            <span className="tracking-tighter text-foreground">
+                              {'●'.repeat(row.stage)}{'○'.repeat(5 - row.stage)}
+                            </span>
+                          )}
+                          <span className="tabular-nums">{row.stageAvailable === false ? '—' : `${row.pct}%`}</span>
                           {row.stress > 0.2 && <span className="text-amber-500">stress</span>}
                         </button>
                         {selected && diag && <DiagnosticsPanel diag={diag} />}

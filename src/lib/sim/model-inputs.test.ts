@@ -3,8 +3,8 @@ import { cropLibrary } from '@/data/crops';
 import { lettuceRosalbaRUEReference, lettuceYumaRootProfileReference } from '@/data/cropModelV2LettuceReferences';
 import { cropThermalParams } from '@/data/cropThermalParams';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
-import type { FrozenCropModelParametersV2, RunConfig, RunModelInputsV2 } from './types';
-import { freezeRunModelInputs, freezeRunModelInputsV2, inspectRunModelSupport } from './model-inputs';
+import type { CropEstablishmentInput, FrozenCropModelParametersV2, RunConfig, RunModelInputsV2 } from './types';
+import { freezeRunModelInputs, freezeRunModelInputsV2, freezeRunModelInputsV3, inspectRunModelSupport } from './model-inputs';
 import { NO_CLIMATE_EQUIPMENT } from './environment-climate';
 import { createRun, simulateRun, stepDay } from './engine';
 
@@ -291,6 +291,404 @@ describe('frozen crop model inputs and replay support', () => {
     expect(incompatibleStart.reasons.some((reason) => reason.includes('outside the thermal source start-event domain'))).toBe(true);
     expect(missingAsOfStartState).toMatchObject({ status: 'unsupported', canReplay: false, preserveStoredSummary: true });
     expect(missingAsOfStartState.reasons.some((reason) => reason.includes('frozen as-of-start crop state'))).toBe(true);
+  });
+
+  it('gates v3 crop fluxes until observed emergence and applies per-cell transplant state on its event', () => {
+    const bean = cropLibrary.find((crop) => crop.id === 27)!;
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const beanThermal = cropThermalParams.find((parameter) => parameter.cropId === bean.id)!;
+    const tomatoThermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const evidence = {
+      classification: 'synthetic' as const,
+      evidenceId: 'TEST-ESTABLISHMENT-EVENT-GATE',
+      validDomain: 'synthetic software reducer acceptance only',
+    };
+    const days = Array.from({ length: 4 }, (_, index) => ({
+      date: new Date(Date.parse('2026-10-01T00:00:00Z') + index * 86_400_000).toISOString().slice(0, 10),
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 4,
+      dliNaturalMol: 18,
+      gddBase10C: 15,
+      provenance: { tMinC: 'default' as const, tMaxC: 'default' as const, precipMm: 'default' as const, etoMm: 'default' as const, dliNaturalMol: 'default' as const },
+    }));
+    const beanKey = targetCellKey({ kind: 'floor' }, '0,0');
+    const beanEstablishment: CropEstablishmentInput = {
+      startEvent: 'direct-sowing',
+      establishedAtDate: '2026-10-03',
+      initialAboveGroundDryMatterGPerM2: 12,
+      evidence,
+    };
+    const beanRun = config({
+      cropModelVersion: 'crop-model-v3',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': bean.id },
+        plantedAt: { '0,0': '2026-10-01' },
+      },
+      cropStartEvents: { [beanKey]: 'direct-sowing' },
+    });
+    const beanInputs = freezeRunModelInputsV3(beanRun, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [bean],
+      cropParametersV2: [syntheticStartEventParameter(bean.id, beanThermal)],
+      cropEstablishmentByCell: { [beanKey]: beanEstablishment },
+    });
+    const activeBeanRun = { ...beanRun, modelInputs: beanInputs };
+    const beanSupport = inspectRunModelSupport(activeBeanRun);
+    let beanState = createRun(activeBeanRun);
+    const beforeEmergence = stepDay(beanState, days[0]!, activeBeanRun);
+    beanState = beforeEmergence.state;
+    const secondPreEmergence = stepDay(beanState, days[1]!, activeBeanRun);
+    beanState = secondPreEmergence.state;
+    const emergence = stepDay(beanState, days[2]!, activeBeanRun);
+    const beanCellBefore = secondPreEmergence.state.cells[beanKey]!;
+    const beanCellAfter = emergence.state.cells[beanKey]!;
+
+    const tomatoKey = targetCellKey({ kind: 'floor' }, '0,0');
+    const tomatoEstablishment: CropEstablishmentInput = {
+      startEvent: 'transplanting',
+      establishedAtDate: '2026-10-03',
+      initialAboveGroundDryMatterGPerM2: 7,
+      evidence,
+    };
+    const transplantRun = config({
+      cropModelVersion: 'crop-model-v3',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': tomato.id },
+        plantedAt: { '0,0': '2026-10-03' },
+      },
+      cropStartEvents: { [tomatoKey]: 'transplanting' },
+    });
+    const transplantInputs = freezeRunModelInputsV3(transplantRun, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [tomato],
+      cropParametersV2: [syntheticStartEventParameter(tomato.id, tomatoThermal)],
+      cropEstablishmentByCell: { [tomatoKey]: tomatoEstablishment },
+    });
+    const activeTransplantRun = { ...transplantRun, modelInputs: transplantInputs };
+    const preTransplant = simulateRun(activeTransplantRun, days.slice(0, 2));
+    const transplant = simulateRun(activeTransplantRun, days);
+
+    expect(beanSupport).toMatchObject({ model: 'crop-model-v3', status: 'qualified', canReplay: true });
+    expect(beanSupport.reasons.some((reason) => reason.includes('start on the sowing date'))).toBe(false);
+    expect(beanSupport.reasons).toContain(
+      `Crop ${bean.id}: maturity is a source target range; the endpoint uses the conservative upper target.`,
+    );
+    expect(beanSupport.reasons).toContain(
+      'A separate physiology thermal accumulator starts at establishment; intermediate v3 crop-stage mapping has no source support, so stage remains unavailable throughout the run, including at and after the maturity endpoint.',
+    );
+    expect(beanSupport.reasons).toContain(
+      'The 3D crop mesh remains at its smallest juvenile archetype pose throughout the run, including after maturity; it is an illustrative placeholder, not crop growth or a stage estimate.',
+    );
+    expect(beanCellBefore.gddAccumC).toBe(0);
+    expect(beanCellBefore.sourceThermalCdays).toBeGreaterThan(0);
+    expect(beanCellBefore.stageEstimateAvailable).toBe(false);
+    expect(beanCellBefore.biomassFrac).toBe(0);
+    expect(beanCellBefore.dryMatterGPerM2).toBe(0);
+    expect(beanCellBefore.rootThermalCdays).toBeUndefined();
+    expect(beanCellBefore.stressDaysCount).toBe(0);
+    expect(beforeEmergence.dayStats.waterUseMm).toBe(0);
+    expect(secondPreEmergence.dayStats.waterUseMm).toBe(0);
+    expect(beanCellAfter.establishmentApplied).toBe(true);
+    expect(beanCellAfter.gddAccumC).toBeGreaterThan(0);
+    expect(beanCellAfter.sourceThermalCdays).toBeGreaterThan(beanCellAfter.gddAccumC);
+    expect(beanCellAfter.dryMatterGPerM2).toBeGreaterThan(beanEstablishment.initialAboveGroundDryMatterGPerM2);
+    expect(emergence.dayStats.waterUseMm).toBeGreaterThan(0);
+    expect(preTransplant.finalState.cells[tomatoKey]?.dryMatterGPerM2).toBe(0);
+    expect(preTransplant.finalState.cells[tomatoKey]?.gddAccumC).toBe(0);
+    expect(transplant.finalState.cells[tomatoKey]?.establishmentApplied).toBe(true);
+    expect(transplant.finalState.cells[tomatoKey]?.dryMatterGPerM2).toBeGreaterThan(7);
+  });
+
+  it('validates intervention establishment evidence and v3 qualification status', () => {
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const thermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const establishment: CropEstablishmentInput = {
+      startEvent: 'transplanting',
+      establishedAtDate: '2026-10-02',
+      initialAboveGroundDryMatterGPerM2: 7,
+      evidence: {
+        classification: 'synthetic',
+        evidenceId: 'TEST-INTERVENTION-ESTABLISHMENT',
+        validDomain: 'software acceptance only',
+      },
+    };
+    const plant = {
+      kind: 'plant' as const,
+      date: '2026-10-02',
+      cell: '0,0',
+      cropId: tomato.id,
+      startEvent: 'transplanting' as const,
+      establishment,
+    };
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      basePlan: { ...config().basePlan, planting: {} },
+      cropStartEvents: {},
+      interventions: [plant],
+    });
+    const modelInputs = freezeRunModelInputsV3(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [tomato],
+      cropParametersV2: [syntheticStartEventParameter(tomato.id, thermal)],
+      cropEstablishmentByCell: {},
+    });
+
+    expect(inspectRunModelSupport({ ...run, modelInputs })).toMatchObject({
+      status: 'qualified',
+      canReplay: true,
+    });
+    expect(inspectRunModelSupport({ ...run, modelInputs }).reasons)
+      .toContain(`Crop ${tomato.id}: synthetic establishment state is a software fixture, not biological evidence.`);
+
+    const invalidEvidencePlant = {
+      ...plant,
+      establishment: {
+        ...establishment,
+        evidence: { ...establishment.evidence, classification: 'unknown' },
+      },
+    } as unknown as RunConfig['interventions'][number];
+    const invalidEvidence = inspectRunModelSupport({
+      ...run,
+      interventions: [invalidEvidencePlant],
+      modelInputs,
+    });
+    expect(invalidEvidence).toMatchObject({ status: 'unsupported', canReplay: false });
+    expect(invalidEvidence.reasons.some((reason) => reason.includes('evidence classification is unknown'))).toBe(true);
+
+    const invalidStatusInputs = {
+      ...modelInputs,
+      qualification: { ...modelInputs.qualification, status: 'pending' },
+    } as unknown as typeof modelInputs;
+    expect(inspectRunModelSupport({ ...run, modelInputs: invalidStatusInputs }))
+      .toMatchObject({ status: 'unsupported', canReplay: false });
+  });
+
+  it('keeps v3 sowing-to-maturity thermal time separate from emergence-relative physiology', () => {
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const sourceThermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const thermal = {
+      ...sourceThermal,
+      gddToMaturityCdays: [60, 60] as const,
+      startEvents: ['direct-sowing'] as const,
+    };
+    const parameter = syntheticStartEventParameter(tomato.id, thermal);
+    const key = targetCellKey({ kind: 'floor' }, '0,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      dayCount: 4,
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': tomato.id },
+        plantedAt: { '0,0': '2026-10-01' },
+      },
+      cropStartEvents: { [key]: 'direct-sowing' },
+    });
+    const modelInputs = freezeRunModelInputsV3(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [tomato],
+      cropParametersV2: [parameter],
+      cropEstablishmentByCell: {
+        [key]: {
+          startEvent: 'direct-sowing',
+          establishedAtDate: '2026-10-03',
+          initialAboveGroundDryMatterGPerM2: 10,
+          evidence: {
+            classification: 'synthetic',
+            evidenceId: 'TEST-V3-SOURCE-AND-PHYSIOLOGY-CLOCKS',
+            validDomain: 'software acceptance only',
+          },
+        },
+      },
+    });
+    const activeRun = { ...run, modelInputs };
+    const series = Array.from({ length: 4 }, (_, index) => ({
+      date: new Date(Date.parse('2026-10-01T00:00:00Z') + index * 86_400_000).toISOString().slice(0, 10),
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 4,
+      dliNaturalMol: 18,
+      gddBase10C: 15,
+      provenance: {
+        tMinC: 'default' as const,
+        tMaxC: 'default' as const,
+        precipMm: 'default' as const,
+        etoMm: 'default' as const,
+        dliNaturalMol: 'default' as const,
+      },
+    }));
+    let state = createRun(activeRun);
+    const states = series.map((day) => {
+      const result = stepDay(state, day, activeRun);
+      state = result.state;
+      return result.state.cells[key]!;
+    });
+
+    expect(states[1]?.sourceThermalCdays).toBeGreaterThan(0);
+    expect(states[1]?.gddAccumC).toBe(0);
+    expect(states[1]?.biomassFrac).toBe(0);
+    expect(states[1]?.stageEstimateAvailable).toBe(false);
+    expect(states[2]?.gddAccumC).toBeGreaterThan(0);
+    expect(states[2]?.sourceThermalCdays).toBeGreaterThan(states[2]!.gddAccumC);
+    expect(states[2]?.biomassFrac).toBe(0);
+    expect(states[2]?.stageEstimateAvailable).toBe(false);
+    expect(states[3]?.sourceThermalCdays).toBe(60);
+    expect(states[3]?.biomassFrac).toBe(1);
+    expect(states[3]?.stageEstimateAvailable).toBe(false);
+  });
+
+  it('applies qualified heat response and terminal frost mortality after establishment', () => {
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const thermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const key = targetCellKey({ kind: 'floor' }, '0,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': tomato.id },
+        plantedAt: { '0,0': '2026-10-01' },
+      },
+      cropStartEvents: { [key]: 'transplanting' },
+    });
+    const modelInputs = freezeRunModelInputsV3(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [tomato],
+      cropParametersV2: [syntheticStartEventParameter(tomato.id, thermal)],
+      cropEstablishmentByCell: {
+        [key]: {
+          startEvent: 'transplanting',
+          establishedAtDate: '2026-10-01',
+          initialAboveGroundDryMatterGPerM2: 10,
+          evidence: {
+            classification: 'synthetic',
+            evidenceId: 'TEST-V3-STRESS-MORTALITY',
+            validDomain: 'software acceptance only',
+          },
+        },
+      },
+    });
+    const activeRun = { ...run, modelInputs };
+    const day = (date: string, tMinC: number, tMaxC: number) => ({
+      date,
+      tMinC,
+      tMaxC,
+      precipMm: 0,
+      etoMm: 4,
+      dliNaturalMol: 18,
+      gddBase10C: Math.max(0, (tMinC + tMaxC) / 2 - 10),
+      provenance: {
+        tMinC: 'default' as const,
+        tMaxC: 'default' as const,
+        precipMm: 'default' as const,
+        etoMm: 'default' as const,
+        dliNaturalMol: 'default' as const,
+      },
+    });
+    const mildEnv = day('2026-10-01', 20, 25);
+    const hotEnv = day('2026-10-01', 20, 37);
+    const mild = stepDay(createRun(activeRun), mildEnv, activeRun);
+    const hot = stepDay(createRun(activeRun), hotEnv, activeRun);
+    const hotCell = hot.state.cells[key]!;
+
+    expect(hotCell.stress.heat).toBeGreaterThan(0);
+    expect(hotCell.dryMatterGPerM2).toBeGreaterThan(10);
+    expect(hotCell.dryMatterGPerM2).toBeLessThan(mild.state.cells[key]!.dryMatterGPerM2!);
+
+    const frostEnv = day('2026-10-01', -2, 3);
+    const frost = stepDay(createRun(activeRun), frostEnv, activeRun);
+    const afterDeath = stepDay(frost.state, day('2026-10-02', 20, 25), activeRun);
+    expect(frost.state.cells[key]?.dead).toBe(true);
+    expect(afterDeath.state.cells[key]?.dryMatterGPerM2).toBe(frost.state.cells[key]?.dryMatterGPerM2);
+    expect(afterDeath.dayStats.waterUseMm).toBe(0);
+  });
+
+  it('rejects v3 direct-sow records that shift sowing-start roots to delayed emergence', () => {
+    const bean = cropLibrary.find((crop) => crop.id === 27)!;
+    const thermal = cropThermalParams.find((parameter) => parameter.cropId === bean.id)!;
+    const key = targetCellKey({ kind: 'floor' }, '0,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      basePlan: { ...config().basePlan, planting: { '0,0': bean.id } },
+      cropStartEvents: { [key]: 'direct-sowing' },
+    });
+    const parameter = syntheticStartEventParameter(bean.id, thermal);
+    parameter.rootZone.rootDevelopment = {
+      methodVersion: 'thermal-linear-root-depth-v1',
+      storageExpansionMethod: 'uniform-initial-awc-fraction-v1',
+      startEvent: 'direct-sowing',
+      initialRootDepthCm: 12,
+      growthStartsAfterCdays: 200,
+      growthMmPerCday: 1.2,
+      thermalBaseC: 4.5,
+      thermalUpperC: 28,
+      thermalAccumulationMethod: 'single sine horizontal cutoff',
+      evidence: {
+        evidenceId: 'test-yuma-root-profile',
+        sourceCitation: 'Synthetic test only',
+        sourceUrl: 'test-only:root-profile',
+        validDomain: 'software acceptance only',
+      },
+    };
+    const inputs = freezeRunModelInputsV3(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [bean],
+      cropParametersV2: [parameter],
+      cropEstablishmentByCell: {
+        [key]: {
+          startEvent: 'direct-sowing',
+          establishedAtDate: '2026-10-03',
+          initialAboveGroundDryMatterGPerM2: 5,
+          evidence: {
+            classification: 'synthetic',
+            evidenceId: 'test-observed-emergence',
+            validDomain: 'software acceptance only',
+          },
+        },
+      },
+    });
+    const support = inspectRunModelSupport({ ...run, modelInputs: inputs });
+    expect(support).toMatchObject({ status: 'unsupported', canReplay: false, preserveStoredSummary: true });
+    expect(support.reasons.some((reason) => reason.includes('cannot be shifted to a delayed emergence date'))).toBe(true);
+
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const tomatoThermal = cropThermalParams.find((candidate) => candidate.cropId === tomato.id)!;
+    const transplantRun = config({
+      cropModelVersion: 'crop-model-v3',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': tomato.id },
+        plantedAt: { '0,0': '2026-10-01' },
+      },
+      cropStartEvents: { [key]: 'transplanting' },
+    });
+    const transplantParameter = syntheticStartEventParameter(tomato.id, tomatoThermal);
+    transplantParameter.rootZone.rootDevelopment = { ...parameter.rootZone.rootDevelopment! };
+    const transplantInputs = freezeRunModelInputsV3(transplantRun, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [tomato],
+      cropParametersV2: [transplantParameter],
+      cropEstablishmentByCell: {
+        [key]: {
+          startEvent: 'transplanting',
+          establishedAtDate: '2026-10-01',
+          initialAboveGroundDryMatterGPerM2: 5,
+          evidence: {
+            classification: 'synthetic',
+            evidenceId: 'test-transplant-establishment',
+            validDomain: 'software acceptance only',
+          },
+        },
+      },
+    });
+    const transplantSupport = inspectRunModelSupport({ ...transplantRun, modelInputs: transplantInputs });
+    expect(transplantSupport).toMatchObject({ status: 'qualified', canReplay: true });
+    expect(transplantSupport.reasons).toContain(
+      `Crop ${tomato.id}: root-depth reference starts at direct-sowing, while this run starts at transplanting; root development is outside its source event domain.`,
+    );
   });
 
   it('scopes v2 irrigation to its target and carries water stress into production', () => {
@@ -1011,7 +1409,7 @@ describe('frozen crop model inputs and replay support', () => {
   });
 
   it('rejects an unknown persisted model version without attempting replay', () => {
-    const support = inspectRunModelSupport({ ...config(), cropModelVersion: 'crop-model-v3' as never });
+    const support = inspectRunModelSupport({ ...config(), cropModelVersion: 'crop-model-v4' as never });
     expect(support).toMatchObject({ model: 'unknown', status: 'unsupported', canReplay: false });
     expect(support.preserveStoredSummary).toBe(true);
   });

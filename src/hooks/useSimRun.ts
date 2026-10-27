@@ -31,6 +31,8 @@ import {
   stepDay,
 } from '@/lib/sim';
 import { canonicalizeObservations } from '@/lib/sim/observations';
+import { dailyThermalUnits } from '@/lib/sim/crop-model-v2';
+import { effectiveEnvironmentForSurface } from '@/lib/sim/drivers';
 import { inspectRunModelSupport, type RunModelSupport } from '@/lib/sim/model-inputs';
 import type {
   DailyEnvironment,
@@ -95,6 +97,7 @@ export interface RunProgressRow {
   targetLabel: string;
   plantedAt: string;
   stage: number;
+  stageAvailable: boolean;
   pct: number;
   stress: number;
 }
@@ -107,22 +110,23 @@ export interface CellDiagnosticRow {
   targetLabel: string;
   plantedAt: string;
   cropName: string;
+  gddLabel: string;
   gddAccumC: number;
   gddRequiredC: number;
-  moistureFrac: number;
-  awcMmPerCm: number;
-  rootDepthCm: number;
-  awcCapMm: number;
-  bucketMm: number;
+  moistureFrac: number | null;
+  awcMmPerCm: number | null;
+  rootDepthCm: number | null;
+  awcCapMm: number | null;
+  bucketMm: number | null;
   nitrogenKgHa: number;
   stress: { water: number; heat: number; cold: number; nitrogen: number };
-  todayGddC: number;
-  todayEtMm: number;
-  todayTMinC: number;
-  todayTMaxC: number;
+  todayGddC: number | null;
+  todayEtMm: number | null;
+  todayTMinC: number | null;
+  todayTMaxC: number | null;
   cropMinTempC: number;
   cropMaxTempC: number;
-  sources: { temp: EnvSourceTag; precip: EnvSourceTag; eto: EnvSourceTag };
+  sources: { temp: EnvSourceTag | null; precip: EnvSourceTag | null; eto: EnvSourceTag | null };
 }
 
 /** Notable-event sink: fired once per stepped sim day with that day's events
@@ -225,6 +229,7 @@ interface CellAgg {
   plantedAtDay: number;
   biomass: number;
   stage: number;
+  stageAvailable: boolean;
   stressWater: number;
   stressHeat: number;
   stressCold: number;
@@ -232,6 +237,13 @@ interface CellAgg {
   moistureSum: number;
   nitrogenSum: number;
   gddAccum: number;
+  sourceThermal: number;
+  sourceThermalActiveCount: number;
+  rootZoneWaterSum: number;
+  rootZoneCapacitySum: number;
+  rootZoneDepthSum: number;
+  rootZoneAwcSum: number;
+  rootZoneCellCount: number;
   count: number;
 }
 
@@ -242,17 +254,38 @@ function targetLabelFor(target: GrowingTargetRef, layout?: EnvironmentLayout): s
   return `${space?.label ?? `Growing space ${target.growingSpaceId}`} · ${level?.label ?? `Level ${target.levelId}`}`;
 }
 
-function aggregateCells(state: SimState, layout?: EnvironmentLayout): CellAgg[] {
+function aggregateCells(state: SimState, layout?: EnvironmentLayout, config?: RunRecord['config']): CellAgg[] {
   const groups = new Map<string, CellAgg>();
   for (const cell of Object.values(state.cells)) {
     const target = cell.target ?? { kind: 'floor' as const };
     const targetKey = growingTargetKey(target);
     const targetLabel = targetLabelFor(target, layout);
     const key = `${cell.cropId}|${cell.plantedAtDay}|${targetKey}`;
+    const inputs = config?.modelInputs;
+    const modelParameters = inputs?.model === 'run-inputs-v2' || inputs?.model === 'run-inputs-v3'
+      ? inputs.cropParameters.find((parameter) => parameter.cropId === cell.cropId)
+      : undefined;
+    const awcMmPerCm = inputs?.model === 'run-inputs-v2' || inputs?.model === 'run-inputs-v3'
+      ? inputs.soil?.awcMmPerCm
+      : undefined;
+    const rootDepthCm = cell.rootZoneDepthCm
+      ?? (modelParameters?.rootZone?.rootDevelopment
+        ? undefined
+        : modelParameters?.rootZone?.effectiveRootDepthCm);
+    const hasRootZone = typeof awcMmPerCm === 'number' && Number.isFinite(awcMmPerCm) && awcMmPerCm > 0
+      && typeof rootDepthCm === 'number' && Number.isFinite(rootDepthCm) && rootDepthCm > 0;
+    const rootZoneCapacityMm = hasRootZone ? awcMmPerCm * rootDepthCm : 0;
+    const rootZoneWaterMm = hasRootZone
+      ? (typeof cell.rootZoneWaterMm === 'number' && Number.isFinite(cell.rootZoneWaterMm)
+          ? cell.rootZoneWaterMm
+          : cell.moistureFrac * rootZoneCapacityMm)
+      : 0;
+    const sourceThermalActive = state.dayIndex - 1 >= cell.plantedAtDay && !cell.dead && cell.biomassFrac < 1;
     const g = groups.get(key);
     if (g) {
       g.biomass = Math.max(g.biomass, cell.biomassFrac);
       g.stage = Math.max(g.stage, cell.stage);
+      g.stageAvailable = g.stageAvailable && cell.stageEstimateAvailable !== false;
       g.stressWater = Math.max(g.stressWater, cell.stress.water);
       g.stressHeat = Math.max(g.stressHeat, cell.stress.heat);
       g.stressCold = Math.max(g.stressCold, cell.stress.cold);
@@ -260,6 +293,15 @@ function aggregateCells(state: SimState, layout?: EnvironmentLayout): CellAgg[] 
       g.moistureSum += cell.moistureFrac;
       g.nitrogenSum += cell.nitrogenKgHa;
       g.gddAccum = Math.max(g.gddAccum, cell.gddAccumC);
+      g.sourceThermal = Math.max(g.sourceThermal, cell.sourceThermalCdays ?? 0);
+      if (sourceThermalActive) g.sourceThermalActiveCount++;
+      if (hasRootZone) {
+        g.rootZoneWaterSum += rootZoneWaterMm;
+        g.rootZoneCapacitySum += rootZoneCapacityMm;
+        g.rootZoneDepthSum += rootDepthCm as number;
+        g.rootZoneAwcSum += awcMmPerCm as number;
+        g.rootZoneCellCount++;
+      }
       g.count++;
     } else {
       groups.set(key, {
@@ -270,6 +312,7 @@ function aggregateCells(state: SimState, layout?: EnvironmentLayout): CellAgg[] 
         plantedAtDay: cell.plantedAtDay,
         biomass: cell.biomassFrac,
         stage: cell.stage,
+        stageAvailable: cell.stageEstimateAvailable !== false,
         stressWater: cell.stress.water,
         stressHeat: cell.stress.heat,
         stressCold: cell.stress.cold,
@@ -277,6 +320,13 @@ function aggregateCells(state: SimState, layout?: EnvironmentLayout): CellAgg[] 
         moistureSum: cell.moistureFrac,
         nitrogenSum: cell.nitrogenKgHa,
         gddAccum: cell.gddAccumC,
+        sourceThermal: cell.sourceThermalCdays ?? 0,
+        sourceThermalActiveCount: sourceThermalActive ? 1 : 0,
+        rootZoneWaterSum: hasRootZone ? rootZoneWaterMm : 0,
+        rootZoneCapacitySum: hasRootZone ? rootZoneCapacityMm : 0,
+        rootZoneDepthSum: hasRootZone ? rootDepthCm as number : 0,
+        rootZoneAwcSum: hasRootZone ? awcMmPerCm as number : 0,
+        rootZoneCellCount: hasRootZone ? 1 : 0,
         count: 1,
       });
     }
@@ -310,6 +360,7 @@ export function buildRunProgressRows(
         : `${crop.name} · ${g.targetLabel}`,
       plantedAt,
       stage: g.stage,
+      stageAvailable: g.stageAvailable,
       pct: Math.round(g.biomass * 100),
       stress: Math.round(stress * 100) / 100,
     });
@@ -329,25 +380,60 @@ export function buildCellDiagnostics(
 ): CellDiagnosticRow[] {
   const params = soilWaterParams(soil?.awcMmPerCm);
   const capacity = bucketCapacityMm(params);
-  const env = dayEnv ?? record.envSeries[0] ?? null;
+  const v3 = record.config.cropModelVersion === 'crop-model-v3';
+  const env = v3
+    ? state.dayIndex > 0 ? dayEnv : null
+    : dayEnv ?? record.envSeries[0] ?? null;
   const start = isoDayNumber(record.config.startDate);
+  const thermalEnv = v3 && state.dayIndex === 0
+    ? null
+    : state.climate
+    ? { tMinC: state.climate.tMinC, tMaxC: state.climate.tMaxC }
+    : env
+      ? effectiveEnvironmentForSurface(env, state.surface)
+      : null;
   const rows: CellDiagnosticRow[] = [];
-  for (const g of aggregateCells(state, record.config.environment?.layout)) {
+  for (const g of aggregateCells(state, record.config.environment?.layout, record.config)) {
     const crop = cropById.get(g.cropId);
     if (!crop) continue;
+    const thermal = record.config.modelInputs?.model === 'run-inputs-v3'
+      ? record.config.modelInputs.cropParameters.find((parameter) => parameter.cropId === g.cropId)?.thermal
+      : undefined;
+    const sourceThermalToday = !v3
+      ? env?.gddBase10C ?? 0
+      : g.sourceThermalActiveCount === 0
+        ? 0
+        : g.sourceThermalActiveCount !== g.count || !thermal || !thermalEnv
+          ? null
+          : dailyThermalUnits(thermalEnv.tMinC, thermalEnv.tMaxC, thermal);
+    const hasFrozenRootZone = g.rootZoneCellCount === g.count && g.rootZoneCellCount > 0;
+    const frozenRootModel = record.config.cropModelVersion === 'crop-model-v2'
+      || record.config.cropModelVersion === 'crop-model-v3';
+    const hasRootDiagnostics = hasFrozenRootZone || !frozenRootModel;
+    const rootDepthCm = hasFrozenRootZone ? g.rootZoneDepthSum / g.rootZoneCellCount : hasRootDiagnostics ? params.rootDepthCm : null;
+    const awcMmPerCm = hasFrozenRootZone ? g.rootZoneAwcSum / g.rootZoneCellCount : hasRootDiagnostics ? params.awcMmPerCm : null;
+    const awcCapMm = hasFrozenRootZone ? g.rootZoneCapacitySum / g.rootZoneCellCount : hasRootDiagnostics ? capacity : null;
+    const bucketMm = hasFrozenRootZone
+      ? g.rootZoneWaterSum / g.rootZoneCellCount
+      : hasRootDiagnostics ? (g.count > 0 ? g.moistureSum / g.count : 0) * capacity : null;
+    const moistureFrac = bucketMm !== null && awcCapMm !== null && awcCapMm > 0
+      ? bucketMm / awcCapMm
+      : hasRootDiagnostics && g.count > 0 ? g.moistureSum / g.count : null;
+    const temperatures = v3 ? thermalEnv ?? env : env;
     rows.push({
       cropId: g.cropId,
       targetKey: g.targetKey,
       targetLabel: g.targetLabel,
       plantedAt: isoFromDayNumber(start + g.plantedAtDay),
       cropName: crop.name,
-      gddAccumC: g.gddAccum,
-      gddRequiredC: gddRequiredC(crop, record.config.meanDailyGddC),
-      moistureFrac: g.count > 0 ? g.moistureSum / g.count : 0,
-      awcMmPerCm: params.awcMmPerCm,
-      rootDepthCm: params.rootDepthCm,
-      awcCapMm: capacity,
-      bucketMm: (g.count > 0 ? g.moistureSum / g.count : 0) * capacity,
+      gddLabel: v3 ? 'Source thermal' : 'GDD',
+      gddAccumC: v3 ? g.sourceThermal : g.gddAccum,
+      gddRequiredC: thermal?.gddToMaturityCdays[1] ?? gddRequiredC(crop, record.config.meanDailyGddC),
+      moistureFrac,
+      awcMmPerCm,
+      rootDepthCm,
+      awcCapMm,
+      bucketMm,
       nitrogenKgHa: Math.round((g.count > 0 ? g.nitrogenSum / g.count : 0) * 10) / 10,
       stress: {
         water: g.stressWater,
@@ -355,16 +441,16 @@ export function buildCellDiagnostics(
         cold: g.stressCold,
         nitrogen: g.stressNitrogen,
       },
-      todayGddC: env?.gddBase10C ?? 0,
-      todayEtMm: env?.etoMm ?? 0,
-      todayTMinC: env?.tMinC ?? 0,
-      todayTMaxC: env?.tMaxC ?? 0,
+      todayGddC: sourceThermalToday,
+      todayEtMm: env?.etoMm ?? null,
+      todayTMinC: temperatures?.tMinC ?? null,
+      todayTMaxC: temperatures?.tMaxC ?? null,
       cropMinTempC: crop.minTempC,
       cropMaxTempC: crop.maxTempC,
       sources: {
-        temp: env?.provenance.tMaxC ?? 'default',
-        precip: env?.provenance.precipMm ?? 'default',
-        eto: env?.provenance.etoMm ?? 'default',
+        temp: state.climate?.provenance.source ?? env?.provenance.tMaxC ?? null,
+        precip: env?.provenance.precipMm ?? null,
+        eto: env?.provenance.etoMm ?? null,
       },
     });
   }
@@ -652,8 +738,8 @@ export function useSimRun(opts: {
     if (!support.canReplay) {
       return {
         ok: false,
-        error: support.model === 'crop-model-v2'
-          ? `This run has no supported v2 daily reducer. ${support.reasons.join(' ')}`
+        error: support.model === 'crop-model-v2' || support.model === 'crop-model-v3'
+          ? `This run has no supported ${support.model === 'crop-model-v3' ? 'v3' : 'v2'} daily reducer. ${support.reasons.join(' ')}`
           : 'This run’s model inputs are unsupported; its stored summary is preserved.',
       };
     }

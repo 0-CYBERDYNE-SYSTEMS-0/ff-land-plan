@@ -24,7 +24,7 @@ export interface RunAssetPhysicsSnapshot {
   hydroRequiredCells: Partial<Record<GrowingTargetKey, string[]>>;
 }
 
-export type CropModelVersion = 'crop-model-v1' | 'crop-model-v2';
+export type CropModelVersion = 'crop-model-v1' | 'crop-model-v2' | 'crop-model-v3';
 
 /** Minimum crop/soil inputs frozen by the legacy reducer. */
 export interface RunModelInputsV1 {
@@ -90,6 +90,24 @@ export interface FrozenCropModelParametersV2 {
   lifecycle: 'plant' | 'fungus' | 'unsupported';
 }
 
+/** V3 keeps crop-level production parameters separate from the per-cell
+ * establishment state; initial above-ground DM is supplied for each cell. */
+export type FrozenCropModelParametersV3 = Omit<FrozenCropModelParametersV2, 'production'> & {
+  production: Omit<FrozenCropModelParametersV2['production'], 'initialDryMatterGPerM2'>;
+};
+
+export interface CropEstablishmentInput {
+  startEvent: CropStartEvent;
+  /** Emergence date for direct-sowing; transplant date for transplanting. */
+  establishedAtDate: string;
+  initialAboveGroundDryMatterGPerM2: number;
+  evidence: {
+    classification: 'measured' | 'explicit-assumption' | 'synthetic';
+    evidenceId: string;
+    validDomain: string;
+  };
+}
+
 /** Complete v2 snapshot shape, including explicit missing-parameter status. */
 export interface RunModelInputsV2 {
   model: 'run-inputs-v2';
@@ -100,7 +118,19 @@ export interface RunModelInputsV2 {
   qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
 }
 
-export type RunModelInputs = RunModelInputsV1 | RunModelInputsV2;
+/** V3 freezes per-cell post-emergence state and uses a separate establishment
+ * event date; older v2 inputs retain their historical sowing-day behavior. */
+export interface RunModelInputsV3 {
+  model: 'run-inputs-v3';
+  parameterSetVersion: 'crop-parameters-v4';
+  soil: RunModelInputsV2['soil'];
+  crops: Crop[];
+  cropParameters: FrozenCropModelParametersV3[];
+  establishmentByCell: Record<string, CropEstablishmentInput>;
+  qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
+}
+
+export type RunModelInputs = RunModelInputsV1 | RunModelInputsV2 | RunModelInputsV3;
 
 export interface FarmCalibration {
   version: 'farm-calibration-v1';
@@ -181,7 +211,7 @@ export type Intervention =
   | { kind: 'irrigate'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; mm: number }
   | { kind: 'fertilize'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; nKgHa: number }
   | { kind: 'refill-water'; date: string; litres: number }
-  | { kind: 'plant'; date: string; cell: string; target?: GrowingTargetRef; cropId: number; startEvent?: CropStartEvent }
+  | { kind: 'plant'; date: string; cell: string; target?: GrowingTargetRef; cropId: number; startEvent?: CropStartEvent; establishment?: CropEstablishmentInput }
   | { kind: 'harvest'; date: string; cell: string; target?: GrowingTargetRef }
   | { kind: 'surface'; date: string; surface: PlanSurface } // greenhouse/tent/etc.
   | { kind: 'weather'; fromDate: string; tempDeltaC?: number; precipMultiplier?: number };
@@ -221,14 +251,27 @@ export interface CellState {
   /** Plant-available N, kg/ha. OM-derived start + daily mineralization −
    * uptake − leaching (ecosystem.ts). */
   nitrogenKgHa: number;
+  /** V1/v2 development clock; in v3 this is establishment-relative physiology, not source maturity time. */
   gddAccumC: number;
-  biomassFrac: number; // 0..1 = gddAccum / gddRequired
-  /** v2 above-ground dry matter, g DM/m² of planted cell area. */
+  biomassFrac: number; // v1/v2 thermal progress; v3 source-maturity endpoint latch, not mass fraction
+  /** v2/v3 above-ground dry matter, g DM/m² of planted cell area. */
   dryMatterGPerM2?: number;
   /** v2 FAO-56 effective root-zone storage and accumulated closure residual, mm. */
   rootZoneWaterMm?: number;
   /** Frozen establishment event whose date is represented by plantedAtDay. */
   startEvent?: CropStartEvent;
+  /** V3 day at which the emerged/transplanted above-ground state activates. */
+  physiologyStartDay?: number;
+  /** V3 initial above-ground DM applied once at physiologyStartDay. */
+  establishmentDryMatterGPerM2?: number;
+  /** V3 latch prevents the initial state from being applied twice. */
+  establishmentApplied?: boolean;
+  /** V3 source-event thermal clock; starts at sowing/transplant per frozen thermal evidence. */
+  sourceThermalCdays?: number;
+  /** V3 has no source-supported stage map; remains false even when maturity is known. */
+  stageEstimateAvailable?: boolean;
+  /** V3 terminal crop mortality; v1/v2 visual mortality remains projected. */
+  dead?: boolean;
   /** v2 root-growth thermal clock and effective rooting depth. */
   rootThermalCdays?: number;
   rootZoneDepthCm?: number;
@@ -238,7 +281,7 @@ export interface CellState {
   rootZoneResidualMaxAbsMm?: number;
   /** v2 water removed when a replant shrinks effective root-zone capacity, mm. */
   rootZoneReplantDrainageMm?: number;
-  stage: number; // 0..5 = round(biomass × 5)
+  stage: number; // v1/v2: 0..5 from progress; v3: endpoint-only without sourced intermediate mapping
   floweringFrac: number; // 0..1 bump across the stage 3–4 band
   pestPressure: number; // 0..1, daily dynamics in ecosystem.ts
   /** Season-high pestPressure — the yield penalty reads the peak, not today. */
@@ -441,7 +484,7 @@ export interface RunSummary {
   irrigatedMm: number;
   etoMmTotal: number;
   totalYieldKg: number;
-  /** v1 catalog yields are fresh-mass estimates; v2 harvest-index output is dry mass. */
+  /** v1 catalog yields are fresh-mass estimates; v2/v3 harvest-index output is dry mass. */
   yieldBasis?: 'fresh-matter' | 'dry-matter';
   /** cropId → kg (JSON keys are strings). */
   yieldKgByCrop: Record<string, number>;

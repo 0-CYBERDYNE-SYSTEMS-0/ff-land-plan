@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanState } from '@/types';
 import type { RunConfig, RunRecord, RunSummary } from './types';
-import { compareRuns, yieldMassUnit } from './timeline';
+import { compareRuns, runSummaryHasAvailableEstimates, yieldMassUnit } from './timeline';
 
 function runConfig(): RunConfig {
   const basePlan: PlanState = {
@@ -94,17 +94,19 @@ describe('compareRuns', () => {
     expect(comparison.outbreakDays.delta).toBe(-5);
   });
 
-  it('omits numeric comparisons for a v2 placeholder summary', () => {
+  it('omits numeric comparisons for an unsupported v3 placeholder summary', () => {
     const a = record('run-a', 'A', summary({ totalYieldKg: 100, modelQualification: undefined }));
     const b = record('run-b', 'B', summary({
       totalYieldKg: 0,
       waterUseMm: 0,
       stressCellDays: 0,
+      yieldBasis: 'dry-matter',
       modelQualification: {
         status: 'unsupported',
-        reasons: ['The crop-model-v2 daily reducer is not enabled yet.'],
+        reasons: ['The frozen crop-model-v3 inputs are incomplete.'],
       },
     }));
+    b.config.cropModelVersion = 'crop-model-v3';
 
     const comparison = compareRuns(a, b);
 
@@ -113,9 +115,23 @@ describe('compareRuns', () => {
     expect(comparison.stressCellDays).toEqual({ a: 0, b: null, delta: null });
   });
 
-  it('does not compare fresh-matter yield with v2 dry-matter yield', () => {
+  it('hides numeric comparisons when a saved qualification status is unknown', () => {
+    const a = record('run-a', 'A', summary({ totalYieldKg: 100, modelQualification: undefined }));
+    const invalid = summary({
+      totalYieldKg: 3,
+      modelQualification: { status: 'pending', reasons: [] } as unknown as RunSummary['modelQualification'],
+    });
+    const b = record('run-b', 'B', invalid);
+
+    expect(runSummaryHasAvailableEstimates(invalid)).toBe(false);
+    expect(compareRuns(a, b).totalYieldKg).toEqual({ a: 100, b: null, delta: null });
+    expect(compareRuns(a, b).waterUseMm).toEqual({ a: 0, b: null, delta: null });
+  });
+
+  it('does not compare fresh-matter yield with v3 dry-matter yield', () => {
     const a = record('run-a', 'A', summary({ totalYieldKg: 100, waterUseMm: 50 }));
     const b = record('run-b', 'B', summary({ totalYieldKg: 3, waterUseMm: 40, yieldBasis: 'dry-matter' }));
+    b.config.cropModelVersion = 'crop-model-v3';
 
     const comparison = compareRuns(a, b);
 
@@ -125,9 +141,11 @@ describe('compareRuns', () => {
     expect(yieldMassUnit(comparison.yieldBasis)).toBeNull();
   });
 
-  it('labels same-basis v2 comparison output as dry matter', () => {
+  it('labels same-basis v3 comparison output as dry matter', () => {
     const a = record('run-a', 'A', summary({ totalYieldKg: 3, yieldBasis: 'dry-matter' }));
     const b = record('run-b', 'B', summary({ totalYieldKg: 4, yieldBasis: 'dry-matter' }));
+    a.config.cropModelVersion = 'crop-model-v3';
+    b.config.cropModelVersion = 'crop-model-v3';
     const comparison = compareRuns(a, b);
 
     expect(comparison.yieldBasis).toBe('dry-matter');

@@ -145,7 +145,8 @@ function metric(a: number | null | undefined, b: number | null | undefined): Com
 }
 
 export function runSummaryHasAvailableEstimates(summary: RunRecord['summary']): boolean {
-  return summary.modelQualification?.status !== 'unsupported';
+  const status = summary.modelQualification?.status;
+  return status === undefined || status === 'supported' || status === 'qualified';
 }
 
 /** Compare B against A without treating an unobserved value as zero. */

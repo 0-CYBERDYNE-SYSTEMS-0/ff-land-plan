@@ -1902,3 +1902,31 @@ snapshots changed, and no application implementation is claimed by this revision
 - Verification: `npm test` (41 files / 207 tests), `npm run build`, `npm run check:private`
   (499 tracked files), `git diff --check`, and evidence-manifest JSON parsing passed. The build
   retained the existing Vite config-loader and large-chunk advisories.
+
+## 2026-10-27 — BETA-02A v3 source and establishment clocks
+
+- The v3 reducer keeps the frozen source-event thermal clock from sowing/transplant through
+  observed emergence and uses it only for the source maturity endpoint. A separate physiology
+  clock starts at emergence/transplant; it is not converted into an intermediate crop stage.
+  No source-supported stage map exists, so stage stays unavailable throughout the run. The 3D
+  mesh holds its smallest juvenile authored pose throughout, including after the endpoint; this
+  is an illustrative placeholder, not a simulated growth trajectory. Diagnostics show the source
+  thermal clock explicitly.
+- V3 plant interventions validate evidence classification and expose synthetic/assumed initial
+  mass. Invalid qualification states and evidence classifications are unsupported. V1/v2 replay
+  semantics and new-run v1 dispatch remain unchanged.
+- Dry-matter summaries now label v3 output as harvestable dry matter; mixed fresh/dry comparisons
+  suppress yield deltas, and unknown or unsupported qualification status hides numeric output.
+  These paths remain qualified synthetic software behavior, not measured crop validation. The
+  full 02A production, stress, target, spacing and management acceptance matrix remains open.
+- V3 diagnostics show frozen root-zone storage using each cell's current root depth; if frozen
+  soil capacity is absent, the UI marks it unavailable instead of substituting the legacy 30 cm
+  bucket. The source thermal “today” value uses the same effective or interior temperatures shown
+  in diagnostics; inactive pre-plant/dead/mature cells report zero, while an active source method
+  that cannot be evaluated is shown as unavailable. Before the first stepped day, diagnostics do
+  not borrow the first future environment-series temperatures, ET0 or provenance tags; those
+  values are shown as unavailable until a day has completed.
+- No candidate comparison was run. Verification: `npm test` (42 files / 216 tests),
+  `npm run typecheck`, `npm run build`, `npm run check:private` (499 tracked files), and
+  `git diff --check` passed. The build retained existing Vite config-loader and large-chunk
+  advisories.
