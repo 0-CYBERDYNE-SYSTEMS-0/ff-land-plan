@@ -1574,3 +1574,269 @@ describe('frozen crop model inputs and replay support', () => {
     }
   });
 });
+
+describe('crop-model-v3 frozen-input harvest payout', () => {
+  const crop = cropLibrary.find((entry) => entry.id === 1)!;
+  const thermal = cropThermalParams.find((entry) => entry.cropId === crop.id)!;
+  const initialDryMatterGPerM2 = 12;
+  const harvestIndex = 0.5;
+  const cellM = 0.4;
+  const eligibleCells = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0'];
+  const unestablishedCell = '6,0';
+  const deadCell = '7,0';
+  const immatureCell = '8,0';
+  const startDate = '2026-10-01';
+  const target = { kind: 'floor' as const };
+  const maturityTarget = thermal.gddToMaturityCdays[1];
+  const expectedPayoutKg = initialDryMatterGPerM2 * cellM ** 2 * harvestIndex / 1000;
+
+  function dateAtOffset(offset: number): string {
+    return new Date(Date.parse(`${startDate}T00:00:00Z`) + offset * 86_400_000)
+      .toISOString().slice(0, 10);
+  }
+
+  function dailyEnvironment(offset: number) {
+    return {
+      date: dateAtOffset(offset),
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 0,
+      dliNaturalMol: 0,
+      gddBase10C: 15,
+      provenance: {
+        tMinC: 'default' as const,
+        tMaxC: 'default' as const,
+        precipMm: 'default' as const,
+        etoMm: 'default' as const,
+        dliNaturalMol: 'default' as const,
+      },
+    };
+  }
+
+  function frozenRun(options: {
+    cells: string[];
+    autoHarvest: boolean;
+    interventions?: RunConfig['interventions'];
+  }): RunConfig {
+    const cellKeys = options.cells.map((cell) => targetCellKey(target, cell));
+    const establishmentEvidence = {
+      classification: 'synthetic' as const,
+      evidenceId: 'TEST-V3-HARVEST-PAYOUT',
+      validDomain: 'synthetic v3 payout regression only',
+    };
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      autoHarvest: options.autoHarvest,
+      interventions: options.interventions ?? [],
+      basePlan: {
+        ...config().basePlan,
+        widthM: options.cells.length * cellM,
+        heightM: cellM,
+        cellM,
+        planting: Object.fromEntries(options.cells.map((cell) => [cell, crop.id])),
+        plantedAt: Object.fromEntries(options.cells.map((cell) => [cell, startDate])),
+      },
+      cropStartEvents: Object.fromEntries(cellKeys.map((key) => [key, 'transplanting' as const])),
+    });
+    const modelInputs = freezeRunModelInputsV3(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [crop],
+      cropParametersV2: [
+        {
+          ...syntheticStartEventParameter(crop.id, thermal),
+          production: {
+            ...syntheticStartEventParameter(crop.id, thermal).production,
+            harvestIndex,
+          },
+        },
+      ],
+      cropEstablishmentByCell: Object.fromEntries(options.cells.map((_cell, index) => {
+        const key = cellKeys[index]!;
+        return [key, {
+          startEvent: 'transplanting' as const,
+          establishedAtDate: startDate,
+          initialAboveGroundDryMatterGPerM2: initialDryMatterGPerM2,
+          evidence: establishmentEvidence,
+        }];
+      })),
+    });
+    return { ...run, modelInputs };
+  }
+
+  function findMaturity(run: RunConfig, cells: string[]): { dayIndex: number; envSeries: ReturnType<typeof dailyEnvironment>[] } {
+    let state = createRun(run);
+    const envSeries: ReturnType<typeof dailyEnvironment>[] = [];
+    for (let offset = 0; offset < 500; offset++) {
+      const env = dailyEnvironment(offset);
+      envSeries.push(env);
+      state = stepDay(state, env, run).state;
+      if (cells.every((cell) => state.cells[targetCellKey(target, cell)]?.biomassFrac === 1)) {
+        envSeries.push(dailyEnvironment(offset + 1));
+        return { dayIndex: offset, envSeries };
+      }
+    }
+    throw new Error('Frozen v3 fixture did not reach its maturity endpoint within 500 days.');
+  }
+
+  function runRecord(
+    id: string,
+    run: RunConfig,
+    envSeries: ReturnType<typeof dailyEnvironment>[],
+    summary: RunRecord['summary'],
+  ): RunRecord {
+    return {
+      id,
+      farmId: run.farmId,
+      label: id,
+      createdAt: `${startDate}T00:00:00.000Z`,
+      config: run,
+      envSeries,
+      summary,
+      status: 'complete',
+    };
+  }
+
+  it('pays manual v3 harvests only for established mature live cells and replays the saved summary', () => {
+    const manualCells = [...eligibleCells, unestablishedCell, deadCell, immatureCell];
+    const harvestDate = startDate;
+    const manualSeededPath = () => {
+      const run = frozenRun({
+        cells: manualCells,
+        autoHarvest: false,
+        interventions: manualCells.map((cell) => ({ kind: 'harvest' as const, date: harvestDate, cell })),
+      });
+      const support = inspectRunModelSupport(run);
+      expect(support, JSON.stringify(support)).toMatchObject({ status: 'qualified', canReplay: true });
+      const state = createRun(run);
+      for (const cell of eligibleCells) {
+        const key = targetCellKey(target, cell);
+        state.cells[key] = {
+          ...state.cells[key]!,
+          biomassFrac: 1,
+          dryMatterGPerM2: initialDryMatterGPerM2,
+          gddAccumC: maturityTarget,
+          sourceThermalCdays: maturityTarget,
+          establishmentApplied: true,
+        };
+      }
+      const unestablishedKey = targetCellKey(target, unestablishedCell);
+      // Seed the impossible mature-but-unestablished state to isolate the manual payout guard;
+      // the frozen transplant date above remains valid and supportable.
+      state.cells[unestablishedKey] = {
+        ...state.cells[unestablishedKey]!,
+        biomassFrac: 1,
+        dryMatterGPerM2: initialDryMatterGPerM2,
+        gddAccumC: maturityTarget,
+        sourceThermalCdays: maturityTarget,
+        establishmentApplied: false,
+      };
+      const deadKey = targetCellKey(target, deadCell);
+      state.cells[deadKey] = {
+        ...state.cells[deadKey]!,
+        biomassFrac: 1,
+        dryMatterGPerM2: initialDryMatterGPerM2,
+        gddAccumC: maturityTarget,
+        sourceThermalCdays: maturityTarget,
+        establishmentApplied: true,
+        dead: true,
+      };
+      const immatureKey = targetCellKey(target, immatureCell);
+      state.cells[immatureKey] = {
+        ...state.cells[immatureKey]!,
+        biomassFrac: 0,
+        dryMatterGPerM2: initialDryMatterGPerM2,
+        gddAccumC: maturityTarget / 2,
+        sourceThermalCdays: maturityTarget / 2,
+        establishmentApplied: true,
+      };
+      return { run, result: stepDay(state, dailyEnvironment(0), run) };
+    };
+
+    const first = manualSeededPath();
+    const replay = manualSeededPath();
+    const harvested = first.result.events.filter((event) => event.kind === 'harvested');
+    const tooEarly = first.result.events.filter((event) => event.kind === 'harvest-too-early');
+    expect(first.result.events).toEqual(replay.result.events);
+    expect(first.result.state).toEqual(replay.result.state);
+    expect(harvested).toHaveLength(6);
+    expect(harvested.map((event) => event.cell).sort()).toEqual(
+      eligibleCells.map((cell) => targetCellKey(target, cell)).sort(),
+    );
+    for (const event of harvested) {
+      if (event.kind === 'harvested') expect(event.data.yieldKg).toBeCloseTo(0.00096, 12);
+    }
+    expect(harvested.reduce((sum, event) => (
+      sum + (event.kind === 'harvested' ? event.data.yieldKg : 0)
+    ), 0)).toBeCloseTo(0.00576, 12);
+    expect(tooEarly).toHaveLength(1);
+    expect(tooEarly[0]?.cell).toBe(targetCellKey(target, immatureCell));
+    expect(harvested.some((event) => event.cell === targetCellKey(target, unestablishedCell))).toBe(false);
+    expect(harvested.some((event) => event.cell === targetCellKey(target, deadCell))).toBe(false);
+
+    const baseline = frozenRun({ cells: eligibleCells, autoHarvest: false });
+    const maturity = findMaturity(baseline, eligibleCells);
+    const actualHarvestDate = maturity.envSeries[maturity.dayIndex + 1]!.date;
+    const manualInterventions = eligibleCells.flatMap((cell, index) => {
+      const request = { kind: 'harvest' as const, date: actualHarvestDate, cell };
+      return index === 0 ? [request, { ...request }] : [request];
+    });
+    const manualRun = {
+      ...baseline,
+      interventions: manualInterventions,
+    };
+    const original = simulateRun(manualRun, maturity.envSeries);
+    const record = runRecord('run:v3:manual-harvest-payout', manualRun, maturity.envSeries, original.summary);
+    const persistedReplay = simulateRun(record.config, record.envSeries);
+    const persistedHarvests = original.events.filter((event) => event.kind === 'harvested');
+    expect(manualRun.interventions.filter((intervention) => (
+      intervention.kind === 'harvest' && intervention.cell === eligibleCells[0]
+    ))).toHaveLength(2);
+    expect(persistedHarvests).toHaveLength(6);
+    expect(persistedHarvests.map((event) => event.cell)).toHaveLength(
+      new Set(persistedHarvests.map((event) => event.cell)).size,
+    );
+    expect(persistedHarvests.every((event) => event.dayIndex === maturity.dayIndex + 1)).toBe(true);
+    expect(persistedHarvests.every((event) => event.kind !== 'harvested' || event.data.yieldKg === expectedPayoutKg)).toBe(true);
+    expect(persistedReplay.events).toEqual(original.events);
+    expect(persistedReplay.finalState).toEqual(original.finalState);
+    expect(persistedReplay.summary).toEqual(record.summary);
+    expect(record.summary.totalYieldKg).toBe(0.01);
+    expect(original.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+    expect(record.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+  });
+
+  it('auto-harvests v3 on the actual frozen maturity endpoint once and replays the saved summary', () => {
+    const baseline = frozenRun({ cells: eligibleCells, autoHarvest: false });
+    const maturity = findMaturity(baseline, eligibleCells);
+    const autoRun = { ...baseline, autoHarvest: true };
+    const original = simulateRun(autoRun, maturity.envSeries);
+    const record = runRecord('run:v3:auto-harvest-payout', autoRun, maturity.envSeries, original.summary);
+    const replay = simulateRun(record.config, record.envSeries);
+    const harvested = original.events.filter((event) => event.kind === 'harvested');
+
+    expect(harvested).toHaveLength(6);
+    expect(harvested.every((event) => event.dayIndex === maturity.dayIndex)).toBe(true);
+    expect(harvested.every((event) => event.kind !== 'harvested' || event.data.yieldKg === expectedPayoutKg)).toBe(true);
+    expect(harvested.reduce((sum, event) => (
+      sum + (event.kind === 'harvested' ? event.data.yieldKg : 0)
+    ), 0)).toBeCloseTo(0.00576, 12);
+    expect(harvested.map((event) => event.cell)).toHaveLength(new Set(harvested.map((event) => event.cell)).size);
+    expect(original.events.some((event) => event.kind === 'harvested' && event.dayIndex === maturity.dayIndex + 1)).toBe(false);
+    for (const cell of eligibleCells) {
+      expect(original.finalState.cells[targetCellKey(target, cell)]).toMatchObject({
+        biomassFrac: 1,
+        sourceThermalCdays: maturityTarget,
+        readyAtDay: maturity.dayIndex,
+        harvested: true,
+      });
+    }
+    expect(original.summary.totalYieldKg).toBe(0.01);
+    expect(record.summary.totalYieldKg).toBe(0.01);
+    expect(original.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+    expect(record.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+    expect(replay.events).toEqual(original.events);
+    expect(replay.finalState).toEqual(original.finalState);
+    expect(replay.summary).toEqual(record.summary);
+  });
+});

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2 and partial source-equation software checkpoint; candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v3 harvest software checkpoints; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -24,7 +24,8 @@
     "cropProductionReferenceCoverage": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json",
     "dynamicCanopyEngineFixture": "quality/beta/evidence/water-sa-2018-dynamic-canopy-engine-fixture.json",
     "environmentV2TranspirationFixture": "quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json",
-    "sourceEquationOnlyFixture": "BROCCOLI-OHAYOU-SPRING-CONTROL-SYNTHETIC-SOLAR-EQUATION-01"
+    "sourceEquationOnlyFixture": "BROCCOLI-OHAYOU-SPRING-CONTROL-SYNTHETIC-SOLAR-EQUATION-01",
+    "v3HarvestPayoutSoftwareFixture": "V3-FROZEN-DM-HARVEST-PAYOUT-SYNTHETIC-01"
   },
   "sources": [
     {
@@ -1235,6 +1236,43 @@
       "reproduction": "npx vitest run src/lib/sim/ohayou-production.test.ts",
       "candidateComparison": false,
       "status": "Equation-only software behavior. A-03 remains UNVERIFIED; this fixture does not establish a complete source-backed crop profile, measured validation, or prediction accuracy."
+    },
+    {
+      "id": "V3-FROZEN-DM-HARVEST-PAYOUT-SYNTHETIC-01",
+      "classification": "synthetic frozen-input software regression; not a crop benchmark",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "not asserted; catalog identity is fixture routing only and production/establishment values are synthetic"
+      },
+      "environment": "synthetic floor-cell reducer sequence with known zero DLI; no weather reproduction or observed site inputs",
+      "modelVersion": "crop-model-v3 with frozen crop, soil, per-cell establishment, and synthetic production inputs",
+      "syntheticInputs": {
+        "initialAboveGroundDryMatterGPerM2PerCell": 12,
+        "harvestIndex": 0.5,
+        "cellM": 0.4,
+        "usableDliMolParM2Day": 0,
+        "manualEligibleCells": 6,
+        "manualGateCases": [
+          "mature but unestablished state deliberately seeded to isolate the manual eligibility guard",
+          "mature established dead state",
+          "established live immature state"
+        ],
+        "manualDuplicateRequest": "one eligible cell receives two same-date manual harvest interventions",
+        "automaticMaturity": "six cells advance through stepDay to the frozen v3 source maturity endpoint under synthetic daily temperatures"
+      },
+      "expected": {
+        "payoutKgPerEligibleCell": 0.00096,
+        "sixEventSumKg": 0.00576,
+        "roundedSummaryTotalYieldKg": 0.01,
+        "roundedSummaryYieldKgByCrop": 0.01,
+        "automaticPayoutTiming": "maturity endpoint day, with no following-day duplicate",
+        "replay": "events, final state, and stored summary exactly equal for identical frozen inputs and environment series",
+        "tolerance": "Each event and six-event sum within 1e-12 kg; both stored summaries exactly 0.01 kg under the reducer's two-decimal aggregate rounding; replay equality exact. Software tolerances only."
+      },
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"crop-model-v3 frozen-input harvest payout\"",
+      "candidateComparison": false,
+      "status": "Synthetic v3 payout, eligibility-gate, and replay software evidence only. A-07 remains UNVERIFIED overall; this fixture does not establish crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observations, or predictive accuracy."
     }
   ],
   "coverageSummary": {
@@ -2811,6 +2849,14 @@
         "status": "independent GPT-6 Luna max tolerance review approved for synthetic software invariants; focused implementation checks pass locally; candidate comparison not run",
         "scope": "Synthetic v4/environment-v2 software invariant: FAO-56 wet/dry Ks, one per-cell actual-transpiration flux reused once for root storage loss and room vapour source, prior-day ET-factor lag, multi-cell area conversion, and wet/dry RH direction. No climate calibration, measured or candidate comparison",
         "evidence": "quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json"
+      },
+      {
+        "id": "v3-frozen-dm-manual-auto-harvest-payout",
+        "tolerance": "each event payout and six-event sum within 1e-12 kg; stored total and per-crop summaries exactly 0.01 kg after the reducer's two-decimal aggregate rounding; replayed events, final state, and summary exactly equal",
+        "status": "independent GPT-6 Luna max review approved; synthetic software invariant; locally verified; candidate comparison not run",
+        "basis": "Per-cell arithmetic is 12 g DM/m² × 0.4² m² × synthetic harvest index 0.5 / 1000 = 0.00096 kg; six cells sum to 0.00576 kg before the existing two-decimal summary rounding. The 1e-12 kg bound checks JavaScript arithmetic only; it is not a model or prediction tolerance.",
+        "scope": "Synthetic crop-model-v3 frozen-input regression with known zero light: manual established/live/mature payout, unestablished/dead/immature gates, repeated same-date manual request suppression, actual source maturity endpoint auto-payout, next-day no-repeat, aggregate rounding, and deterministic replay. One manually seeded impossible mature-but-unestablished state isolates an eligibility guard; no mortality model behavior is inferred.",
+        "evidence": "src/lib/sim/model-inputs.test.ts"
       }
     ]
   },
@@ -2818,6 +2864,6 @@
     "calibrationRecords": [],
     "holdoutRecords": [],
     "candidateComparisonRuns": [],
-    "note": "Evidence records above describe source availability and published reference points. Parameter fixtures check source transcription and reducer arithmetic; the environment-v2 fixture checks synthetic software coupling invariants. No candidate has been evaluated; the Michelon measured record remains non-executable and no predictive comparison is authorized."
+    "note": "Evidence records above separate published source availability, synthetic parameter/equation fixtures, and software regressions. The environment-v2 fixture checks synthetic enclosure coupling; the v3 harvest fixture checks payout/gate/replay behavior only. No candidate has been evaluated; the Michelon measured record remains non-executable and no predictive comparison is authorized."
   }
 }
