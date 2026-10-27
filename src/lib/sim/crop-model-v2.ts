@@ -3,6 +3,14 @@ import type { CropThermalParam } from '@/data/cropThermalParams';
 /** Horticultural conversion used by light.ts: 4.5 mol PAR per MJ PAR. */
 export const PAR_MOL_PER_MJ = 4.5;
 
+/** PAR interception from LAI and K_PAR: FI_PAR = 1 - exp(-K_PAR × LAI). */
+export function fractionalParInterceptionFromLai(leafAreaIndex: number, kPar: number): number {
+  if (![leafAreaIndex, kPar].every(Number.isFinite) || leafAreaIndex < 0 || kPar < 0) {
+    throw new RangeError('LAI and K_PAR must be finite and nonnegative.');
+  }
+  return 1 - Math.exp(-kPar * leafAreaIndex);
+}
+
 export type ThermalAccumulationMethod =
   | 'mean-base'
   | 'max-min-horizontal-cutoff'

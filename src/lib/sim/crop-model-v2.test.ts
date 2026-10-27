@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import { cropThermalParams } from '@/data/cropThermalParams';
 import rootReferenceCoverageRecord from '../../../quality/beta/evidence/fao56-root-reference-coverage.json';
+import waterSaParameterReferences from '../../../quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json';
 import {
   dailyDryMatterProduction,
   dailyThermalUnits,
   effectiveRootDepthCmAtThermalTime,
   fao56AdjustedDepletionFraction,
+  fractionalParInterceptionFromLai,
   stepFao56RootZone,
   thermalDevelopmentRange,
   type RootZoneState,
@@ -261,6 +263,22 @@ describe('crop model v2 equation helpers', () => {
       expect(entry.maximumEffectiveRootDepthRangeM![1]).toBeGreaterThanOrEqual(entry.maximumEffectiveRootDepthRangeM![0]);
       expect(entry.depletionFractionAtEtc5MmDay).toBeGreaterThan(0);
       expect(entry.depletionFractionAtEtc5MmDay).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('reproduces the preregistered synthetic LAI-to-PAR interception equation', () => {
+    const fixture = waterSaParameterReferences.preregisteredSyntheticCanopyEquationFixture;
+    const fractions = fixture.inputs.laiValues.map((lai) =>
+      fractionalParInterceptionFromLai(lai, fixture.inputs.kpar));
+
+    expect(fixture.candidateComparison).toBe(false);
+    expect(fractions[0]).toBe(0);
+    for (let index = 0; index < fractions.length; index += 1) {
+      expect(Math.abs(fractions[index]! - fixture.expectedFractions[index]!))
+        .toBeLessThanOrEqual(fixture.tolerance.maximumDeviation);
+      expect(fractions[index]).toBeGreaterThanOrEqual(0);
+      expect(fractions[index]).toBeLessThan(1);
+      if (index > 0) expect(fractions[index]).toBeGreaterThan(fractions[index - 1]!);
     }
   });
 
