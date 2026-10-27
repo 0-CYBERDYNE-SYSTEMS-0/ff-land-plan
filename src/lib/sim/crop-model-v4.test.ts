@@ -324,15 +324,23 @@ describe('crop-model-v4 dynamic canopy and two-pool production', () => {
     const run = frozenRun();
     const start = createRun(run);
     const before = start.cells['0,0']!;
-    const zero = stepDay(start, dailyEnvironment('2026-10-01', 0), run).state.cells['0,0']!;
+    const zeroResult = stepDay(start, dailyEnvironment('2026-10-01', 0), run);
+    const zero = zeroResult.state.cells['0,0']!;
     expect(zero.canopyDryMatterGPerM2).toBe(before.canopyDryMatterGPerM2);
     expect(zero.harvestableDryMatterGPerM2).toBe(before.harvestableDryMatterGPerM2);
+    expect(zero.dryMatterGPerM2).toBe(before.dryMatterGPerM2);
+    expect(zero.dryMatterGPerM2).toBe(zero.canopyDryMatterGPerM2! + zero.harvestableDryMatterGPerM2!);
 
     const unknownEnv = { ...dailyEnvironment('2026-10-01'), dliNaturalMol: undefined };
-    const unknown = stepDay(start, unknownEnv, run).state.cells['0,0']!;
+    const unknownResult = stepDay(start, unknownEnv, run);
+    const unknown = unknownResult.state.cells['0,0']!;
     expect(unknown.canopyDryMatterGPerM2).toBe(before.canopyDryMatterGPerM2);
     expect(unknown.harvestableDryMatterGPerM2).toBe(before.harvestableDryMatterGPerM2);
     expect(unknown.dryMatterGPerM2).toBe(before.dryMatterGPerM2);
+    expect(unknown.dryMatterGPerM2).toBe(unknown.canopyDryMatterGPerM2! + unknown.harvestableDryMatterGPerM2!);
+    expect(unknownResult.state.modelQualificationReasons?.some((reason) => (
+      /unknown/i.test(reason) && /(DLI|light)/i.test(reason)
+    ))).toBe(true);
   });
 
   it('ignores and does not score stage observations without a source-supported stage map', () => {

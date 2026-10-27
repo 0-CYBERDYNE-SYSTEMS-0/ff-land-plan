@@ -35,6 +35,13 @@ The package includes:
 - `SPEC-02D-SEASONS-PERENNIALS.md`
 - `SPEC-02E-OBSERVATIONS-SYNTHETIC-CSV.md`
 
+## Current integration checkpoint — 2026-10-27
+
+- The latest code/evidence commit is being prepared on the existing `integration/beta-readiness-main-20261027` branch for draft PR #82. Recheck exact branch, SHA, PR head/base and named checks before relying on this checkpoint.
+- The v4 dynamic-canopy fixture now asserts its known-zero and unknown-light acceptance details, including pool closure and an unknown-DLI qualification reason. After the focused, v4-file and full sim-suite checks passed, its execution count is 1. This is synthetic engine software evidence only; A-03, A-05, A-06 and overall 02A remain UNVERIFIED.
+- The next substantive 02A candidate is an engine-level FAO-56 Example 37 regression through frozen v2 inputs and `stepDay`, after reading the full root-reference fixture, preregistering its synthetic routing inputs and confirming all tolerances with the independent validator. Do not call this crop validation or advance to 02B.
+- Latest local gates for the canopy test patch: `npm test` (46 files / 244 tests), typecheck, standard/demo/Pages builds, private-file guard (521 tracked files), manifest JSON parsing and `git diff --check` passed. Vite native-config-loader and large-chunk warnings are pre-existing. Exact-head PR CI for the new commit is pending.
+
 ## Team and tools
 
 Use a GPT-6 Luna worker at max reasoning and a separate GPT-6 Luna validator at max reasoning for every implementation stage. You orchestrate, inspect evidence, resolve issues and own integration. Explicitly assign files/responsibilities; tell workers they are not alone and must preserve others' changes. Validator reviews independently and should not edit the worker's implementation. Fix concrete findings, repeat affected checks/review, then commit the stage before advancing.
