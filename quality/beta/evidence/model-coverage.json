@@ -298,7 +298,7 @@
     {
       "id": "LETTUCE-ROSALBA-GREENHOUSE-RUE-2003",
       "sourceId": "BECCAFICHI-2003-ACTAHORT-614-75",
-      "classification": "measured-study / production-parameter-reference; not validation fixture",
+      "classification": "measured-study / parameter reference only; not validation fixture",
       "crop": {
         "slug": "lettuce",
         "cultivar": "Rosalba; butterhead (Lactuca sativa var. capitata)"
@@ -315,7 +315,7 @@
       "limitations": [
         "This value applies to above-ground dry matter, not whole-plant biomass or harvested marketable mass.",
         "No source-independent generic canopy interception fraction/trajectory is supplied by this parameter record.",
-        "This parameter reference is calibration evidence only; it does not validate a prediction."
+        "This parameter reference is not calibration evidence for a candidate and does not validate a prediction."
       ],
       "sourceUrl": "https://doi.org/10.17660/ActaHortic.2003.614.75",
       "sourceVersion": "2003 Acta Horticulturae 614, pages 507–513",
@@ -2329,6 +2329,18 @@
         "tolerance": "±0.005 m",
         "status": "preliminarily-reviewed-transcription-only",
         "basis": "half the source-reported 0.01 m display increment for 0.12 m initial root depth"
+      },
+      {
+        "id": "lettuce-yuma-root-base-temperature-transcription",
+        "tolerance": "±0.05 °C",
+        "status": "preliminarily-reviewed-transcription-only",
+        "basis": "half the source-reported 0.1 °C display increment for the 4.5 °C lettuce root-GDD base"
+      },
+      {
+        "id": "lettuce-yuma-root-upper-temperature-transcription",
+        "tolerance": "±0.5 °C",
+        "status": "preliminarily-reviewed-transcription-only",
+        "basis": "half the integer display increment for the 28 °C lettuce root-GDD upper cutoff"
       },
       {
         "id": "lettuce-yuma-root-maximum-depth",
