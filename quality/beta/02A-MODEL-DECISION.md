@@ -164,6 +164,8 @@ The frozen ten-day run uses `run-inputs-v2` / `crop-parameters-v3`, a tomato cat
 
 S2 independently approved software-arithmetic tolerances: p/RAW/Ks ≤1e-12 absolute; daily ET/storage/depletion/residual ≤1e-9 mm; signed ten-day residual ≤1e-8 mm; daily DM increment ≤1e-9 g/m²; cumulative DM gain ≤1e-8 g/m². These do not bound biological/model error. S1 confirmed the fixture is implementable without production changes and estimated 4–6 hours for preregistration plus the focused test. S3 approved the evidence-boundary wording. The test must not run before this reviewed record and manifest are committed and exact-head PR CI passes.
 
+Preregistration commit `ec0876a314b81494e26be323bfdc638ab030bbf8` passed exact-head PR #82 run [40604271469](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40604271469). All four named checks passed: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`. Pages smoke passed 3/3 journeys: Pages base-path boot, unsupported environment-v2 summary retention, and unsupported v4 lifecycle explanation with summary retention. This CI verifies the preregistration commit and existing repository behavior only; the new reducer fixture has not run and no crop accuracy or biological validity is established.
+
 This narrow fixture does not exercise positive drainage, infiltration/runoff, irrigation delivery, capillary rise, root-depth or media variants, full nutrient behavior, measured trials, or independent reference-model agreement. A-05 and 02A remain UNVERIFIED. Any production-code change requires a separate design, estimate, and independent review.
 
 ## Remaining 02A gates

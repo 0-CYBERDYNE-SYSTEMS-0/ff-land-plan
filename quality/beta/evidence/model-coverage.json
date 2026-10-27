@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down preregistered after independent review but not executed; candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down preregistered and exact-head CI passed on ec0876a, but not executed; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -1608,7 +1608,7 @@
       "evidence": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json",
       "reproduction": "Planned: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\"",
       "candidateComparison": false,
-      "status": "Preregistered after independent tolerance and evidence-boundary review; no reducer candidate executed; A-05 and 02A remain UNVERIFIED."
+      "status": "Preregistered after independent tolerance and evidence-boundary review; exact-head PR #82 CI passed on ec0876a (run 40604271469); no reducer candidate executed; A-05 and 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
@@ -3197,7 +3197,7 @@
       {
         "id": "fao56-v2-adjusted-p-root-drydown-integration",
         "tolerance": "p and RAW ≤1e-12 absolute; Ks ≤1e-12; daily ET/storage/depletion/residual ≤1e-9 mm and signed cumulative residual ≤1e-8 mm; daily DM gain ≤1e-9 g/m² and cumulative gain ≤1e-8 g/m²",
-        "status": "approved by independent GPT-6 Luna max review for synthetic software arithmetic only; preregistered, not executed; candidate comparison not authorized",
+        "status": "approved by independent GPT-6 Luna max review for synthetic software arithmetic only; preregistration exact-head CI passed on ec0876a (run 40604271469); reducer fixture not executed; candidate comparison not authorized",
         "basis": "Independent recurrence from the frozen FAO-56 p-adjustment and root-zone equations plus the v2 RUE equation; bounds account for double-precision operation order and ten daily state updates only, not model error.",
         "scope": "Synthetic v2 reducer integration with source-derived reference inputs adapted to v2 p adjustment (p 0.40→0.36), zero inflows, fixed depth, a paired wet control, and synthetic known-light production response. No Example 37 reproduction, drainage/root-depth/media/nutrient coverage, measured validation, or reference agreement.",
         "evidence": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json"
