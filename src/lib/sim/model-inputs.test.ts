@@ -1256,6 +1256,70 @@ describe('frozen crop model inputs and replay support', () => {
     expect(duplicateManualHarvestReplay.finalState).toEqual(duplicateManualHarvest.finalState);
     expect(duplicateManualHarvestReplay.summary).toEqual(duplicateManualHarvest.summary);
 
+    const earlyHarvestDate = sunnySeries[0]!.date;
+    expect(earlyHarvestDate).toBe('2026-10-01');
+    const earlyHarvestRequest = {
+      kind: 'harvest' as const,
+      date: earlyHarvestDate,
+      cell: '0,0',
+    };
+    const eligibleHarvestRequest = {
+      ...earlyHarvestRequest,
+      date: firstEligibleDate,
+    };
+    const earlyHarvestRetryRun = {
+      ...autoHarvestDisabledRun,
+      interventions: [earlyHarvestRequest, eligibleHarvestRequest],
+    };
+    expect(earlyHarvestRetryRun.autoHarvest).toBe(false);
+    expect(earlyHarvestRetryRun.interventions).toEqual([
+      earlyHarvestRequest,
+      eligibleHarvestRequest,
+    ]);
+
+    const earlyHarvestTick = stepDay(createRun(earlyHarvestRetryRun), sunnySeries[0]!, earlyHarvestRetryRun);
+    const earlyRejectedEvents = earlyHarvestTick.events.filter((event) => event.kind === 'harvest-too-early');
+    expect(earlyRejectedEvents).toHaveLength(1);
+    expect(earlyRejectedEvents[0]).toMatchObject({
+      dayIndex: 0,
+      date: earlyHarvestDate,
+      kind: 'harvest-too-early',
+      cell: '0,0',
+      data: { biomass: 0, minimum: 0.8 },
+    });
+    expect(earlyHarvestTick.events.filter((event) => event.kind === 'harvested')).toHaveLength(0);
+    expect(earlyHarvestTick.state.cells['0,0']?.harvested ?? false).toBe(false);
+
+    const earlyHarvestRetry = simulateRun(earlyHarvestRetryRun, sunnySeries);
+    const earlyHarvestRetryReplay = simulateRun(earlyHarvestRetryRun, sunnySeries);
+    const retryEarlyEvents = earlyHarvestRetry.events.filter((event) => event.kind === 'harvest-too-early');
+    const retryHarvestedEvents = earlyHarvestRetry.events.filter((event) => event.kind === 'harvested');
+    expect(retryEarlyEvents).toHaveLength(1);
+    expect(retryEarlyEvents[0]).toMatchObject({
+      dayIndex: 0,
+      date: earlyHarvestDate,
+      cell: '0,0',
+      data: { biomass: 0, minimum: 0.8 },
+    });
+    expect(retryHarvestedEvents).toHaveLength(1);
+    expect(retryHarvestedEvents[0]).toMatchObject({
+      dayIndex: firstEligibleDayIndex,
+      date: firstEligibleDate,
+      kind: 'harvested',
+      cell: '0,0',
+    });
+    const retryHarvestedEvent = retryHarvestedEvents[0];
+    if (retryHarvestedEvent?.kind === 'harvested') {
+      expect(Math.abs(retryHarvestedEvent.data.yieldKg - 0.007875)).toBeLessThanOrEqual(1e-12);
+    }
+    expect(earlyHarvestRetry.summary.harvestReadyDay).toBe(62);
+    expect(earlyHarvestRetry.finalState.cells['0,0']?.harvested).toBe(true);
+    expect(earlyHarvestRetry.summary.totalYieldKg).toBe(0.01);
+    expect(earlyHarvestRetry.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+    expect(earlyHarvestRetryReplay.events).toEqual(earlyHarvestRetry.events);
+    expect(earlyHarvestRetryReplay.finalState).toEqual(earlyHarvestRetry.finalState);
+    expect(earlyHarvestRetryReplay.summary).toEqual(earlyHarvestRetry.summary);
+
     const replacementCrop = cropLibrary.find((entry) => entry.id !== crop.id && entry.category !== 'fungus')!;
     const replantInputs = structuredClone(inputs) as RunModelInputsV2;
     replantInputs.crops.push(replacementCrop);
