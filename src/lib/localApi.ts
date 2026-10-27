@@ -882,7 +882,6 @@ export const localApi: Api = {
       : undefined;
     const config: RunConfig = {
       farmId: input.farmId,
-      cropModelVersion: 'crop-model-v2',
       // Deep fork: a run never aliases the live plan (which keeps mutating).
       basePlan: structuredClone(plan),
       ...(ENV_RECORDS_ENABLED && environment ? { environment: environmentSnapshot(environment) } : {}),

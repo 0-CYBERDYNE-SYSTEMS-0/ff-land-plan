@@ -177,6 +177,19 @@ returning a `RunRecord` (config + frozen daily env series + summary; per-tick
 state is never stored — replay rebuilds it). `PUT /sim-runs/:id` accepts the
 complete frozen record to persist a management fork or its small cached
 ensemble result without recomposing weather or reading the current plan.
+The returned and persisted `RunRecord.config` must round-trip `cropModelVersion`
+and `modelInputs` without dropping or rewriting them. `cropModelVersion` names
+the crop equations (`crop-model-v1` or `crop-model-v2`; it is absent on older
+records). `modelInputs.model` is a separate schema tag: `run-inputs-v1` freezes
+the crop records and soil fields used by v1, while `run-inputs-v2` also carries
+`parameterSetVersion`, per-crop parameters and explicit qualification status.
+The shape tag does not choose the equations. Complete v1 inputs on an older
+record with no `cropModelVersion` retain v1 replay semantics; a missing model
+version plus missing frozen inputs, or an unknown version, must preserve the
+stored summary and must not be replayed from the current catalog or caller
+context. While the v2 reducer and acceptance gates are incomplete, local run
+creation continues to use v1; v2 records must be returned as unsupported with
+their qualification reason rather than represented as zero-valued estimates.
 Campaign mode stores season summaries separately: `GET /farms/:id/seasons` lists a farm's seasons,
 `PUT /seasons/:id` upserts a complete `SeasonRecord`, and `DELETE /seasons/:id` removes it.
 Local-first remains the default — with the variable unset or empty, the local store plus live

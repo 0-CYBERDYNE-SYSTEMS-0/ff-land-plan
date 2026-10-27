@@ -6,7 +6,7 @@ Scope: BETA-02A only. This record does not claim horticultural validation.
 
 ## Baseline inspected
 
-The current daily reducer is deterministic and replays from `RunConfig` plus frozen `envSeries`. New records freeze used crop records and selected soil fields through `modelInputs`, but the input set has no model/parameter-set discriminator. Legacy records may omit `modelInputs`; `engine.ts` then falls back to caller context or today’s crop catalog. Existing development is run-window normalized in `drivers.ts` (`growthDays × meanDailyGddC`), biomass is `gddAccum / gddRequired`, the water bucket uses a universal 30 cm root depth, and catalog yield is paid independently of accumulated dry matter. `DailyEnvironment` may include natural DLI; enclosure climate can combine natural and installed DLI, while `dliAvailable` distinguishes unknown light from known zero.
+The current daily reducer is deterministic and replays from `RunConfig` plus frozen `envSeries`. Before this work, `modelInputs.model: 'run-inputs-v1'` already existed as a serialized input-shape tag; it did not identify the crop equations or parameter set. `cropModelVersion` is the separate discriminator added by this stage. Legacy records may omit `modelInputs`; `engine.ts` then falls back to caller context or today’s crop catalog. Existing development is run-window normalized in `drivers.ts` (`growthDays × meanDailyGddC`), biomass is `gddAccum / gddRequired`, the water bucket uses a universal 30 cm root depth, and catalog yield is paid independently of accumulated dry matter. `DailyEnvironment` may include natural DLI; enclosure climate can combine natural and installed DLI, while `dliAvailable` distinguishes unknown light from known zero.
 
 The current `cropThermalParams.ts` has nine crop entries. It is useful source evidence, but does not yet cover production, root-zone, nutrient, cultivar, or every catalog parameter. `growth.ts` remains a second calendar-day projection path and must be labelled/kept separate until its consumers are migrated.
 
@@ -24,7 +24,8 @@ Each new run must freeze both a named model version and the complete parameter/i
 | Missing model discriminator but complete v1 frozen inputs | Treat as the named legacy v1 semantics; never reinterpret it as v2. |
 | Missing discriminator and missing frozen crop/model inputs | Mark historical replay unsupported/qualified, preserve the stored summary and input artifact, and do not recompute or overwrite it from the current catalog/context. |
 | Explicit but unknown model/parameter version | Report unsupported with an export path; preserve the stored summary. |
-| New runs | Use the new version and freeze all model-driving values, provenance, units, event/method and fallback status. |
+| New runs while v2 is not runnable | Continue using v1 with frozen v1 inputs; do not store a v2 placeholder summary. |
+| New runs after the v2 daily reducer and acceptance gates pass | Use v2 and freeze every model-driving value, provenance, unit, event/method and fallback status. |
 
 A migration cannot invent a user’s original measurements. If current run creation or playback cannot identify this state without changing summary semantics, that migration is part of the implementation gate; do not silently substitute live context.
 
@@ -92,7 +93,7 @@ The independent validator reviewed and approved the displayed-value rounding tol
 
 ## Implementation checkpoint
 
-The first implementation checkpoint adds named v1/v2 frozen-input shapes, rejects persisted replay paths that would otherwise use a live crop catalog or soil context, and marks v2 summaries unavailable while its daily reducer is disabled. Unsupported stored records retain their original summaries; guarded derived paths reject or suppress recomputation. Focused regressions and typechecking pass at this checkpoint. This is not an 02A completion claim: the v2 daily reducer, source-backed executable parameter coverage, and the remaining acceptance fixtures are still outstanding.
+The first implementation checkpoint adds named v1/v2 frozen-input shapes, rejects persisted replay paths that would otherwise use a live crop catalog or soil context, and marks v2 summaries unavailable while its daily reducer is disabled. New local run creation remains on v1 until the v2 reducer and acceptance gates pass, so ordinary runs do not produce placeholder summaries. Unsupported stored records retain their original summaries; guarded derived paths reject or suppress recomputation. Focused regressions and typechecking pass at this checkpoint. This is not an 02A completion claim: the v2 daily reducer, source-backed executable parameter coverage, and the remaining acceptance fixtures are still outstanding.
 
 ## Implementation gates after this record
 
