@@ -3,6 +3,24 @@ import type { CropThermalParam } from '@/data/cropThermalParams';
 /** Horticultural conversion used by light.ts: 4.5 mol PAR per MJ PAR. */
 export const PAR_MOL_PER_MJ = 4.5;
 
+/** Source SWB canopy relation: LAI = CDM × SLA / (1 + p × CDM).
+ * CDM is canopy-only dry matter in kg/m²; it is not total plant dry matter. */
+export function leafAreaIndexFromCanopyDryMatter(
+  canopyDryMatterKgPerM2: number,
+  specificLeafAreaM2PerKg: number,
+  leafStemPartitionParameterM2PerKg: number,
+): number {
+  if (![canopyDryMatterKgPerM2, specificLeafAreaM2PerKg, leafStemPartitionParameterM2PerKg]
+    .every(Number.isFinite)
+    || canopyDryMatterKgPerM2 < 0
+    || specificLeafAreaM2PerKg < 0
+    || leafStemPartitionParameterM2PerKg < 0) {
+    throw new RangeError('Canopy dry matter, SLA, and leaf-stem partition must be finite and nonnegative.');
+  }
+  return (canopyDryMatterKgPerM2 * specificLeafAreaM2PerKg)
+    / (1 + leafStemPartitionParameterM2PerKg * canopyDryMatterKgPerM2);
+}
+
 /** PAR interception from LAI and K_PAR: FI_PAR = 1 - exp(-K_PAR × LAI). */
 export function fractionalParInterceptionFromLai(leafAreaIndex: number, kPar: number): number {
   if (![leafAreaIndex, kPar].every(Number.isFinite) || leafAreaIndex < 0 || kPar < 0) {

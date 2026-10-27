@@ -957,7 +957,8 @@
     "The 0.60 m maximum root depth is a source model input applied to all crops, not a direct measured root-depth result.",
     "The article does not provide daily weather, daily soil-water trajectory, raw plot-level observations, seedling dry mass at establishment, or exact transplant/sowing mapping sufficient to reproduce FarmFriend v2/v3 outputs.",
     "The source model includes radiation-or-transpiration limitation and crop organ partitioning but explicitly does not model nutrient or disease limitation; no such stress parameters are transferred.",
-    "The authors report cultivar-specific parameters can perform poorly for another cultivar. Star 3006 carrots also appeared in two summer seasons, but the 2007/08 carrot field was excluded from model development/testing because of Alternaria; the authors identify only Red Ace beetroot and Tenacity cabbage as having independent data across seasons. The source also reports poorer cabbage growth transfer. Do not infer generic cultivar performance or an independent holdout from Table 7."
+    "The authors report cultivar-specific parameters can perform poorly for another cultivar. Star 3006 carrots also appeared in two summer seasons, but the 2007/08 carrot field was excluded from model development/testing because of Alternaria; the authors identify only Red Ace beetroot and Tenacity cabbage as having independent data across seasons. The source also reports poorer cabbage growth transfer. Do not infer generic cultivar performance or an independent holdout from Table 7.",
+    "Broccoli K_PAR differs between measured Table 5 values and selected-model Table 6 values in both seasons: winter Parthenon is 1.14 vs selected winter 1.09, and summer Star 2204 is 1.09 vs selected summer 1.14. Preserve both tables separately; no biological attribution is established."
   ],
   "preregisteredSyntheticCanopyEquationFixture": {
     "classification": "synthetic software equation fixture only; not a field trajectory or candidate comparison",
@@ -990,7 +991,7 @@
   },
   "preregisteredSyntheticCanopyDryMassFixture": {
     "classification": "synthetic equation fixture only; no measured trajectory or candidate comparison",
-    "implementationStatus": "preregistered; implementation pending independent tolerance review",
+    "implementationStatus": "implemented and locally verified by the focused Vitest fixture; independent review approved the arithmetic tolerance only",
     "sourceEquation": "Eq. 5: (CDM × SLA / LAI) − 1 = p × CDM; rearranged as LAI = CDM × SLA / (1 + p × CDM)",
     "subsequentEquation": "FI_PAR = 1 − exp(−K_PAR × LAI)",
     "sourceParameterSet": {
@@ -1002,6 +1003,17 @@
       "specificLeafAreaM2PerKg": 9,
       "leafStemPartitionParameterM2PerKg": 1.54,
       "domainNote": "Source-selected seasonal SWB parameters; not a generic broccoli default or a validated FarmFriend crop parameter set."
+    },
+    "sourceTableDiscrepancy": {
+      "winter2008": {
+        "table5MeasuredParthenonKpar": 1.14,
+        "table6SelectedBroccoliWinterKpar": 1.09
+      },
+      "summer2007_08": {
+        "table5MeasuredStar2204Kpar": 1.09,
+        "table6SelectedBroccoliSummerKpar": 1.14
+      },
+      "disposition": "The source's measured Table 5 and selected-model Table 6 K_PAR values differ in both seasons. This arithmetic fixture uses the winter Table 6 selected value (1.09) exactly; no biological attribution, table correction, or transfer between cultivars/seasons is inferred."
     },
     "syntheticCanopyDryMatterKgPerM2": [
       0,
@@ -1033,11 +1045,11 @@
     "candidateComparison": false
   },
   "toleranceReview": {
-    "status": "independent validator approved source parameter transcription bounds and the synthetic FI_PAR equation arithmetic tolerance only; that helper test passed locally. The separate LAI-from-canopy-DM equation tolerance is preregistered pending independent review. Measured-output and candidate predictive comparisons remain unauthorized",
+    "status": "independent validator approved source parameter transcription bounds and both synthetic canopy equation arithmetic tolerances only; helpers and fixtures passed locally. The Table 5/Table 6 broccoli K_PAR discrepancy is recorded without attribution. Measured-output and candidate predictive comparisons remain unauthorized",
     "reviewedDate": "2026-10-27",
     "approvedScope": [
       "Table 5 and Table 6 parameter transcription bounds based on half the source display increment.",
-      "The synthetic FI_PAR equation implementation check with maximum absolute difference 1e-12."
+      "Synthetic FI_PAR and canopy-DM-to-LAI-to-FI_PAR equation implementation checks with maximum absolute difference 1e-12; the latter uses the Table 6 selected winter broccoli K_PAR while preserving the discrepant Table 5 value separately."
     ],
     "notApproved": [
       "Any measured-output or candidate predictive comparison.",

@@ -9,6 +9,7 @@ import {
   effectiveRootDepthCmAtThermalTime,
   fao56AdjustedDepletionFraction,
   fractionalParInterceptionFromLai,
+  leafAreaIndexFromCanopyDryMatter,
   stepFao56RootZone,
   thermalDevelopmentRange,
   type RootZoneState,
@@ -280,6 +281,46 @@ describe('crop model v2 equation helpers', () => {
       expect(fractions[index]).toBeLessThan(1);
       if (index > 0) expect(fractions[index]).toBeGreaterThan(fractions[index - 1]!);
     }
+  });
+
+  it('reproduces the preregistered source canopy dry-matter-to-LAI and FI_PAR equations', () => {
+    const fixture = waterSaParameterReferences.preregisteredSyntheticCanopyDryMassFixture;
+    const { sourceParameterSet: parameters } = fixture;
+    const table6Parameters = waterSaParameterReferences.table6SelectedSwbParameterSets.find((parameter) =>
+      parameter.crop === 'broccoli' && parameter.cultivar === 'Parthenon' && parameter.season === 'winter');
+    const table5Measurement = waterSaParameterReferences.table5MeasuredParameterReferences.find((parameter) =>
+      parameter.crop === 'broccoli' && parameter.cultivar === 'Parthenon' && parameter.season === 'winter-2008');
+    expect(table6Parameters).toBeDefined();
+    expect(table5Measurement).toBeDefined();
+    expect(parameters.canopyExtinctionParKpar).toBe(table6Parameters!.canopyExtinctionParKpar);
+    expect(parameters.specificLeafAreaM2PerKg).toBe(table6Parameters!.specificLeafAreaM2PerKg);
+    expect(parameters.leafStemPartitionParameterM2PerKg).toBe(table6Parameters!.leafStemPartitionParameterM2PerKg);
+    expect(fixture.sourceTableDiscrepancy.winter2008.table5MeasuredParthenonKpar).toBe(table5Measurement!.kpar);
+    expect(fixture.sourceTableDiscrepancy.disposition).toContain('no biological attribution');
+    expect(fixture.sourceTableDiscrepancy.winter2008.table5MeasuredParthenonKpar)
+      .not.toBe(fixture.sourceTableDiscrepancy.winter2008.table6SelectedBroccoliWinterKpar);
+    const leafAreaIndices = fixture.syntheticCanopyDryMatterKgPerM2.map((canopyDm) =>
+      leafAreaIndexFromCanopyDryMatter(
+        canopyDm,
+        parameters.specificLeafAreaM2PerKg,
+        parameters.leafStemPartitionParameterM2PerKg,
+      ));
+    const fractions = leafAreaIndices.map((lai) =>
+      fractionalParInterceptionFromLai(lai, parameters.canopyExtinctionParKpar));
+
+    expect(fixture.candidateComparison).toBe(false);
+    for (let index = 0; index < leafAreaIndices.length; index += 1) {
+      expect(Math.abs(leafAreaIndices[index]! - fixture.expectedLaiM2PerM2[index]!))
+        .toBeLessThanOrEqual(fixture.tolerance.maximumAbsoluteDeviation);
+      expect(Math.abs(fractions[index]! - fixture.expectedFractions[index]!))
+        .toBeLessThanOrEqual(fixture.tolerance.maximumAbsoluteDeviation);
+    }
+    expect(leafAreaIndices[0]).toBe(0);
+    expect(fractions[0]).toBe(0);
+    expect(leafAreaIndices[1]).toBeLessThan(leafAreaIndices[2]!);
+    expect(leafAreaIndices[2]).toBeLessThan(leafAreaIndices[3]!);
+    expect(fractions[1]).toBeLessThan(fractions[2]!);
+    expect(fractions[2]).toBeLessThan(fractions[3]!);
   });
 
   it('accounts for explicitly assumed storage entering as the root front expands', () => {
