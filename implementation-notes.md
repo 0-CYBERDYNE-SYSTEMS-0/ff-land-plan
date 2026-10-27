@@ -1863,3 +1863,24 @@ snapshots changed, and no application implementation is claimed by this revision
 - Verification: `npm run typecheck`, `npm test` (31 files / 128 tests), `npm run build:demo`, and
   `git diff --check` passed. Independent browser review passed template apply/undo/reload,
   container setup, and additive migration/update/reload.
+
+## 2026-10-26 — BETA-01 durable saves and recovery
+
+- Saved local data now wins over sample content, with one-time legacy sample initialization,
+  persistent sample-deletion markers, canonical v2 preservation, and non-destructive corrupt-
+  store recovery. Local API writes acknowledge only after durable completion; plan revisions
+  remain pending through errors, can be retried, and block ambiguous writes after a tab conflict.
+- Added transaction-completion checks for IndexedDB, pagehide flushing, pending-work snapshots
+  for the BETA-03 backup handoff, and world re-entry overlays that preserve queued plans over
+  stale site data. Matching IndexedDB success acknowledgements clear failures only after commit.
+  Failed environment, sensor and simulation deletions roll back when persistence fails; sensor
+  rollback preserves concurrent readings. Regression coverage includes migration, empty plans,
+  deletion, stale acknowledgements, failed writes, transaction aborts, world switches and conflicts.
+- Production preview checks passed P-01, P-03, P-05, P-07 pagehide, P-09 and P-10. The
+  quota-fault capture showed failure → retry failure → durable retry success; recovery download
+  preserved malformed raw bytes when quarantine was denied. P-10 used two same-origin tabs:
+  a pending Salsa Bed stayed visible in tab 1 while tab 2 durably saved Pollinator Strip;
+  tab 1 showed the conflict warning and blocked further writes.
+- Verification: `npm test` (35 files / 156 tests), `npm run typecheck`, `npm run build`,
+  `npm run check:private` (477 tracked files), and `git diff --check` passed. No simulation
+  equations or golden snapshots changed.

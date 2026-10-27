@@ -20,8 +20,19 @@ vi.mock('@/lib/db', () => ({
     return true;
   }),
   deleteRecord: vi.fn(async (store: string, key: string) => { dbState.records.get(store)?.delete(key); }),
+  deleteFarmRecords: vi.fn(async (farmId: number, includeRuns: boolean) => {
+    const stores = includeRuns ? ['runs', 'seasons', 'observations', 'calibrations'] : ['seasons', 'observations', 'calibrations'];
+    for (const name of stores) {
+      const records = dbState.records.get(name);
+      for (const [key, value] of records ?? []) {
+        if ((value as { farmId?: number }).farmId === farmId) records?.delete(key);
+      }
+    }
+  }),
   clearRecords: vi.fn(async (store: string) => { dbState.records.get(store)?.clear(); }),
   dispatchStorageFailed: vi.fn(),
+  dispatchStorageSaved: vi.fn(),
+  dispatchStorageConflict: vi.fn(),
 }));
 
 class MemoryStorage implements Storage {

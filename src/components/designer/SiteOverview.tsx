@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type PointerEvent } from 'react';
+import { toast } from 'sonner';
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -288,6 +289,8 @@ export function SiteOverview({
     try {
       await onDeleteWorld(deleting.id);
       setDeleteId(null);
+    } catch (error) {
+      toast.error((error as Error).message);
     } finally {
       setBusy(false);
     }

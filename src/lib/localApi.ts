@@ -28,10 +28,11 @@ import type {
   WeatherHistoryPoint,
 } from '@/types';
 import { cropLibrary } from '@/data/crops';
+import { seedFarms } from '@/data/seed';
 import { assetLibrary } from '@/data/assets';
 import { archetypes } from '@/creative/archetypes';
-import { state, persist, persistNow, ensureLegacySimRunsMigrated } from '@/lib/store';
-import { deleteRecord, getAllRecords, getRecord, putRecord } from '@/lib/db';
+import { assertStoreWritable, state, persistWithAck, ensureLegacySimRunsMigrated } from '@/lib/store';
+import { deleteFarmRecords, deleteRecord, getAllRecords, getRecord, putRecord } from '@/lib/db';
 import { deriveAlerts, fetchFarmWeather, type FarmWeather } from '@/lib/weather';
 import { fetchClimateNormals } from '@/lib/climate';
 import { fetchSoilProfile } from '@/lib/soil';
@@ -82,22 +83,24 @@ function newestRunFirst(a: RunRecord, b: RunRecord): number {
   return Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id);
 }
 
-function storeLocalRunWithCap(run: RunRecord): void {
+async function storeLocalRunWithCap(run: RunRecord): Promise<void> {
+  assertStoreWritable();
   const previous = state.simRuns;
   state.simRuns = [structuredClone(run), ...previous.filter((entry) => entry.id !== run.id)]
     .sort(newestRunFirst)
     .slice(0, 40);
-  persist();
-  if (!persistNow()) {
+  try {
+    await persistWithAck();
+  } catch (error) {
     state.simRuns = previous;
-    persist();
-    throw new Error('Could not persist this sim run to localStorage. The previous run list was retained.');
+    throw new Error('Could not persist this sim run to localStorage. The previous run list was retained.', { cause: error });
   }
 }
 
 async function storeRunWithCap(run: RunRecord, mode: 'indexeddb' | 'localstorage'): Promise<void> {
+  assertStoreWritable();
   if (mode === 'localstorage') {
-    storeLocalRunWithCap(run);
+    await storeLocalRunWithCap(run);
     return;
   }
   const existing = await getAllRecords<RunRecord>('runs');
@@ -105,7 +108,9 @@ async function storeRunWithCap(run: RunRecord, mode: 'indexeddb' | 'localstorage
     .sort(newestRunFirst)
     .slice(0, 40);
   const retainedIds = new Set(retained.map((entry) => entry.id));
+  assertStoreWritable();
   await putRecord('runs', run.id, structuredClone(run));
+  assertStoreWritable();
   await Promise.all(existing
     .filter((entry) => !retainedIds.has(entry.id))
     .map((entry) => deleteRecord('runs', entry.id)));
@@ -409,37 +414,28 @@ export const localApi: Api = {
   listFarms: async () => [...state.farms],
   getFarm: async (id) => ({ ...farmOrThrow(id) }),
   createFarm: async (input) => {
+    assertStoreWritable();
     const farm: Farm = {
       ...input,
       id: state.counters.farm++,
       createdAt: new Date().toISOString(),
     };
     state.farms = [farm, ...state.farms];
-    persist();
+    await persistWithAck();
     return farm;
   },
   updateFarm: async (id, patch) => {
+    assertStoreWritable();
     const f = farmOrThrow(id);
     Object.assign(f, patch);
-    persist();
+    await persistWithAck();
     return { ...f };
   },
   deleteFarm: async (id) => {
+    assertStoreWritable();
+    const previous = structuredClone(state);
     const runStorage = await ensureLegacySimRunsMigrated();
-    if (runStorage === 'indexeddb') {
-      const farmRuns = (await getAllRecords<RunRecord>('runs')).filter((run) => run.farmId === id);
-      await Promise.all(farmRuns.map((run) => deleteRecord('runs', run.id)));
-    }
-    const farmSeasons = (await getAllRecords<SeasonRecord>('seasons')).filter((season) => season.farmId === id);
-    await Promise.all(farmSeasons.map((season) => deleteRecord('seasons', season.id)));
-    const [farmObservations, farmCalibrations] = await Promise.all([
-      getAllRecords<Observation>('observations'),
-      getAllRecords<FarmCalibration>('calibrations'),
-    ]);
-    await Promise.all([
-      ...farmObservations.filter((observation) => observation.farmId === id).map((observation) => deleteRecord('observations', observation.id)),
-      ...farmCalibrations.filter((calibration) => calibration.farmId === id).map((calibration) => deleteRecord('calibrations', calibration.environmentId)),
-    ]);
+    assertStoreWritable();
     state.farms = state.farms.filter((f) => f.id !== id);
     state.cells = state.cells.filter((c) => c.farmId !== id);
     state.simulations = state.simulations.filter((s) => s.farmId !== id);
@@ -450,7 +446,27 @@ export const localApi: Api = {
     delete state.plans[id];
     delete state.sites[id];
     delete state.selectedEnvironmentIds[id];
-    persist();
+    if (seedFarms.some((farm) => farm.id === id) && !state.deletedSampleFarmIds.includes(id)) {
+      state.deletedSampleFarmIds = [...state.deletedSampleFarmIds, id].sort((a, b) => a - b);
+    }
+    try {
+      await persistWithAck();
+    } catch (error) {
+      Object.assign(state, previous);
+      throw error;
+    }
+    try {
+      assertStoreWritable();
+      await deleteFarmRecords(id, runStorage === 'indexeddb', assertStoreWritable);
+    } catch (error) {
+      Object.assign(state, previous);
+      try {
+        await persistWithAck();
+      } catch {
+        // The in-memory snapshot remains available for the shell Retry action.
+      }
+      throw error;
+    }
   },
 
   // Weather
@@ -470,8 +486,9 @@ export const localApi: Api = {
     }
   },
   markAlertRead: async (id) => {
+    assertStoreWritable();
     state.alertReads[id] = true;
-    persist();
+    await persistWithAck();
     // Caller only uses invalidation; echo a minimal record.
     return {
       id, farmId: 0, alertType: 'frost', severity: 'info',
@@ -479,8 +496,10 @@ export const localApi: Api = {
     };
   },
   markAllAlertsRead: async (farmId) => {
+    assertStoreWritable();
     const farm = farmOrThrow(farmId);
     const { forecast, weather } = await farmWeather(farm);
+    assertStoreWritable();
     const alerts = deriveAlerts(farmId, forecast, () => false, weather.current?.soilMoisture ?? null);
     let updated = 0;
     for (const a of alerts) {
@@ -489,13 +508,14 @@ export const localApi: Api = {
         updated++;
       }
     }
-    persist();
+    await persistWithAck();
     return { updated };
   },
 
   // Sensors
   listSensors: async (farmId) => state.sensors.filter((s) => s.farmId === farmId),
   createSensor: async (farmId, input) => {
+    assertStoreWritable();
     if (input.environmentId && !TWIN_ENABLED) {
       throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to associate sensors with a growing world.');
     }
@@ -512,10 +532,11 @@ export const localApi: Api = {
       lastReadingAt: null,
     };
     state.sensors = [...state.sensors, sensor];
-    persist();
+    await persistWithAck();
     return sensor;
   },
   updateSensor: async (id, patch) => {
+    assertStoreWritable();
     const sensor = sensorOrThrow(id);
     if (patch.environmentId && !TWIN_ENABLED) {
       throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to associate sensors with a growing world.');
@@ -523,17 +544,35 @@ export const localApi: Api = {
     validateSensorEnvironment(sensor.farmId, patch.environmentId ?? undefined);
     if (patch.environmentId === null) delete sensor.environmentId;
     else sensor.environmentId = patch.environmentId;
-    persist();
+    await persistWithAck();
     return structuredClone(sensor);
   },
   deleteSensor: async (id) => {
-    state.sensors = state.sensors.filter((s) => s.id !== id);
-    delete state.readings[id];
-    persist();
+    assertStoreWritable();
+    const previousSensors = state.sensors;
+    const previousReadings = state.readings;
+    const nextSensors = previousSensors.filter((sensor) => sensor.id !== id);
+    const nextReadings = { ...previousReadings };
+    delete nextReadings[id];
+    state.sensors = nextSensors;
+    state.readings = nextReadings;
+    try {
+      await persistWithAck();
+    } catch (error) {
+      if (state.sensors === nextSensors) state.sensors = previousSensors;
+      if (state.readings === nextReadings) {
+        const restoredReadings = { ...nextReadings };
+        if (Object.hasOwn(previousReadings, id)) restoredReadings[id] = previousReadings[id];
+        else delete restoredReadings[id];
+        state.readings = restoredReadings;
+      }
+      throw error;
+    }
   },
   listReadings: async (sensorId, limit = 20) =>
     (state.readings[sensorId] ?? []).slice(-limit),
   addReading: async (sensorId, value, unit) => {
+    assertStoreWritable();
     const sensor = sensorOrThrow(sensorId);
     const reading: SensorReading = {
       id: state.counters.reading++,
@@ -546,7 +585,7 @@ export const localApi: Api = {
     sensor.lastValue = value;
     sensor.lastUnit = unit;
     sensor.lastReadingAt = reading.recordedAt;
-    persist();
+    await persistWithAck();
     return reading;
   },
   listObservations: async (farmId, environmentId) => {
@@ -559,14 +598,17 @@ export const localApi: Api = {
       .map((observation) => structuredClone(observation));
   },
   addObservation: async (input) => {
+    assertStoreWritable();
     if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable observations.');
     farmOrThrow(input.farmId);
     validateSensorEnvironment(input.farmId, input.environmentId);
     const [observation] = canonicalizeObservations([{ ...input, id: newObservationId() }]);
+    assertStoreWritable();
     await putRecord('observations', observation!.id, observation!);
     return structuredClone(observation!);
   },
   updateObservation: async (id, patch) => {
+    assertStoreWritable();
     if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable observations.');
     const existing = await getRecord<Observation>('observations', id);
     if (!existing) throw new Error(`Observation ${id} not found.`);
@@ -584,10 +626,12 @@ export const localApi: Api = {
     const next: Observation = { ...existing, ...cleanPatch, id: existing.id, farmId: existing.farmId };
     if (next.environmentId !== existing.environmentId) validateSensorEnvironment(next.farmId, next.environmentId);
     const [validated] = canonicalizeObservations([next]);
+    assertStoreWritable();
     await putRecord('observations', id, validated!);
     return structuredClone(validated!);
   },
   deleteObservation: async (id) => {
+    assertStoreWritable();
     if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable observations.');
     await deleteRecord('observations', id);
   },
@@ -595,10 +639,11 @@ export const localApi: Api = {
   // Legacy cells / NDVI
   listCells: async (farmId) => state.cells.filter((c) => c.farmId === farmId),
   setCellCrop: async (farmId, cellId, cropId) => {
+    assertStoreWritable();
     const c = state.cells.find((x) => x.id === cellId && x.farmId === farmId);
     if (!c) throw new Error(`Cell ${cellId} not found on farm ${farmId}`);
     c.cropId = cropId;
-    persist();
+    await persistWithAck();
     return { ...c };
   },
   getNdvi: async (farmId) => {
@@ -614,6 +659,7 @@ export const localApi: Api = {
     return site ? structuredClone(site) : null;
   },
   saveSitePlan: async (site) => {
+    assertStoreWritable();
     requireEnvironmentRecords();
     const normalized = siteForEnvironments(
       site.farmId,
@@ -624,10 +670,11 @@ export const localApi: Api = {
     if (normalized.environments.length === 1) {
       state.plans[site.farmId] = legacyPlanForEnvironment(normalized.environments[0]!);
     }
-    persist();
+    await persistWithAck();
     return structuredClone(normalized);
   },
   createEnvironment: async (farmId, input) => {
+    assertStoreWritable();
     requireEnvironmentRecords();
     farmOrThrow(farmId);
     const oldSite = state.sites[farmId] ?? {
@@ -647,7 +694,7 @@ export const localApi: Api = {
     state.sites[farmId] = next;
     state.selectedEnvironmentIds[farmId] = id;
     if (next.environments.length === 1) state.plans[farmId] = legacyPlanForEnvironment(environment);
-    persist();
+    await persistWithAck();
     return structuredClone(environment);
   },
   getEnvironment: async (farmId, environmentId) => {
@@ -656,6 +703,7 @@ export const localApi: Api = {
     return environment ? structuredClone(environment) : null;
   },
   saveEnvironment: async (environment) => {
+    assertStoreWritable();
     requireEnvironmentRecords();
     farmOrThrow(environment.farmId);
     const site = siteOrThrow(environment.farmId);
@@ -666,10 +714,11 @@ export const localApi: Api = {
     environments[index] = normalized;
     state.sites[environment.farmId] = siteForEnvironments(environment.farmId, environments, site);
     if (environments.length === 1) state.plans[environment.farmId] = legacyPlanForEnvironment(normalized);
-    persist();
+    await persistWithAck();
     return structuredClone(normalized);
   },
   duplicateEnvironment: async (farmId, environmentId) => {
+    assertStoreWritable();
     requireEnvironmentRecords();
     const site = siteOrThrow(farmId);
     const source = site.environments.find((entry) => entry.id === environmentId);
@@ -680,21 +729,42 @@ export const localApi: Api = {
     duplicate.plan.updatedAt = new Date().toISOString();
     state.sites[farmId] = siteForEnvironments(farmId, [...site.environments, duplicate], site);
     state.selectedEnvironmentIds[farmId] = id;
-    persist();
+    await persistWithAck();
     return structuredClone(duplicate);
   },
   deleteEnvironment: async (farmId, environmentId) => {
+    assertStoreWritable();
     requireEnvironmentRecords();
     const site = siteOrThrow(farmId);
-    if (environmentIndex(site, environmentId) < 0) throw new Error(`Growing world ${environmentId} not found on farm ${farmId}`);
+    const index = environmentIndex(site, environmentId);
+    if (index < 0) throw new Error(`Growing world ${environmentId} not found on farm ${farmId}`);
+    const previousSelection = state.selectedEnvironmentIds[farmId];
+    const previousPlan = state.plans[farmId];
     const environments = site.environments.filter((environment) => environment.id !== environmentId);
-    state.sites[farmId] = siteForEnvironments(farmId, environments, site);
-    if (state.selectedEnvironmentIds[farmId] === environmentId) delete state.selectedEnvironmentIds[farmId];
-    if (environments.length === 1) state.plans[farmId] = legacyPlanForEnvironment(environments[0]!);
-    persist();
+    const nextSite = siteForEnvironments(farmId, environments, site);
+    state.sites[farmId] = nextSite;
+    const clearsSelection = previousSelection === environmentId;
+    if (clearsSelection) delete state.selectedEnvironmentIds[farmId];
+    const updatesLegacyPlan = environments.length === 1;
+    const nextPlan = updatesLegacyPlan ? legacyPlanForEnvironment(environments[0]!) : undefined;
+    if (nextPlan) state.plans[farmId] = nextPlan;
+    try {
+      await persistWithAck();
+    } catch (error) {
+      if (state.sites[farmId] === nextSite) state.sites[farmId] = site;
+      if (clearsSelection && state.selectedEnvironmentIds[farmId] === undefined && previousSelection !== undefined) {
+        state.selectedEnvironmentIds[farmId] = previousSelection;
+      }
+      if (updatesLegacyPlan && state.plans[farmId] === nextPlan) {
+        if (previousPlan === undefined) delete state.plans[farmId];
+        else state.plans[farmId] = previousPlan;
+      }
+      throw error;
+    }
   },
   getSelectedEnvironmentId: async (farmId) => state.selectedEnvironmentIds[farmId] ?? null,
   setSelectedEnvironmentId: async (farmId, environmentId) => {
+    assertStoreWritable();
     requireEnvironmentRecords();
     farmOrThrow(farmId);
     if (environmentId === null) {
@@ -706,7 +776,7 @@ export const localApi: Api = {
       }
       state.selectedEnvironmentIds[farmId] = environmentId;
     }
-    persist();
+    await persistWithAck();
   },
   getPlan: async (farmId, environmentId) => {
     const site = state.sites[farmId];
@@ -720,6 +790,7 @@ export const localApi: Api = {
     return environment ? legacyPlanForEnvironment(environment) : null;
   },
   savePlan: async (plan, environmentId) => {
+    assertStoreWritable();
     if (environmentId && !ENV_RECORDS_ENABLED) requireEnvironmentRecords();
     const site = state.sites[plan.farmId];
     if (!site) {
@@ -727,7 +798,7 @@ export const localApi: Api = {
         throw new Error(`Farm ${plan.farmId} has no growing world to save.`);
       }
       state.plans[plan.farmId] = { ...plan, updatedAt: new Date().toISOString() };
-      persist();
+      await persistWithAck();
       return structuredClone(state.plans[plan.farmId]!);
     }
     const environment = environmentId
@@ -745,15 +816,23 @@ export const localApi: Api = {
     const environments = site.environments.map((entry) => entry.id === environment.id ? normalized : entry);
     state.sites[plan.farmId] = siteForEnvironments(plan.farmId, environments, site);
     if (environments.length === 1) state.plans[plan.farmId] = legacyPlanForEnvironment(normalized);
-    persist();
+    await persistWithAck();
     return structuredClone(normalized.plan);
   },
 
   // Simulations (legacy): list + delete only — see the Api interface note.
   listSimulations: async (farmId) => state.simulations.filter((s) => s.farmId === farmId),
   deleteSimulation: async (id) => {
-    state.simulations = state.simulations.filter((s) => s.id !== id);
-    persist();
+    assertStoreWritable();
+    const previous = state.simulations;
+    const next = previous.filter((simulation) => simulation.id !== id);
+    state.simulations = next;
+    try {
+      await persistWithAck();
+    } catch (error) {
+      if (state.simulations === next) state.simulations = previous;
+      throw error;
+    }
   },
 
   // Sim runs: fork the plan, compose the frozen env series (real archive →
@@ -762,6 +841,7 @@ export const localApi: Api = {
   // storage — never per-tick state). Soil/climate fetches are forever-cached
   // and never throw; offline runs fall back to documented defaults.
   createSimRun: async (input) => {
+    assertStoreWritable();
     const farm = farmOrThrow(input.farmId);
     const runStorage = await ensureLegacySimRunsMigrated();
     if (input.soilCarryByTarget && !CAMPAIGN_ENABLED) {
@@ -881,27 +961,31 @@ export const localApi: Api = {
       .map((run) => structuredClone(run));
   },
   saveSimRun: async (run) => {
+    assertStoreWritable();
     if (!TIMELINE_ENABLED && !(TWIN_ENABLED && (run.observations?.length ?? 0) > 0)) {
       throw new Error('Timeline features are disabled. Set VITE_FF_TIMELINE=true to save forks or ensemble results.');
     }
     const mode = await ensureLegacySimRunsMigrated();
     const saved = structuredClone(run);
+    assertStoreWritable();
     await storeRunWithCap(saved, mode);
     return structuredClone(saved);
   },
   deleteSimRun: async (id) => {
+    assertStoreWritable();
     const mode = await ensureLegacySimRunsMigrated();
+    assertStoreWritable();
     if (mode === 'indexeddb') {
       await deleteRecord('runs', id);
       return;
     }
     const previous = state.simRuns;
     state.simRuns = previous.filter((run) => run.id !== id);
-    persist();
-    if (!persistNow()) {
+    try {
+      await persistWithAck();
+    } catch (error) {
       state.simRuns = previous;
-      persist();
-      throw new Error('Could not delete this sim run from localStorage. The previous run list was retained.');
+      throw new Error('Could not delete this sim run from localStorage. The previous run list was retained.', { cause: error });
     }
   },
 
@@ -914,14 +998,18 @@ export const localApi: Api = {
       .map((season) => structuredClone(season));
   },
   saveSeason: async (season) => {
+    assertStoreWritable();
     if (!CAMPAIGN_ENABLED) throw new Error('Campaign features are disabled. Set VITE_FF_CAMPAIGN=true to enable seasons.');
     farmOrThrow(season.farmId);
     const saved = structuredClone(season);
+    assertStoreWritable();
     await putRecord('seasons', saved.id, saved);
     return structuredClone(saved);
   },
   deleteSeason: async (id) => {
+    assertStoreWritable();
     if (!CAMPAIGN_ENABLED) throw new Error('Campaign features are disabled. Set VITE_FF_CAMPAIGN=true to enable seasons.');
+    assertStoreWritable();
     await deleteRecord('seasons', id);
   },
 
@@ -934,6 +1022,7 @@ export const localApi: Api = {
       .map((calibration) => structuredClone(calibration));
   },
   saveFarmCalibration: async (calibration) => {
+    assertStoreWritable();
     if (!TWIN_ENABLED) throw new Error('Twin features are disabled. Set VITE_FF_TWIN=true to enable calibration.');
     farmOrThrow(calibration.farmId);
     validateSensorEnvironment(calibration.farmId, calibration.environmentId);
@@ -946,6 +1035,7 @@ export const localApi: Api = {
       throw new Error(`Calibration changed since this proposal was prepared. Expected revision ${expectedRevision}.`);
     }
     const saved = structuredClone(calibration);
+    assertStoreWritable();
     await putRecord('calibrations', saved.environmentId, saved);
     return structuredClone(saved);
   },
@@ -953,9 +1043,10 @@ export const localApi: Api = {
   // Crops
   listCrops: async () => [...cropLibrary, ...state.customCrops],
   createCrop: async (input) => {
+    assertStoreWritable();
     const crop: Crop = { ...input, id: state.counters.crop++, isCustom: true };
     state.customCrops = [crop, ...state.customCrops];
-    persist();
+    await persistWithAck();
     return crop;
   },
 };

@@ -5,6 +5,16 @@ import { toast } from 'sonner';
 import { assetBySlug, assetLibrary } from '@/data/assets';
 import { missingUpdatedDemoWorlds } from '@/data/demoWorlds';
 import { apiFetch } from '@/lib/api';
+import {
+  deleteWorldAfterPlanSave,
+  flushPendingPlanSaves,
+  getPendingPlanWorkSnapshot,
+  getPlanSaveStatus,
+  siteWithPendingPlanSnapshots,
+  siteWithPlanSnapshot,
+  stagePlanSave,
+} from '@/lib/planSaveQueue';
+import type { PlanSaveEventDetail } from '@/lib/planSaveQueue';
 import { archetypes, LEGACY_SURFACE_FOR_ARCHETYPE, planningProfiles } from '@/creative/archetypes';
 import type { GardenTemplate } from '@/data/templates';
 import { environmentForTemplate, planForTemplate } from '@/lib/template-plan';
@@ -220,7 +230,6 @@ const ZOOM_BASE_PX = 12; // reference for the zoom-percentage display
 const MIN_FIT_PX = 6; // P0-3: fit-to-view never drops below legible mobile floor
 const MIN_DIM_M = 2;
 const MAX_DIM_M = 60;
-const AUTOSAVE_MS = 600;
 const HISTORY_LIMIT = 50;
 const FLOOD_CAP = 5000; // P1-2: fill tool safety ceiling
 let assetInstanceSequence = 0;
@@ -483,8 +492,6 @@ export function usePlanEditor(farmId: number) {
   const lastPaintRef = useRef<{ x: number; y: number } | null>(null);
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchRef = useRef<{ distance: number; midX: number; midY: number } | null>(null);
-  const autosaveRef = useRef<number | null>(null);
-  const pendingSaveRef = useRef<{ environmentId: string | null; plan: PlanState } | null>(null);
   const environmentMutationRef = useRef<Promise<Environment> | null>(null);
   const undoRef = useRef<HistoryEntry[]>([]);
   const redoRef = useRef<HistoryEntry[]>([]);
@@ -505,8 +512,10 @@ export function usePlanEditor(farmId: number) {
   const [lineDraft, setLineDraft] = useState<{ x: number; y: number } | null>(null);
   // DES-009: oversized fills wait here for the PlotDesigner confirm dialog.
   const [pendingFill, setPendingFill] = useState<{ region: Array<[number, number]> } | null>(null);
-  const [saveState, setSaveState] = useState<SaveState>('idle');
-  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [initialSaveStatus] = useState(() => getPlanSaveStatus(farmId));
+  const [saveState, setSaveState] = useState<SaveState>(initialSaveStatus.state);
+  const [saveError, setSaveError] = useState<string | null>(initialSaveStatus.error);
+  const [savedAt, setSavedAt] = useState<string | null>(initialSaveStatus.savedAt);
   const [scope, setScope] = useState<EditorScope>(ENV_RECORDS_ENABLED ? { kind: 'site' } : { kind: 'legacy' });
   const [sitePlan, setSitePlan] = useState<SitePlan | null>(null);
   const [environment, setEnvironment] = useState<Environment | null>(null);
@@ -554,6 +563,11 @@ export function usePlanEditor(farmId: number) {
       canonicalPlanRef.current = canonical;
       const updated = { ...current, plan: canonical };
       environmentRef.current = updated;
+      if (siteRef.current) {
+        const nextSite = siteWithPlanSnapshot(siteRef.current, current.id, canonical);
+        siteRef.current = nextSite;
+        setSitePlan(nextSite);
+      }
       setEnvironment(updated);
       return canonical;
     }
@@ -929,31 +943,42 @@ export function usePlanEditor(farmId: number) {
     }
   }, [farmId, queryClient, updateSiteCache]);
 
-  const flushAutosave = useCallback(async () => {
-    if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
-    autosaveRef.current = null;
-    const pending = pendingSaveRef.current;
-    if (!pending) return;
-    pendingSaveRef.current = null;
-    try {
-      setSaveState('saving');
-      const saved = await apiFetch.savePlan(pending.plan, pending.environmentId ?? undefined);
-      applySavedPlan(pending.environmentId, saved);
-      setSavedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
-      setSaveState(pendingSaveRef.current ? 'dirty' : 'saved');
-    } catch (err) {
-      setSaveState('error');
-      toast.error((err as Error).message);
-    }
-  }, [applySavedPlan]);
+  useEffect(() => {
+    const syncSaveState = (detail: Pick<PlanSaveEventDetail, 'state' | 'savedAt' | 'error'>) => {
+      setSaveState(detail.state);
+      setSavedAt(detail.savedAt);
+      setSaveError(detail.error);
+    };
+    const onPlanSaveState = (event: Event) => {
+      const detail = (event as CustomEvent<PlanSaveEventDetail>).detail;
+      if (detail.farmId !== farmId) return;
+      syncSaveState(detail);
+      if (detail.acknowledgement?.current) {
+        applySavedPlan(detail.acknowledgement.target.environmentId, detail.acknowledgement.saved);
+      }
+      if (detail.state === 'error' && detail.error) toast.error(detail.error);
+    };
+    syncSaveState(getPlanSaveStatus(farmId));
+    window.addEventListener('plan-save-state', onPlanSaveState);
+    return () => window.removeEventListener('plan-save-state', onPlanSaveState);
+  }, [applySavedPlan, farmId]);
+
+  useEffect(() => () => { void flushPendingPlanSaves(); }, []);
+
+  const flushAutosave = useCallback(() => flushPendingPlanSaves(), []);
 
   const scheduleAutosave = useCallback((nextPlan: PlanState) => {
-    const environmentId = scopeRef.current.kind === 'env' ? scopeRef.current.id : null;
-    pendingSaveRef.current = { environmentId, plan: clonePlan(syncCanonicalPlan(nextPlan)) };
-    if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
-    setSaveState('dirty');
-    autosaveRef.current = window.setTimeout(() => { void flushAutosave(); }, AUTOSAVE_MS);
-  }, [flushAutosave, syncCanonicalPlan]);
+    const target = {
+      farmId: nextPlan.farmId,
+      environmentId: scopeRef.current.kind === 'env' ? scopeRef.current.id : null,
+    };
+    stagePlanSave(target, clonePlan(syncCanonicalPlan(nextPlan)));
+  }, [syncCanonicalPlan]);
+
+  const getPendingWorkSnapshot = useCallback(
+    () => getPendingPlanWorkSnapshot(farmId),
+    [farmId],
+  );
 
   const snapshotPlanHistory = useCallback((plan: PlanState): HistoryEntry | null => {
     const activeEnvironment = environmentRef.current;
@@ -978,7 +1003,7 @@ export function usePlanEditor(farmId: number) {
     beforeOverride?: Environment,
     historyTarget: GrowingTargetRef = activeTargetRef.current,
   ) => {
-    await flushAutosave();
+    if (!await flushAutosave()) throw new Error('The pending plan save failed. Retry it before saving growing-world settings.');
     const currentSite = siteRef.current;
     const before = beforeOverride ?? currentSite?.environments.find((entry) => entry.id === nextEnvironment.id) ?? environmentRef.current;
     const beforeSnapshot = before ? cloneEnvironment(before) : null;
@@ -1005,7 +1030,7 @@ export function usePlanEditor(farmId: number) {
   }, [farmId, flushAutosave, pushUndo, updateSiteCache, updateStats]);
 
   const commitSite = useCallback(async (nextSite: SitePlan, recordHistory = true) => {
-    await flushAutosave();
+    if (!await flushAutosave()) throw new Error('The pending plan save failed. Retry it before saving site changes.');
     const before = recordHistory ? cloneSite(siteRef.current ?? emptySite(farmId)) : null;
     const saved = await apiFetch.saveSitePlan(cloneSite(nextSite));
     if (before) pushUndo({ kind: 'site', snapshot: before, selectedEnvironmentId });
@@ -1897,29 +1922,30 @@ export function usePlanEditor(farmId: number) {
   }, [activateEnvironment, farmId, flushAutosave, pushUndo, queryClient, selectedEnvironmentId, updateSiteCache]);
 
   const deleteWorld = useCallback(async (environmentId: string) => {
-    await flushAutosave();
-    const before = cloneSite(siteRef.current ?? emptySite(farmId));
-    const beforeSelection = selectedEnvironmentId;
-    await apiFetch.deleteEnvironment(farmId, environmentId);
-    pushUndo({ kind: 'site', snapshot: before, selectedEnvironmentId: beforeSelection });
-    const nextSite = await apiFetch.getSitePlan(farmId);
-    updateSiteCache(nextSite);
-    const selected = await apiFetch.getSelectedEnvironmentId(farmId);
-    setSelectedEnvironmentId(selected);
-    queryClient.setQueryData(['selected-environment', farmId], selected);
-    if (environmentRef.current?.id === environmentId) {
-      environmentRef.current = null;
-      setEnvironment(null);
-      planRef.current = null;
-      canonicalPlanRef.current = null;
-      activeTargetRef.current = { kind: 'floor' };
-      setActiveTarget({ kind: 'floor' });
-      scopeRef.current = { kind: 'site' };
-      setScope({ kind: 'site' });
-      setSelectedKey(null);
-      setPlanVersion((version) => version + 1);
-    }
-  }, [farmId, flushAutosave, pushUndo, queryClient, selectedEnvironmentId, updateSiteCache]);
+    await deleteWorldAfterPlanSave(async () => {
+      const before = cloneSite(siteRef.current ?? emptySite(farmId));
+      const beforeSelection = selectedEnvironmentId;
+      await apiFetch.deleteEnvironment(farmId, environmentId);
+      pushUndo({ kind: 'site', snapshot: before, selectedEnvironmentId: beforeSelection });
+      const nextSite = await apiFetch.getSitePlan(farmId);
+      updateSiteCache(nextSite);
+      const selected = await apiFetch.getSelectedEnvironmentId(farmId);
+      setSelectedEnvironmentId(selected);
+      queryClient.setQueryData(['selected-environment', farmId], selected);
+      if (environmentRef.current?.id === environmentId) {
+        environmentRef.current = null;
+        setEnvironment(null);
+        planRef.current = null;
+        canonicalPlanRef.current = null;
+        activeTargetRef.current = { kind: 'floor' };
+        setActiveTarget({ kind: 'floor' });
+        scopeRef.current = { kind: 'site' };
+        setScope({ kind: 'site' });
+        setSelectedKey(null);
+        setPlanVersion((version) => version + 1);
+      }
+    });
+  }, [farmId, pushUndo, queryClient, selectedEnvironmentId, updateSiteCache]);
 
   const currentEntryFor = useCallback((target: HistoryEntry): HistoryEntry | null => {
     if (target.kind === 'legacy') {
@@ -2378,8 +2404,17 @@ export function usePlanEditor(farmId: number) {
     setPendingResize(null);
     setSelectedKey(null);
     setHoverKey(null);
+    const pendingPlans = getPendingPlanWorkSnapshot(farmId);
     if (ENV_RECORDS_ENABLED) {
-      const site = storedSite ? cloneSite(storedSite) : null;
+      const site = storedSite ? siteWithPendingPlanSnapshots(cloneSite(storedSite)) : null;
+      if (site) {
+        queryClient.setQueryData(['site-plan', farmId], site);
+        for (const pending of pendingPlans) {
+          if (pending.target.environmentId !== null) {
+            queryClient.setQueryData(['plan', farmId, pending.target.environmentId], clonePlan(pending.plan));
+          }
+        }
+      }
       siteRef.current = site;
       setSitePlan(site);
       const selected = storedSelection ?? null;
@@ -2403,7 +2438,11 @@ export function usePlanEditor(farmId: number) {
       }
       return;
     }
-    const plan = storedPlan ? clonePlan(storedPlan) : createDefaultPlan(farmId);
+    const pendingLegacyPlan = pendingPlans.find((entry) => entry.target.environmentId === null)?.plan;
+    const plan = pendingLegacyPlan
+      ? clonePlan(pendingLegacyPlan)
+      : storedPlan ? clonePlan(storedPlan) : createDefaultPlan(farmId);
+    if (pendingLegacyPlan) queryClient.setQueryData(['plan', farmId], clonePlan(pendingLegacyPlan));
     scopeRef.current = { kind: 'legacy' };
     setScope({ kind: 'legacy' });
     siteRef.current = null;
@@ -2423,7 +2462,7 @@ export function usePlanEditor(farmId: number) {
       fitToView();
       didInitialFitRef.current = true;
     }
-  }, [activateEnvironment, cropsLoading, farmId, fitToView, recordLoading, storedPlan, storedSelection, storedSite, updateStats]);
+  }, [activateEnvironment, cropsLoading, farmId, fitToView, queryClient, recordLoading, storedPlan, storedSelection, storedSite, updateStats]);
 
   useEffect(() => {
     if (!activeCropId && crops.length > 0) setActiveCropId(crops[0].id);
@@ -2548,8 +2587,6 @@ export function usePlanEditor(farmId: number) {
   useEffect(() => { writePref(PREF_KEYS.layerPlants, showPlants); }, [showPlants]);
   useEffect(() => { writePref(PREF_KEYS.layerGround, showGround); }, [showGround]);
 
-  useEffect(() => () => { void flushAutosave(); }, [flushAutosave]);
-
   const toggleSpacing = useCallback(() => setShowSpacing((v) => !v), []);
   const toggleCompanions = useCallback(() => setShowCompanions((v) => !v), []);
   const toggleSimMoisture = useCallback(() => setShowSimMoisture((v) => !v), []);
@@ -2622,7 +2659,9 @@ export function usePlanEditor(farmId: number) {
     lineDraft,
     setLineDraft,
     saveState,
+    saveError,
     savedAt,
+    getPendingWorkSnapshot,
     stats,
     pairings,
     planVersion,

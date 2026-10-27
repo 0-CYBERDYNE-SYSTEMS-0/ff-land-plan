@@ -612,12 +612,17 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
           </>
         )}
         <ViewToggle mode={viewMode} onChange={setViewMode} />
-        {!cinemaOn && (
+        <div className="flex items-center gap-2">
           <Badge variant={saveState === 'error' ? 'destructive' : 'secondary'} className="gap-1">
-            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? `Saved ${savedAt ?? ''}` : saveState === 'dirty' ? 'Unsaved' : 'Ready'}
+            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? `Saved ${savedAt ?? ''}` : saveState === 'dirty' ? 'Unsaved' : saveState === 'error' ? 'Save failed' : 'Ready'}
             {saveState === 'saved' && <Check className="w-3 h-3" />}
           </Badge>
-        )}
+          {saveState === 'error' && (
+            <Button size="sm" variant="outline" title={editor.saveError ?? undefined} onClick={() => { void editor.flushAutosave(); }}>
+              Retry save
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className={`grid gap-4 xl:flex-1 xl:min-h-0${cinemaOn ? '' : ' xl:grid-cols-[minmax(0,1fr)_360px]'}`}>

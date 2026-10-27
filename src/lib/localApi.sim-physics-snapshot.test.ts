@@ -31,6 +31,8 @@ vi.mock('@/lib/db', () => ({
   deleteRecord: vi.fn(async (store: string, key: string) => { dbState.records.get(store)?.delete(key); }),
   clearRecords: vi.fn(async (store: string) => { dbState.records.get(store)?.clear(); }),
   dispatchStorageFailed: vi.fn(),
+  dispatchStorageSaved: vi.fn(),
+  dispatchStorageConflict: vi.fn(),
 }));
 
 vi.mock('@/lib/sim/environment', async (importOriginal) => {

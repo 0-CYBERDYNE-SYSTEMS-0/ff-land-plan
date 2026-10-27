@@ -5,20 +5,47 @@ export interface StorageFailureDetail {
   message: string;
 }
 
+export interface StorageSavedDetail {
+  operation: string;
+  revision?: number;
+}
+
+export interface StorageConflictDetail {
+  message: string;
+}
+
 const DB_NAME = 'ff-pro-data';
 const DB_VERSION = 3;
 const STORE_NAMES: DbStore[] = ['runs', 'seasons', 'ensembles', 'observations', 'calibrations'];
 
 let databasePromise: Promise<IDBDatabase> | null = null;
+let lastStorageFailure: StorageFailureDetail | null = null;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 export function dispatchStorageFailed(operation: string, error: unknown): void {
-  if (typeof window === 'undefined') return;
   const detail: StorageFailureDetail = { operation, message: errorMessage(error) };
+  lastStorageFailure = detail;
+  if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent<StorageFailureDetail>('storage-failed', { detail }));
+}
+
+export function getLastStorageFailure(): StorageFailureDetail | null {
+  return lastStorageFailure;
+}
+
+export function dispatchStorageSaved(operation: string, revision?: number): void {
+  if (lastStorageFailure?.operation === operation) lastStorageFailure = null;
+  if (typeof window === 'undefined') return;
+  const detail: StorageSavedDetail = { operation, ...(revision === undefined ? {} : { revision }) };
+  window.dispatchEvent(new CustomEvent<StorageSavedDetail>('storage-saved', { detail }));
+}
+
+export function dispatchStorageConflict(message: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent<StorageConflictDetail>('storage-conflict', { detail: { message } }));
 }
 
 function database(): Promise<IDBDatabase> {
@@ -74,7 +101,10 @@ async function withStore<T>(
         return;
       }
       request.onsuccess = () => { result = request.result; };
-      transaction.oncomplete = () => resolve(result);
+      transaction.oncomplete = () => {
+        dispatchStorageSaved(`IndexedDB ${operation}`);
+        resolve(result);
+      };
       transaction.onerror = () => reject(transaction.error ?? request.error ?? new Error(`IndexedDB ${operation} failed.`));
       transaction.onabort = () => reject(transaction.error ?? request.error ?? new Error(`IndexedDB ${operation} was aborted.`));
     });
@@ -111,7 +141,10 @@ export async function putRecordIfAbsent<T>(name: DbStore, key: IDBValidKey, valu
           store.put(value, key);
         }
       };
-      transaction.oncomplete = () => resolve(inserted);
+      transaction.oncomplete = () => {
+        dispatchStorageSaved(`IndexedDB migrate ${name}`);
+        resolve(inserted);
+      };
       transaction.onerror = () => reject(transaction.error ?? read.error ?? new Error('IndexedDB migration write failed.'));
       transaction.onabort = () => reject(transaction.error ?? read.error ?? new Error('IndexedDB migration write was aborted.'));
     });
@@ -127,4 +160,44 @@ export function deleteRecord(name: DbStore, key: IDBValidKey): Promise<void> {
 
 export function clearRecords(name: DbStore): Promise<void> {
   return withStore(name, 'readwrite', 'clear', (store) => store.clear()).then(() => undefined);
+}
+
+/** Delete every IndexedDB row owned by a farm in one abortable transaction. */
+export async function deleteFarmRecords(
+  farmId: number,
+  includeRuns: boolean,
+  beforeTransaction: () => void = () => undefined,
+): Promise<void> {
+  const stores: DbStore[] = [
+    ...(includeRuns ? ['runs' as const] : []),
+    'seasons',
+    'observations',
+    'calibrations',
+  ];
+  try {
+    const db = await database();
+    beforeTransaction();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(stores, 'readwrite');
+      for (const name of stores) {
+        const request = transaction.objectStore(name).openCursor();
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) return;
+          const value = cursor.value as { farmId?: number };
+          if (value.farmId === farmId) cursor.delete();
+          cursor.continue();
+        };
+      }
+      transaction.oncomplete = () => {
+        dispatchStorageSaved('IndexedDB delete farm');
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB farm deletion failed.'));
+      transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB farm deletion was aborted.'));
+    });
+  } catch (error) {
+    dispatchStorageFailed('IndexedDB delete farm', error);
+    throw error;
+  }
 }
