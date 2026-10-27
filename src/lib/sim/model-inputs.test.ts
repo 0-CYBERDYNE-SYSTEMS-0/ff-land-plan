@@ -1218,6 +1218,44 @@ describe('frozen crop model inputs and replay support', () => {
     expect(autoHarvestDisabledReplay.finalState).toEqual(autoHarvestDisabled.finalState);
     expect(autoHarvestDisabledReplay.summary).toEqual(autoHarvestDisabled.summary);
 
+    const firstEligibleDayIndex = autoHarvestDisabled.summary.harvestReadyDay! + 1;
+    const firstEligibleDate = sunnySeries[firstEligibleDayIndex]!.date;
+    expect(firstEligibleDayIndex).toBe(63);
+    expect(firstEligibleDate).toBe('2026-12-03');
+    const duplicateHarvestRequest = {
+      kind: 'harvest' as const,
+      date: firstEligibleDate,
+      cell: '0,0',
+    };
+    const duplicateManualHarvestRun = {
+      ...autoHarvestDisabledRun,
+      interventions: [duplicateHarvestRequest, { ...duplicateHarvestRequest }],
+    };
+    expect(duplicateManualHarvestRun.interventions).toEqual([
+      duplicateHarvestRequest,
+      duplicateHarvestRequest,
+    ]);
+    const duplicateManualHarvest = simulateRun(duplicateManualHarvestRun, sunnySeries);
+    const duplicateManualHarvestReplay = simulateRun(duplicateManualHarvestRun, sunnySeries);
+    const duplicateHarvestEvents = duplicateManualHarvest.events.filter((event) => event.kind === 'harvested');
+    expect(duplicateHarvestEvents).toHaveLength(1);
+    expect(duplicateHarvestEvents[0]).toMatchObject({
+      dayIndex: firstEligibleDayIndex,
+      date: firstEligibleDate,
+      kind: 'harvested',
+      cell: '0,0',
+    });
+    const duplicateHarvestEvent = duplicateHarvestEvents[0];
+    if (duplicateHarvestEvent?.kind === 'harvested') {
+      expect(Math.abs(duplicateHarvestEvent.data.yieldKg - 0.007875)).toBeLessThanOrEqual(1e-12);
+    }
+    expect(duplicateManualHarvest.finalState.cells['0,0']?.harvested).toBe(true);
+    expect(duplicateManualHarvest.summary.totalYieldKg).toBe(0.01);
+    expect(duplicateManualHarvest.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+    expect(duplicateManualHarvestReplay.events).toEqual(duplicateManualHarvest.events);
+    expect(duplicateManualHarvestReplay.finalState).toEqual(duplicateManualHarvest.finalState);
+    expect(duplicateManualHarvestReplay.summary).toEqual(duplicateManualHarvest.summary);
+
     const replacementCrop = cropLibrary.find((entry) => entry.id !== crop.id && entry.category !== 'fungus')!;
     const replantInputs = structuredClone(inputs) as RunModelInputsV2;
     replantInputs.crops.push(replacementCrop);
