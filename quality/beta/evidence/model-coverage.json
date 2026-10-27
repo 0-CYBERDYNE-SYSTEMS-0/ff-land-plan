@@ -203,13 +203,13 @@
         "dryMassGPerPlant": 14,
         "marketableYieldKgM2": 1.9
       },
-      "sampleSize": "Three replicate plots; each experimental unit was a 5.4 m² plot with 72 plants. The per-plant measurement subsample size is not verified in the retained extraction.",
+      "sampleSize": "Statistical n = 3 replicate plots; 12 plants sampled within each plot. Each experimental unit was a 5.4 m² plot with 72 plants; the 12 plant measurements are subsamples, not independent replicates.",
       "status": "Measured observation; potential holdout only if no parameter is fitted to this record; not executable without daily inputs.",
       "missing": [
         "daily weather and temperature series",
         "daily DLI series (only the reported experiment mean is available here)",
         "complete soil/root-zone state and inputs",
-        "raw replicate measurements and variance"
+        "raw plot-level means and between-replicate variance; reported table provides treatment means and significance letters"
       ],
       "calibrationOrHoldout": "Potential production holdout; do not fit parameters to this record.",
       "units": {
