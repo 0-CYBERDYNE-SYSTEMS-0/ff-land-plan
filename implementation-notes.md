@@ -2054,3 +2054,24 @@ snapshots changed, and no application implementation is claimed by this revision
   trait handling, crop accuracy, biology, or predictive validity. A-08 remains UNVERIFIED overall
   until unsupported crop-trait handling is also evidenced; 02A remains incomplete. PR CI is pending for
   this checkpoint.
+
+## 2026-10-27 — BETA-02A A-08 Pages smoke CI wait fix
+
+- Test-only commit `9c78595a1ad6105bd3828cb2be4fb4ac4c0a5c38` follows A-08 implementation commit
+  `427715f85859b56d324d0dc1899a30cf34df5f9e`. The implementation commit's PR CI run
+  [40548071145](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40548071145)
+  failed only on the Pages Playwright journey. Trace diagnosis showed the pathname-only wait was a
+  false positive because both URLs use `/ff-land-plan/`; the exact World button was not accessible
+  within the default 5 seconds, although it appeared in the later snapshot. The regression now waits
+  for the full target URL, then exact World button visibility up to 30 seconds, then
+  `aria-pressed=true`.
+- The corrected local Pages smoke passed 2/2. Local `npm test` (45 files / 235 tests), typecheck,
+  standard/demo/Pages builds, private-file scan, evidence-manifest JSON parse, and `git diff --check`
+  passed. PR CI run
+  [40550351216](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40550351216)
+  passed `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file
+  scan`, and `GitGuardian Security Checks` on exact fix commit `9c78595a1ad6105bd3828cb2be4fb4ac4c0a5c38`.
+- Evidence remains limited to the synthetic missing-frozen-environment-inputs case through the normal
+  local-storage list path. It does not cover IndexedDB migration, server persistence, unsupported
+  crop-trait handling, crop accuracy, human validation, or predictive validity. A-08 remains
+  UNVERIFIED overall, 02A remains incomplete, and ordinary new runs remain v1.
