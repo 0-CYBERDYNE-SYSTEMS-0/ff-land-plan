@@ -21,7 +21,8 @@
     "selectedSoilWaterMethod": "FAO-56 root-zone balance within explicitly supported soil domain",
     "noFrameworkCodeCopied": true,
     "rootZoneReferenceCoverage": "quality/beta/evidence/fao56-root-reference-coverage.json",
-    "cropProductionReferenceCoverage": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json"
+    "cropProductionReferenceCoverage": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json",
+    "dynamicCanopyEngineFixture": "quality/beta/evidence/water-sa-2018-dynamic-canopy-engine-fixture.json"
   },
   "sources": [
     {
@@ -1096,6 +1097,8 @@
     "reviewedSourceParameterTranscriptionSets": 1,
     "preregisteredSyntheticCanopyEquationFixtures": 2,
     "executedSyntheticCanopyEquationFixtures": 2,
+    "preregisteredDynamicCanopyEngineFixtures": 1,
+    "executedDynamicCanopyEngineFixtures": 0,
     "executableSyntheticParameterFixtures": 1,
     "measuredEmpiricallyValidatedCrops": 0,
     "measuredValidationClaims": 0,
@@ -2639,6 +2642,13 @@
         "status": "approved-software-math-only; locally verified",
         "scope": "Synthetic equation arithmetic only; explicit canopy dry mass and source-selected broccoli winter parameters; Table 5/Table 6 K_PAR discrepancy disclosed without attribution; not a candidate comparison",
         "evidence": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json"
+      },
+      {
+        "id": "water-sa-v4-dynamic-canopy-engine-integration",
+        "tolerance": "equation/output deviation ≤1e-12; per-day DM closure residual ≤1e-12 g/m²/day",
+        "status": "preregistered-pending-independent-review",
+        "scope": "Synthetic v4 integration invariant only; source parameters remain separate from synthetic RUE/allocation; no measured or candidate comparison",
+        "evidence": "quality/beta/evidence/water-sa-2018-dynamic-canopy-engine-fixture.json"
       }
     ]
   },

@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "id": "WATERSA-2018-DYNAMIC-CANOPY-ENGINE-SYNTHETIC-01",
+  "status": "preregistered synthetic engine-integration fixture; no measured trajectory or candidate comparison",
+  "source": {
+    "evidenceId": "VAHRMEIJER-2018-WATER-SA-44-4-02",
+    "citation": "Vahrmeijer, J.T., Annandale, J.G., Steyn, J.M. and Bristow, K.L. (2018), Model parameters of four important vegetable crops for improved water use and yield estimation, Water SA 44(4), 528–538.",
+    "url": "https://doi.org/10.4314/wsa.v44i4.02",
+    "sourceParameterTable": "Table 6 selected winter broccoli SWB parameter set",
+    "crop": "broccoli",
+    "cultivar": "Parthenon",
+    "season": "winter 2008",
+    "sourceParameters": {
+      "kPar": 1.09,
+      "specificLeafAreaM2PerKg": 9,
+      "leafStemPartitionParameterM2PerKg": 1.54
+    },
+    "tableDiscrepancy": "Table 5 measured winter Parthenon K_PAR=1.14 and Table 6 selected winter broccoli K_PAR=1.09. Table 5 summer Star 2204 K_PAR=1.09 and Table 6 selected summer broccoli K_PAR=1.14. Values are preserved separately; no biological attribution is inferred.",
+    "domainLimits": [
+      "These selected values are not generic broccoli defaults or a complete FarmFriend parameter set.",
+      "The source RUE uses intercepted total solar radiation and cannot be copied into FarmFriend's intercepted-PAR RUE equation.",
+      "The source p/SLA relation calculates LAI from canopy dry matter; it does not define the daily share of new net dry matter allocated to canopy versus harvestable organs."
+    ]
+  },
+  "modelDispatch": {
+    "cropModelVersion": "crop-model-v4",
+    "runModelInputs": "run-inputs-v4",
+    "parameterSetVersion": "crop-parameters-v5",
+    "historicalVersions": "crop-model-v1, v2 and v3 retain their existing equations and frozen-input interpretation; ordinary new-run creation remains v1 until acceptance gates pass."
+  },
+  "fixtureClassification": "synthetic software integration only; not a source reproduction, measured comparison, reference-model agreement, or crop prediction",
+  "frozenSyntheticInputs": {
+    "dryMatterUnits": "g DM/m² ground",
+    "initialPerCellCanopyDryMatterGPerM2": 10,
+    "initialPerCellHarvestableDryMatterGPerM2": 5,
+    "initialPerCellTotalAboveGroundDryMatterGPerM2": 15,
+    "syntheticDailyCanopyAllocationShare": 0.6,
+    "syntheticDailyHarvestableAllocationShare": 0.4,
+    "allocationConstraint": "Canopy and harvestable shares are synthetic frozen assumptions, sum to exactly 1, and partition each net DM increment once. No harvest-index multiplier is applied on top of the harvestable pool.",
+    "syntheticNetRueGPerMjInterceptedPar": 2,
+    "dailyDliMolParM2": 18,
+    "dailyStressFactor": 1,
+    "dailyEtoMm": 0,
+    "dailyPrecipitationMm": 0,
+    "dailyIrrigationMm": 0,
+    "dailyRunoffMm": 0,
+    "rootZoneWaterStressCoefficient": 1,
+    "dailyTimeStep": "one deterministic daily tick",
+    "interceptionTiming": "Compute LAI and FI_PAR from the frozen beginning-of-day canopy DM; use that same fraction for the day's photosynthesis, then partition the resulting net DM gain. Do not feed the same day's gain into that day's interception."
+  },
+  "expectedDailyRows": [
+    {
+      "day": 1,
+      "beginningCanopyDryMatterGPerM2": 10,
+      "leafAreaIndexM2PerM2": 0.088635020682,
+      "interceptedParFraction": 0.092091950467,
+      "netDryMatterGainGPerM2": 0.736735603736,
+      "endingCanopyDryMatterGPerM2": 10.442041362242,
+      "endingHarvestableDryMatterGPerM2": 5.294694241494,
+      "endingTotalAboveGroundDryMatterGPerM2": 15.736735603736
+    },
+    {
+      "day": 2,
+      "beginningCanopyDryMatterGPerM2": 10.442041362242,
+      "leafAreaIndexM2PerM2": 0.092491047432,
+      "interceptedParFraction": 0.095899942555,
+      "netDryMatterGainGPerM2": 0.767199540443,
+      "endingCanopyDryMatterGPerM2": 10.902361086508,
+      "endingHarvestableDryMatterGPerM2": 5.601574057672,
+      "endingTotalAboveGroundDryMatterGPerM2": 16.503935144179
+    }
+  ],
+  "acceptanceChecks": {
+    "equationArithmeticTolerance": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": "LAI m²/m²; FI_PAR dimensionless; net DM g/m²/day",
+      "basis": "Synthetic deterministic arithmetic check with frozen displayed source transcriptions; not biological or predictive accuracy."
+    },
+    "dryMatterClosureTolerance": {
+      "maximumAbsoluteResidual": 1e-12,
+      "units": "g DM/m²/day",
+      "residual": "total dry-matter increment minus canopy increment minus harvestable increment",
+      "basis": "Numerical conservation invariant for each partitioned daily net-production increment."
+    },
+    "zeroLight": "Exactly zero photosynthetic gain in both canopy and harvestable pools when DLI is known zero.",
+    "unknownLight": "No DM pool changes when DLI is unknown; output is qualified as unsupported for that day's production.",
+    "candidateComparison": false,
+    "measuredOutputComparison": false
+  },
+  "qualification": [
+    "The source K_PAR/SLA/p values are source-selected seasonal references; the Table 5/Table 6 K_PAR discrepancy is disclosed without attribution.",
+    "The intercepted-PAR RUE, 0.6/0.4 daily canopy/harvestable allocation, and initial per-cell pool values are synthetic assumptions, not source parameters.",
+    "The source RUE and water/climate equations are not transferred. Root-zone transpiration remains FAO-56 potential ET with Ks-limited actual uptake and production stress. Enclosure transpiration remains a lagged potential-ET proxy using frozen Kc and previous climate ET factor; current Ks is not coupled into enclosure flux. Dynamic FI_PAR is only a qualified canopy-cover proxy for enclosure exchange.",
+    "This fixture does not validate broccoli growth, harvest timing, water response, or model accuracy."
+  ],
+  "toleranceReview": {
+    "status": "preregistered; pending independent validator review",
+    "requestedScope": "Equation arithmetic, zero/unknown light behavior, and two-pool daily dry-matter closure only. No measured or candidate comparison is authorized.",
+    "reviewedBy": null,
+    "reviewedDate": null
+  },
+  "implementationStatus": "not implemented; no candidate comparison run"
+}
