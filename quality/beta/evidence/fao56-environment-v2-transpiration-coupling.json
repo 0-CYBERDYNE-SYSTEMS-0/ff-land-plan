@@ -50,7 +50,22 @@
     "plantedCells": ["0,0", "1,0"],
     "plantedCellAreaM2": 0.25,
     "totalPlantedAreaM2": 0.5,
-    "dailyOutdoorEtoMm": 2,
+    "cropModelVersion": "crop-model-v4",
+    "runModelInputs": "run-inputs-v4",
+    "parameterSetVersion": "crop-parameters-v5",
+    "crop": {
+      "cropId": 19,
+      "catalogSlug": "broccoli",
+      "catalogVariety": "Brassica oleracea var. italica",
+      "startEvent": "transplanting",
+      "establishedAtDay": 0,
+      "initialCanopyDryMatterGPerM2": 10,
+      "initialHarvestableDryMatterGPerM2": 5,
+      "initialTotalAboveGroundDryMatterGPerM2": 15,
+      "syntheticRootInputs": "AWC 1.5 mm/cm, effective depth 20 cm, TAW 30 mm, p at ETc 5 mm/day = 0.5, Kc 1; no dynamic root-development profile"
+    },
+    "dailyOutdoorEtoMm": 5,
+    "priorRoomClimateState": { "tMinC": 15, "tMaxC": 20, "rhPct": 60, "co2Ppm": 420, "etFactor": 1 },
     "dailyOutdoorTemperatureC": [15, 20],
     "dailyDliMolParM2": 0,
     "precipitationMm": 0,
@@ -69,13 +84,17 @@
       "wetInitialDepletionMmPerCell": 0,
       "dryInitialDepletionMmPerCell": 22.5,
       "wetExpectedKs": 1,
-      "dryExpectedKs": 0.5
+      "dryExpectedKs": 0.5,
+      "wetExpectedTranspirationMmPerCellDay": 5,
+      "dryExpectedTranspirationMmPerCellDay": 2.5,
+      "wetExpectedEnvironmentTranspirationKgDay": 2.5,
+      "dryExpectedEnvironmentTranspirationKgDay": 1.25
     },
     "establishment": "both cells already established before the tick; no germination, emergence or establishment flux is under test",
     "humidityDomain": "synthetic non-saturating greenhouse day; both expected RH outputs must remain below 100%"
   },
   "equations": {
-    "dailyPotentialTranspirationPerCellMm": "outdoor ETo (mm/day) × previous-day environment ET factor (dimensionless) × frozen Kc (dimensionless)",
+    "dailyPotentialTranspirationPerCellMm": "outdoor ETo (5 mm/day) × previous-day environment ET factor (1) × frozen Kc (1) = ETc 5 mm/day; FAO-56 p adjustment therefore leaves the frozen p=0.5 unchanged",
     "dailyActualTranspirationPerCellMm": "min(available root-zone water after declared boundary inputs, daily potential transpiration × current FAO-56 Ks)",
     "rootZoneStorageChangePerCellMm": "inflows - runoff - deep drainage - actual transpiration; use unrounded internal values",
     "wholeEnvironmentTranspirationKgDay": "sum over crop cells(actual transpiration mm/cell/day × cell area m² × 1 kg water/(mm·m²))",
@@ -84,8 +103,8 @@
     "environmentV1Preservation": "This lagged, water-limited flux rule applies only to environment-v2. Existing environment-v1 replay equations are unchanged."
   },
   "acceptanceChecks": {
-    "fao56KsArithmetic": "Wet Ks equals 1; dry Ks equals 0.5 for the frozen TAW, p and initial storage values.",
-    "rootZoneToAirFlux": "For each treatment, summed root-zone water loss in mm×m² equals environment transpiration input in kg/day within the preregistered 1e-12 numerical conversion tolerance.",
+    "fao56KsArithmetic": "At the reference ETc of 5 mm/day, adjusted p remains 0.5. Wet Ks equals 1; dry Ks equals 0.5 for the frozen TAW and initial storage values. Expected actual transpiration is 5 mm/cell-day wet and 2.5 mm/cell-day dry.",
+    "rootZoneToAirFlux": "For each treatment, summed root-zone water loss in mm×m² equals environment transpiration input in kg/day within the preregistered 1e-12 numerical conversion tolerance: wet 5×0.25×2=2.5 kg/day and dry 2.5×0.25×2=1.25 kg/day.",
     "noDoubleStressOrCoefficient": "Actual transpiration is ETo×previousEtFactor×Kc×Ks once; no second Ks/Kc multiplier is applied to its air input or root-zone debit.",
     "wetDryDirection": "Wet treatment actual transpiration exceeds dry treatment actual transpiration, wet room RH exceeds dry room RH, and both room RH values remain below saturation.",
     "zeroLightAndCanopy": "Known zero DLI yields exactly zero production; canopy and harvestable DM pools remain unchanged in both treatments.",
