@@ -9,6 +9,7 @@ import { archetypes } from '@/creative/archetypes';
 import { campaignScopeKey } from '@/lib/campaign';
 import { CAMPAIGN_ENABLED } from '@/lib/featureFlags';
 import { growingTargetKey } from '@/lib/growingTargets';
+import { yieldMassUnit } from '@/lib/sim';
 import type { RunRecord } from '@/lib/sim/types';
 import type { GrowingTargetRef, SeasonHarvest, SeasonRecord, SeasonSoilCarry } from '@/types';
 
@@ -385,11 +386,11 @@ export function CampaignPanel({
             <p className="text-[11px] font-medium">Runs to include</p>
             <div className="mt-1 max-h-36 space-y-1 overflow-y-auto rounded border border-border p-1.5">
               {selectableRuns.length === 0 ? <p className="px-1 py-2 text-[10px] text-muted-foreground">No unclosed runs are available for this farm and year.</p> : selectableRuns.map((run) => (
-                <label key={run.id} className="flex cursor-pointer items-start gap-2 rounded px-1 py-1 hover:bg-muted/50">
-                  <input type="checkbox" checked={selectedRunIds.includes(run.id)} disabled={run.status !== 'complete'} onChange={() => toggleRun(run.id)} className="mt-0.5 h-3.5 w-3.5 accent-primary disabled:opacity-40" />
+                <label key={run.id} className={`flex items-start gap-2 rounded px-1 py-1 ${run.summary.yieldBasis === 'dry-matter' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-muted/50'}`}>
+                  <input type="checkbox" checked={selectedRunIds.includes(run.id)} disabled={run.status !== 'complete' || run.summary.yieldBasis === 'dry-matter'} onChange={() => toggleRun(run.id)} className="mt-0.5 h-3.5 w-3.5 accent-primary disabled:opacity-40" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[10px] font-medium">{run.label}</span>
-                    <span className="block text-[9px] text-muted-foreground">{runDates(run)} · {run.summary.totalYieldKg.toFixed(1)} kg · {run.status}{unavailableRunIds.has(run.id) ? ' · already closed' : ''}</span>
+                    <span className="block text-[9px] text-muted-foreground">{runDates(run)} · {run.summary.totalYieldKg.toFixed(1)} {yieldMassUnit(run.summary.yieldBasis)}{run.summary.yieldBasis === 'dry-matter' ? ' · not eligible for fresh-mass campaign' : ''} · {run.status}{unavailableRunIds.has(run.id) ? ' · already closed' : ''}</span>
                   </span>
                 </label>
               ))}

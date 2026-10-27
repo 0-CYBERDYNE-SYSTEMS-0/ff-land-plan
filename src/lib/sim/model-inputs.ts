@@ -1,11 +1,12 @@
 import { cropLibrary } from '@/data/crops';
+import { archetypes } from '@/creative/archetypes';
 import type { SoilProfile } from '@/lib/soil';
 import type { Crop } from '@/types';
 import { cropThermalParams } from '@/data/cropThermalParams';
 import type { FrozenCropModelParametersV2, RunConfig, RunModelInputs, RunModelInputsV1 } from './types';
 
 export interface RunModelSource {
-  soil?: Pick<SoilProfile, 'awcMmPerCm' | 'organicMatterPct'> | null;
+  soil?: Pick<SoilProfile, 'awcMmPerCm' | 'organicMatterPct'> & Partial<Pick<SoilProfile, 'source'>> | null;
   crops?: Crop[];
   cropParametersV2?: FrozenCropModelParametersV2[];
 }
@@ -29,11 +30,110 @@ function cropIdsFor(config: RunConfig): number[] {
   return [...ids].sort((a, b) => a - b);
 }
 
+function usesSoillessTarget(config: RunConfig): boolean {
+  if (Object.values(config.basePlan.ground ?? {}).some((slug) => slug.includes('hydro'))
+    || Object.values(config.assetPhysics?.soillessCells ?? {}).some((cells) => (cells?.length ?? 0) > 0)
+    || Object.values(config.assetPhysics?.hydroRequiredCells ?? {}).some((cells) => (cells?.length ?? 0) > 0)) return true;
+  const hydroSpaces = new Set((config.environment?.layout?.growingSpaces ?? [])
+    .filter((space) => space.kind === 'hydro')
+    .map((space) => space.id));
+  if (Object.values(config.basePlan.targets ?? {}).some((target) => hydroSpaces.has(target.growingSpaceId))) return true;
+  return config.interventions.some((intervention) => intervention.kind === 'plant'
+    && intervention.target?.kind === 'growing-level'
+    && hydroSpaces.has(intervention.target.growingSpaceId));
+}
+
+function thermalParametersComplete(parameter: FrozenCropModelParametersV2['thermal']): boolean {
+  if (!parameter) return false;
+  if (!Array.isArray(parameter.gddToMaturityCdays) || parameter.gddToMaturityCdays.length !== 2
+    || typeof parameter.accumulationMethod !== 'string'
+    || typeof parameter.accumulationStart !== 'string'
+    || typeof parameter.maturityEndpoint !== 'string'
+    || typeof parameter.sourceCitation !== 'string'
+    || typeof parameter.sourceUrl !== 'string') return false;
+  const method = parameter.accumulationMethod.toLowerCase();
+  const supportedMethod = method.includes('single sine')
+    || method.includes('max–min')
+    || method.includes('max-min')
+    || method.includes('study thermal-time')
+    || method.includes('study heat-unit');
+  return Number.isFinite(parameter.tBaseC)
+    && (parameter.tUpperC === undefined
+      || (Number.isFinite(parameter.tUpperC) && parameter.tUpperC > parameter.tBaseC))
+    && parameter.gddToMaturityCdays.every((target) => Number.isFinite(target) && target > 0)
+    && parameter.gddToMaturityCdays[0] <= parameter.gddToMaturityCdays[1]
+    && parameter.accumulationStart.trim().length > 0
+    && parameter.maturityEndpoint.trim().length > 0
+    && parameter.sourceCitation.trim().length > 0
+    && parameter.sourceUrl.trim().length > 0
+    && supportedMethod;
+}
+
+function productionParametersComplete(parameter: FrozenCropModelParametersV2['production']): boolean {
+  if (!parameter || !Array.isArray(parameter.missing)) return false;
+  const evidence = parameter.evidence;
+  if (!evidence || ![evidence.evidenceId, evidence.sourceCitation, evidence.sourceUrl, evidence.validDomain]
+    .every((value) => typeof value === 'string' && value.trim().length > 0)) return false;
+  return parameter.equationFamily === 'LINTUL-net-RUE'
+    && parameter.status === 'supported'
+    && parameter.missing.length === 0
+    && parameter.rueGPerMjInterceptedPar !== null
+    && Number.isFinite(parameter.rueGPerMjInterceptedPar)
+    && parameter.rueGPerMjInterceptedPar >= 0
+    && parameter.interceptedParFraction !== null
+    && Number.isFinite(parameter.interceptedParFraction)
+    && parameter.interceptedParFraction >= 0
+    && parameter.interceptedParFraction <= 1
+    && parameter.harvestIndex !== null
+    && Number.isFinite(parameter.harvestIndex)
+    && parameter.harvestIndex >= 0
+    && parameter.harvestIndex <= 1;
+}
+
+function rootZoneParametersComplete(parameter: FrozenCropModelParametersV2['rootZone']): boolean {
+  if (!parameter || !Array.isArray(parameter.missing)) return false;
+  const evidence = parameter.evidence;
+  if (!evidence || ![evidence.evidenceId, evidence.sourceCitation, evidence.sourceUrl, evidence.validDomain]
+    .every((value) => typeof value === 'string' && value.trim().length > 0)) return false;
+  return parameter.method === 'FAO-56'
+    && parameter.status === 'supported'
+    && parameter.missing.length === 0
+    && parameter.effectiveRootDepthCm !== null
+    && Number.isFinite(parameter.effectiveRootDepthCm)
+    && parameter.effectiveRootDepthCm > 0
+    && parameter.depletionFraction !== null
+    && Number.isFinite(parameter.depletionFraction)
+    && parameter.depletionFraction >= 0
+    && parameter.depletionFraction <= 1
+    && parameter.cropCoefficient !== null
+    && Number.isFinite(parameter.cropCoefficient)
+    && parameter.cropCoefficient >= 0
+    && parameter.initialStorageFraction !== null
+    && Number.isFinite(parameter.initialStorageFraction)
+    && parameter.initialStorageFraction >= 0
+    && parameter.initialStorageFraction <= 1;
+}
+
+function soilQualificationReasons(
+  soil: Extract<RunModelInputs, { model: 'run-inputs-v2' }>['soil'],
+): string[] {
+  if (!soil) return [];
+  const reasons: string[] = [];
+  if (soil.source !== 'usda-sda' && soil.source !== 'soilgrids') {
+    reasons.push('Frozen v2 soil AWC provenance is unknown.');
+  }
+  if (soil.source === 'soilgrids' && typeof soil.awcMmPerCm === 'number' && Number.isFinite(soil.awcMmPerCm)) {
+    reasons.push('Frozen v2 numeric soil AWC is paired with SoilGrids classification-only provenance.');
+  }
+  return reasons;
+}
+
 /** Inspect replay compatibility without consulting live catalog or soil data. */
 export function inspectRunModelSupport(config: RunConfig, persisted = true): RunModelSupport {
   const requiredCropIds = cropIdsFor(config);
   const inputs = config.modelInputs;
-  const inputCropIds = new Set(inputs?.crops.map((crop) => crop.id) ?? []);
+  const inputCrops = Array.isArray(inputs?.crops) ? inputs.crops : [];
+  const inputCropIds = new Set(inputCrops.map((crop) => crop.id));
   const missingCropIds = requiredCropIds.filter((cropId) => !inputCropIds.has(cropId));
   const hasCompleteCropSnapshot = !!inputs && missingCropIds.length === 0;
 
@@ -44,28 +144,67 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
         reasons: ['Frozen crop-model-v2 parameter inputs are missing or have an unknown version.'],
       };
     }
+    if (!Array.isArray(inputs.crops) || !Array.isArray(inputs.cropParameters)
+      || !inputs.qualification || !Array.isArray(inputs.qualification.reasons)) {
+      return {
+        model: 'crop-model-v2', status: 'unsupported', canReplay: false, preserveStoredSummary: persisted,
+        reasons: ['Frozen crop-model-v2 inputs have an invalid shape.'],
+      };
+    }
     const parameterIds = new Set(inputs.cropParameters.map((parameter) => parameter.cropId));
     const missingParameters = requiredCropIds.filter((cropId) => !parameterIds.has(cropId));
+    const invalidParameters = inputs.cropParameters.filter((parameter) =>
+      !thermalParametersComplete(parameter.thermal)
+      || !productionParametersComplete(parameter.production)
+      || !rootZoneParametersComplete(parameter.rootZone)
+      || parameter.lifecycle !== 'plant',
+    );
     const reasons = [
       ...inputs.qualification.reasons,
       ...(missingCropIds.length ? [`Frozen crop records are missing for crop IDs ${missingCropIds.join(', ')}.`] : []),
       ...(missingParameters.length ? [`Frozen crop parameters are missing for crop IDs ${missingParameters.join(', ')}.`] : []),
-      ...inputs.cropParameters.flatMap((parameter) => parameter.thermal
-        ? []
-        : [`Crop ${parameter.cropId}: frozen thermal development parameters are missing.`]),
+      ...(inputs.cropParameters.length !== parameterIds.size ? ['Frozen v2 crop parameters contain duplicate crop IDs.'] : []),
+      ...(inputs.soil?.awcMmPerCm === undefined || inputs.soil.awcMmPerCm === null
+        || !Number.isFinite(inputs.soil.awcMmPerCm) || inputs.soil.awcMmPerCm <= 0
+        ? ['Frozen v2 soil available-water capacity is missing or invalid.']
+        : []),
+      ...soilQualificationReasons(inputs.soil),
+      ...(usesSoillessTarget(config) ? ['Soilless targets require the separate 02B resource model.'] : []),
+      ...invalidParameters.map((parameter) => `Crop ${parameter.cropId}: one or more frozen v2 parameter values are missing, invalid, or unsupported.`),
     ];
     const complete = hasCompleteCropSnapshot
       && missingParameters.length === 0
+      && inputs.cropParameters.length === parameterIds.size
+      && (inputs.soil?.awcMmPerCm ?? 0) > 0
+      && !usesSoillessTarget(config)
       && inputs.qualification.status === 'supported'
       && inputs.cropParameters.every((parameter) =>
-        parameter.thermal !== null
-        && parameter.production.status === 'supported' && parameter.rootZone.status === 'supported'
+        thermalParametersComplete(parameter.thermal)
+        && productionParametersComplete(parameter.production)
+        && rootZoneParametersComplete(parameter.rootZone)
         && parameter.lifecycle === 'plant',
       );
     if (complete) {
       return {
-        model: 'crop-model-v2', status: 'unsupported', canReplay: false, preserveStoredSummary: persisted,
-        reasons: ['Frozen v2 parameters are complete, but the v2 daily state reducer is not enabled yet.'],
+        model: 'crop-model-v2', status: 'qualified', canReplay: true, preserveStoredSummary: false,
+        reasons: [
+          'Empirical v2 crop-model accuracy remains UNVERIFIED for this parameter set.',
+          'v2 dry-matter production currently applies the FAO-56 water stress coefficient; nutrient and temperature production stress factors are not parameterized.',
+          'PAR interception is a fixed fraction; dynamic canopy/LAI development is not modeled.',
+          ...(config.climateModel === 'environment-v1' && config.environment
+            && archetypes[config.environment.archetype]?.kind !== 'open'
+            ? ['Enclosed v2 climate transpiration is lagged potential ET using frozen, stage-independent root-zone Kc and the previous climate ET factor; it is not reduced by current root-zone Ks. CO₂ uptake uses thermal progress times fixed PAR interception as a qualified leaf-area proxy, not measured LAI.']
+            : []),
+          'Surface runoff is assumed to be 0 mm/day because the run has no frozen runoff input; infiltration and runoff uncertainty remain unmodeled.',
+          'Effective root depth is held at the frozen value; root growth and rooting barriers are not modeled.',
+          ...(config.environment && config.climateModel !== 'environment-v1'
+            && archetypes[config.environment.archetype]?.kind !== 'open'
+            && archetypes[config.environment.archetype]?.dliMode !== 'supplement-only'
+            ? ['Without an environment-v1 climate state, enclosed natural DLI uses frozen calibration cover transmission when present, otherwise the archetype default; only explicitly frozen target lighting is included.']
+            : []),
+          'Thermal accumulation starts on the frozen plantedAt day; separate sowing/transplant event acceptance remains outstanding.',
+          ...soilQualificationReasons(inputs.soil),
+        ],
       };
     }
     return {
@@ -143,6 +282,16 @@ function frozenSoil(source: RunModelSource, prior?: RunModelInputs) {
   return soil;
 }
 
+function frozenSoilV2(source: RunModelSource, prior?: RunModelInputs) {
+  const soil = frozenSoil(source, prior);
+  if (!soil) return null;
+  const priorSource = prior?.model === 'run-inputs-v2' ? prior.soil?.source : undefined;
+  return {
+    ...soil,
+    source: prior ? priorSource ?? 'unknown' : source.soil?.source ?? 'unknown',
+  };
+}
+
 function freezeRunModelInputsV1(
   config: RunConfig,
   source: RunModelSource,
@@ -171,22 +320,28 @@ function parameterForCrop(
   const productionMissing = fungal
     ? ['separate substrate/lifecycle model parameters']
     : ['crop-specific net RUE', 'canopy PAR interception', 'harvest index'];
-  const rootZoneMissing = ['effective crop root depth', 'crop depletion fraction'];
+  const rootZoneMissing = ['effective crop root depth', 'crop depletion fraction', 'crop coefficient', 'initial root-zone storage fraction'];
   return {
     cropId: crop.id,
     thermal: thermal ? structuredClone(thermal) : null,
     production: {
+      equationFamily: 'LINTUL-net-RUE',
       rueGPerMjInterceptedPar: null,
       interceptedParFraction: null,
       harvestIndex: null,
       status: 'unsupported',
       missing: productionMissing,
+      evidence: { evidenceId: null, sourceCitation: null, sourceUrl: null, validDomain: null },
     },
     rootZone: {
+      method: 'FAO-56',
       effectiveRootDepthCm: null,
       depletionFraction: null,
+      cropCoefficient: null,
+      initialStorageFraction: null,
       status: 'unsupported',
       missing: rootZoneMissing,
+      evidence: { evidenceId: null, sourceCitation: null, sourceUrl: null, validDomain: null },
     },
     lifecycle: fungal ? 'fungus' : 'plant',
   };
@@ -208,7 +363,7 @@ export function freezeRunModelInputsV2(
   return {
     model: 'run-inputs-v2',
     parameterSetVersion: 'crop-parameters-v2',
-    soil: frozenSoil(source, prior),
+    soil: frozenSoilV2(source, prior),
     crops,
     cropParameters,
     qualification: {

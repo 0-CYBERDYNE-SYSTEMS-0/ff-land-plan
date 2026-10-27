@@ -3,6 +3,7 @@ import { SCENARIOS } from '@/lib/growth';
 import { TIMELINE_ENABLED } from '@/lib/featureFlags';
 import type { ScenarioType, WeatherCurrent } from '@/types';
 import type { ComparisonMetric, DailyEnvironment, EnsembleBand, EnvSourceTag, Intervention, RunComparison, RunEnsembleResult } from '@/lib/sim';
+import { yieldMassUnit } from '@/lib/sim';
 import type { ApplyInterventionResult, CellDiagnosticRow, SimRunTimeline } from '@/hooks/useSimRun';
 import type { RunModelSupport } from '@/lib/sim/model-inputs';
 import { cn } from '@/lib/utils';
@@ -420,6 +421,7 @@ export function SimDrawer({
   };
 
   const days = Math.max(1, runTimeline?.days ?? 1);
+  const comparisonYieldUnit = yieldMassUnit(runComparison?.yieldBasis);
   const eventDots = (runTimeline?.events ?? []).filter(
     (e) => e.kind === 'stress-onset' || e.kind === 'harvest-ready',
   );
@@ -461,19 +463,25 @@ export function SimDrawer({
             : 'pointer-events-none translate-x-full max-xl:translate-x-0 max-xl:translate-y-full',
         )}
       >
-        {runModelSupport && !runModelSupport.canReplay && (
+        {runModelSupport && (!runModelSupport.canReplay || runModelSupport.status === 'qualified') && (
           <div role="status" className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[11px] text-amber-900 dark:text-amber-100">
             <div className="font-semibold">
-              {runModelSupport.model === 'crop-model-v2' ? 'Crop estimate unavailable' : 'Saved summary preserved'}
+              {runModelSupport.model === 'crop-model-v2' && runModelSupport.canReplay
+                ? 'Qualified v2 estimate'
+                : runModelSupport.model === 'crop-model-v2'
+                  ? 'Crop estimate unavailable'
+                  : 'Saved summary preserved'}
             </div>
             <p className="mt-0.5">
-              {runModelSupport.model === 'crop-model-v2'
-                ? 'This model version has no enabled daily reducer for these frozen inputs; the saved summary is left unchanged.'
+              {runModelSupport.model === 'crop-model-v2' && runModelSupport.canReplay
+                ? 'This dry-matter estimate is qualified; independent measured accuracy remains UNVERIFIED.'
+                : runModelSupport.model === 'crop-model-v2'
+                  ? 'This model version cannot replay these frozen inputs; its saved summary is left unchanged.'
                 : 'This saved record has no supported frozen model version or complete inputs; its stored summary is unchanged.'}
             </p>
             {runModelSupport.reasons.length > 0 && (
               <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                {runModelSupport.reasons.slice(0, 3).map((reason) => <li key={reason}>{reason}</li>)}
+                {runModelSupport.reasons.map((reason) => <li key={reason}>{reason}</li>)}
               </ul>
             )}
           </div>
@@ -688,7 +696,7 @@ export function SimDrawer({
                         <div className="mt-2 rounded-md bg-muted/50 p-2" title={`${runComparison.b.label} minus ${runComparison.a.label}`}>
                           <div className="mb-1 text-[10px] font-medium text-foreground/80">Delta · B − A ({runComparison.b.label} − {runComparison.a.label})</div>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
-                            <span className="text-muted-foreground">Yield</span><span className="text-right tabular-nums">{signedDelta(runComparison.totalYieldKg, 'kg')}</span>
+                            <span className="text-muted-foreground">{comparisonYieldUnit ? `Yield (${comparisonYieldUnit})` : 'Yield (not comparable)'}</span><span className="text-right tabular-nums">{signedDelta(runComparison.totalYieldKg, comparisonYieldUnit ?? '')}</span>
                             <span className="text-muted-foreground">Water</span><span className="text-right tabular-nums">{signedDelta(runComparison.waterUseMm, 'mm')}</span>
                             <span className="text-muted-foreground">Stress cell-days</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressCellDays, 'days', 0)}</span>
                             <span className="text-muted-foreground">Harvest-ready day</span><span className="text-right tabular-nums">{signedDelta(runComparison.harvestReadyDay, 'days', 0)}</span>

@@ -105,6 +105,14 @@ describe('campaign soil carry', () => {
     expect(saved.summary).toEqual(storedSummary);
   });
 
+  it('does not use dry-matter v2 harvest output in fresh-matter campaign summaries', () => {
+    const saved = record('dry-matter', config(tomato.id));
+    saved.summary = { ...saved.summary, yieldBasis: 'dry-matter' };
+
+    expect(() => buildSeasonPreview([saved]))
+      .toThrow('campaign harvest summaries require fresh-matter yield');
+  });
+
   it('rejects overlapping runs in one world but allows sequential windows and separate worlds', () => {
     const first = record('first', config(tomato.id, { dayCount: 2 }));
     const overlapping = record('alternate', config(coverCrop.id, { startDate: '2026-05-02' }));

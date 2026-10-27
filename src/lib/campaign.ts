@@ -188,6 +188,9 @@ export function buildSeasonPreview(
     if (!support.canReplay) {
       throw new Error(`Cannot build a season preview from run ${run.id}: ${support.reasons.join(' ')}`);
     }
+    if (run.summary.yieldBasis === 'dry-matter') {
+      throw new Error(`Cannot build a season preview from run ${run.id}: campaign harvest summaries require fresh-matter yield.`);
+    }
   }
 
   const explicitSoil = new Map((options.soilIn ?? []).map((entry) => [

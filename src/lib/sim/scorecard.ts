@@ -108,7 +108,9 @@ export function collectRunPredictionPairs(record: RunRecord, ctx: SimRunCtx = {}
         metric: observation.metric,
         date: observation.date,
         observed: observation.value,
-        predicted: predict(observation, before, result.events, result.effectiveEnv, outdoorDliAvailable),
+        predicted: observation.metric === 'yieldKg' && record.summary.yieldBasis === 'dry-matter'
+          ? null
+          : predict(observation, before, result.events, result.effectiveEnv, outdoorDliAvailable),
       });
     }
     state = result.state;

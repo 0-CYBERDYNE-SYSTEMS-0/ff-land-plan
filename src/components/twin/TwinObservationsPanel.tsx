@@ -221,6 +221,8 @@ export function TwinObservationsPanel({ farmId }: { farmId: number }) {
     [latestTwinRun],
   );
   const latestTwinSupport = latestTwinRun ? inspectRunModelSupport(latestTwinRun.config) : null;
+  const hasDryMatterYieldObservations = latestTwinRun?.summary.yieldBasis === 'dry-matter'
+    && latestTwinRun.observations?.some((observation) => observation.metric === 'yieldKg');
   const scoreAsOfDate = latestTwinRun?.envSeries.at(-1)?.date ?? TODAY();
   const scorecards = useMemo(
     () => computeTwinScorecards(predictionPairs, scoreAsOfDate, 30),
@@ -446,6 +448,7 @@ export function TwinObservationsPanel({ farmId }: { farmId: number }) {
           {latestTwinRun ? (
             <div className="space-y-2 rounded-md border border-border p-2">
               <p className="text-[10px] text-muted-foreground">{latestTwinRun.label} · last 30 days through {scoreAsOfDate}</p>
+              {hasDryMatterYieldObservations && <p className="text-[10px] text-muted-foreground">Yield observations use fresh mass; this run reports dry matter, so those values are not scored together.</p>}
               {scorecards.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground">
                   {latestTwinSupport && !latestTwinSupport.canReplay

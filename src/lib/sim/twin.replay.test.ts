@@ -216,6 +216,17 @@ describe('frozen observations and replay', () => {
     expect(collectRunPredictionPairs(saved, { crops: [tomato] })[0]?.predicted).toBeNull();
   });
 
+  it('does not compare dry-matter harvest with fresh-mass yield observations', () => {
+    const saved = record(config(), [
+      observation({ id: 'yield', date: '2026-05-01', metric: 'yieldKg', value: 0.25, unit: 'kg' }),
+    ]);
+    saved.summary = { ...saved.summary, yieldBasis: 'dry-matter' };
+
+    expect(collectRunPredictionPairs(saved, { crops: [tomato] })).toEqual([
+      { observationId: 'yield', metric: 'yieldKg', date: '2026-05-01', observed: 0.25, predicted: null },
+    ]);
+  });
+
   it('creates a twin without mutating its source and forks only completed observations', () => {
     const runConfig = config();
     const parent = record(runConfig);

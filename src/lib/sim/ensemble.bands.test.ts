@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import type { SeasonEnsembles, SeasonYear } from '@/lib/ensembles';
-import { freezeRunModelInputs } from './model-inputs';
+import { freezeRunModelInputs, freezeRunModelInputsV2 } from './model-inputs';
 import type { RunConfig } from './types';
 import { ensembleCacheKey, ensembleUnavailableReason, EnsembleResultCache, runEnsemble, runEnsembleCached, summarizeEnsemble } from './ensemble';
 
@@ -68,6 +68,51 @@ describe('historical ensemble bands', () => {
     const reason = ensembleUnavailableReason(v2, years());
 
     expect(reason).toContain('Frozen crop-model-v2 parameter inputs are missing');
+    expect(runEnsemble(v2, years())).toBeNull();
+  });
+
+  it('does not label dry-matter v2 output as a fresh-matter ensemble band', () => {
+    const v2 = config();
+    v2.cropModelVersion = 'crop-model-v2';
+    v2.modelInputs = freezeRunModelInputsV2(v2, {
+      soil: { awcMmPerCm: 2, organicMatterPct: 3 },
+      crops: [lettuce],
+      cropParametersV2: [{
+        cropId: lettuce.id,
+        thermal: {
+          tBaseC: 5,
+          gddToMaturityCdays: [700, 800],
+          accumulationStart: 'planting',
+          maturityEndpoint: 'first harvest',
+          accumulationMethod: 'study thermal-time',
+          sourceCitation: 'Synthetic test contract',
+          sourceUrl: 'test-only:fixture',
+        },
+        production: {
+          equationFamily: 'LINTUL-net-RUE',
+          rueGPerMjInterceptedPar: 2,
+          interceptedParFraction: 0.5,
+          harvestIndex: 0.5,
+          status: 'supported',
+          missing: [],
+          evidence: { evidenceId: 'test-only', sourceCitation: 'Synthetic test contract', sourceUrl: 'test-only:fixture', validDomain: 'software test only' },
+        },
+        rootZone: {
+          method: 'FAO-56',
+          effectiveRootDepthCm: 20,
+          depletionFraction: 0.5,
+          cropCoefficient: 1,
+          initialStorageFraction: 0.7,
+          status: 'supported',
+          missing: [],
+          evidence: { evidenceId: 'test-only', sourceCitation: 'Synthetic test contract', sourceUrl: 'test-only:fixture', validDomain: 'software test only' },
+        },
+        lifecycle: 'plant',
+      }],
+    });
+
+    expect(ensembleUnavailableReason(v2, years()))
+      .toContain('cannot represent crop-model-v2 dry-matter output');
     expect(runEnsemble(v2, years())).toBeNull();
   });
 

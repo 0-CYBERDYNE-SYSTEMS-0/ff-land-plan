@@ -48,17 +48,23 @@ export interface FrozenCropModelParametersV2 {
     sourceUrl: string;
   } | null;
   production: {
+    equationFamily: 'LINTUL-net-RUE';
     rueGPerMjInterceptedPar: number | null;
     interceptedParFraction: number | null;
     harvestIndex: number | null;
     status: 'unsupported' | 'qualified' | 'supported';
     missing: string[];
+    evidence: { evidenceId: string | null; sourceCitation: string | null; sourceUrl: string | null; validDomain: string | null };
   };
   rootZone: {
+    method: 'FAO-56';
     effectiveRootDepthCm: number | null;
     depletionFraction: number | null;
+    cropCoefficient: number | null;
+    initialStorageFraction: number | null;
     status: 'unsupported' | 'qualified' | 'supported';
     missing: string[];
+    evidence: { evidenceId: string | null; sourceCitation: string | null; sourceUrl: string | null; validDomain: string | null };
   };
   lifecycle: 'plant' | 'fungus' | 'unsupported';
 }
@@ -67,7 +73,7 @@ export interface FrozenCropModelParametersV2 {
 export interface RunModelInputsV2 {
   model: 'run-inputs-v2';
   parameterSetVersion: 'crop-parameters-v2';
-  soil: { awcMmPerCm: number | null; organicMatterPct: number | null } | null;
+  soil: { awcMmPerCm: number | null; organicMatterPct: number | null; source?: 'usda-sda' | 'soilgrids' | 'unknown' } | null;
   crops: Crop[];
   cropParameters: FrozenCropModelParametersV2[];
   qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
@@ -196,6 +202,14 @@ export interface CellState {
   nitrogenKgHa: number;
   gddAccumC: number;
   biomassFrac: number; // 0..1 = gddAccum / gddRequired
+  /** v2 above-ground dry matter, g DM/m² of planted cell area. */
+  dryMatterGPerM2?: number;
+  /** v2 FAO-56 effective root-zone storage and accumulated closure residual, mm. */
+  rootZoneWaterMm?: number;
+  rootZoneResidualAccumulatedMm?: number;
+  rootZoneResidualMaxAbsMm?: number;
+  /** v2 water removed when a replant shrinks effective root-zone capacity, mm. */
+  rootZoneReplantDrainageMm?: number;
   stage: number; // 0..5 = round(biomass × 5)
   floweringFrac: number; // 0..1 bump across the stage 3–4 band
   pestPressure: number; // 0..1, daily dynamics in ecosystem.ts
@@ -227,6 +241,8 @@ export interface SimState {
   /** Remaining shared physical water storage, present for ASSET_PHYSICS runs. */
   waterStoreL?: number;
   cells: Record<string, CellState>; // sparse, planted cells only
+  /** Runtime qualifications from explicitly unknown daily model inputs. */
+  modelQualificationReasons?: string[];
   /** Neighbor context per cell key — cached (built at createRun, rebuilt on
    * 'plant'); drivers read it, nothing rescans the grid per day. */
   neighbors?: Record<string, NeighborContext>;
@@ -395,6 +411,8 @@ export interface RunSummary {
   irrigatedMm: number;
   etoMmTotal: number;
   totalYieldKg: number;
+  /** v1 catalog yields are fresh-mass estimates; v2 harvest-index output is dry mass. */
+  yieldBasis?: 'fresh-matter' | 'dry-matter';
   /** cropId → kg (JSON keys are strings). */
   yieldKgByCrop: Record<string, number>;
   /** Cell-days with max stress ≥ 0.4 (drivers.STRESS_ONSET). */
@@ -415,6 +433,11 @@ export interface RunSummary {
   eventCounts: Record<string, number>;
   /** Missing on historical summaries; explicit on newly generated v2 records. */
   modelQualification?: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
+  /** v2 unrounded per-cell FAO-56 closure totals across the run. */
+  rootZoneBalanceResidualAccumulatedMm?: number;
+  rootZoneBalanceResidualMaxAbsMm?: number;
+  /** v2 water counted as drainage when replanting shrinks root-zone capacity, mm. */
+  rootZoneReplantDrainageMm?: number;
 }
 
 /** Persist run inputs (config, frozen envSeries, optional observations) + summary.

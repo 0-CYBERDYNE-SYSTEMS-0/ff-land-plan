@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanState } from '@/types';
 import type { RunConfig, RunRecord, RunSummary } from './types';
-import { compareRuns } from './timeline';
+import { compareRuns, yieldMassUnit } from './timeline';
 
 function runConfig(): RunConfig {
   const basePlan: PlanState = {
@@ -111,5 +111,26 @@ describe('compareRuns', () => {
     expect(comparison.totalYieldKg).toEqual({ a: 100, b: null, delta: null });
     expect(comparison.waterUseMm).toEqual({ a: 0, b: null, delta: null });
     expect(comparison.stressCellDays).toEqual({ a: 0, b: null, delta: null });
+  });
+
+  it('does not compare fresh-matter yield with v2 dry-matter yield', () => {
+    const a = record('run-a', 'A', summary({ totalYieldKg: 100, waterUseMm: 50 }));
+    const b = record('run-b', 'B', summary({ totalYieldKg: 3, waterUseMm: 40, yieldBasis: 'dry-matter' }));
+
+    const comparison = compareRuns(a, b);
+
+    expect(comparison.totalYieldKg).toEqual({ a: null, b: null, delta: null });
+    expect(comparison.waterUseMm).toEqual({ a: 50, b: 40, delta: -10 });
+    expect(comparison.yieldBasis).toBe('incompatible');
+    expect(yieldMassUnit(comparison.yieldBasis)).toBeNull();
+  });
+
+  it('labels same-basis v2 comparison output as dry matter', () => {
+    const a = record('run-a', 'A', summary({ totalYieldKg: 3, yieldBasis: 'dry-matter' }));
+    const b = record('run-b', 'B', summary({ totalYieldKg: 4, yieldBasis: 'dry-matter' }));
+    const comparison = compareRuns(a, b);
+
+    expect(comparison.yieldBasis).toBe('dry-matter');
+    expect(yieldMassUnit(comparison.yieldBasis)).toBe('kg DM');
   });
 });

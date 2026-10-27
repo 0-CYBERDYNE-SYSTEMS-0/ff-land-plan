@@ -1,6 +1,6 @@
 # BETA-02A crop model and evidence decision record
 
-Status: source-backed decision and evidence baseline reviewed; explicit model dispatch and unsupported replay guards are in progress; the v2 daily reducer and acceptance remain incomplete. No candidate comparisons have been run.
+Status: source-backed decision and evidence baseline reviewed; explicit model dispatch and a qualified v2 daily path are implemented for complete frozen inputs; source-backed executable parameter coverage and acceptance remain incomplete. No candidate comparisons have been run.
 Prepared: 2026-10-27
 Scope: BETA-02A only. This record does not claim horticultural validation.
 
@@ -93,14 +93,27 @@ The independent validator reviewed and approved the displayed-value rounding tol
 
 ## Implementation checkpoint
 
-The first implementation checkpoint adds named v1/v2 frozen-input shapes, rejects persisted replay paths that would otherwise use a live crop catalog or soil context, and marks v2 summaries unavailable while its daily reducer is disabled. New local run creation remains on v1 until the v2 reducer and acceptance gates pass, so ordinary runs do not produce placeholder summaries. Unsupported stored records retain their original summaries; guarded derived paths reject or suppress recomputation. Focused regressions and typechecking pass at this checkpoint. This is not an 02A completion claim: the v2 daily reducer, source-backed executable parameter coverage, and the remaining acceptance fixtures are still outstanding.
+The current implementation adds named v1/v2 frozen-input shapes, rejects persisted replay paths that would otherwise use a live crop catalog or soil context, and runs a qualified v2 daily path for complete frozen inputs. It computes fixed-source thermal development, light-driven net dry matter, harvestable dry matter, and a single effective FAO-56 root-zone balance. Soil AWC source is frozen when known; legacy or missing provenance is retained as unknown and disclosed, and numeric AWC paired with SoilGrids classification-only provenance is explicitly qualified. Replant interventions preserve the cell's existing root-zone storage and residual history; any storage above a reduced new capacity is recorded as transition drainage and surfaced in the summary. PAR interception is a fixed fraction, root depth is fixed, and ordinary daily runoff is explicitly assumed to be zero; these limits are surfaced in qualified v2 output. Enclosed v2 climate transpiration is lagged potential ET using frozen, stage-independent root-zone Kc and the previous climate ET factor; it is not reduced by current root-zone Ks. Its CO₂ uptake term uses thermal progress times fixed PAR interception as a qualified leaf-area proxy, not measured LAI. With no environment-v1 climate state, enclosed natural DLI uses the frozen calibration cover transmission when present and the archetype default otherwise; frozen target lighting is included. If natural DLI is missing but a natural-plus-supplement enclosure has installed light, supplemental DLI is used only as a disclosed lower bound. Supplement-only worlds can use their known installed DLI directly. Pre-plant v2 cells do not transpire, contribute climate transpiration, or accumulate crop stress. At the source maturity endpoint, thermal accumulation is capped and dry-matter production stops; auto-harvest pays out on that endpoint day without the legacy three-day grace. V2 output remains qualified and explicitly UNVERIFIED; unsupported parameter sets preserve saved summaries and cannot replay. Runtime qualification reasons are deduplicated by crop and reason across simulated days. New local run creation remains explicitly v1 until source-backed executable parameter coverage and acceptance gates pass. Fresh-matter-only downstream summaries (campaign harvest and historical ensemble bands) reject or suppress v2 dry-matter output, and twin yield observations are left unscored with an explanation. Qualification displays expose the full assumption list. No predictive candidate comparison has been run. This is not an 02A completion claim: source-backed production/root-zone coverage, sowing/transplant acceptance, dynamic canopy, root development, broader stress integration, all-catalog coverage, and measured/reference acceptance fixtures remain outstanding.
 
-## Implementation gates after this record
+### 02A acceptance status at this checkpoint
 
-1. Add explicit model and parameter version dispatch; preserve v1 and unsupported historical summaries.
-2. Freeze new model inputs (units, provenance, crop parameter values/status, planting method/start event, soil/media values and model methods) into each new run.
-3. Implement separate phenology, light-driven net dry matter, harvest allocation and root-zone balances in the existing reducer.
-4. Add source-linked fixtures, zero/unknown-light tests, sowing/transplant tests, water/nutrient conservation/bounds, all-catalog coverage checks, replay/fallback tests and reviewed golden changes.
-5. Keep measured-accuracy claims UNVERIFIED when input or independent data coverage is missing; document any intentionally unsupported crop/model combinations.
+| Contract | Status | Evidence or remaining work |
+|---|---|---|
+| A-01 frozen replay and explicit version dispatch | PASS for implemented v1/v2 replay paths | Frozen-input tests verify replay ignores changed live crop/soil context. Local run creation explicitly records v1. |
+| A-02 fixed crop-specific thermal method/target | PASS for software structure | `crop-model-v2.test.ts` covers fixed targets, source method, lower/upper bounds and thermal target range. Cultivar/domain accuracy remains UNVERIFIED. |
+| A-03 light-driven production | UNVERIFIED overall | Zero, unknown and proportional low/sufficient DLI behavior have equation tests; no source-backed executable production parameter set or independent measured output is available. |
+| A-04 sowing/transplant and source event endpoints | UNVERIFIED | Future planted cells accrue no pre-plant thermal development or transpiration; the distinct source transplant/sowing start event is not implemented. |
+| A-05 root-zone, nutrient and stress response | UNVERIFIED overall | FAO-56 stress/transpiration and daily/accumulated water residuals pass structural checks. Fixed root depth, zero-runoff assumption, and absent nutrient/temperature production stresses prevent full acceptance. |
+| A-06 independent measured/reference holdout | UNVERIFIED | No executable measured-trial fixture or candidate comparison; the lettuce source summary lacks daily inputs, and no parameters were fit to it. |
+| A-07 existing spacing, mortality, management, target and golden suites | UNVERIFIED for v2 | Full existing suite passes on this checkpoint, but equivalent v2 cross-target/spacing acceptance remains outstanding. |
+| A-08 missing-input and unsupported-trait handling | PASS | Missing production/root-zone parameters produce an unsupported result and preserve stored summaries rather than silently falling back to live catalog/context. |
+
+## Remaining 02A gates
+
+1. Add source-backed executable crop production/root-zone parameter sets and dynamic canopy/root development state.
+2. Implement distinct sowing/transplant start events, stage-appropriate harvest allocation, and supported nutrient/temperature production stresses.
+3. Add source-linked fixtures, all-catalog coverage checks, and 02A target/spacing/management regressions; review deliberate golden changes.
+4. Acquire/reproduce independent measured or reference-model holdout inputs, lock source-specific tolerances through independent review, then run comparisons and keep claims UNVERIFIED where data is incomplete.
+5. Preserve explicit historical dispatch and unsupported-summary behavior throughout remaining model work.
 
 References were accessed 2026-10-27. The machine-readable source/fixture inventory is the companion `quality/beta/evidence/model-coverage.json`.

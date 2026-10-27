@@ -18,6 +18,7 @@ export interface ComparisonMetric {
 export interface RunComparison {
   a: { id: string; label: string };
   b: { id: string; label: string };
+  yieldBasis: NonNullable<RunRecord['summary']['yieldBasis']> | 'incompatible';
   totalYieldKg: ComparisonMetric;
   waterUseMm: ComparisonMetric;
   stressCellDays: ComparisonMetric;
@@ -30,6 +31,14 @@ export interface RunComparison {
   };
   harvestReadyDay: ComparisonMetric;
   outbreakDays: ComparisonMetric;
+}
+
+/** Unit for one comparable harvest output, or null when mass bases differ. */
+export function yieldMassUnit(
+  basis: NonNullable<RunRecord['summary']['yieldBasis']> | 'incompatible' | undefined,
+): 'kg' | 'kg DM' | null {
+  if (basis === 'incompatible') return null;
+  return basis === 'dry-matter' ? 'kg DM' : 'kg';
 }
 
 let forkSequence = 0;
@@ -143,12 +152,17 @@ export function runSummaryHasAvailableEstimates(summary: RunRecord['summary']): 
 export function compareRuns(a: RunRecord, b: RunRecord): RunComparison {
   const aSummary = runSummaryHasAvailableEstimates(a.summary) ? a.summary : undefined;
   const bSummary = runSummaryHasAvailableEstimates(b.summary) ? b.summary : undefined;
+  const yieldBasisMatches = (aSummary?.yieldBasis ?? 'fresh-matter') === (bSummary?.yieldBasis ?? 'fresh-matter');
+  const yieldBasis = yieldBasisMatches
+    ? aSummary?.yieldBasis ?? bSummary?.yieldBasis ?? 'fresh-matter'
+    : 'incompatible';
   const aStress = aSummary?.stressDays;
   const bStress = bSummary?.stressDays;
   return {
     a: { id: a.id, label: a.label },
     b: { id: b.id, label: b.label },
-    totalYieldKg: metric(aSummary?.totalYieldKg, bSummary?.totalYieldKg),
+    yieldBasis,
+    totalYieldKg: yieldBasisMatches ? metric(aSummary?.totalYieldKg, bSummary?.totalYieldKg) : metric(undefined, undefined),
     waterUseMm: metric(aSummary?.waterUseMm, bSummary?.waterUseMm),
     stressCellDays: metric(aSummary?.stressCellDays, bSummary?.stressCellDays),
     stressDays: {
