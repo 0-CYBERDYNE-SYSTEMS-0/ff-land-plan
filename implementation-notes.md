@@ -1864,6 +1864,19 @@ snapshots changed, and no application implementation is claimed by this revision
   `git diff --check` passed. Independent browser review passed template apply/undo/reload,
   container setup, and additive migration/update/reload.
 
+## 2026-10-26 — Assignable beta-readiness development contracts
+
+- Added `quality/beta/README.md` and five proposed specs for durable persistence,
+  explicit planner-beta scope, complete workspace backup/restore, onboarding/support,
+  and qualification of an immutable production artifact. Each names ownership,
+  dependencies, exclusions, effort, acceptance cases and required evidence.
+- The launch-scope decision is explicitly proposed: eight outdoor-planner participants;
+  indoor simulation/campaign/twin remain internal until separate correctness/domain
+  gates pass. Backup must preserve advanced hidden data across both storage systems.
+- Documentation only. No application behavior, feature flags, simulation terms or
+  golden snapshots changed; no merge, deploy or publication performed. Spec verification
+  checks relative links, work-package coverage and whitespace, not runtime acceptance.
+
 ## 2026-10-26 — BETA-01 durable saves and recovery
 
 - Saved local data now wins over sample content, with one-time legacy sample initialization,
@@ -1884,6 +1897,24 @@ snapshots changed, and no application implementation is claimed by this revision
 - Verification: `npm test` (35 files / 156 tests), `npm run typecheck`, `npm run build`,
   `npm run check:private` (477 tracked files), and `git diff --check` passed. No simulation
   equations or golden snapshots changed.
+
+## 2026-10-26 — Full simulator beta specification handoff
+
+- Recorded the user's simulator-first decisions: all nine worlds, species/selected cultivars,
+  confidence tied to evidence, independent/site runs, dated design/management changes,
+  Blueprint setup plus 3D playback, multiseason/rotations/perennials and published benchmarks.
+- Replaced the earlier planner-only BETA-02 proposal with a full simulator integration contract
+  and five assignable model/environment/experiment/lifecycle/observation subcontracts.
+- Initial twin work uses manual/CSV imports and reproducible synthetic fixtures. Synthetic
+  provenance remains visible and cannot establish measured crop accuracy or live telemetry.
+- Revised incomplete backup, onboarding/support and release contracts; prepared the next-team
+  prompt. Existing BETA-01 runtime implementation remains at 8962bef pending integration/CI.
+- Documentation preparation only: no application changes, model retuning, fixture generation,
+  commit, merge, deployment, publication or participant contact in this revision.
+- Verification: 12 beta-package documents / 88 acceptance cases checked for local links,
+  heading references, whitespace and contract coverage; `git diff --check` passed. Independent
+  documentation review found no remaining actionable issue. Runtime tests were not repeated
+  for this documentation-only handoff; implementation and release approval remain pending.
 
 ## 2026-10-27 — BETA-02A establishment and partial management acceptance
 
