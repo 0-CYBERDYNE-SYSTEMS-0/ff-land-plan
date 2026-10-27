@@ -22,12 +22,25 @@ const rootReferenceCoverage = rootReferenceCoverageRecord as {
   }>;
   sourceArithmeticFixture: {
     inputs: {
-      soil: { availableWaterMmPerCm: number };
+      soil: {
+        fieldCapacityM3PerM3: number;
+        wiltingPointM3PerM3: number;
+        availableWaterMmPerCm: number;
+      };
+      soilQualification: string;
       rootDepthM: number;
       totalAvailableWaterMm: number;
       tableDepletionFractionP: number;
       initialDepletionMm: number;
+      referenceEvapotranspirationMmDay: number;
+      cropCoefficient: number;
       potentialCropEvapotranspirationMmDay: number;
+      dailyFluxes: {
+        precipitationMm: number;
+        irrigationMm: number;
+        capillaryRiseMm: number;
+        runoffMm: number;
+      };
     };
     expectedDisplayedRows: Array<{
       day: number;
@@ -197,8 +210,15 @@ describe('crop model v2 equation helpers', () => {
     const fixture = rootReferenceCoverage.sourceArithmeticFixture;
     const { inputs, expectedDisplayedRows, tolerances } = fixture;
     const depthCm = inputs.rootDepthM * 100;
+    const { fieldCapacityM3PerM3, wiltingPointM3PerM3, availableWaterMmPerCm } = inputs.soil;
+    expect(availableWaterMmPerCm).toBeCloseTo((fieldCapacityM3PerM3 - wiltingPointM3PerM3) * 10, 12);
     expect(inputs.soil.availableWaterMmPerCm * depthCm).toBe(inputs.totalAvailableWaterMm);
+    expect(inputs.referenceEvapotranspirationMmDay * inputs.cropCoefficient)
+      .toBe(inputs.potentialCropEvapotranspirationMmDay);
+    expect(inputs.soil.wiltingPointM3PerM3).toBe(0.12);
+    expect(inputs.soilQualification).toContain('Do not substitute the generic Table 19 silt wilting point 0.15');
     expect(fixture.candidateComparison).toBe(false);
+    expect(Object.values(inputs.dailyFluxes)).toEqual([0, 0, 0, 0]);
 
     const params = {
       awcMmPerCm: inputs.soil.availableWaterMmPerCm,
@@ -208,10 +228,10 @@ describe('crop model v2 equation helpers', () => {
     let state: RootZoneState = { waterMm: inputs.totalAvailableWaterMm - inputs.initialDepletionMm };
     for (const expected of expectedDisplayedRows) {
       const result = stepFao56RootZone(state, params, {
-        precipMm: 0,
-        irrigationMm: 0,
-        capillaryRiseMm: 0,
-        runoffMm: 0,
+        precipMm: inputs.dailyFluxes.precipitationMm,
+        irrigationMm: inputs.dailyFluxes.irrigationMm,
+        capillaryRiseMm: inputs.dailyFluxes.capillaryRiseMm,
+        runoffMm: inputs.dailyFluxes.runoffMm,
         potentialTranspirationMm: inputs.potentialCropEvapotranspirationMmDay,
       });
       const endDepletionMm = result.capacityMm - result.state.waterMm;
