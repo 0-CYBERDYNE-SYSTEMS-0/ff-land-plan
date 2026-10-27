@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "FAO56-CEA-TRANSPIRATION-WET-DRY-SYNTHETIC-01",
-  "status": "preregistered synthetic software-integration fixture; validator tolerance review requested; implementation and comparison not run",
+  "status": "implemented synthetic software-integration fixture; focused software and client-persistence checks pass locally; candidate and measured-output comparisons not run",
   "sources": [
     {
       "evidenceId": "FAO-56-1998-CHAPTER-8",
@@ -113,7 +113,7 @@
     "measuredOutputComparison": false
   },
   "toleranceReview": {
-    "status": "approved by independent GPT-6 Luna max validator for synthetic software invariants only; implementation comparison not run",
+    "status": "approved by independent GPT-6 Luna max validator for synthetic software invariants only; focused implementation checks pass locally; candidate comparison not run",
     "requestedScope": "FAO-56 Ks arithmetic, one-use per-cell transpiration, mm×m² to kg/day conversion, fixed-point avoidance through explicit one-day lag, root-zone residual, and wet/dry directional climate response only",
     "proposedTolerances": {
       "KsArithmetic": "≤1e-12 dimensionless absolute deviation",
@@ -124,5 +124,45 @@
     "reviewedBy": "GPT-6 Luna max independent validator (Herdr beta_validator)",
     "reviewedDate": "2026-10-27"
   },
-  "implementationStatus": "not implemented; no reducer fixture comparison run"
+  "implementationStatus": "implemented; focused wet/dry, flux, zero-light, root-temperature-ordering, prior-day ET-factor lag, replay, unsupported-input, and client persistence checks passed locally; no candidate or measured-output comparison run",
+  "implementationVerification": {
+    "status": "focused and full software checks passed locally",
+    "testCommand": "npx vitest run src/lib/sim/environment-v2-coupling.test.ts src/lib/sim/environment-climate.test.ts src/lib/sim/model-inputs.test.ts src/lib/sim/crop-model-v2.test.ts src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts",
+    "testFiles": 6,
+    "testsPassed": 62,
+    "fullSuiteCommand": "npm test",
+    "fullSuiteFiles": 45,
+    "fullSuiteTests": 233,
+    "verifiedDate": "2026-10-27",
+    "typecheck": "npm run typecheck passed",
+    "beta01DurabilityRetest": {
+      "command": "npx vitest run src/lib/planSaveLedger.test.ts src/lib/planSaveQueue.test.ts src/lib/planTransfer.test.ts src/lib/store.persistence.test.ts src/lib/store.test.ts src/lib/localApi.sim-runs.test.ts",
+      "testFiles": 6,
+      "testsPassed": 40,
+      "result": "PASS; plan-save ledger/queue/transfer and store persistence regressions rechecked after RunRecord schema changes"
+    },
+    "builds": ["npm run build", "npm run build:demo", "npm run build:pages"],
+    "privateFileGuard": "npm run check:private passed; 517 tracked files",
+    "whitespaceCheck": "git diff --check passed",
+    "persistenceScope": "local save/list used mocked IndexedDB operations; REST PUT/save/list used a mocked server. This establishes client serialization only, not native browser transaction or live server persistence.",
+    "scope": "software invariants only; no climate calibration, measured-output comparison, candidate comparison, or biological validation"
+  },
+  "implementationReview": {
+    "status": "independent code review passed after adding the two-tick prior-day ET-factor assertion",
+    "reviewedBy": "GPT-6 Luna max independent validator (Herdr beta_validator)",
+    "reviewedDate": "2026-10-27",
+    "retestCommand": "npx vitest run src/lib/sim/environment-v2-coupling.test.ts",
+    "testFiles": 1,
+    "testsPassed": 5,
+    "scope": "replay determinism, causal coupling and synthetic assertion adequacy; no biological or predictive review"
+  },
+  "persistenceReview": {
+    "status": "independent local and mocked REST client round-trip review passed",
+    "reviewedBy": "GPT-6 Luna max independent validator (Herdr beta_redteam)",
+    "reviewedDate": "2026-10-27",
+    "testCommand": "npx vitest run src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts",
+    "testFiles": 2,
+    "testsPassed": 8,
+    "limits": "The local API test mocks IndexedDB operations and the REST test mocks server responses. No native browser transaction or live-server persistence was tested; unsupported-record browser-load summary retention remains UNVERIFIED."
+  }
 }

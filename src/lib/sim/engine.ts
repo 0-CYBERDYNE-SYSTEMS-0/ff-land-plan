@@ -336,10 +336,113 @@ function harvestGroupKey(cropId: number, system: string): string {
 }
 
 function climateEnabledFor(config: RunConfig, archetype: ArchetypeId): boolean {
-  return config.climateModel === 'environment-v1'
-    && !!config.environment
-    && config.environment.archetype === archetype
-    && archetypes[config.environment.archetype]?.kind !== 'open';
+  if (!config.environment || config.environment.archetype !== archetype) return false;
+  if (config.climateModel === 'environment-v1') {
+    return archetypes[config.environment.archetype]?.kind !== 'open';
+  }
+  return config.climateModel === 'environment-v2'
+    && config.environmentModelInputs?.archetypeId === config.environment.archetype
+    && config.environmentModelInputs.archetype.kind !== 'open';
+}
+
+interface PreparedEnvironmentV2RootStep {
+  result: ReturnType<typeof stepFao56RootZone>;
+  rootThermalCdays?: number;
+  rootZoneDepthCm?: number;
+  rootZoneExpansionInflowMm?: number;
+}
+
+function prepareEnvironmentV2RootSteps(
+  config: RunConfig,
+  state: SimState,
+  outdoor: DailyEnvironment,
+  cells: Record<string, CellState>,
+  crops: Map<number, Crop>,
+  soil: SimRunCtx['soil'],
+  irrigationByCell: Map<string, number>,
+): { steps: Map<string, PreparedEnvironmentV2RootStep>; qualifications: string[] } {
+  const steps = new Map<string, PreparedEnvironmentV2RootStep>();
+  const qualifications: string[] = [];
+  const inputs = config.environmentModelInputs!;
+  const awc = soil?.awcMmPerCm;
+  if (typeof awc !== 'number' || !Number.isFinite(awc) || awc <= 0) {
+    throw new Error('Environment-v2 frozen soil available-water capacity is unavailable.');
+  }
+  const previousEtFactor = state.climate?.etFactor
+    ?? inputs.initialClimateState?.etFactor
+    ?? inputs.archetype.etFactor;
+  const rootTemperature = state.dayIndex > 0 && state.climate
+    ? state.climate
+    : outdoor;
+  for (const [key, prev] of Object.entries(cells)) {
+    const crop = crops.get(prev.cropId);
+    const inGround = crop !== undefined && state.dayIndex >= prev.plantedAtDay;
+    const establishmentDue = isEstablishmentModel(config) && inGround && !prev.establishmentApplied
+      && state.dayIndex >= (prev.physiologyStartDay ?? Number.POSITIVE_INFINITY);
+    const established = inGround && (!isEstablishmentModel(config)
+      || ((prev.establishmentApplied || establishmentDue) && !prev.dead));
+    const growing = established && (!isDryMatterModel(config) || (prev.biomassFrac < 1 && !prev.harvested));
+    const parameters = cropModelParametersFor(config, prev.cropId);
+    if (!parameters || prev.rootZoneWaterMm === undefined) {
+      throw new Error(`Environment-v2 root-zone storage is unavailable for crop ${prev.cropId}.`);
+    }
+    const root = parameters.rootZone;
+    let rootThermalCdays = prev.rootThermalCdays;
+    let rootZoneDepthCm = prev.rootZoneDepthCm;
+    let rootZoneExpansionInflowMm = prev.rootZoneExpansionInflowMm;
+    let rootGrowthStorageMm = 0;
+    if (root.rootDevelopment && growing) {
+      const development = root.rootDevelopment;
+      const rootThermalToday = dailyThermalUnits(rootTemperature.tMinC, rootTemperature.tMaxC, {
+        tBaseC: development.thermalBaseC,
+        tUpperC: development.thermalUpperC,
+        accumulationMethod: development.thermalAccumulationMethod,
+      });
+      if (rootThermalToday === null) {
+        qualifications.push(dailyModelQualification(prev.cropId, 'Frozen root-development thermal method could not be evaluated.'));
+      } else {
+        rootThermalCdays = (prev.rootThermalCdays ?? 0) + rootThermalToday;
+        const previousDepthCm = prev.rootZoneDepthCm ?? development.initialRootDepthCm;
+        rootZoneDepthCm = effectiveRootDepthCmAtThermalTime(rootThermalCdays, {
+          initialRootDepthCm: development.initialRootDepthCm,
+          maximumRootDepthCm: root.effectiveRootDepthCm!,
+          growthStartsAfterCdays: development.growthStartsAfterCdays,
+          growthMmPerCday: development.growthMmPerCday,
+        });
+        rootGrowthStorageMm = awc * Math.max(0, rootZoneDepthCm - previousDepthCm)
+          * root.initialStorageFraction!;
+        rootZoneExpansionInflowMm = (prev.rootZoneExpansionInflowMm ?? 0) + rootGrowthStorageMm;
+      }
+    }
+    const effectiveRootDepthCm = rootZoneDepthCm
+      ?? root.rootDevelopment?.initialRootDepthCm
+      ?? root.effectiveRootDepthCm!;
+    const potentialTranspirationMm = growing
+      ? outdoor.etoMm * previousEtFactor * root.cropCoefficient!
+      : 0;
+    const result = stepFao56RootZone(
+      { waterMm: prev.rootZoneWaterMm, residualAccumulatedMm: prev.rootZoneResidualAccumulatedMm },
+      {
+        awcMmPerCm: awc,
+        effectiveRootDepthCm,
+        depletionFraction: fao56AdjustedDepletionFraction(root.depletionFraction!, potentialTranspirationMm),
+      },
+      {
+        precipMm: 0,
+        irrigationMm: irrigationByCell.get(key) ?? 0,
+        runoffMm: 0,
+        rootGrowthStorageMm,
+        potentialTranspirationMm,
+      },
+    );
+    steps.set(key, {
+      result,
+      ...(rootThermalCdays !== undefined ? { rootThermalCdays } : {}),
+      ...(rootZoneDepthCm !== undefined ? { rootZoneDepthCm } : {}),
+      ...(rootZoneExpansionInflowMm !== undefined ? { rootZoneExpansionInflowMm } : {}),
+    });
+  }
+  return { steps, qualifications: [...new Set(qualifications)] };
 }
 
 function climateInputsFor(
@@ -350,17 +453,23 @@ function climateInputsFor(
   archetype: ArchetypeId,
   surface: SimState['surface'],
   cells: Record<string, CellState>,
+  environmentV2RootSteps?: Map<string, PreparedEnvironmentV2RootStep>,
 ): { env: DailyEnvironment; climate?: ReturnType<typeof environmentDay> } {
   if (!climateEnabledFor(config, archetype)) return { env: effectiveEnvironmentForSurface(env, surface) };
   const environment = config.environment!;
-  const modelArchetype = archetypes[environment.archetype]!;
+  const environmentInputs = config.climateModel === 'environment-v2'
+    ? config.environmentModelInputs!
+    : undefined;
+  const modelArchetype = environmentInputs?.archetype ?? archetypes[environment.archetype]!;
   const cellM = Number.isFinite(config.basePlan.cellM) && config.basePlan.cellM > 0 ? config.basePlan.cellM : 0.25;
   const cellArea = cellM * cellM;
   const floorArea = Math.max(0.01, environment.widthM * environment.heightM);
-  const previousEtFactor = state.climate?.etFactor ?? modelArchetype.etFactor;
+  const previousEtFactor = state.climate?.etFactor
+    ?? environmentInputs?.initialClimateState?.etFactor
+    ?? modelArchetype.etFactor;
   let transpirationKgDay = 0;
   let leafAreaM2 = 0;
-  for (const cell of Object.values(cells)) {
+  for (const [key, cell] of Object.entries(cells)) {
     if (isDryMatterModel(config)
       && (state.dayIndex < cell.plantedAtDay
         || (isEstablishmentModel(config) && state.dayIndex < (cell.physiologyStartDay ?? cell.plantedAtDay))
@@ -375,9 +484,13 @@ function climateInputsFor(
         : Math.max(0, Math.min(1, cell.biomassFrac));
       const interception = interceptionForModelCell(config, cell.canopyDryMatterGPerM2 ?? 0, parameters) ?? 0;
       const cropCoefficient = parameters.rootZone.cropCoefficient ?? 0;
-      // The crop coefficient drives this lagged potential ET. Interception is
-      // only a cover proxy for enclosure exchange; it does not reduce ET.
-      transpirationKgDay += env.etoMm * previousEtFactor * cropCoefficient * cellArea;
+      if (environmentInputs) {
+        transpirationKgDay += (environmentV2RootSteps?.get(key)?.result.actualTranspirationMm ?? 0) * cellArea;
+      } else {
+        // The crop coefficient drives this lagged potential ET. Interception is
+        // only a cover proxy for enclosure exchange; it does not reduce ET.
+        transpirationKgDay += env.etoMm * previousEtFactor * cropCoefficient * cellArea;
+      }
       leafAreaM2 += (isDynamicCanopyModel(config) ? interception : progress * interception) * cellArea;
       continue;
     }
@@ -386,8 +499,8 @@ function climateInputsFor(
     transpirationKgDay += env.etoMm * previousEtFactor * kc * cellArea;
     leafAreaM2 += cover * cellArea;
   }
-  const roomEquipment = config.climateEquipment ?? NO_CLIMATE_EQUIPMENT;
-  const calibration = config.calibration?.farmId === config.farmId
+  const roomEquipment = environmentInputs?.climateEquipment ?? config.climateEquipment ?? NO_CLIMATE_EQUIPMENT;
+  const calibration = !environmentInputs && config.calibration?.farmId === config.farmId
     && config.calibration.environmentId === environment.id
     ? config.calibration.parameters
     : undefined;
@@ -400,11 +513,12 @@ function climateInputsFor(
       ...(env.dliNaturalMol !== undefined ? { dliNaturalMol: env.dliNaturalMol } : {}),
     },
     roomEquipment,
-    state.climate,
+    state.climate ?? environmentInputs?.initialClimateState ?? undefined,
     {
       transpirationKgDay,
       leafAreaIndex: leafAreaM2 / floorArea,
       ...(calibration ? { modelOverrides: calibration } : {}),
+      ...(environmentInputs ? { environmentModelInputs: environmentInputs } : {}),
     },
   );
   return { env: withEnvironmentClimate(env, climate, modelArchetype), climate };
@@ -440,11 +554,16 @@ function targetDliForCell(
   if (!environment || (config.climateModel !== 'environment-v1' && !isDryMatterModel(config))) return undefined;
   const parsed = parseTargetCellKey(key);
   const target = parsed.target;
-  const archetype = archetypes[environment.archetype];
+  const environmentInputs = config.climateModel === 'environment-v2'
+    ? config.environmentModelInputs
+    : undefined;
+  const archetype = environmentInputs?.archetype ?? archetypes[environment.archetype];
   if (!archetype || archetype.kind === 'open') return undefined;
-  const equipment = config.climateTargetEquipment?.[growingTargetKey(target)] ?? NO_CLIMATE_EQUIPMENT;
+  const equipment = environmentInputs
+    ? environmentInputs.climateTargetEquipment[growingTargetKey(target)] ?? environmentInputs.noEquipment
+    : config.climateTargetEquipment?.[growingTargetKey(target)] ?? NO_CLIMATE_EQUIPMENT;
   const naturalAvailable = outdoor.dliNaturalMol !== undefined;
-  const photoperiodH = effectivePhotoperiodH(environment, equipment.photoperiodH);
+  const photoperiodH = effectivePhotoperiodH(environment, equipment.photoperiodH, environmentInputs?.archetype);
   const space = target.kind === 'growing-level'
     ? environment.layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId)
     : undefined;
@@ -455,10 +574,12 @@ function targetDliForCell(
     .slice()
     .sort((a, b) => b.elevationM - a.elevationM || a.id.localeCompare(b.id))[0];
   const levelGetsNaturalLight = target.kind === 'floor' || targetLevel?.id === topLevel?.id;
-  const fittedCoverTransmission = config.calibration?.farmId === config.farmId
-    && config.calibration.environmentId === environment.id
-    ? config.calibration.parameters.coverTransmission
-    : undefined;
+  const fittedCoverTransmission = environmentInputs
+    ? environmentInputs.modelOverrides.coverTransmission ?? undefined
+    : config.calibration?.farmId === config.farmId
+      && config.calibration.environmentId === environment.id
+      ? config.calibration.parameters.coverTransmission
+      : undefined;
   const coverTransmission = fittedCoverTransmission !== undefined && Number.isFinite(fittedCoverTransmission)
     ? Math.min(1, Math.max(0, fittedCoverTransmission))
     : archetype.coverTransmission;
@@ -476,6 +597,10 @@ function targetDliForCell(
  * start accumulating GDD once dayIndex reaches it. The neighbor context is
  * built once here and rebuilt only on 'plant' interventions. */
 export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
+  if (config.climateModel === 'environment-v2') {
+    const support = inspectRunModelSupport(config, false);
+    if (!support.canReplay) throw new Error(support.reasons.join(' ') || 'This environment-v2 run has unsupported frozen inputs.');
+  }
   const start = isoDayNumber(config.startDate);
   const planting = config.basePlan.planting ?? {};
   const plantedAt = config.basePlan.plantedAt ?? {};
@@ -534,7 +659,9 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
   const archetype = config.environment?.archetype
     ?? ARCHETYPE_FOR_SURFACE[config.basePlan.surface ?? 'outdoor'];
   const surface = config.environment
-    ? LEGACY_SURFACE_FOR_ARCHETYPE[archetype]
+    ? config.climateModel === 'environment-v2'
+      ? config.environmentModelInputs!.legacySurface
+      : LEGACY_SURFACE_FOR_ARCHETYPE[archetype]
     : config.basePlan.surface ?? 'outdoor';
   return {
     dayIndex: 0,
@@ -680,7 +807,8 @@ export function stepDay(
   ctx: SimRunCtx = {},
   observations: readonly Observation[] = [],
 ): { state: SimState; events: SimEvent[]; dayStats: DayStats; effectiveEnv: DailyEnvironment } {
-  if (isDryMatterModel(config)) {
+  if (isDryMatterModel(config)
+    || (config.climateModel !== undefined && config.climateModel !== 'environment-v1')) {
     const support = inspectRunModelSupport(config, false);
     if (!support.canReplay) throw new Error(support.reasons.join(' ') || 'This dry-matter run has unsupported frozen model inputs.');
   }
@@ -707,7 +835,9 @@ export function stepDay(
     : undefined;
   const irrigationByCell = new Map<string, number>();
   const waterSuppliedToday = new Set<string>();
-  const climateArchetype = config.environment ? archetypes[config.environment.archetype] : undefined;
+  const climateArchetype = config.climateModel === 'environment-v2'
+    ? config.environmentModelInputs?.archetype
+    : config.environment ? archetypes[config.environment.archetype] : undefined;
   if (config.assetPhysics && storeCapacityL > 0 && climateArchetype && climateArchetype.kind !== 'open') {
     const roofAreaM2 = Math.max(0, config.environment!.widthM * config.environment!.heightM);
     const rainL = Math.max(0, Number.isFinite(env.precipMm) ? env.precipMm : 0) * roofAreaM2;
@@ -1004,7 +1134,13 @@ export function stepDay(
   let pestSum = 0;
 
   // One effective environment per day feeds every consumer in the pass below.
-  const climateResult = climateInputsFor(config, state, env, crops, archetype, surface, cells);
+  const environmentV2RootSteps = config.climateModel === 'environment-v2'
+    ? prepareEnvironmentV2RootSteps(config, state, env, cells, crops, soil, irrigationByCell)
+    : undefined;
+  environmentV2RootSteps?.qualifications.forEach((reason) => modelQualificationReasons.add(reason));
+  const climateResult = climateInputsFor(
+    config, state, env, crops, archetype, surface, cells, environmentV2RootSteps?.steps,
+  );
   const env2 = climateResult.env;
   // The drought preset includes a +2 °C scenario delta. Without a guard, that
   // extra warmth can accelerate crops past their harvest threshold before the
@@ -1047,54 +1183,64 @@ export function stepDay(
     let moistureFrac: number;
     let water: number;
     if (isDryMatter && modelParameters) {
-      const awc = soil?.awcMmPerCm;
-      if (typeof awc !== 'number' || !Number.isFinite(awc) || awc <= 0 || rootZoneWaterMm === undefined) {
-        throw new Error(`Crop-model-v2 root-zone storage is unavailable for crop ${prev.cropId}.`);
-      }
-      const root = modelParameters.rootZone;
-      let rootGrowthStorageMm = 0;
-      if (root.rootDevelopment && growing) {
-        const development = root.rootDevelopment;
-        const rootThermalToday = dailyThermalUnits(env2.tMinC, env2.tMaxC, {
-          tBaseC: development.thermalBaseC,
-          tUpperC: development.thermalUpperC,
-          accumulationMethod: development.thermalAccumulationMethod,
-        });
-        if (rootThermalToday === null) {
-          modelQualificationReasons.add(dailyModelQualification(prev.cropId, 'Frozen root-development thermal method could not be evaluated.'));
-        } else {
-          rootThermalCdays = (prev.rootThermalCdays ?? 0) + rootThermalToday;
-          const previousDepthCm = prev.rootZoneDepthCm ?? development.initialRootDepthCm;
-          rootZoneDepthCm = effectiveRootDepthCmAtThermalTime(rootThermalCdays, {
-            initialRootDepthCm: development.initialRootDepthCm,
-            maximumRootDepthCm: root.effectiveRootDepthCm!,
-            growthStartsAfterCdays: development.growthStartsAfterCdays,
-            growthMmPerCday: development.growthMmPerCday,
-          });
-          rootGrowthStorageMm = awc * Math.max(0, rootZoneDepthCm - previousDepthCm)
-            * root.initialStorageFraction!;
-          rootZoneExpansionInflowMm = (prev.rootZoneExpansionInflowMm ?? 0) + rootGrowthStorageMm;
+      let result: ReturnType<typeof stepFao56RootZone>;
+      if (environmentV2RootSteps) {
+        const prepared = environmentV2RootSteps.steps.get(key);
+        if (!prepared) throw new Error(`Environment-v2 root-zone step is unavailable for crop ${prev.cropId}.`);
+        result = prepared.result;
+        rootThermalCdays = prepared.rootThermalCdays;
+        rootZoneDepthCm = prepared.rootZoneDepthCm;
+        rootZoneExpansionInflowMm = prepared.rootZoneExpansionInflowMm;
+      } else {
+        const awc = soil?.awcMmPerCm;
+        if (typeof awc !== 'number' || !Number.isFinite(awc) || awc <= 0 || rootZoneWaterMm === undefined) {
+          throw new Error(`Crop-model-v2 root-zone storage is unavailable for crop ${prev.cropId}.`);
         }
+        const root = modelParameters.rootZone;
+        let rootGrowthStorageMm = 0;
+        if (root.rootDevelopment && growing) {
+          const development = root.rootDevelopment;
+          const rootThermalToday = dailyThermalUnits(env2.tMinC, env2.tMaxC, {
+            tBaseC: development.thermalBaseC,
+            tUpperC: development.thermalUpperC,
+            accumulationMethod: development.thermalAccumulationMethod,
+          });
+          if (rootThermalToday === null) {
+            modelQualificationReasons.add(dailyModelQualification(prev.cropId, 'Frozen root-development thermal method could not be evaluated.'));
+          } else {
+            rootThermalCdays = (prev.rootThermalCdays ?? 0) + rootThermalToday;
+            const previousDepthCm = prev.rootZoneDepthCm ?? development.initialRootDepthCm;
+            rootZoneDepthCm = effectiveRootDepthCmAtThermalTime(rootThermalCdays, {
+              initialRootDepthCm: development.initialRootDepthCm,
+              maximumRootDepthCm: root.effectiveRootDepthCm!,
+              growthStartsAfterCdays: development.growthStartsAfterCdays,
+              growthMmPerCday: development.growthMmPerCday,
+            });
+            rootGrowthStorageMm = awc * Math.max(0, rootZoneDepthCm - previousDepthCm)
+              * root.initialStorageFraction!;
+            rootZoneExpansionInflowMm = (prev.rootZoneExpansionInflowMm ?? 0) + rootGrowthStorageMm;
+          }
+        }
+        const effectiveRootDepthCm = rootZoneDepthCm
+          ?? root.rootDevelopment?.initialRootDepthCm
+          ?? root.effectiveRootDepthCm!;
+        const potentialTranspirationMm = growing ? env2.etoMm * root.cropCoefficient! : 0;
+        result = stepFao56RootZone(
+          { waterMm: rootZoneWaterMm!, residualAccumulatedMm: rootZoneResidualAccumulatedMm },
+          {
+            awcMmPerCm: awc,
+            effectiveRootDepthCm,
+            depletionFraction: fao56AdjustedDepletionFraction(root.depletionFraction!, potentialTranspirationMm),
+          },
+          {
+            precipMm: env2.precipMm,
+            irrigationMm: irrigationByCell.get(key) ?? 0,
+            runoffMm: 0,
+            rootGrowthStorageMm,
+            potentialTranspirationMm,
+          },
+        );
       }
-      const effectiveRootDepthCm = rootZoneDepthCm
-        ?? root.rootDevelopment?.initialRootDepthCm
-        ?? root.effectiveRootDepthCm!;
-      const potentialTranspirationMm = growing ? env2.etoMm * root.cropCoefficient! : 0;
-      const result = stepFao56RootZone(
-        { waterMm: rootZoneWaterMm, residualAccumulatedMm: rootZoneResidualAccumulatedMm },
-        {
-          awcMmPerCm: awc,
-          effectiveRootDepthCm,
-          depletionFraction: fao56AdjustedDepletionFraction(root.depletionFraction!, potentialTranspirationMm),
-        },
-        {
-          precipMm: env2.precipMm,
-          irrigationMm: irrigationByCell.get(key) ?? 0,
-          runoffMm: 0,
-          rootGrowthStorageMm,
-          potentialTranspirationMm,
-        },
-      );
       rootZoneWaterMm = result.state.waterMm;
       rootZoneResidualAccumulatedMm = result.state.residualAccumulatedMm;
       rootZoneResidualMaxAbsMm = Math.max(rootZoneResidualMaxAbsMm ?? 0, Math.abs(result.residualMm));
@@ -1244,11 +1390,14 @@ export function stepDay(
             modelQualificationReasons.add(`Crop ${prev.cropId}: maturity is a source target range; stage uses the conservative upper target.`);
           }
         }
-        const enclosed = archetypes[archetype]?.kind !== 'open';
+        const cropEnvironmentArchetype = config.climateModel === 'environment-v2'
+          ? config.environmentModelInputs!.archetype
+          : archetypes[archetype];
+        const enclosed = cropEnvironmentArchetype?.kind !== 'open';
         const dli = enclosed ? targetDliForCell(key, config, env) : env2.dliNaturalMol;
         if (enclosed && dli !== undefined && env.dliNaturalMol === undefined
           && config.environment
-          && archetypes[config.environment.archetype]?.dliMode !== 'supplement-only') {
+          && cropEnvironmentArchetype?.dliMode !== 'supplement-only') {
           modelQualificationReasons.add(dailyModelQualification(
             prev.cropId,
             'Known supplemental DLI is used as a lower bound because natural DLI is unknown.',

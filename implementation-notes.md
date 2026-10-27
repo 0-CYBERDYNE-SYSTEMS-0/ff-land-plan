@@ -1970,3 +1970,34 @@ snapshots changed, and no application implementation is claimed by this revision
   software invariants only; this does not validate climate accuracy or crop predictions.
 - The validator did not run the fixture. Implementation and candidate comparison remain pending;
   no engine tests or comparison results are claimed in this review entry.
+
+## 2026-10-27 — BETA-02A environment-v2 water-coupling implementation
+
+- Added explicit `environment-v2` replay for complete frozen crop-model-v4/run-inputs-v4 and
+  environment-inputs-v2 records. The environment snapshot freezes its archetype, room/target
+  equipment, no-equipment defaults, calibration overrides, outdoor RH/CO₂ defaults and initial
+  room state. Missing or unknown v2 inputs are unsupported and preserve stored summaries; normal
+  run creation remains v1.
+- The v2 day uses outdoor ETo × previous room ET factor × frozen Kc, prepares each FAO-56 root
+  balance once, and reuses its unrounded actual-transpiration result for both root storage loss
+  and the room vapour/latent-heat input. Root growth uses outdoor temperatures on tick one, then
+  prior-room temperatures. A two-tick regression proves tick two uses tick one's computed room ET
+  factor. The environment-v1 path retains its existing potential-ET equations.
+- Focused synthetic checks passed: `npx vitest run
+  src/lib/sim/environment-v2-coupling.test.ts src/lib/sim/environment-climate.test.ts
+  src/lib/sim/model-inputs.test.ts src/lib/sim/crop-model-v2.test.ts` (4 files / 54 tests), and
+  `npx vitest run src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts` (2 files / 8
+  tests). Independent reviews found and closed the ET-factor-lag and direct client round-trip test
+  gaps. The local API test uses mocked IndexedDB operations; REST tests use a mocked server and
+  establish client serialization only. BETA-01 durability regressions also pass:
+  `npx vitest run src/lib/planSaveLedger.test.ts src/lib/planSaveQueue.test.ts
+  src/lib/planTransfer.test.ts src/lib/store.persistence.test.ts src/lib/store.test.ts
+  src/lib/localApi.sim-runs.test.ts` (6 files / 40 tests). Full gates pass:
+  `npm test` (45 files / 233 tests),
+  `npm run typecheck`, `npm run build`, `npm run build:demo`, `npm run build:pages`,
+  `npm run check:private` (517 tracked files), and `git diff --check`. No live-server persistence,
+  candidate comparison, or measured-output comparison was run. Build output retains the existing
+  Vite config-loader and large-chunk advisories. No browser load journey for an unsupported
+  environment-v2 record was run, so end-to-end historical-summary retention remains UNVERIFIED.
+  These are software checks only; A-05 remains UNVERIFIED and no biological or predictive
+  validity is claimed.

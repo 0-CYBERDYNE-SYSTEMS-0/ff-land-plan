@@ -1,13 +1,19 @@
 import { cropLibrary } from '@/data/crops';
-import { archetypes } from '@/creative/archetypes';
+import { archetypes, LEGACY_SURFACE_FOR_ARCHETYPE } from '@/creative/archetypes';
 import type { SoilProfile } from '@/lib/soil';
 import type { Crop, CropStartEvent } from '@/types';
 import { cropThermalParams } from '@/data/cropThermalParams';
 import { targetCellKey } from '@/lib/growingTargets';
 import { isoDayNumber } from './environment';
+import {
+  DEFAULT_OUTDOOR_CO2_PPM,
+  DEFAULT_OUTDOOR_RH_PCT,
+  NO_CLIMATE_EQUIPMENT,
+} from './environment-climate';
 import type {
   CropCanopyEstablishmentInput,
   CropEstablishmentInput,
+  EnvironmentModelInputsV2,
   FrozenCropModelParametersV2,
   FrozenCropModelParametersV3,
   FrozenCropModelParametersV4,
@@ -35,6 +41,128 @@ export interface RunModelSupport {
   canReplay: boolean;
   preserveStoredSummary: boolean;
   reasons: string[];
+}
+
+/** Freeze every live environment default and equipment term consulted by environment-v2. */
+export function freezeEnvironmentModelInputsV2(
+  config: RunConfig,
+  initialClimateState: EnvironmentModelInputsV2['initialClimateState'] = null,
+): EnvironmentModelInputsV2 | undefined {
+  const environment = config.environment;
+  const archetype = environment ? archetypes[environment.archetype] : undefined;
+  if (!environment || !archetype) return undefined;
+  const matchingCalibration = config.calibration?.farmId === config.farmId
+    && config.calibration.environmentId === environment.id
+    ? config.calibration.parameters
+    : undefined;
+  return {
+    model: 'environment-inputs-v2',
+    archetypeId: environment.archetype,
+    legacySurface: LEGACY_SURFACE_FOR_ARCHETYPE[environment.archetype],
+    archetype: structuredClone(archetype),
+    noEquipment: structuredClone(NO_CLIMATE_EQUIPMENT),
+    climateEquipment: structuredClone(config.climateEquipment ?? NO_CLIMATE_EQUIPMENT),
+    climateTargetEquipment: structuredClone(config.climateTargetEquipment ?? {}),
+    outdoorDefaults: { rhPct: DEFAULT_OUTDOOR_RH_PCT, co2Ppm: DEFAULT_OUTDOOR_CO2_PPM },
+    modelOverrides: {
+      coverTransmission: matchingCalibration?.coverTransmission ?? null,
+      uValueWm2K: matchingCalibration?.uValueWm2K ?? null,
+    },
+    initialClimateState: initialClimateState ? structuredClone(initialClimateState) : null,
+  };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function validClimateEquipment(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const equipment = value as Record<string, unknown>;
+  const nonnegative = ['ppfdUmol', 'lightingW', 'photoperiodH', 'achBoost', 'heatingKw', 'coolingKw', 'dehumLpd', 'co2KgDay'];
+  if (!nonnegative.every((key) => equipment[key] === undefined
+    ? key === 'co2KgDay'
+    : isFiniteNumber(equipment[key]) && equipment[key] >= 0)) return false;
+  if (equipment.dehumDerateBelowRh !== undefined
+    && (!isFiniteNumber(equipment.dehumDerateBelowRh) || equipment.dehumDerateBelowRh < 0 || equipment.dehumDerateBelowRh > 100)) return false;
+  return equipment.co2TargetPpm === null
+    || (isFiniteNumber(equipment.co2TargetPpm) && equipment.co2TargetPpm >= 350 && equipment.co2TargetPpm <= 1500);
+}
+
+function environmentModelInputsV2Issues(config: RunConfig): string[] {
+  const value: unknown = config.environmentModelInputs;
+  const issues: string[] = [];
+  if (!config.environment) issues.push('Environment-v2 requires a frozen environment snapshot.');
+  if (!value || typeof value !== 'object') {
+    return [...issues, 'Frozen environment-v2 inputs are missing or have an unknown version.'];
+  }
+  const inputs = value as Record<string, unknown>;
+  if (inputs.model !== 'environment-inputs-v2') issues.push('Frozen environment-v2 inputs are missing or have an unknown version.');
+  if (inputs.archetypeId !== config.environment?.archetype) issues.push('Frozen environment-v2 archetype does not match the run environment.');
+  if (!['outdoor', 'greenhouse', 'hoophouse', 'tent', 'indoor', 'warehouse'].includes(String(inputs.legacySurface))) {
+    issues.push('Frozen environment-v2 surface mapping is missing or invalid.');
+  }
+  if (!validClimateEquipment(inputs.noEquipment)) issues.push('Frozen environment-v2 no-equipment defaults are missing or invalid.');
+  if (!validClimateEquipment(inputs.climateEquipment)) issues.push('Frozen environment-v2 room equipment is missing or invalid.');
+  const targetEquipment = inputs.climateTargetEquipment;
+  if (!targetEquipment || typeof targetEquipment !== 'object' || Array.isArray(targetEquipment)
+    || !Object.values(targetEquipment).every(validClimateEquipment)) {
+    issues.push('Frozen environment-v2 target equipment is missing or invalid.');
+  }
+  const defaults = inputs.outdoorDefaults;
+  if (!defaults || typeof defaults !== 'object'
+    || !isFiniteNumber((defaults as Record<string, unknown>).rhPct)
+    || (defaults as Record<string, number>).rhPct < 0 || (defaults as Record<string, number>).rhPct > 100
+    || !isFiniteNumber((defaults as Record<string, unknown>).co2Ppm)
+    || (defaults as Record<string, number>).co2Ppm < 350 || (defaults as Record<string, number>).co2Ppm > 1500) {
+    issues.push('Frozen environment-v2 outdoor climate defaults are missing or invalid.');
+  }
+  const overrides = inputs.modelOverrides;
+  const overrideRecord = overrides && typeof overrides === 'object'
+    ? overrides as Record<string, unknown>
+    : undefined;
+  const coverTransmission = overrideRecord?.coverTransmission;
+  const uValueWm2K = overrideRecord?.uValueWm2K;
+  if (!overrideRecord || !('coverTransmission' in overrideRecord) || !('uValueWm2K' in overrideRecord)
+    || (coverTransmission !== null
+      && (!isFiniteNumber(coverTransmission) || coverTransmission < 0 || coverTransmission > 1))
+    || (uValueWm2K !== null && (!isFiniteNumber(uValueWm2K) || uValueWm2K <= 0))) {
+    issues.push('Frozen environment-v2 calibration overrides are missing or invalid.');
+  }
+  const initialClimateState = inputs.initialClimateState;
+  if (initialClimateState !== null && (!initialClimateState || typeof initialClimateState !== 'object'
+    || !['tMinC', 'tMaxC', 'rhPct', 'co2Ppm', 'etFactor'].every((key) =>
+      isFiniteNumber((initialClimateState as Record<string, unknown>)[key])))
+    || (initialClimateState !== null && typeof initialClimateState === 'object'
+      && ((initialClimateState as Record<string, number>).tMaxC < (initialClimateState as Record<string, number>).tMinC
+        || (initialClimateState as Record<string, number>).rhPct < 0
+        || (initialClimateState as Record<string, number>).rhPct > 100
+        || (initialClimateState as Record<string, number>).co2Ppm < 350
+        || (initialClimateState as Record<string, number>).co2Ppm > 1500
+        || (initialClimateState as Record<string, number>).etFactor < 0))) {
+    issues.push('Frozen environment-v2 initial climate state is invalid.');
+  }
+  const archetype = inputs.archetype as Record<string, unknown> | undefined;
+  const footprint = archetype?.defaultFootprint as Record<string, unknown> | undefined;
+  const setpoints = archetype?.setpoints;
+  const supportedArchetype = !!archetype
+    && (archetype.kind === 'protected' || archetype.kind === 'sealed')
+    && !!footprint && isFiniteNumber(footprint.wM) && footprint.wM > 0
+    && isFiniteNumber(footprint.hM) && footprint.hM > 0
+    && isFiniteNumber(archetype.defaultUsableHeightM) && archetype.defaultUsableHeightM > 0
+    && isFiniteNumber(archetype.volumePerM2) && archetype.volumePerM2 > 0
+    && isFiniteNumber(archetype.coverTransmission) && archetype.coverTransmission >= 0 && archetype.coverTransmission <= 1
+    && isFiniteNumber(archetype.uValueWm2K) && archetype.uValueWm2K > 0
+    && isFiniteNumber(archetype.achInfiltration) && archetype.achInfiltration >= 0
+    && isFiniteNumber(archetype.achVented) && archetype.achVented >= 0
+    && isFiniteNumber(archetype.maxDliMol) && archetype.maxDliMol >= 0
+    && isFiniteNumber(archetype.etFactor) && archetype.etFactor >= 0
+    && typeof archetype.dliMode === 'string'
+    && typeof archetype.rainEnters === 'boolean'
+    && !!setpoints && typeof setpoints === 'object'
+    && Object.values(setpoints).every(isFiniteNumber);
+  if (!supportedArchetype) issues.push('Frozen environment-v2 archetype defaults are missing or invalid.');
+  return [...new Set(issues)];
 }
 
 function cropIdsFor(config: RunConfig): number[] {
@@ -461,6 +589,21 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
   const inputCropIds = new Set(inputCrops.map((crop) => crop.id));
   const missingCropIds = requiredCropIds.filter((cropId) => !inputCropIds.has(cropId));
   const hasCompleteCropSnapshot = !!inputs && missingCropIds.length === 0;
+  const climateModel = config.climateModel as string | undefined;
+
+  if (climateModel !== undefined && climateModel !== 'environment-v1' && climateModel !== 'environment-v2') {
+    return {
+      model: config.cropModelVersion ?? 'crop-model-v1', status: 'unsupported', canReplay: false,
+      preserveStoredSummary: persisted, reasons: [`Unknown environment model version: ${climateModel}.`],
+    };
+  }
+  if (climateModel === 'environment-v2' && config.cropModelVersion !== 'crop-model-v4') {
+    return {
+      model: config.cropModelVersion ?? 'crop-model-v1', status: 'unsupported', canReplay: false,
+      preserveStoredSummary: persisted,
+      reasons: ['Environment-v2 requires explicit crop-model-v4 with complete run-inputs-v4.'],
+    };
+  }
 
   if (config.cropModelVersion === 'crop-model-v2') {
     if (inputs?.model !== 'run-inputs-v2' || inputs.parameterSetVersion !== 'crop-parameters-v3') {
@@ -530,7 +673,7 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
           ...(inputs.cropParameters.some((parameter) => parameter.rootZone.rootDevelopment)
             ? ['Root development uses a frozen source profile; new subsoil storage is added at the frozen initial available-water fraction as an explicit root-growth inflow. Vertical soil-water layering and rooting barriers are not modeled.']
             : ['Effective root depth is held at the frozen value; root growth and rooting barriers are not modeled.']),
-          ...(config.environment && config.climateModel !== 'environment-v1'
+          ...(config.environment && config.climateModel !== 'environment-v1' && config.climateModel !== 'environment-v2'
             && archetypes[config.environment.archetype]?.kind !== 'open'
             && archetypes[config.environment.archetype]?.dliMode !== 'supplement-only'
             ? ['Without an environment-v1 climate state, enclosed natural DLI uses frozen calibration cover transmission when present, otherwise the archetype default; only explicitly frozen target lighting is included.']
@@ -671,6 +814,9 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
     );
     const starts = cropStartEventChecks(config, inputs.cropParameters);
     const establishment = cropCanopyEstablishmentChecks(config, inputs.establishmentByCell, inputs.cropParameters);
+    const environmentIssues = climateModel === 'environment-v2'
+      ? environmentModelInputsV2Issues(config)
+      : [];
     const reasons = [
       ...inputs.qualification.reasons,
       ...(missingCropIds.length ? [`Frozen crop records are missing for crop IDs ${missingCropIds.join(', ')}.`] : []),
@@ -683,6 +829,7 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
       ...soilQualificationReasons(inputs.soil, 'v4'),
       ...starts.issues,
       ...establishment.issues,
+      ...environmentIssues,
       ...(usesSoillessTarget(config) ? ['Soilless targets require the separate 02B resource model.'] : []),
       ...invalidParameters.map((parameter) => `Crop ${parameter.cropId}: one or more frozen v4 parameter values are missing, invalid, or unsupported.`),
     ];
@@ -693,6 +840,7 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
       && !usesSoillessTarget(config)
       && starts.issues.length === 0
       && establishment.issues.length === 0
+      && environmentIssues.length === 0
       && inputs.qualification.status !== 'unsupported'
       && inputs.cropParameters.every((parameter) =>
         thermalParametersComplete(parameter.thermal)
@@ -714,7 +862,10 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
           'V4 derives daily PAR interception from the beginning-of-day canopy-only DM pool, then partitions each net DM increment once into canopy and harvestable pools; the source p/SLA relation does not determine those allocation shares and no additional harvest-index multiplier is applied.',
           'Water SA K_PAR/SLA/p values are selected seasonal references; its total-solar RUE is not used in the intercepted-PAR production equation. Broccoli K_PAR differs between source Tables 5 and 6 without a resolved attribution.',
           'Canopy dry matter and net production use synthetic assumptions in the approved software fixture; crop and cultivar accuracy remain UNVERIFIED.',
-          'Canopy FI_PAR is an interception input and a qualified cover proxy only; it is not a crop transpiration coefficient. Enclosure transpiration retains the existing lagged potential-ET proxy and is not coupled to current root-zone Ks.',
+          'Canopy FI_PAR is an interception input and a qualified cover proxy only; it is not a crop transpiration coefficient.',
+          ...(climateModel === 'environment-v2'
+            ? ['Environment-v2 reuses each unrounded FAO-56 actual-transpiration flux once for root-zone storage loss and once as the room-vapour source; potential ET uses the previous frozen room ET factor.']
+            : ['Enclosure transpiration retains the existing lagged potential-ET proxy and is not coupled to current root-zone Ks.']),
           'Surface runoff is assumed to be 0 mm/day because the run has no frozen runoff input; infiltration and runoff uncertainty remain unmodeled.',
           ...(inputs.cropParameters.some((parameter) => parameter.rootZone.rootDevelopment)
             ? ['Root development uses the frozen profile only after its declared start event; new subsoil storage is added at the frozen initial available-water fraction as an explicit root-growth inflow. Vertical soil-water layering and rooting barriers are not modeled.']

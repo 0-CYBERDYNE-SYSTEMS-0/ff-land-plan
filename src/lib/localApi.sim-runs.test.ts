@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { RunRecord } from '@/lib/sim/types';
+import type { EnvironmentModelInputsV2, RunRecord } from '@/lib/sim/types';
 import type { PlanState } from '@/types';
+import { freezeEnvironmentModelInputsV2 } from '@/lib/sim/model-inputs';
 
 const dbState = vi.hoisted(() => ({ records: new Map<string, Map<string, unknown>>() }));
 
@@ -95,6 +96,55 @@ function run(id: string): RunRecord {
   };
 }
 
+function environmentV2Run(): RunRecord {
+  const base = run('run:env2:local-roundtrip');
+  const environment = {
+    id: 'env:1:greenhouse-roundtrip',
+    farmId: 1,
+    archetype: 'greenhouse-glass' as const,
+    label: 'Frozen greenhouse',
+    x: 0,
+    y: 0,
+    widthM: 10,
+    heightM: 10,
+    cellM: 0.5,
+  };
+  const config = {
+    ...base.config,
+    cropModelVersion: 'crop-model-v4' as const,
+    climateModel: 'environment-v2' as const,
+    environment,
+    modelInputs: {
+      model: 'run-inputs-v4' as const,
+      parameterSetVersion: 'crop-parameters-v5' as const,
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 5, source: 'usda-sda' as const },
+      crops: [],
+      cropParameters: [],
+      establishmentByCell: {},
+      qualification: { status: 'qualified' as const, reasons: [] },
+    },
+  };
+  const environmentModelInputs: EnvironmentModelInputsV2 = freezeEnvironmentModelInputsV2(config, {
+    tMinC: 15,
+    tMaxC: 20,
+    rhPct: 60,
+    co2Ppm: 420,
+    etFactor: 1,
+  })!;
+  return {
+    ...base,
+    config: { ...config, environmentModelInputs },
+    summary: {
+      ...base.summary,
+      daysSimulated: 17,
+      totalYieldKg: 42.125,
+      yieldBasis: 'dry-matter',
+      waterUseMm: 6.75,
+      modelQualification: { status: 'qualified', reasons: ['distinctive stored v2 summary'] },
+    },
+  };
+}
+
 async function loadApi(timeline: boolean, campaign = false) {
   vi.stubEnv('VITE_FF_TIMELINE', String(timeline));
   vi.stubEnv('VITE_FF_CAMPAIGN', String(campaign));
@@ -112,6 +162,19 @@ afterEach(() => {
 });
 
 describe('localApi.saveSimRun', () => {
+  it('round-trips environment-v2 frozen climate inputs and the stored summary through save/list', async () => {
+    const { localApi } = await loadApi(true);
+    const saved = environmentV2Run();
+
+    await expect(localApi.saveSimRun(saved)).resolves.toEqual(saved);
+    const [listed] = await localApi.listSimRuns(saved.farmId);
+
+    expect(listed).toEqual(saved);
+    expect(listed?.config.climateModel).toBe('environment-v2');
+    expect(listed?.config.environmentModelInputs).toEqual(saved.config.environmentModelInputs);
+    expect(listed?.summary).toEqual(saved.summary);
+  });
+
   it('upserts complete frozen records at the front and enforces the 40-run cap', async () => {
     const { localApi, state } = await loadApi(true);
     state.simRuns = Array.from({ length: 40 }, (_, index) => ({

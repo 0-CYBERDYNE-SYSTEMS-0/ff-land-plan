@@ -9,7 +9,7 @@
 //      rewrites).
 //   2. Every environment number traces to a source via EnvSourceTag.
 
-import type { ArchetypeId, Crop, CropStartEvent, EnvironmentSnapshot, GrowingTargetKey, GrowingTargetRef, Observation, ObservationMetric, PlanState, PlanSurface, ScenarioType, SoilCarry } from '@/types';
+import type { ArchetypeId, Crop, CropStartEvent, EnvironmentArchetype, EnvironmentSnapshot, GrowingTargetKey, GrowingTargetRef, Observation, ObservationMetric, PlanState, PlanSurface, ScenarioType, SoilCarry } from '@/types';
 import type { EnvironmentClimateDay } from './environment-climate';
 import type { ClimateEquipmentInput } from './environment-climate';
 import type { EquipmentTerms } from './equipment';
@@ -22,6 +22,20 @@ export interface RunAssetPhysicsSnapshot {
   soillessCells: Partial<Record<GrowingTargetKey, string[]>>;
   /** Cells on a hydro-designed level that require installed hydro coverage. */
   hydroRequiredCells: Partial<Record<GrowingTargetKey, string[]>>;
+}
+
+/** Complete environment-v2 climate context, copied at run creation for replay. */
+export interface EnvironmentModelInputsV2 {
+  model: 'environment-inputs-v2';
+  archetypeId: ArchetypeId;
+  legacySurface: PlanSurface;
+  archetype: EnvironmentArchetype;
+  noEquipment: ClimateEquipmentInput;
+  climateEquipment: ClimateEquipmentInput;
+  climateTargetEquipment: Partial<Record<GrowingTargetKey, ClimateEquipmentInput>>;
+  outdoorDefaults: { rhPct: number; co2Ppm: number };
+  modelOverrides: { coverTransmission: number | null; uValueWm2K: number | null };
+  initialClimateState: Pick<EnvironmentClimateDay, 'tMinC' | 'tMaxC' | 'rhPct' | 'co2Ppm' | 'etFactor'> | null;
 }
 
 export type CropModelVersion = 'crop-model-v1' | 'crop-model-v2' | 'crop-model-v3' | 'crop-model-v4';
@@ -488,7 +502,9 @@ export interface RunConfig {
    * basePlan is the sole plan snapshot and is never duplicated here. */
   environment?: EnvironmentSnapshot;
   /** Missing means the pre-environment legacy surface model. */
-  climateModel?: 'environment-v1';
+  climateModel?: 'environment-v1' | 'environment-v2';
+  /** Frozen archetype, equipment, calibration and climate defaults for v2 replay. */
+  environmentModelInputs?: EnvironmentModelInputsV2;
   /** User-approved, per-world model calibration frozen for deterministic replay. */
   calibration?: FarmCalibration;
   /** Frozen placed-asset contributions used by replay; absent means legacy semantics. */

@@ -17,7 +17,7 @@
  * single placed-asset aggregator. They are not inferred from palette assets.
  */
 import { archetypes } from '@/creative/archetypes';
-import type { DailyEnvironment } from './types';
+import type { DailyEnvironment, EnvironmentModelInputsV2 } from './types';
 import type { Environment, EnvironmentArchetype } from '@/types';
 
 const AIR_DENSITY_KG_M3 = 1.2;
@@ -25,7 +25,8 @@ const AIR_HEAT_CAPACITY_J_KG_K = 1005;
 const WATER_LATENT_HEAT_J_KG = 2.45e6;
 const FLOOR_ABSORPTIVITY = 0.6;
 const PAR_WM2_TO_DLI = 0.0864;
-const OUTDOOR_CO2_PPM = 420;
+export const DEFAULT_OUTDOOR_RH_PCT = 60;
+export const DEFAULT_OUTDOOR_CO2_PPM = 420;
 const CO2_KG_PER_PPM_M3 = 1.84e-6;
 
 export interface OutdoorClimateDay {
@@ -92,6 +93,8 @@ export interface EnvironmentClimateInputs {
   leafAreaIndex?: number;
   /** User-approved calibration terms; other archetype defaults remain fixed. */
   modelOverrides?: Partial<Pick<EnvironmentArchetype, 'coverTransmission' | 'uValueWm2K'>>;
+  /** Present only for replay paths with a fully frozen environment context. */
+  environmentModelInputs?: Pick<EnvironmentModelInputsV2, 'archetype' | 'outdoorDefaults' | 'modelOverrides'>;
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
@@ -137,8 +140,9 @@ function archetypeFor(environment: ClimateEnvironment): EnvironmentArchetype {
 export function effectivePhotoperiodH(
   environment: ClimateEnvironment,
   equipmentPhotoperiodH: number,
+  frozenArchetype?: EnvironmentArchetype,
 ): number {
-  const archetype = archetypeFor(environment);
+  const archetype = frozenArchetype ?? archetypeFor(environment);
   const assetDefault = nonNegative(equipmentPhotoperiodH);
   const archetypeDefault = nonNegative(archetype.setpoints?.photoperiodH);
   const fallback = assetDefault > 0 ? assetDefault : archetypeDefault;
@@ -202,11 +206,18 @@ export function environmentDay(
     & Partial<Pick<EnvironmentClimateDay, 'tMinC' | 'tMaxC'>>,
   inputs: EnvironmentClimateInputs = {},
 ): EnvironmentClimateDay {
-  const baseArchetype = archetypeFor(environment);
+  const baseArchetype = inputs.environmentModelInputs?.archetype ?? archetypeFor(environment);
+  const frozenOverrides = inputs.environmentModelInputs?.modelOverrides;
+  const modelOverrides = frozenOverrides
+    ? {
+        ...(frozenOverrides.coverTransmission !== null ? { coverTransmission: frozenOverrides.coverTransmission } : {}),
+        ...(frozenOverrides.uValueWm2K !== null ? { uValueWm2K: frozenOverrides.uValueWm2K } : {}),
+      }
+    : inputs.modelOverrides;
   const archetype = {
     ...baseArchetype,
-    coverTransmission: finiteBound(inputs.modelOverrides?.coverTransmission, baseArchetype.coverTransmission, 0, 1),
-    uValueWm2K: finiteBound(inputs.modelOverrides?.uValueWm2K, baseArchetype.uValueWm2K, 0.01, 50),
+    coverTransmission: finiteBound(modelOverrides?.coverTransmission, baseArchetype.coverTransmission, 0, 1),
+    uValueWm2K: finiteBound(modelOverrides?.uValueWm2K, baseArchetype.uValueWm2K, 0.01, 50),
   };
   const setpoints = { ...archetype.setpoints, ...environment.setpoints };
   const widthM = finiteBound(environment.widthM, archetype.defaultFootprint.wM, 0.1, MAX_ENV_DIM_M);
@@ -232,7 +243,9 @@ export function environmentDay(
   const ppfdUmol = nonNegative(equipment.ppfdUmol);
   const lightingW = nonNegative(equipment.lightingW);
   const hasInstalledLight = ppfdUmol > 0 || lightingW > 0;
-  const photoperiodH = hasInstalledLight ? effectivePhotoperiodH(environment, equipment.photoperiodH) : 0;
+  const photoperiodH = hasInstalledLight
+    ? effectivePhotoperiodH(environment, equipment.photoperiodH, inputs.environmentModelInputs?.archetype)
+    : 0;
   const lightHeatW = lightingW * 0.6 * photoperiodH / 24;
   const dliMol = clamp(
     naturalDli * archetype.coverTransmission + ppfdUmol * photoperiodH * 3600 / 1e6,
@@ -252,7 +265,12 @@ export function environmentDay(
   const ach = archetype.kind === 'open' ? 0 : (min.ach + max.ach) / 2;
   const tMeanC = (min.temperatureC + max.temperatureC) / 2;
 
-  const outdoorRhPct = finiteBound(outdoor.rhPct, 60, 0, 100);
+  const outdoorRhPct = finiteBound(
+    outdoor.rhPct,
+    inputs.environmentModelInputs?.outdoorDefaults.rhPct ?? DEFAULT_OUTDOOR_RH_PCT,
+    0,
+    100,
+  );
   const outdoorAbsoluteHumidity = absoluteHumidityGm3((outdoorTMinC + outdoorTMaxC) / 2, outdoorRhPct);
   const previousAbsoluteHumidity = previous
     ? absoluteHumidityGm3(
@@ -288,7 +306,12 @@ export function environmentDay(
   const rhPct = clamp(indoorAbsoluteHumidity / Math.max(0.01, saturationHumidity) * 100, 0, 100);
   const vpdKPa = Math.max(0, saturationVaporPressureKPa(tMeanC) * (1 - rhPct / 100));
 
-  const outdoorCo2Ppm = finiteBound(outdoor.co2Ppm, OUTDOOR_CO2_PPM, 350, 1500);
+  const outdoorCo2Ppm = finiteBound(
+    outdoor.co2Ppm,
+    inputs.environmentModelInputs?.outdoorDefaults.co2Ppm ?? DEFAULT_OUTDOOR_CO2_PPM,
+    350,
+    1500,
+  );
   let co2Ppm = previous ? finiteBound(previous.co2Ppm, outdoorCo2Ppm, 350, 1500) : outdoorCo2Ppm;
   if (archetype.kind === 'sealed') {
     const co2TargetPpm = setpoints.co2Ppm === undefined

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "baseline-before-retuning; candidate comparisons not run",
+  "status": "environment-v2 software-integration checkpoint; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -2669,7 +2669,7 @@
       {
         "id": "fao56-environment-v2-wet-dry-transpiration-coupling",
         "tolerance": "Ks and unrounded water-to-air flux conversion ≤1e-12 absolute; root-zone residual ≤1e-6 mm/cell-day; wet/dry outcomes directional only",
-        "status": "independent GPT-6 Luna max tolerance review approved for synthetic software invariants; implementation and comparison not run",
+        "status": "independent GPT-6 Luna max tolerance review approved for synthetic software invariants; focused implementation checks pass locally; candidate comparison not run",
         "scope": "Synthetic v4/environment-v2 software invariant: FAO-56 wet/dry Ks, one per-cell actual-transpiration flux reused once for root storage loss and room vapour source, prior-day ET-factor lag, multi-cell area conversion, and wet/dry RH direction. No climate calibration, measured or candidate comparison",
         "evidence": "quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json"
       }
@@ -2679,6 +2679,6 @@
     "calibrationRecords": [],
     "holdoutRecords": [],
     "candidateComparisonRuns": [],
-    "note": "Evidence records above describe source availability and published reference points. The synthetic parameter fixture checks only reducer arithmetic and closure. No candidate has been evaluated; the Michelon measured record remains non-executable and no predictive comparison is authorized."
+    "note": "Evidence records above describe source availability and published reference points. Parameter fixtures check source transcription and reducer arithmetic; the environment-v2 fixture checks synthetic software coupling invariants. No candidate has been evaluated; the Michelon measured record remains non-executable and no predictive comparison is authorized."
   }
 }
