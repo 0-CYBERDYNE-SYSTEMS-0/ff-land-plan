@@ -2051,9 +2051,9 @@ snapshots changed, and no application implementation is claimed by this revision
   suites were not repeated for this route/UI change.
 - Evidence boundary: this browser fixture covers the missing frozen environment-input case through the
   normal local-storage list path. It does not establish IndexedDB migration, server persistence, crop
-  trait handling, crop accuracy, biology, or predictive validity. A-08 remains UNVERIFIED overall
-  until unsupported crop-trait handling is also evidenced; 02A remains incomplete. PR CI is pending for
-  this checkpoint.
+  trait handling, crop accuracy, biology, or predictive validity. At this checkpoint, A-08 was
+  UNVERIFIED because unsupported crop-trait handling and PR CI were still outstanding; 02A remained
+  incomplete.
 
 ## 2026-10-27 — BETA-02A A-08 Pages smoke CI wait fix
 
@@ -2123,7 +2123,23 @@ snapshots changed, and no application implementation is claimed by this revision
   head `de04d4e444e0c2fe8a3702776a16b2e165df4507`: the three Actions jobs in run
   [40553243061](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40553243061)
   and the separate `GitGuardian Security Checks` context. That head predates this change. The stage
-  commit must be pushed to draft PR #82 for actual CI, and the exact named results recorded afterward.
-  A-08 is UNVERIFIED pending that browser run; 02A remains
-  incomplete and ordinary new runs remain v1. This synthetic fixture does not establish trait
+  commit still awaited its actual PR CI run at this checkpoint. A-08 was then UNVERIFIED; 02A remained
+  incomplete and ordinary new runs remained v1. This synthetic fixture does not establish trait
   validity, crop accuracy, measured-trial agreement, site observations, or predictive validity.
+
+## 2026-10-27 — BETA-02A A-08 exact-head CI reconciliation
+
+- PR CI run [40558437392](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40558437392)
+  completed successfully for exact head `119130a93bbc3f3963a62781265f4ada108c3c71`. The
+  `Playwright production Pages-path smoke` check passed all 3 tests (3 passed, 4.1m):
+  `production build boots under the GitHub Pages project base path` (478ms),
+  `unsupported environment-v2 run opens under Pages and retains its stored summary` (1.9m), and
+  `unsupported v4 crop lifecycle is explained in World and retains its stored summary` (2.1m).
+  All four exact contexts passed on that SHA: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`.
+- The A-08 contract row is now PASS for synthetic fail-closed software handling only. Its two
+  synthetic browser cases provide useful missing-input/lifecycle explanations, block unsupported
+  replay or estimates, and preserve the saved summary. The lifecycle fixture keeps frozen crop and
+  environment-v2 inputs complete apart from the explicit unsupported lifecycle. This is not a
+  qualified crop-yield result and establishes no biology, measured accuracy, predictive validity,
+  site observation or human validation. A-05 remains UNVERIFIED overall; 02A remains incomplete and
+  ordinary new runs remain v1.
