@@ -435,6 +435,79 @@ describe('crop-model-v4 dynamic canopy and two-pool production', () => {
     }
   });
 
+  it('stops v4 growth and uptake after terminal frost and blocks a mature manual harvest deterministically', () => {
+    const run = frozenRun({ autoHarvest: false, dayCount: 2 });
+    const modelInputs = run.modelInputs;
+    if (modelInputs?.model !== 'run-inputs-v4') throw new Error('frozenRun must provide v4 model inputs');
+    const maturityEndpoint = modelInputs.cropParameters[0]!.thermal!.gddToMaturityCdays[1];
+    const frostDay: DailyEnvironment = {
+      ...dailyEnvironment('2026-10-01', 0),
+      tMinC: -20,
+      tMaxC: 0,
+      precipMm: 0,
+      etoMm: 4,
+      gddBase10C: 0,
+    };
+    const warmDay: DailyEnvironment = {
+      ...dailyEnvironment('2026-10-02', 0),
+      precipMm: 0,
+      etoMm: 4,
+    };
+    const manualHarvestRun = {
+      ...run,
+      interventions: [{ kind: 'harvest' as const, date: warmDay.date, cell: '0,0' }],
+    };
+
+    const replayPath = () => {
+      const afterFrost = stepDay(createRun(run), frostDay, run);
+      const afterWarm = stepDay(afterFrost.state, warmDay, run);
+
+      // Place the already-dead cell at its frozen maturity endpoint so this
+      // manual-harvest check cannot pass merely because the crop is immature.
+      const matureDeadState = structuredClone(afterFrost.state);
+      matureDeadState.cells[cellKey] = {
+        ...matureDeadState.cells[cellKey]!,
+        biomassFrac: 1,
+        sourceThermalCdays: maturityEndpoint,
+      };
+      const matureManualHarvest = stepDay(matureDeadState, warmDay, manualHarvestRun);
+
+      return { afterFrost, afterWarm, matureManualHarvest };
+    };
+
+    const first = replayPath();
+    const second = replayPath();
+    const frostCell = first.afterFrost.state.cells[cellKey]!;
+    const warmCell = first.afterWarm.state.cells[cellKey]!;
+    const matureDeadCell = first.matureManualHarvest.state.cells[cellKey]!;
+
+    expect(frostCell.dead).toBe(true);
+    expect(frostCell.biomassFrac).toBeLessThan(1);
+    expect(frostCell.sourceThermalCdays).toBeLessThan(maturityEndpoint);
+    expect(warmCell.dead).toBe(true);
+    expect(warmCell.gddAccumC).toBe(frostCell.gddAccumC);
+    expect(warmCell.sourceThermalCdays).toBe(frostCell.sourceThermalCdays);
+    expect(warmCell.biomassFrac).toBe(frostCell.biomassFrac);
+    expect(warmCell.canopyDryMatterGPerM2).toBe(frostCell.canopyDryMatterGPerM2);
+    expect(warmCell.harvestableDryMatterGPerM2).toBe(frostCell.harvestableDryMatterGPerM2);
+    expect(warmCell.rootZoneWaterMm).toBe(frostCell.rootZoneWaterMm);
+    expect(first.afterWarm.dayStats.waterUseMm).toBe(0);
+
+    expect(matureDeadCell.dead).toBe(true);
+    expect(matureDeadCell.biomassFrac).toBe(1);
+    expect(matureDeadCell.sourceThermalCdays).toBe(maturityEndpoint);
+    expect(first.matureManualHarvest.state.dayIndex).toBe(2);
+    expect(first.matureManualHarvest.events.filter((event) => event.kind === 'harvested')).toHaveLength(0);
+    expect(matureDeadCell.harvested).not.toBe(true);
+
+    expect(second.afterFrost.state).toEqual(first.afterFrost.state);
+    expect(second.afterFrost.events).toEqual(first.afterFrost.events);
+    expect(second.afterWarm.state).toEqual(first.afterWarm.state);
+    expect(second.afterWarm.events).toEqual(first.afterWarm.events);
+    expect(second.matureManualHarvest.state).toEqual(first.matureManualHarvest.state);
+    expect(second.matureManualHarvest.events).toEqual(first.matureManualHarvest.events);
+  });
+
   it('rejects incomplete or inconsistent frozen pools and allocation shares', () => {
     const run = config();
     const invalidPools = freezeRunModelInputsV4(run, {
