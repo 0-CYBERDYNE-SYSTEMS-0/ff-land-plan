@@ -186,6 +186,7 @@ describe('local sim run physics snapshots', () => {
     expect(record.config.assetPhysics?.room).toMatchObject({ lightingW: 40, waterStoreL: 200 });
     expect(record.config.climateModel).toBe('environment-v1');
     expect(record.config.climateEquipment?.lightingW).toBe(40);
+    expect(record.config.cropModelVersion).toBe('crop-model-v1');
     expect(record.config.modelInputs).toMatchObject({
       model: 'run-inputs-v1',
       soil: { awcMmPerCm: 1.7, organicMatterPct: 3.4 },
