@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-CEA-TRANSPIRATION-WET-DRY-SYNTHETIC-01",
+  "status": "preregistered synthetic software-integration fixture; validator tolerance review requested; implementation and comparison not run",
+  "sources": [
+    {
+      "evidenceId": "FAO-56-1998-CHAPTER-8",
+      "citation": "Allen, R.G., Pereira, L.S., Raes, D. and Smith, M. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Equations 80, 81 and 84.",
+      "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+      "use": "Equation 81 supports the single-crop-coefficient approximation ETc_adj = Ks × Kc × ETo when soil evaporation is not a large ET component. Equation 84 defines Ks from root-zone depletion, TAW and RAW."
+    },
+    {
+      "evidenceId": "VANTHOOR-2011-GREENHOUSE-CLIMATE-PART-1",
+      "citation": "Vanthoor, B.H.E., Stanghellini, C., van Henten, E.J. and de Visser, P.H.B. (2011), A methodology for model-based greenhouse design: Part 1, a greenhouse climate model for a broad range of designs and climates, Biosystems Engineering 110(4), 363–377.",
+      "url": "https://doi.org/10.1016/j.biosystemseng.2011.06.001",
+      "use": "Primary reference for representing crop transpiration as an input to greenhouse air temperature and vapour-pressure dynamics. FarmFriend's existing environment solver remains a daily steady-state approximation and is not validated by this fixture."
+    }
+  ],
+  "fixtureClassification": "synthetic software invariant only; not greenhouse calibration, measured comparison, reference-model agreement, or crop prediction",
+  "modelDispatch": {
+    "cropModelVersion": "crop-model-v4",
+    "climateModelVersion": "environment-v2",
+    "environmentModelInputsVersion": "environment-inputs-v2",
+    "historicalRule": "crop-model-v4 with environment-v1 retains its committed lagged-potential climate behavior; environment-v2 is a separately versioned, frozen-input path",
+    "newRunRule": "ordinary new-run creation remains crop-model-v1/environment-v1 until the applicable acceptance gates pass"
+  },
+  "frozenSyntheticInputs": {
+    "environmentArchetype": "greenhouse-glass",
+    "environmentWidthM": 10,
+    "environmentDepthM": 10,
+    "environmentLayout": "open greenhouse layout with no placed equipment or crop-plane overlap",
+    "frozenEnvironmentArchetypeInputs": {
+      "kind": "protected",
+      "defaultFootprintM": [8, 6],
+      "defaultUsableHeightM": 2.9,
+      "coverTransmission": 0.7,
+      "uValueWm2K": 4,
+      "achInfiltration": 1,
+      "achVented": 20,
+      "volumePerM2": 2.9,
+      "maxDliMol": 45,
+      "dliMode": "natural+supplement",
+      "rainEnters": false,
+      "etFactor": 0.85,
+      "setpoints": { "heatC": 12, "coolC": 28, "rhMaxPct": 85, "photoperiodH": 0 }
+    },
+    "frozenClimateDefaults": { "outdoorRhPct": 60, "outdoorCo2Ppm": 420 },
+    "climateEquipment": "all capacities zero; no equipment is installed",
+    "basePlanCellM": 0.5,
+    "plantedCells": ["0,0", "1,0"],
+    "plantedCellAreaM2": 0.25,
+    "totalPlantedAreaM2": 0.5,
+    "dailyOutdoorEtoMm": 2,
+    "dailyOutdoorTemperatureC": [15, 20],
+    "dailyDliMolParM2": 0,
+    "precipitationMm": 0,
+    "irrigationMmPerCell": 0,
+    "runoffMm": 0,
+    "rootGrowthStorageMm": 0,
+    "rootZone": {
+      "awcMmPerCm": 1.5,
+      "effectiveRootDepthCm": 20,
+      "totalAvailableWaterMm": 30,
+      "depletionFraction": 0.5,
+      "readilyAvailableWaterMm": 15,
+      "cropCoefficient": 1,
+      "wetInitialStorageMmPerCell": 30,
+      "dryInitialStorageMmPerCell": 7.5,
+      "wetInitialDepletionMmPerCell": 0,
+      "dryInitialDepletionMmPerCell": 22.5,
+      "wetExpectedKs": 1,
+      "dryExpectedKs": 0.5
+    },
+    "establishment": "both cells already established before the tick; no germination, emergence or establishment flux is under test",
+    "humidityDomain": "synthetic non-saturating greenhouse day; both expected RH outputs must remain below 100%"
+  },
+  "equations": {
+    "dailyPotentialTranspirationPerCellMm": "outdoor ETo (mm/day) × previous-day environment ET factor (dimensionless) × frozen Kc (dimensionless)",
+    "dailyActualTranspirationPerCellMm": "min(available root-zone water after declared boundary inputs, daily potential transpiration × current FAO-56 Ks)",
+    "rootZoneStorageChangePerCellMm": "inflows - runoff - deep drainage - actual transpiration; use unrounded internal values",
+    "wholeEnvironmentTranspirationKgDay": "sum over crop cells(actual transpiration mm/cell/day × cell area m² × 1 kg water/(mm·m²))",
+    "singleUseConstraint": "The same per-cell actual-transpiration value is debited once from root-zone storage and converted once into the whole-environment water-vapour source. Do not multiply by Ks or Kc again in either path.",
+    "lagAndTemperatureOrdering": "Use the previous day's frozen room ET factor for today's potential ET to avoid a same-day atmosphere-water algebraic loop. Use the previous day's room temperatures for today's dynamic root-development increment; when no prior room state exists, use the frozen outdoor temperatures. The resulting current room state affects tomorrow's potential ET and root-development temperature driver.",
+    "environmentV1Preservation": "This lagged, water-limited flux rule applies only to environment-v2. Existing environment-v1 replay equations are unchanged."
+  },
+  "acceptanceChecks": {
+    "fao56KsArithmetic": "Wet Ks equals 1; dry Ks equals 0.5 for the frozen TAW, p and initial storage values.",
+    "rootZoneToAirFlux": "For each treatment, summed root-zone water loss in mm×m² equals environment transpiration input in kg/day within the preregistered 1e-12 numerical conversion tolerance.",
+    "noDoubleStressOrCoefficient": "Actual transpiration is ETo×previousEtFactor×Kc×Ks once; no second Ks/Kc multiplier is applied to its air input or root-zone debit.",
+    "wetDryDirection": "Wet treatment actual transpiration exceeds dry treatment actual transpiration, wet room RH exceeds dry room RH, and both room RH values remain below saturation.",
+    "zeroLightAndCanopy": "Known zero DLI yields exactly zero production; canopy and harvestable DM pools remain unchanged in both treatments.",
+    "waterBalance": "Each per-cell daily FAO-56 residual remains within the previously reviewed ≤1e-6 mm/cell-day closure tolerance; no storage reaches the 0 mm floor in this fixture.",
+    "candidateComparison": false,
+    "measuredOutputComparison": false
+  },
+  "toleranceReview": {
+    "status": "requested; no comparison authorized until independent review",
+    "requestedScope": "FAO-56 Ks arithmetic, one-use per-cell transpiration, mm×m² to kg/day conversion, fixed-point avoidance through explicit one-day lag, root-zone residual, and wet/dry directional climate response only",
+    "proposedTolerances": {
+      "KsArithmetic": "≤1e-12 dimensionless absolute deviation",
+      "waterToAirFlux": "≤1e-12 kg/day absolute deviation after summing unrounded per-cell mm×m²",
+      "rootZoneResidual": "≤1e-6 mm/cell-day, existing reviewed allowance",
+      "climateDirection": "strict inequalities only; not an RH accuracy band"
+    },
+    "reviewedBy": null,
+    "reviewedDate": null
+  },
+  "implementationStatus": "not implemented; no reducer fixture comparison run"
+}
