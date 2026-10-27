@@ -236,6 +236,7 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
             ? ['Without an environment-v1 climate state, enclosed natural DLI uses frozen calibration cover transmission when present, otherwise the archetype default; only explicitly frozen target lighting is included.']
             : []),
           'Thermal accumulation starts on the frozen plantedAt day; separate sowing/transplant event acceptance remains outstanding.',
+          'Crop root-zone and enclosure transpiration stop at the frozen source maturity endpoint or harvest; v1 postharvest behavior is preserved.',
           ...soilQualificationReasons(inputs.soil),
         ],
       };

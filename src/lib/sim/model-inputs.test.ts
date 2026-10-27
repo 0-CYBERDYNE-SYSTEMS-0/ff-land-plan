@@ -669,6 +669,84 @@ describe('frozen crop model inputs and replay support', () => {
     }
   });
 
+  it('stops v2 root-zone and enclosure transpiration after harvest while v1 remains unchanged', () => {
+    const lettuce = cropLibrary.find((crop) => crop.id === 2)!;
+    const environment = {
+      id: 'env:1:postharvest-flux',
+      farmId: 1,
+      archetype: 'greenhouse-glass' as const,
+      label: 'Greenhouse',
+      x: 0,
+      y: 0,
+      widthM: 2,
+      heightM: 2,
+      cellM: 0.25,
+    };
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      climateModel: 'environment-v1',
+      climateEquipment: NO_CLIMATE_EQUIPMENT,
+      environment,
+      autoHarvest: false,
+      basePlan: { ...config().basePlan, planting: { '0,0': lettuce.id } },
+    });
+    const modelInputs = freezeRunModelInputsV2(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [lettuce],
+      cropParametersV2: [lettuceSourceParameterFixture()],
+    });
+    const frozenRun = { ...run, modelInputs };
+    const climateDay = {
+      date: '2026-10-01',
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 2,
+      dliNaturalMol: 18,
+      gddBase10C: 15,
+      provenance: { tMinC: 'default' as const, tMaxC: 'default' as const, precipMm: 'default' as const, etoMm: 'default' as const, dliNaturalMol: 'default' as const },
+    };
+    const planted = createRun(frozenRun);
+    planted.cells['0,0'] = {
+      ...planted.cells['0,0']!,
+      biomassFrac: 0.8,
+      dryMatterGPerM2: 100,
+    };
+    const preHarvest = stepDay(structuredClone(planted), climateDay, frozenRun);
+    const harvestRun = {
+      ...frozenRun,
+      interventions: [{ kind: 'harvest' as const, date: climateDay.date, cell: '0,0' }],
+    };
+    const postHarvest = stepDay(structuredClone(planted), climateDay, harvestRun);
+    const emptyRun = {
+      ...frozenRun,
+      basePlan: { ...frozenRun.basePlan, planting: {} },
+    };
+    const emptyWorld = stepDay(createRun(emptyRun), climateDay, emptyRun);
+
+    const legacyRun = { ...run, cropModelVersion: 'crop-model-v1' as const };
+    const legacyModelInputs = freezeRunModelInputs(legacyRun, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [lettuce],
+    });
+    const legacyHarvestRun = {
+      ...legacyRun,
+      modelInputs: legacyModelInputs,
+      interventions: [{ kind: 'harvest' as const, date: climateDay.date, cell: '0,0' }],
+    };
+    const legacyPlanted = createRun(legacyHarvestRun);
+    legacyPlanted.cells['0,0'] = { ...legacyPlanted.cells['0,0']!, biomassFrac: 0.8 };
+    const legacyPostHarvest = stepDay(legacyPlanted, climateDay, legacyHarvestRun);
+
+    expect(preHarvest.dayStats.waterUseMm).toBeGreaterThan(0);
+    expect(postHarvest.state.cells['0,0']?.harvested).toBe(true);
+    expect(postHarvest.dayStats.waterUseMm).toBe(0);
+    expect(postHarvest.state.cells['0,0']?.rootZoneWaterMm).toBe(planted.cells['0,0']?.rootZoneWaterMm);
+    expect(postHarvest.state.climate).toEqual(emptyWorld.state.climate);
+    expect(legacyPostHarvest.state.cells['0,0']?.harvested).toBe(true);
+    expect(legacyPostHarvest.dayStats.waterUseMm).toBeGreaterThan(0);
+  });
+
   it('rejects an unknown persisted model version without attempting replay', () => {
     const support = inspectRunModelSupport({ ...config(), cropModelVersion: 'crop-model-v3' as never });
     expect(support).toMatchObject({ model: 'unknown', status: 'unsupported', canReplay: false });

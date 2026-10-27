@@ -254,7 +254,8 @@ function climateInputsFor(
   let transpirationKgDay = 0;
   let leafAreaM2 = 0;
   for (const cell of Object.values(cells)) {
-    if (config.cropModelVersion === 'crop-model-v2' && state.dayIndex < cell.plantedAtDay) continue;
+    if (config.cropModelVersion === 'crop-model-v2'
+      && (state.dayIndex < cell.plantedAtDay || cell.biomassFrac >= 1 || cell.harvested)) continue;
     const crop = crops.get(cell.cropId);
     if (!crop) continue;
     if (config.cropModelVersion === 'crop-model-v2') {
@@ -875,7 +876,8 @@ export function stepDay(
   for (const key of Object.keys(cells)) {
     const prev = cells[key]!;
     const crop = crops.get(prev.cropId);
-    const growing = crop !== undefined && dayIndex >= prev.plantedAtDay;
+    const inGround = crop !== undefined && dayIndex >= prev.plantedAtDay;
+    const growing = inGround && (!isV2 || (prev.biomassFrac < 1 && !prev.harvested));
     const hydro = hydroCellsForRun(config, key);
     const target = parseTargetCellKey(key).target;
     const carry = hydro.required ? undefined : carryForTarget(config, ctx, target);
@@ -900,7 +902,7 @@ export function stepDay(
       }
       const root = modelParameters.rootZone;
       let rootGrowthStorageMm = 0;
-      if (root.rootDevelopment && growing && prev.biomassFrac < 1 && !prev.harvested) {
+      if (root.rootDevelopment && growing) {
         const development = root.rootDevelopment;
         const rootThermalToday = dailyThermalUnits(env2.tMinC, env2.tMaxC, {
           tBaseC: development.thermalBaseC,
