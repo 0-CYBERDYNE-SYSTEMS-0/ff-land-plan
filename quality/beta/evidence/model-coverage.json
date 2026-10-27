@@ -3157,7 +3157,7 @@
       {
         "id": "water-sa-v4-dynamic-canopy-engine-integration",
         "tolerance": "equation/output deviation ≤1e-12; exact total DM = canopy DM + harvestable DM; unrounded per-day DM closure residual ≤1e-12 g/m²/day",
-        "status": "independently reviewed synthetic arithmetic, closure, known-zero and unknown-light checks; locally verified; no predictive comparison authorized",
+        "status": "independently reviewed synthetic arithmetic, closure, known-zero and unknown-light checks; local gates and exact-head PR CI passed on eb940aa (run 40601160981); no predictive comparison authorized",
         "scope": "Synthetic v4 isolated production integration only: g/m²-to-kg/m² canopy conversion, LAI/FI_PAR, DLI/4.5 to intercepted PAR, net-RUE arithmetic, known-zero no-gain, unknown-light no-change with unsupported daily qualification, and unrounded two-pool balance. Synthetic weather, DLI and GDD plus soil N, root storage, no-neighbor and pest-driver inputs keep reducer stress at 1; water/climate fluxes are zero. No climate integration, measured or candidate comparison",
         "evidence": "quality/beta/evidence/water-sa-2018-dynamic-canopy-engine-fixture.json"
       },
