@@ -1,0 +1,2130 @@
+{
+  "schemaVersion": 1,
+  "preparedDate": "2026-10-27",
+  "status": "baseline-before-retuning; candidate comparisons not run",
+  "evidencePolicy": {
+    "primarySourcesPreferred": true,
+    "measuredAccuracyClaimRequires": [
+      "independent measured data",
+      "identified crop and cultivar/domain",
+      "sample size",
+      "complete model-driving inputs",
+      "held-out error",
+      "reproducible source fixture id"
+    ],
+    "missingInformationRule": "Record unavailable data and retain UNVERIFIED; do not impute it or promote reference-model agreement to measured validation.",
+    "artifactStorage": "Source PDFs/HTML snapshots remain in scratch acquisition storage; manifest records SHA-256 and source link. No source article is redistributed in this repository."
+  },
+  "modelDecision": {
+    "record": "quality/beta/02A-MODEL-DECISION.md",
+    "selectedProductionFamily": "LINTUL-family intercepted PAR × net RUE; crop parameters remain UNVERIFIED until source-backed",
+    "selectedSoilWaterMethod": "FAO-56 root-zone balance within explicitly supported soil domain",
+    "noFrameworkCodeCopied": true
+  },
+  "sources": [
+    {
+      "id": "OSU-EM9305-2021",
+      "citation": "Andrews et al., Oregon State University Extension EM 9305, Vegetable Degree-Day Models: An Introduction for Farmers and Gardeners, Jan. 2021 edition.",
+      "url": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "PDF",
+        "sha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+        "localPath": null
+      },
+      "licenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction.",
+      "sourceVersion": "EM 9305, January 2021 PDF"
+    },
+    {
+      "id": "MICHELON-2020-AGR-10-668",
+      "citation": "Michelon et al. (2020), Strategies for Improved Water Use Efficiency (WUE) of Field-Grown Lettuce, Agronomy 10(5), 668.",
+      "url": "https://doi.org/10.3390/agronomy10050668",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "version-of-record PDF",
+        "sha256": "f07bf16a1854cd9ec9aa1000dd61eb6653d0376a53db8923463dbae78df8c317",
+        "localPath": null
+      },
+      "licenseOrReuse": "CC BY 4.0, as stated by the publisher; cite the article and retain a source link.",
+      "sourceVersion": "2020 Agronomy 10(5), article 668; version of record"
+    },
+    {
+      "id": "ISENBERG-1975-JASHS-100-313",
+      "citation": "Isenberg et al. (1975), The Use of Weight, Density, Heat Units, and Solar Radiation to Predict the Maturity of Cabbage for Storage, Journal of the American Society for Horticultural Science 100(3), 313–316.",
+      "url": "https://doi.org/10.21273/JASHS.100.3.313",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "PDF",
+        "sha256": "0bbe44864df88faedb9abb22877b237223c500368a6d25eadf4bacd018d0a8f6",
+        "localPath": null
+      },
+      "licenseOrReuse": "No open license identified in the article artifact; cite and retain only derived parameter values, with no text/code reproduction.",
+      "sourceVersion": "1975 JASHS 100(3), pages 313–316; retrieved PDF begins at article page 313"
+    },
+    {
+      "id": "UC-IPM-SWEET-CORN",
+      "citation": "UC Statewide Integrated Pest Management Program, Sweet corn phenology model page, citing Coop, Croft & Drapek (1993).",
+      "url": "https://ipm.ucanr.edu/weather/phenology-models-description/sweet-corn/",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "HTML snapshot",
+        "sha256": "3fa493befb33dfa864b7f254a289acff440f407cd84f5aad5719d25ba6dd5e28",
+        "localPath": null
+      },
+      "licenseOrReuse": "Page copyright/reuse terms apply; cite only the derived method and threshold; no page content copied.",
+      "sourceVersion": "UC IPM page updated 2026-04; page cites Coop, Croft & Drapek (1993)"
+    },
+    {
+      "id": "FAO-56-1998",
+      "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56.",
+      "url": "https://www.fao.org/4/x0490e/x0490e00.htm",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "FAO publication; cited as method reference, no code or substantial text copied."
+    },
+    {
+      "id": "SPITTERS-1990-LINTUL",
+      "citation": "Spitters (1990), Crop growth models: their usefulness and limitations, Acta Horticulturae 267, 349–368.",
+      "url": "https://doi.org/10.17660/ActaHortic.1990.267.42",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "Cited as method reference; no code or substantial text copied."
+    },
+    {
+      "id": "SPITTERS-1988-POTATO",
+      "citation": "Spitters (1988), An analysis of variation in yield among potato cultivars in terms of light absorption, light utilization and dry matter partitioning, Acta Horticulturae 214, 71–84.",
+      "url": "https://doi.org/10.17660/ActaHortic.1988.214.5",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "Cited as method reference; no code or substantial text copied."
+    },
+    {
+      "id": "FAO-AQUACROP-SCHEME",
+      "citation": "FAO, AquaCrop calculation scheme.",
+      "url": "https://www.fao.org/aquacrop/overview/calculation-scheme/",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "Cited for structural comparison; no code or text copied."
+    },
+    {
+      "id": "AQUACROP-OSPY-2021",
+      "citation": "Foster et al. (2021), AquaCrop-OSPy: An open-source Python implementation of FAO AquaCrop, Agricultural Water Management 257, 106976.",
+      "url": "https://doi.org/10.1016/j.agwat.2021.106976",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "OSPy implementation is Apache-2.0; no implementation code copied."
+    },
+    {
+      "id": "WOFOST-2018-REVIEW",
+      "citation": "de Wit et al. (2019), 25 years of the WOFOST cropping systems model, Agricultural Systems 168, 154–167.",
+      "url": "https://doi.org/10.1016/j.agsy.2018.06.018",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "Cited as model-architecture reference; no code copied."
+    },
+    {
+      "id": "PCSE-DOCS",
+      "citation": "Python Crop Simulation Environment documentation.",
+      "url": "https://pcse.readthedocs.io/en/develop/",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "PCSE is EUPL-1.1-or-later; no code copied."
+    },
+    {
+      "id": "DSSAT-CSM-2003",
+      "citation": "Jones et al. (2003), The DSSAT cropping system model, European Journal of Agronomy 18(3–4), 235–265.",
+      "url": "https://doi.org/10.1016/S1161-0301(02)00107-7",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "Method reference only; repository identifies BSD-3-Clause; no code copied."
+    },
+    {
+      "id": "APSIM-X-LICENSE",
+      "citation": "APSIM Next Generation official repository and license.",
+      "url": "https://github.com/APSIMInitiative/ApsimX/blob/master/LICENSE.md",
+      "retrievedDate": "2026-10-27",
+      "artifact": null,
+      "licenseOrReuse": "Custom General Use License; separate commercial-use terms; architectural reference only, no code copied."
+    },
+    {
+      "id": "OSU-EM9305-CROPTIME-ACCURACY",
+      "citation": "Oregon State University Extension EM 9305 Croptime development and evaluation material.",
+      "url": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": "PDF",
+        "sha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+        "localPath": null
+      },
+      "licenseOrReuse": "Same artifact as OSU-EM9305-2021; errors reported on development data are not independent holdout evidence."
+    },
+    {
+      "id": "PEA-THERMAL-TIME-1998",
+      "citation": "Thermal time requirements for the development of green pea (Pisum sativum L.) (1998), Field Crops Research 56(3), 301–307.",
+      "url": "https://doi.org/10.1016/S0378-4290(97)00097-X",
+      "retrievedDate": "2026-10-27",
+      "artifact": {
+        "type": null,
+        "sha256": null,
+        "localPath": null,
+        "status": "not acquired; citation/transcription not independently verified"
+      },
+      "licenseOrReuse": "Citation metadata only in this inventory; source table was not retained as a local artifact and has not been independently transcribed.",
+      "sourceLicense": "Journal/article license was not verified; citation metadata only; no content reproduced.",
+      "sourceVersion": "1998 Field Crops Research 56(3), pages 301–307; citation metadata only, artifact not acquired"
+    }
+  ],
+  "evidenceRecords": [
+    {
+      "id": "THERMAL-OSU-TOMATO-FIRST-RIPE",
+      "sourceId": "OSU-EM9305-2021",
+      "classification": "parameter-reference / model-development",
+      "crop": {
+        "slug": "tomato",
+        "cultivar": "four named cultivars; source range only"
+      },
+      "environment": "Oregon Extension crop model domain; detailed per-run weather unavailable in retrieved source artifact",
+      "inputs": {
+        "baseC": 7.2,
+        "upperC": 33.3,
+        "sourceRangeFday": [
+          1844,
+          2010
+        ],
+        "convertedRangeCday": [
+          1024,
+          1117
+        ]
+      },
+      "endpoint": "first ripe harvest, four or more fruits showing ripe color",
+      "metric": "thermal sum",
+      "expected": "1024–1117 °C·day after source conversion",
+      "sampleSize": "four cultivar values",
+      "status": "parameter reference only; not an executable fixture; not independent validation",
+      "missing": [
+        "daily weather series",
+        "per-cultivar trial observations and errors"
+      ],
+      "calibrationOrHoldout": "development/reference; not holdout",
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalRange": "°F·day",
+        "convertedThermalRange": "°C·day"
+      },
+      "startEvent": "Transplant at 3–5 true leaves",
+      "endEvent": "First ripe harvest (four or more fruits show ripe color)",
+      "validDomain": "Named OSU Croptime tomato cultivar values and transplant method; regional use outside the source domain is unverified.",
+      "expectedMetricRange": {
+        "min": 1024,
+        "max": 1117,
+        "unit": "°C·day"
+      },
+      "sourceMethod": "EM 9305 Table 6; single sine with horizontal cutoff",
+      "missingData": [
+        "complete daily weather/input series",
+        "raw independent observations and variance",
+        "independent validation records"
+      ],
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    },
+    {
+      "id": "THERMAL-OSU-LETTUCE-TRANSPLANT-HARVEST",
+      "sourceId": "MICHELON-2020-AGR-10-668",
+      "classification": "measured-field-observation / candidate-holdout",
+      "crop": {
+        "slug": "lettuce",
+        "cultivar": "HS50"
+      },
+      "environment": "Myanmar field experiment 1; DLI 17.0 mol m-2 day-1",
+      "inputs": {
+        "transplantDate": "2018-12-28",
+        "GDDbaseC": 4,
+        "GDDsumCday": 662,
+        "irrigationTreatment": "HS50; reported seasonal water 65.2 mm"
+      },
+      "endpoint": "31 days after transplant; marketable harvest",
+      "metric": "fresh and dry mass per plant; area yield",
+      "expected": {
+        "freshMassGPerPlant": 146,
+        "dryMassGPerPlant": 14,
+        "marketableYieldKgM2": 1.9
+      },
+      "sampleSize": "three replicate plots; 12 harvested plants per plot (article method)",
+      "status": "measured observation; potential holdout, not executable until daily weather and plot inputs are available",
+      "missing": [
+        "daily weather/light series",
+        "complete soil/root-zone inputs",
+        "raw replicate measurements and variance"
+      ],
+      "calibrationOrHoldout": "candidate holdout; no fitting to this record permitted",
+      "units": {
+        "airTemperature": "°C",
+        "DLI": "mol PAR m⁻² day⁻¹",
+        "seasonalIrrigation": "mm",
+        "thermalSum": "°C·day",
+        "plantFreshMass": "g/plant",
+        "plantDryMass": "g/plant",
+        "marketableYield": "kg/m²"
+      },
+      "startEvent": "Transplanting; source thermal accumulation begins at transplant",
+      "endEvent": "Harvest 31 days after transplant in experiment 1",
+      "validDomain": "One field experiment in the Central Dry Zone of Myanmar (Yezin), cultivar HS50, experiment-1 weather/treatment; no generalization beyond these conditions.",
+      "expectedMetricRange": {
+        "plantFreshMass": {
+          "value": 146,
+          "unit": "g/plant"
+        },
+        "plantDryMass": {
+          "value": 14,
+          "unit": "g/plant"
+        },
+        "marketableYield": {
+          "value": 1.9,
+          "unit": "kg/m²"
+        }
+      },
+      "sourceMethod": "Published field study; GDD base 4 °C; HS50 irrigation treatment",
+      "missingData": [
+        "daily weather/light time series",
+        "complete soil/root-zone state and inputs",
+        "raw replicate measurements and variance"
+      ],
+      "sourceUrl": "https://doi.org/10.3390/agronomy10050668",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "2020 Agronomy 10(5), article 668; version of record",
+      "sourceArtifactSha256": "f07bf16a1854cd9ec9aa1000dd61eb6653d0376a53db8923463dbae78df8c317",
+      "sourceLicenseOrReuse": "CC BY 4.0, as stated by the publisher; cite the article and retain a source link."
+    },
+    {
+      "id": "THERMAL-CABBAGE-STORAGE-MATURITY",
+      "sourceId": "ISENBERG-1975-JASHS-100-313",
+      "classification": "measured-study / parameter-reference",
+      "crop": {
+        "slug": "cabbage",
+        "cultivar": "four cultivars plus breeding lines"
+      },
+      "environment": "storage cabbage; two growing seasons; source-specific experiment",
+      "inputs": {
+        "baseC": 10,
+        "thermalRangeCday": [
+          1000,
+          1050
+        ]
+      },
+      "endpoint": "storage maturity; source uses head density and harvest measures",
+      "metric": "thermal sum with weight/density/sunlight context",
+      "expected": "1000–1050 °C·day reference range",
+      "sampleSize": "four cultivars plus lines across two seasons; exact unit count not transcribed",
+      "status": "parameter reference only; existing thermal table already uses this evidence, so not a holdout",
+      "missing": [
+        "complete daily weather and radiation",
+        "raw cultivar-level observations",
+        "replicate variance"
+      ],
+      "calibrationOrHoldout": "reference/calibration source; not holdout",
+      "units": {
+        "baseTemperature": "°C",
+        "thermalSum": "°C·day",
+        "headDensity": "g/cm³",
+        "headWeight": "kg"
+      },
+      "startEvent": "Direct seeding or transplanting; source treatment-specific date",
+      "endEvent": "Storage cabbage maturity at head density 0.72–0.80 and weight 2.2–3.0 kg",
+      "validDomain": "Storage cabbage at Cornell field experiments in 1970 and 1973; the paper reports cultivar and weather-dependent variation.",
+      "expectedMetricRange": {
+        "thermalSum": {
+          "min": 1000,
+          "max": 1050,
+          "unit": "°C·day"
+        },
+        "headDensity": {
+          "min": 0.72,
+          "max": 0.8,
+          "unit": "g/cm³"
+        },
+        "headWeight": {
+          "min": 2.2,
+          "max": 3,
+          "unit": "kg"
+        }
+      },
+      "sourceMethod": "Published two-season study; heat units base 10 °C and solar radiation also considered",
+      "missingData": [
+        "complete daily weather and radiation",
+        "raw cultivar-level observations",
+        "replicate-level error"
+      ],
+      "sourceUrl": "https://doi.org/10.21273/JASHS.100.3.313",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "1975 JASHS 100(3), pages 313–316; retrieved PDF begins at article page 313",
+      "sourceArtifactSha256": "0bbe44864df88faedb9abb22877b237223c500368a6d25eadf4bacd018d0a8f6",
+      "sourceLicenseOrReuse": "No open license identified in the article artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    },
+    {
+      "id": "THERMAL-UCIPM-SWEET-CORN-FRESH-MARKET",
+      "sourceId": "UC-IPM-SWEET-CORN",
+      "classification": "published-method-reference",
+      "crop": {
+        "slug": "corn",
+        "cultivar": "fresh-market sweet corn model domain; cultivars not enumerated in the page"
+      },
+      "environment": "UC IPM phenology model domain",
+      "inputs": {
+        "baseC": 10,
+        "upperC": 30,
+        "totalCday": 855
+      },
+      "endpoint": "mature for fresh market",
+      "metric": "thermal sum",
+      "expected": "855 °C·day; source says its specific single-sine method is preferred",
+      "sampleSize": "not reported on page",
+      "status": "method reference only; no executable measured fixture",
+      "missing": [
+        "cultivar identities",
+        "daily weather",
+        "trial observations and error"
+      ],
+      "calibrationOrHoldout": "reference; not holdout",
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalSum": "°F·day",
+        "thermalSum": "°C·day"
+      },
+      "startEvent": "Planting (biofix)",
+      "endEvent": "Mature for fresh market",
+      "validDomain": "Western Oregon field-study model domain for sweet corn; the source advises local field testing before use elsewhere.",
+      "expectedMetricRange": {
+        "value": 855,
+        "unit": "°C·day"
+      },
+      "sourceMethod": "Source reports max–min; UC IPM recommends single sine and horizontal cutoff; keep these method details distinct.",
+      "missingData": [
+        "cultivar identities and field-level outcomes",
+        "daily weather",
+        "replicate/error data"
+      ],
+      "sourceUrl": "https://ipm.ucanr.edu/weather/phenology-models-description/sweet-corn/",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "UC IPM page updated 2026-04; page cites Coop, Croft & Drapek (1993)",
+      "sourceArtifactSha256": "3fa493befb33dfa864b7f254a289acff440f407cd84f5aad5719d25ba6dd5e28",
+      "sourceLicenseOrReuse": "Page copyright/reuse terms apply; cite only the derived method and threshold; no page content copied."
+    },
+    {
+      "id": "THERMAL-PEA-GREEN-MATURITY",
+      "sourceId": "PEA-THERMAL-TIME-1998",
+      "classification": "literature-parameter-reference / transcription-unverified",
+      "crop": {
+        "slug": "pea",
+        "cultivar": "study-specific green pea; cultivar not transcribed"
+      },
+      "environment": "source study domain unavailable in retained artifact",
+      "inputs": {
+        "baseC": 2.9,
+        "sourceRangeCday": [
+          1370,
+          1450
+        ]
+      },
+      "endpoint": "tenderometer reading 130",
+      "metric": "thermal sum",
+      "expected": "1370–1450 °C·day as represented in existing table",
+      "sampleSize": "not verified",
+      "status": "citation-only; source artifact and exact transcription unverified; do not use as executable fixture",
+      "missing": [
+        "source artifact",
+        "cultivar details",
+        "weather series",
+        "replicate observations and errors"
+      ],
+      "calibrationOrHoldout": "reference only; not holdout",
+      "units": {
+        "baseTemperature": "°C",
+        "thermalSum": "°C·day",
+        "endpointReading": "tenderometer units"
+      },
+      "startEvent": "Sowing",
+      "endEvent": "Green-pea maturity at tenderometer reading 130",
+      "validDomain": "Unverified until original paper is retrieved and its environment/cultivar/thermal method are checked.",
+      "expectedMetricRange": {
+        "min": 1370,
+        "max": 1450,
+        "unit": "°C·day"
+      },
+      "sourceMethod": "Unverified citation/transcription represented by current thermal table; do not treat as an executable parameter.",
+      "missingData": [
+        "source artifact and exact table transcription",
+        "cultivar/environment",
+        "weather and thermal calculation method",
+        "replicate/error data"
+      ],
+      "sourceUrl": "https://doi.org/10.1016/S0378-4290(97)00097-X",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceVersion": "1998 Field Crops Research 56(3), pages 301–307; citation metadata only, artifact not acquired",
+      "sourceArtifactSha256": null,
+      "sourceLicenseOrReuse": "Citation metadata only in this inventory; source table was not retained as a local artifact and has not been independently transcribed."
+    },
+    {
+      "id": "THERMAL-OSU-PEPPER-FIRST-RIPE",
+      "sourceId": "OSU-EM9305-2021",
+      "classification": "parameter-reference / model-development data",
+      "crop": {
+        "slug": "pepper",
+        "cultivar": "four named sweet pepper cultivars; source range only"
+      },
+      "environment": "OSU Croptime source domain; most source data were collected in the Willamette Valley in 2013–2015.",
+      "inputs": {
+        "baseTemperatureC": 11.1,
+        "upperTemperatureC": 37.8,
+        "sourceThermalRangeFday": [
+          1682,
+          1998
+        ],
+        "convertedThermalRangeCday": [
+          934,
+          1110
+        ],
+        "method": "single sine with horizontal cutoff"
+      },
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalRange": "°F·day",
+        "convertedThermalRange": "°C·day"
+      },
+      "sourceMethod": "EM 9305 Table 5 sweet pepper; single sine with horizontal cutoff",
+      "startEvent": "Transplant at 4–7 true leaves",
+      "endEvent": "First ripe harvest (four or more fruits show ripe color)",
+      "metric": "thermal sum to the stated development endpoint",
+      "expectedMetricRange": {
+        "min": 934,
+        "max": 1110,
+        "unit": "°C·day"
+      },
+      "sampleSize": "four cultivar values",
+      "validDomain": "Named OSU Croptime crop/cultivar and transplant or direct-seed method; regional use outside the source domain is unverified.",
+      "status": "parameter reference only; not an executable fixture and not independent validation",
+      "missingData": [
+        "complete daily weather/input series",
+        "raw independent observations and variance",
+        "independent validation records"
+      ],
+      "calibrationOrHoldout": "model-development/reference; not holdout",
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    },
+    {
+      "id": "THERMAL-OSU-BROCCOLI-FIRST-HARVEST",
+      "sourceId": "OSU-EM9305-2021",
+      "classification": "parameter-reference / model-development data",
+      "crop": {
+        "slug": "broccoli",
+        "cultivar": "Arcadia, Emerald Pride, Green Magic, Imperial"
+      },
+      "environment": "OSU Croptime source domain; most source data were collected in the Willamette Valley in 2013–2015.",
+      "inputs": {
+        "baseTemperatureC": 0,
+        "upperTemperatureC": 21.1,
+        "sourceThermalRangeFday": [
+          2103,
+          2383
+        ],
+        "convertedThermalRangeCday": [
+          1168,
+          1324
+        ],
+        "method": "single sine with horizontal cutoff"
+      },
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalRange": "°F·day",
+        "convertedThermalRange": "°C·day"
+      },
+      "sourceMethod": "EM 9305 Table 1 transplanted broccoli; single sine with horizontal cutoff",
+      "startEvent": "Transplant at 2–4 true leaves",
+      "endEvent": "First harvest at approximately 6-inch head diameter",
+      "metric": "thermal sum to the stated development endpoint",
+      "expectedMetricRange": {
+        "min": 1168,
+        "max": 1324,
+        "unit": "°C·day"
+      },
+      "sampleSize": "four cultivars; source has one planting-location dataset per named data set",
+      "validDomain": "Named OSU Croptime crop/cultivar and transplant or direct-seed method; regional use outside the source domain is unverified.",
+      "status": "parameter reference only; not an executable fixture and not independent validation",
+      "missingData": [
+        "complete daily weather/input series",
+        "raw independent observations and variance",
+        "independent validation records"
+      ],
+      "calibrationOrHoldout": "model-development/reference; not holdout",
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    },
+    {
+      "id": "THERMAL-OSU-CUCUMBER-FIRST-HARVEST",
+      "sourceId": "OSU-EM9305-2021",
+      "classification": "parameter-reference / model-development data",
+      "crop": {
+        "slug": "cucumber",
+        "cultivar": "direct-seeded and transplanted varieties; source range only"
+      },
+      "environment": "OSU Croptime source domain; most source data were collected in the Willamette Valley in 2013–2015.",
+      "inputs": {
+        "baseTemperatureC": 10,
+        "upperTemperatureC": 32.2,
+        "sourceThermalRangeFday": [
+          805,
+          1211
+        ],
+        "convertedThermalRangeCday": [
+          447,
+          673
+        ],
+        "method": "single sine with horizontal cutoff"
+      },
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalRange": "°F·day",
+        "convertedThermalRange": "°C·day"
+      },
+      "sourceMethod": "EM 9305 Table 2 cucumber; single sine with horizontal cutoff",
+      "startEvent": "Direct seeding or transplanting at 2 true leaves",
+      "endEvent": "First harvest at market size",
+      "metric": "thermal sum to the stated development endpoint",
+      "expectedMetricRange": {
+        "min": 447,
+        "max": 673,
+        "unit": "°C·day"
+      },
+      "sampleSize": "source cultivar/method values; exact count not carried into current thermal table",
+      "validDomain": "Named OSU Croptime crop/cultivar and transplant or direct-seed method; regional use outside the source domain is unverified.",
+      "status": "parameter reference only; not an executable fixture and not independent validation",
+      "missingData": [
+        "complete daily weather/input series",
+        "raw independent observations and variance",
+        "independent validation records"
+      ],
+      "calibrationOrHoldout": "model-development/reference; not holdout",
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    },
+    {
+      "id": "THERMAL-OSU-SNAP-BEAN-HARVEST",
+      "sourceId": "OSU-EM9305-2021",
+      "classification": "parameter-reference / model-development data",
+      "crop": {
+        "slug": "bush-bean",
+        "cultivar": "three named snap-bean cultivars; source range only"
+      },
+      "environment": "OSU Croptime source domain; most source data were collected in the Willamette Valley in 2013–2015.",
+      "inputs": {
+        "baseTemperatureC": 4.4,
+        "upperTemperatureC": 32.2,
+        "sourceThermalRangeFday": [
+          1630,
+          1805
+        ],
+        "convertedThermalRangeCday": [
+          906,
+          1003
+        ],
+        "method": "single sine with horizontal cutoff"
+      },
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalRange": "°F·day",
+        "convertedThermalRange": "°C·day"
+      },
+      "sourceMethod": "EM 9305 Table 3 snap bean; single sine with horizontal cutoff",
+      "startEvent": "Direct seeding",
+      "endEvent": "Snap-bean harvest at 3.5–4 inches",
+      "metric": "thermal sum to the stated development endpoint",
+      "expectedMetricRange": {
+        "min": 906,
+        "max": 1003,
+        "unit": "°C·day"
+      },
+      "sampleSize": "three cultivar values",
+      "validDomain": "Named OSU Croptime crop/cultivar and transplant or direct-seed method; regional use outside the source domain is unverified.",
+      "status": "parameter reference only; not an executable fixture and not independent validation",
+      "missingData": [
+        "complete daily weather/input series",
+        "raw independent observations and variance",
+        "independent validation records"
+      ],
+      "calibrationOrHoldout": "model-development/reference; not holdout",
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction."
+    }
+  ],
+  "fixtures": [],
+  "coverageSummary": {
+    "builtInCatalogCrops": 50,
+    "existingThermalTableEntries": 9,
+    "thermalEntriesWithRetrievedSourceArtifact": 8,
+    "completeV2ProductionParameterSets": 0,
+    "completeV2RootZoneParameterSets": 0,
+    "measuredEmpiricallyValidatedCrops": 0,
+    "measuredValidationClaims": 0,
+    "referenceAgreementClaims": 0,
+    "executableSourceFixtures": 0,
+    "overallAccuracyStatus": "UNVERIFIED"
+  },
+  "cropCoverage": [
+    {
+      "cropId": 1,
+      "slug": "tomato",
+      "name": "Tomato",
+      "scientificName": "Solanum lycopersicum",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-OSU-TOMATO-FIRST-RIPE"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 2,
+      "slug": "lettuce",
+      "name": "Lettuce",
+      "scientificName": "Lactuca sativa",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-OSU-LETTUCE-TRANSPLANT-HARVEST"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 3,
+      "slug": "wheat",
+      "name": "Wheat",
+      "scientificName": "Triticum aestivum",
+      "catalogCategory": "grain",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 4,
+      "slug": "apple",
+      "name": "Apple",
+      "scientificName": "Malus domestica",
+      "catalogCategory": "fruit",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 5,
+      "slug": "basil",
+      "name": "Basil",
+      "scientificName": "Ocimum basilicum",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 6,
+      "slug": "pepper",
+      "name": "Pepper",
+      "scientificName": "Capsicum annuum",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-OSU-PEPPER-FIRST-RIPE"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 7,
+      "slug": "eggplant",
+      "name": "Eggplant",
+      "scientificName": "Solanum melongena",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 8,
+      "slug": "potato",
+      "name": "Potato",
+      "scientificName": "Solanum tuberosum",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 9,
+      "slug": "carrot",
+      "name": "Carrot",
+      "scientificName": "Daucus carota",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 10,
+      "slug": "beet",
+      "name": "Beet",
+      "scientificName": "Beta vulgaris",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 11,
+      "slug": "radish",
+      "name": "Radish",
+      "scientificName": "Raphanus sativus",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 12,
+      "slug": "onion",
+      "name": "Onion",
+      "scientificName": "Allium cepa",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 13,
+      "slug": "garlic",
+      "name": "Garlic",
+      "scientificName": "Allium sativum",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 14,
+      "slug": "leek",
+      "name": "Leek",
+      "scientificName": "Allium porrum",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 15,
+      "slug": "spinach",
+      "name": "Spinach",
+      "scientificName": "Spinacia oleracea",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 16,
+      "slug": "arugula",
+      "name": "Arugula",
+      "scientificName": "Eruca vesicaria",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 17,
+      "slug": "chard",
+      "name": "Swiss Chard",
+      "scientificName": "Beta vulgaris subsp. cicla",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 18,
+      "slug": "kale",
+      "name": "Kale",
+      "scientificName": "Brassica oleracea var. acephala",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 19,
+      "slug": "broccoli",
+      "name": "Broccoli",
+      "scientificName": "Brassica oleracea var. italica",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-OSU-BROCCOLI-FIRST-HARVEST"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 20,
+      "slug": "cabbage",
+      "name": "Cabbage",
+      "scientificName": "Brassica oleracea var. capitata",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-CABBAGE-STORAGE-MATURITY"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 21,
+      "slug": "cauliflower",
+      "name": "Cauliflower",
+      "scientificName": "Brassica oleracea var. botrytis",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 22,
+      "slug": "cucumber",
+      "name": "Cucumber",
+      "scientificName": "Cucumis sativus",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-OSU-CUCUMBER-FIRST-HARVEST"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 23,
+      "slug": "zucchini",
+      "name": "Zucchini",
+      "scientificName": "Cucurbita pepo",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 24,
+      "slug": "pumpkin",
+      "name": "Pumpkin",
+      "scientificName": "Cucurbita maxima",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 25,
+      "slug": "melon",
+      "name": "Melon",
+      "scientificName": "Cucumis melo",
+      "catalogCategory": "fruit",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 26,
+      "slug": "corn",
+      "name": "Sweet Corn",
+      "scientificName": "Zea mays",
+      "catalogCategory": "grain",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-UCIPM-SWEET-CORN-FRESH-MARKET"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 27,
+      "slug": "bush-bean",
+      "name": "Bush Bean",
+      "scientificName": "Phaseolus vulgaris",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-OSU-SNAP-BEAN-HARVEST"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 28,
+      "slug": "pole-bean",
+      "name": "Pole Bean",
+      "scientificName": "Phaseolus vulgaris",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 29,
+      "slug": "pea",
+      "name": "Pea",
+      "scientificName": "Pisum sativum",
+      "catalogCategory": "vegetable",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "literature-reference-only",
+          "sourceEvidence": [
+            "THERMAL-PEA-GREEN-MATURITY"
+          ]
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 30,
+      "slug": "strawberry",
+      "name": "Strawberry",
+      "scientificName": "Fragaria × ananassa",
+      "catalogCategory": "fruit",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 31,
+      "slug": "raspberry",
+      "name": "Raspberry",
+      "scientificName": "Rubus idaeus",
+      "catalogCategory": "fruit",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 32,
+      "slug": "blueberry",
+      "name": "Blueberry",
+      "scientificName": "Vaccinium corymbosum",
+      "catalogCategory": "fruit",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 33,
+      "slug": "parsley",
+      "name": "Parsley",
+      "scientificName": "Petroselinum crispum",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 34,
+      "slug": "cilantro",
+      "name": "Cilantro",
+      "scientificName": "Coriandrum sativum",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 35,
+      "slug": "dill",
+      "name": "Dill",
+      "scientificName": "Anethum graveolens",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 36,
+      "slug": "thyme",
+      "name": "Thyme",
+      "scientificName": "Thymus vulgaris",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 37,
+      "slug": "rosemary",
+      "name": "Rosemary",
+      "scientificName": "Salvia rosmarinus",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 38,
+      "slug": "sage",
+      "name": "Sage",
+      "scientificName": "Salvia officinalis",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 39,
+      "slug": "oregano",
+      "name": "Oregano",
+      "scientificName": "Origanum vulgare",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 40,
+      "slug": "chives",
+      "name": "Chives",
+      "scientificName": "Allium schoenoprasum",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 41,
+      "slug": "mint",
+      "name": "Mint",
+      "scientificName": "Mentha spicata",
+      "catalogCategory": "herb",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 42,
+      "slug": "marigold",
+      "name": "Marigold",
+      "scientificName": "Tagetes patula",
+      "catalogCategory": "flower",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 43,
+      "slug": "nasturtium",
+      "name": "Nasturtium",
+      "scientificName": "Tropaeolum majus",
+      "catalogCategory": "flower",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 44,
+      "slug": "sunflower",
+      "name": "Sunflower",
+      "scientificName": "Helianthus annuus",
+      "catalogCategory": "flower",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 45,
+      "slug": "borage",
+      "name": "Borage",
+      "scientificName": "Borago officinalis",
+      "catalogCategory": "flower",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 46,
+      "slug": "crimson-clover",
+      "name": "Crimson Clover",
+      "scientificName": "Trifolium incarnatum",
+      "catalogCategory": "cover_crop",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 47,
+      "slug": "winter-rye",
+      "name": "Winter Rye",
+      "scientificName": "Secale cereale",
+      "catalogCategory": "cover_crop",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "species/cultivar lifecycle and harvest contract not fully parameterized",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 48,
+      "slug": "oyster-mushroom",
+      "name": "Oyster Mushroom",
+      "scientificName": "Pleurotus ostreatus",
+      "catalogCategory": "fungus",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "requires separate substrate/lifecycle model; not plant photosynthesis",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 49,
+      "slug": "button-mushroom",
+      "name": "Button Mushroom",
+      "scientificName": "Agaricus bisporus",
+      "catalogCategory": "fungus",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "requires separate substrate/lifecycle model; not plant photosynthesis",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    },
+    {
+      "cropId": 50,
+      "slug": "shiitake",
+      "name": "Shiitake",
+      "scientificName": "Lentinula edodes",
+      "catalogCategory": "fungus",
+      "currentModel": {
+        "version": "v1-legacy",
+        "behavior": "preserve old equations for supported frozen records; current catalog fallback remains legacy-only and is not evidence of v2 support"
+      },
+      "v2Baseline": {
+        "thermal": {
+          "status": "UNVERIFIED",
+          "sourceEvidence": []
+        },
+        "production": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific RUE/interception/allocation parameter set at baseline"
+        },
+        "rootZone": {
+          "status": "UNVERIFIED",
+          "parameterCoverage": "no crop-specific root-depth/depletion parameter set at baseline"
+        },
+        "lifecycle": "requires separate substrate/lifecycle model; not plant photosynthesis",
+        "releaseClaim": "UNVERIFIED; no empirical accuracy claim"
+      }
+    }
+  ],
+  "toleranceReview": {
+    "reviewedBy": "independent integration validator",
+    "status": "approved with stated conditions; no candidate comparison authorized by approval alone",
+    "checks": [
+      {
+        "id": "supported-frozen-replay",
+        "tolerance": "exact state and summary equality",
+        "status": "approved",
+        "scope": "complete frozen supported records only"
+      },
+      {
+        "id": "unsupported-record-preservation",
+        "tolerance": "exact preservation of stored summary and input artifact; no regenerated result",
+        "status": "approved",
+        "scope": "records missing critical frozen inputs or with unknown versions"
+      },
+      {
+        "id": "thermal-transcription",
+        "tolerance": "±0.5 °C·day",
+        "status": "approved",
+        "scope": "source display rounding only; same method, endpoint and unit conversion"
+      },
+      {
+        "id": "lettuce-fresh-mass-rounding",
+        "tolerance": "±0.5 g/plant",
+        "status": "approved-as-rounding-only",
+        "scope": "published table reproduction, never predictive accuracy"
+      },
+      {
+        "id": "lettuce-dry-mass-rounding",
+        "tolerance": "±0.05 g/plant",
+        "status": "approved-as-rounding-only",
+        "scope": "published table reproduction, never predictive accuracy"
+      },
+      {
+        "id": "water-balance-residual",
+        "tolerance": "≤1e-6 mm/cell-day",
+        "status": "approved-with-condition",
+        "condition": "unrounded internal pools; residual = storage_start + inflow - uptake - drainage - runoff - storage_end; report signed accumulated residual and maximum absolute daily residual"
+      },
+      {
+        "id": "dry-matter-closure",
+        "tolerance": "≤1e-6 g DM/m²/day",
+        "status": "proposed numerical-analysis check",
+        "condition": "all production and transfers use unrounded additive state; reserve transfers are explicit"
+      },
+      {
+        "id": "zero-light-production",
+        "tolerance": "exactly zero photosynthetic production increment",
+        "status": "approved-contract",
+        "condition": "seed/reserve drawdown is a separate finite state transfer"
+      },
+      {
+        "id": "independent-held-out-error",
+        "tolerance": "none universal",
+        "status": "source-specific threshold pending",
+        "condition": "lock and independently review before any comparison; incomplete input record remains UNVERIFIED"
+      }
+    ]
+  },
+  "calibrationAndHoldout": {
+    "calibrationRecords": [],
+    "holdoutRecords": [],
+    "candidateComparisonRuns": [],
+    "note": "Evidence records above describe source availability and published reference points. No candidate has been evaluated; records lacking complete daily inputs are not executable fixtures."
+  }
+}
