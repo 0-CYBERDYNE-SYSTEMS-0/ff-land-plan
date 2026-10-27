@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import { cropThermalParams } from '@/data/cropThermalParams';
-import { targetCellKey } from '@/lib/growingTargets';
+import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
 import type { Observation } from '@/types';
 import fixture from '../../../quality/beta/evidence/water-sa-2018-dynamic-canopy-engine-fixture.json';
 import type {
@@ -17,6 +17,13 @@ import { collectRunPredictionPairs } from './scorecard';
 
 const crop = cropLibrary.find((entry) => entry.slug === 'broccoli')!;
 const cellKey = targetCellKey({ kind: 'floor' }, '0,0');
+const elevatedTarget = { kind: 'growing-level' as const, growingSpaceId: 'space-a', levelId: 'high' };
+const harvestAreaCells = [
+  { target: { kind: 'floor' as const }, cell: '0,0', harvestablePoolGPerM2: 5 },
+  { target: elevatedTarget, cell: '0,0', harvestablePoolGPerM2: 8 },
+  { target: elevatedTarget, cell: '1,0', harvestablePoolGPerM2: 13 },
+];
+const harvestAreaCellM = 0.4;
 const sourceEvidence = {
   evidenceId: fixture.source.evidenceId,
   sourceCitation: fixture.source.citation,
@@ -141,6 +148,120 @@ function frozenRun(overrides: Partial<RunConfig> = {}) {
     },
   });
   return { ...run, modelInputs };
+}
+
+function harvestAreaRun(options: { autoHarvest: boolean; spacingVariant?: boolean }): RunConfig {
+  const harvestDate = '2026-10-01';
+  const run = config({
+    basePlan: {
+      ...config().basePlan,
+      widthM: 2,
+      heightM: 1,
+      cellM: harvestAreaCellM,
+      planting: { '0,0': crop.id },
+      targets: {
+        [growingTargetKey(elevatedTarget)]: {
+          growingSpaceId: elevatedTarget.growingSpaceId,
+          levelId: elevatedTarget.levelId,
+          planting: { '0,0': crop.id, '1,0': crop.id },
+        },
+      },
+    },
+    cropStartEvents: Object.fromEntries(harvestAreaCells.map((entry) => [
+      targetCellKey(entry.target, entry.cell),
+      'transplanting',
+    ])),
+    interventions: options.autoHarvest ? [] : harvestAreaCells.map((entry) => ({
+      kind: 'harvest' as const,
+      date: harvestDate,
+      cell: entry.cell,
+      ...(entry.target.kind === 'floor' ? {} : { target: entry.target }),
+    })),
+    autoHarvest: options.autoHarvest,
+  });
+  const modelInputs = freezeRunModelInputsV4(run, {
+    soil: { awcMmPerCm: 1.5, organicMatterPct: 5 },
+    crops: [crop],
+    cropParametersV4: [v4Parameter()],
+    cropCanopyEstablishmentByCell: Object.fromEntries(harvestAreaCells.map((entry) => [
+      targetCellKey(entry.target, entry.cell),
+      {
+        startEvent: 'transplanting' as const,
+        establishedAtDate: run.startDate,
+        initialCanopyDryMatterGPerM2: fixture.frozenSyntheticInputs.initialPerCellCanopyDryMatterGPerM2,
+        initialHarvestableDryMatterGPerM2: entry.harvestablePoolGPerM2,
+        evidence: { classification: 'synthetic' as const, evidenceId: fixture.id, validDomain: 'synthetic software fixture only' },
+      },
+    ])),
+  });
+  if (!options.spacingVariant) return { ...run, modelInputs };
+
+  const spacingVariantInputs = structuredClone(modelInputs);
+  spacingVariantInputs.crops[0] = {
+    ...spacingVariantInputs.crops[0]!,
+    spacingCm: 5,
+    rowSpacingCm: 5,
+    yieldKgPerPlant: 1000,
+  };
+  return { ...run, modelInputs: spacingVariantInputs };
+}
+
+function manualHarvestResult(run: RunConfig) {
+  const start = createRun(run);
+  for (const entry of harvestAreaCells) {
+    const key = targetCellKey(entry.target, entry.cell);
+    start.cells[key] = { ...start.cells[key]!, biomassFrac: 1 };
+  }
+  return stepDay(start, dailyEnvironment(run.startDate, 0), run);
+}
+
+function automaticHarvestResult(run: RunConfig) {
+  const start = createRun(run);
+  const maturityTarget = cropThermalParams.find((entry) => entry.cropId === crop.id)!.gddToMaturityCdays[1];
+  for (const entry of harvestAreaCells) {
+    const key = targetCellKey(entry.target, entry.cell);
+    start.cells[key] = {
+      ...start.cells[key]!,
+      biomassFrac: 0,
+      gddAccumC: maturityTarget - 1,
+      sourceThermalCdays: maturityTarget - 1,
+    };
+  }
+  return stepDay(start, dailyEnvironment(run.startDate), run);
+}
+
+function expectSameFrozenPools(firstRun: RunConfig, secondRun: RunConfig): void {
+  const firstState = createRun(firstRun);
+  const secondState = createRun(secondRun);
+  for (const entry of harvestAreaCells) {
+    const key = targetCellKey(entry.target, entry.cell);
+    expect(firstState.cells[key]!.harvestableDryMatterGPerM2)
+      .toBe(secondState.cells[key]!.harvestableDryMatterGPerM2);
+  }
+}
+
+function expectAreaReconciledPayout(run: RunConfig, result: ReturnType<typeof stepDay>): number {
+  expect(run.basePlan.cellM).toBe(harvestAreaCellM);
+  const harvested = result.events.filter((event) => event.kind === 'harvested');
+  expect(harvested).toHaveLength(harvestAreaCells.length);
+  expect(harvested.filter((event) => event.target?.kind === 'growing-level')).toHaveLength(2);
+
+  let expectedTotalKg = 0;
+  for (const entry of harvestAreaCells) {
+    const key = targetCellKey(entry.target, entry.cell);
+    const cell = result.state.cells[key]!;
+    const expectedCellKg = (cell.harvestableDryMatterGPerM2 ?? 0) * run.basePlan.cellM ** 2 / 1000;
+    const payout = harvested.find((event) => event.cell === key);
+    expect(cell.harvested).toBe(true);
+    expect(payout?.kind === 'harvested' ? payout.data.yieldKg : undefined).toBeCloseTo(expectedCellKg, 12);
+    expectedTotalKg += expectedCellKg;
+  }
+
+  const actualTotalKg = harvested.reduce((sum, event) => (
+    sum + (event.kind === 'harvested' ? event.data.yieldKg : 0)
+  ), 0);
+  expect(actualTotalKg).toBeCloseTo(expectedTotalKg, 12);
+  return actualTotalKg;
 }
 
 function expectWithinFixtureTolerance(actual: number, expected: number): void {
@@ -277,6 +398,41 @@ describe('crop-model-v4 dynamic canopy and two-pool production', () => {
     const result = stepDay(start, dailyEnvironment(harvestDate), run);
     const payout = result.events.find((event) => event.kind === 'harvested');
     expect(payout?.data?.yieldKg).toBe(0.005);
+  });
+
+  it('reconciles manual floor and elevated harvest payout to area across spacing variants', () => {
+    const run = harvestAreaRun({ autoHarvest: false });
+    const spacingVariant = harvestAreaRun({ autoHarvest: false, spacingVariant: true });
+    expectSameFrozenPools(run, spacingVariant);
+    const result = manualHarvestResult(run);
+    const spacingVariantResult = manualHarvestResult(spacingVariant);
+
+    const actualTotalKg = expectAreaReconciledPayout(run, result);
+    const spacingVariantTotalKg = expectAreaReconciledPayout(spacingVariant, spacingVariantResult);
+    expect(spacingVariantTotalKg).toBeCloseTo(actualTotalKg, 12);
+    for (const entry of harvestAreaCells) {
+      const key = targetCellKey(entry.target, entry.cell);
+      expect(result.state.cells[key]!.harvestableDryMatterGPerM2).toBe(entry.harvestablePoolGPerM2);
+      expect(spacingVariantResult.state.cells[key]!.harvestableDryMatterGPerM2)
+        .toBe(result.state.cells[key]!.harvestableDryMatterGPerM2);
+    }
+  });
+
+  it('reconciles automatic floor and elevated harvest payout to area across spacing variants', () => {
+    const run = harvestAreaRun({ autoHarvest: true });
+    const spacingVariant = harvestAreaRun({ autoHarvest: true, spacingVariant: true });
+    expectSameFrozenPools(run, spacingVariant);
+    const result = automaticHarvestResult(run);
+    const spacingVariantResult = automaticHarvestResult(spacingVariant);
+
+    const actualTotalKg = expectAreaReconciledPayout(run, result);
+    const spacingVariantTotalKg = expectAreaReconciledPayout(spacingVariant, spacingVariantResult);
+    expect(spacingVariantTotalKg).toBeCloseTo(actualTotalKg, 12);
+    for (const entry of harvestAreaCells) {
+      const key = targetCellKey(entry.target, entry.cell);
+      expect(spacingVariantResult.state.cells[key]!.harvestableDryMatterGPerM2)
+        .toBeCloseTo(result.state.cells[key]!.harvestableDryMatterGPerM2!, 12);
+    }
   });
 
   it('rejects incomplete or inconsistent frozen pools and allocation shares', () => {

@@ -2006,3 +2006,18 @@ snapshots changed, and no application implementation is claimed by this revision
   completed successfully on that exact SHA: `test + typecheck + build`,
   `Playwright production Pages-path smoke`, `secret + private-file scan`, and
   `GitGuardian Security Checks` all passed. PR #82 remains open and unmerged.
+- Documentation checkpoint `dd0019e1a388c9ddbb539ef730ae549254c08b45` is also pushed to PR #82.
+  Actual CI run [40540748769](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40540748769)
+  passed all four named checks on that exact SHA, including the production Pages-path smoke.
+- The next 02A A-07 increment adds v4 software regressions for manual and automatic dry-matter
+  harvest across one floor cell and two elevated cells. With `cellM = 0.4 m`, each event and
+  combined payout must equal frozen `g DM/m² × cellM² ÷ 1000`; identical frozen pools also
+  preserve payout across spacing variants. An independent area-semantics review confirmed
+  `CellState.harvestableDryMatterGPerM2` and both v4 payout paths use this area conversion;
+  invalid/nonpositive cell sizes fall back to 0.25 m and are excluded from the fixture. The
+  worker estimated 0.5–1 engineer-day if the current formula passed; it did, so `engine.ts` is
+  unchanged. An independent validator found no gaps and passed the focused test (1 file / 8 tests).
+  Lead verification: `npm test` (45 files / 235 tests), `npm run typecheck`, standard/demo/Pages
+  builds, private-file guard, and `git diff --check` passed. This is A-07 software evidence only;
+  the row remains UNVERIFIED until the broader spacing, mortality, management, target and golden
+  matrix is covered across v2/v3/v4.
