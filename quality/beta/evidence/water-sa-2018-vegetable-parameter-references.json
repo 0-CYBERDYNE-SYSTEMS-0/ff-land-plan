@@ -988,8 +988,52 @@
     },
     "candidateComparison": false
   },
+  "preregisteredSyntheticCanopyDryMassFixture": {
+    "classification": "synthetic equation fixture only; no measured trajectory or candidate comparison",
+    "implementationStatus": "preregistered; implementation pending independent tolerance review",
+    "sourceEquation": "Eq. 5: (CDM × SLA / LAI) − 1 = p × CDM; rearranged as LAI = CDM × SLA / (1 + p × CDM)",
+    "subsequentEquation": "FI_PAR = 1 − exp(−K_PAR × LAI)",
+    "sourceParameterSet": {
+      "table": "Table 6 selected SWB parameter set",
+      "crop": "broccoli",
+      "cultivar": "Parthenon",
+      "season": "winter-2008",
+      "canopyExtinctionParKpar": 1.09,
+      "specificLeafAreaM2PerKg": 9,
+      "leafStemPartitionParameterM2PerKg": 1.54,
+      "domainNote": "Source-selected seasonal SWB parameters; not a generic broccoli default or a validated FarmFriend crop parameter set."
+    },
+    "syntheticCanopyDryMatterKgPerM2": [
+      0,
+      0.5,
+      1,
+      2
+    ],
+    "expectedLaiM2PerM2": [
+      0,
+      2.542372881356,
+      3.543307086614,
+      4.411764705882
+    ],
+    "expectedFractions": [
+      0,
+      0.937412295924,
+      0.978978398444,
+      0.991842548944
+    ],
+    "tolerance": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": {
+        "lai": "m²/m²",
+        "fraction": "dimensionless"
+      },
+      "basis": "Deterministic equation arithmetic only, with frozen source parameter transcriptions and synthetic CDM inputs; no biological or predictive accuracy claim."
+    },
+    "limitation": "The fixture treats CDM as an explicit canopy-only state. FarmFriend's current total dryMatterGPerM2 is not guaranteed to be canopy dry matter after organ allocation; this fixture alone does not authorize routing total run dry matter through the equation.",
+    "candidateComparison": false
+  },
   "toleranceReview": {
-    "status": "independent validator approved source parameter transcription bounds and synthetic canopy equation arithmetic tolerance only; the helper test passed locally; measured-output and candidate predictive comparisons remain unauthorized",
+    "status": "independent validator approved source parameter transcription bounds and the synthetic FI_PAR equation arithmetic tolerance only; that helper test passed locally. The separate LAI-from-canopy-DM equation tolerance is preregistered pending independent review. Measured-output and candidate predictive comparisons remain unauthorized",
     "reviewedDate": "2026-10-27",
     "approvedScope": [
       "Table 5 and Table 6 parameter transcription bounds based on half the source display increment.",
