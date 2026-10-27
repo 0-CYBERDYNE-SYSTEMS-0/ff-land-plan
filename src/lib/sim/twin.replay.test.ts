@@ -7,6 +7,7 @@ import { ReplayStateCache, replayRunToDay } from './replay-cache';
 import { collectRunPredictionPairs } from './scorecard';
 import { forkRun } from './timeline';
 import { createTwinRunRecord } from './twin';
+import { freezeRunModelInputs } from './model-inputs';
 import type { DailyEnvironment, RunConfig, RunRecord } from './types';
 
 const PROVENANCE = {
@@ -73,15 +74,18 @@ function observation(overrides: Partial<Observation> & Pick<Observation, 'id' | 
 
 function record(runConfig: RunConfig, observations?: Observation[]): RunRecord {
   const envSeries = weather();
+  const frozenConfig = runConfig.modelInputs
+    ? runConfig
+    : { ...runConfig, modelInputs: freezeRunModelInputs(runConfig, { crops: [tomato] }) };
   return {
     id: 'run:1:baseline',
     farmId: 1,
     label: 'Baseline',
     createdAt: '2026-05-01T00:00:00.000Z',
-    config: runConfig,
+    config: frozenConfig,
     envSeries,
     ...(observations ? { observations } : {}),
-    summary: simulateRun(runConfig, envSeries, { crops: [tomato] }, observations ?? []).summary,
+    summary: simulateRun(frozenConfig, envSeries, { crops: [tomato] }, observations ?? []).summary,
     status: 'complete',
   };
 }
@@ -184,6 +188,19 @@ describe('frozen observations and replay', () => {
       { observationId: 'air', metric: 'airTempC', date: '2026-05-01', observed: 20, predicted: 18 },
       { observationId: 'stage', metric: 'stage', date: '2026-05-01', observed: 0.6, predicted: 0 },
     ]);
+  });
+
+  it('does not score an unsupported saved run from a caller-supplied current catalog', () => {
+    const saved = record(config(), [
+      observation({ id: 'stage', date: '2026-05-01', metric: 'stage', value: 0.6, unit: 'fraction' }),
+    ]);
+    const unsupported = { ...saved, config: { ...saved.config, modelInputs: undefined } };
+    const storedSummary = structuredClone(unsupported.summary);
+
+    expect(collectRunPredictionPairs(unsupported, { crops: [tomato] })).toEqual([]);
+    expect(() => createTwinRunRecord(unsupported, saved.observations ?? [], { crops: [tomato] }))
+      .toThrow('Historical record has no frozen model inputs.');
+    expect(unsupported.summary).toEqual(storedSummary);
   });
 
   it('does not score indoor DLI against raw outdoor light when the run has no climate model', () => {

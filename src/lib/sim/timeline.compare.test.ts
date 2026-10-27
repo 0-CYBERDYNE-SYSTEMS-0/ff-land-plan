@@ -93,4 +93,23 @@ describe('compareRuns', () => {
     expect(comparison.harvestReadyDay).toEqual({ a: null, b: 22, delta: null });
     expect(comparison.outbreakDays.delta).toBe(-5);
   });
+
+  it('omits numeric comparisons for a v2 placeholder summary', () => {
+    const a = record('run-a', 'A', summary({ totalYieldKg: 100, modelQualification: undefined }));
+    const b = record('run-b', 'B', summary({
+      totalYieldKg: 0,
+      waterUseMm: 0,
+      stressCellDays: 0,
+      modelQualification: {
+        status: 'unsupported',
+        reasons: ['The crop-model-v2 daily reducer is not enabled yet.'],
+      },
+    }));
+
+    const comparison = compareRuns(a, b);
+
+    expect(comparison.totalYieldKg).toEqual({ a: 100, b: null, delta: null });
+    expect(comparison.waterUseMm).toEqual({ a: 0, b: null, delta: null });
+    expect(comparison.stressCellDays).toEqual({ a: 0, b: null, delta: null });
+  });
 });

@@ -12,14 +12,12 @@
 //
 // Determinism: replay folds stepDay over record.envSeries + record.config
 // ONLY — no live fetches inside the tick loop. New records carry their
-// model-driving soil and crop inputs; historical records still load the
-// legacy context once at start.
+// model-driving soil and crop inputs. Historical records without complete
+// frozen inputs are shown as unsupported and their stored summaries survive.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { Crop, EnvironmentLayout, GrowingTargetRef, ObservationMetric } from '@/types';
-import { apiFetch } from '@/lib/api';
-import { fetchSoilProfile } from '@/lib/soil';
 import { growingTargetKey } from '@/lib/growingTargets';
 import {
   bucketCapacityMm,
@@ -33,6 +31,7 @@ import {
   stepDay,
 } from '@/lib/sim';
 import { canonicalizeObservations } from '@/lib/sim/observations';
+import { inspectRunModelSupport, type RunModelSupport } from '@/lib/sim/model-inputs';
 import type {
   DailyEnvironment,
   EnvSourceTag,
@@ -145,6 +144,7 @@ export interface SimRunController {
   /** Soil + crops context used for the replay (null until loaded). */
   ctx: SimRunCtx | null;
   timeline: SimRunTimeline | null;
+  modelSupport: RunModelSupport | null;
   /** THE render-path source of truth — read this from rAF/effects, not state. */
   simStateRef: RefObject<SimState | null>;
   startRun: (record: RunRecord) => void;
@@ -399,6 +399,7 @@ export function useSimRun(opts: {
   const [tickVersion, setTickVersion] = useState(0);
   const [ctx, setCtx] = useState<SimRunCtx | null>(null);
   const [timeline, setTimeline] = useState<SimRunTimeline | null>(null);
+  const [modelSupport, setModelSupport] = useState<RunModelSupport | null>(null);
   // Session-only divergence marker: the amended config lives in memory, the
   // stored RunRecord is never rewritten by authoring (see applyIntervention).
   const [unsavedChanges, setUnsavedChanges] = useState(false);
@@ -551,16 +552,18 @@ export function useSimRun(opts: {
       stopTicking();
       loadIdRef.current += 1;
       const loadId = loadIdRef.current;
+      const support = inspectRunModelSupport(rec.config);
       replayStateCache.invalidateRun(rec.id);
       recordRef.current = rec;
       setRecord(rec);
+      setModelSupport(support);
       // A new primary invalidates any ghost comparison (Phase 4): a ghost
       // always belongs to the run it was loaded against. ?ffrun+?ffghost
       // re-load the ghost right after this via loadGhost.
       ghostRecordRef.current = null;
       ghostStateRef.current = null;
       setGhostRecord(null);
-      setEnded(false);
+      setEnded(!support.canReplay);
       setUnsavedChanges(false);
       simStateRef.current = null;
       dayIndexRef.current = 0;
@@ -570,18 +573,12 @@ export function useSimRun(opts: {
       setTimeline(null);
       setDayIndex(0);
       maybeCommit(true);
-      // New records replay from their frozen model inputs; historical records
-      // still use the cached soil/crop lookup because they predate snapshots.
+      if (!support.canReplay) return;
+      // Replay only from the run's frozen inputs. The support check above
+      // rejects records that would need today's live catalog/context.
       const modelInputs = rec.config.modelInputs;
-      const contextPromise = modelInputs
-        ? Promise.resolve({ soil: modelInputs.soil, crops: modelInputs.crops })
-        : Promise.all([
-            fetchSoilProfile(
-              rec.config.lat ?? farmCoordsRef.current?.lat ?? 0,
-              rec.config.lng ?? farmCoordsRef.current?.lng ?? 0,
-            ),
-            apiFetch.listCrops(),
-          ]).then(([soil, crops]) => ({ soil, crops }));
+      if (!modelInputs) return;
+      const contextPromise = Promise.resolve({ soil: modelInputs.soil, crops: modelInputs.crops });
       void contextPromise.then(({ soil, crops }) => {
         if (loadId !== loadIdRef.current) return; // superseded by stop/start
         const runCtx: SimRunCtx = { soil, crops };
@@ -651,6 +648,15 @@ export function useSimRun(opts: {
   const applyIntervention = useCallback((iv: Intervention): ApplyInterventionResult => {
     const rec = recordRef.current;
     if (!rec) return { ok: false, error: 'No active run.' };
+    const support = inspectRunModelSupport(rec.config);
+    if (!support.canReplay) {
+      return {
+        ok: false,
+        error: support.model === 'crop-model-v2'
+          ? `This run has no supported v2 daily reducer. ${support.reasons.join(' ')}`
+          : 'This run’s model inputs are unsupported; its stored summary is preserved.',
+      };
+    }
     if (iv.kind === 'weather') {
       return {
         ok: false,
@@ -735,6 +741,7 @@ export function useSimRun(opts: {
         : { ...inputGhost, observations: canonicalizeObservations(inputGhost.observations) };
       const rec = recordRef.current;
       if (!rec) return; // ghosts exist only against an active primary run
+      if (!inspectRunModelSupport(g.config).canReplay) return;
       if (g.farmId !== rec.farmId) return; // a comparison crosses runs, not farms
       if (g.id === rec.id) return; // a run cannot be its own ghost
       ghostRecordRef.current = g;
@@ -766,6 +773,7 @@ export function useSimRun(opts: {
     dayIndexRef.current = 0;
     pendingSeekRef.current = null;
     setRecord(null);
+    setModelSupport(null);
     setCtx(null);
     setTimeline(null);
     setGhostRecord(null);
@@ -795,6 +803,7 @@ export function useSimRun(opts: {
       tickVersion,
       ctx,
       timeline,
+      modelSupport,
       simStateRef,
       startRun,
       play,
@@ -811,7 +820,7 @@ export function useSimRun(opts: {
       loadGhost,
       clearGhost,
     }),
-    [record, dayIndex, playing, speed, ended, tickVersion, ctx, timeline, startRun, play, pause, setSpeed, seekDay, stopRun, applyIntervention, unsavedChanges, ghostRecord, ghostVersion, loadGhost, clearGhost],
+    [record, dayIndex, playing, speed, ended, tickVersion, ctx, timeline, modelSupport, startRun, play, pause, setSpeed, seekDay, stopRun, applyIntervention, unsavedChanges, ghostRecord, ghostVersion, loadGhost, clearGhost],
   );
 }
 

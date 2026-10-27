@@ -1,6 +1,6 @@
 import type { RunRecord, RunConfig, Intervention } from './types';
 import { simulateRun, type SimRunCtx } from './engine';
-import { freezeRunModelInputs } from './model-inputs';
+import { freezeRunModelInputs, inspectRunModelSupport } from './model-inputs';
 import { canonicalizeObservations } from './observations';
 
 export interface RunForkPatch {
@@ -59,6 +59,10 @@ export function forkRun(
   patch: RunForkPatch = {},
   ctx: SimRunCtx = {},
 ): RunRecord {
+  const support = inspectRunModelSupport(parent.config);
+  if (!support.canReplay) {
+    throw new Error(support.reasons.join(' ') || 'This run does not have supported frozen model inputs.');
+  }
   if (!Number.isInteger(afterDayCount) || afterDayCount < 0 || afterDayCount > parent.envSeries.length) {
     throw new RangeError(`Fork boundary must be a completed-day count from 0 to ${parent.envSeries.length}.`);
   }
@@ -131,24 +135,30 @@ function metric(a: number | null | undefined, b: number | null | undefined): Com
   };
 }
 
+export function runSummaryHasAvailableEstimates(summary: RunRecord['summary']): boolean {
+  return summary.modelQualification?.status !== 'unsupported';
+}
+
 /** Compare B against A without treating an unobserved value as zero. */
 export function compareRuns(a: RunRecord, b: RunRecord): RunComparison {
-  const aStress = a.summary.stressDays;
-  const bStress = b.summary.stressDays;
+  const aSummary = runSummaryHasAvailableEstimates(a.summary) ? a.summary : undefined;
+  const bSummary = runSummaryHasAvailableEstimates(b.summary) ? b.summary : undefined;
+  const aStress = aSummary?.stressDays;
+  const bStress = bSummary?.stressDays;
   return {
     a: { id: a.id, label: a.label },
     b: { id: b.id, label: b.label },
-    totalYieldKg: metric(a.summary.totalYieldKg, b.summary.totalYieldKg),
-    waterUseMm: metric(a.summary.waterUseMm, b.summary.waterUseMm),
-    stressCellDays: metric(a.summary.stressCellDays, b.summary.stressCellDays),
+    totalYieldKg: metric(aSummary?.totalYieldKg, bSummary?.totalYieldKg),
+    waterUseMm: metric(aSummary?.waterUseMm, bSummary?.waterUseMm),
+    stressCellDays: metric(aSummary?.stressCellDays, bSummary?.stressCellDays),
     stressDays: {
-      water: metric(aStress.water, bStress.water),
-      heat: metric(aStress.heat, bStress.heat),
-      cold: metric(aStress.cold, bStress.cold),
-      nitrogen: metric(aStress.nitrogen, bStress.nitrogen),
-      light: metric(aStress.light, bStress.light),
+      water: metric(aStress?.water, bStress?.water),
+      heat: metric(aStress?.heat, bStress?.heat),
+      cold: metric(aStress?.cold, bStress?.cold),
+      nitrogen: metric(aStress?.nitrogen, bStress?.nitrogen),
+      light: metric(aStress?.light, bStress?.light),
     },
-    harvestReadyDay: metric(a.summary.harvestReadyDay, b.summary.harvestReadyDay),
-    outbreakDays: metric(a.summary.outbreakDays, b.summary.outbreakDays),
+    harvestReadyDay: metric(aSummary?.harvestReadyDay, bSummary?.harvestReadyDay),
+    outbreakDays: metric(aSummary?.outbreakDays, bSummary?.outbreakDays),
   };
 }

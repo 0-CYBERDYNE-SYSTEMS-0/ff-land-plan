@@ -3,6 +3,7 @@ import { archetypes } from '@/creative/archetypes';
 import type { GrowingTargetRef, Observation, ObservationMetric } from '@/types';
 import { createRun, stepDay, type SimRunCtx } from './engine';
 import { canonicalizeObservations, observationMatchesRun, observationTarget } from './observations';
+import { inspectRunModelSupport } from './model-inputs';
 import type { RunRecord, SimEvent, SimState } from './types';
 
 export interface TwinPredictionPair {
@@ -80,6 +81,7 @@ function predict(
 
 /** Replay a frozen run and pair each measured value with the model prediction at that day boundary. */
 export function collectRunPredictionPairs(record: RunRecord, ctx: SimRunCtx = {}): TwinPredictionPair[] {
+  if (!inspectRunModelSupport(record.config).canReplay) return [];
   const observations = canonicalizeObservations(record.observations ?? [])
     .filter((observation) => observationMatchesRun(observation, record.config));
   if (observations.length === 0) return [];

@@ -94,6 +94,17 @@ const startingSoil: SoilCarry = {
 };
 
 describe('campaign soil carry', () => {
+  it('does not recompute an unsupported saved run from the live catalog', () => {
+    const saved = record('legacy-no-snapshot', config(tomato.id));
+    const storedSummary = structuredClone(saved.summary);
+    saved.config.modelInputs = undefined;
+
+    expect(() => buildSeasonPreview([saved])).toThrow(
+      'Cannot build a season preview from run legacy-no-snapshot: Historical record has no frozen model inputs.',
+    );
+    expect(saved.summary).toEqual(storedSummary);
+  });
+
   it('rejects overlapping runs in one world but allows sequential windows and separate worlds', () => {
     const first = record('first', config(tomato.id, { dayCount: 2 }));
     const overlapping = record('alternate', config(coverCrop.id, { startDate: '2026-05-02' }));

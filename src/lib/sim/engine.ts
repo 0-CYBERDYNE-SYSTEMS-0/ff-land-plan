@@ -75,6 +75,7 @@ import {
   uptakeDemandKgHa,
 } from './ecosystem';
 import { isoDayNumber } from './environment';
+import { inspectRunModelSupport } from './model-inputs';
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -474,6 +475,9 @@ export function stepDay(
   ctx: SimRunCtx = {},
   observations: readonly Observation[] = [],
 ): { state: SimState; events: SimEvent[]; dayStats: DayStats; effectiveEnv: DailyEnvironment } {
+  if (config.cropModelVersion === 'crop-model-v2') {
+    throw new Error('crop-model-v2 daily stepping is unavailable until its frozen production and root-zone parameters are supported.');
+  }
   const dayIndex = state.dayIndex;
   const date = env.date;
   const crops = cropMapOf(config, ctx);
@@ -1061,6 +1065,37 @@ export function simulateRun(
   ctx: SimRunCtx = {},
   observations: readonly Observation[] = [],
 ): SimulateResult {
+  if (config.cropModelVersion === 'crop-model-v2') {
+    const support = inspectRunModelSupport(config, false);
+    const finalState = createRun(config, ctx);
+    return {
+      finalState,
+      events: [],
+      summary: {
+        daysSimulated: 0,
+        rainMm: 0,
+        irrigatedMm: 0,
+        etoMmTotal: 0,
+        totalYieldKg: 0,
+        yieldKgByCrop: {},
+        stressCellDays: 0,
+        waterUseMm: 0,
+        stressDays: { water: 0, heat: 0, cold: 0, nitrogen: 0 },
+        outbreakDays: 0,
+        meanNitrogenKgHa: 0,
+        harvestReadyDay: null,
+        matureCells: 0,
+        cellCount: Object.keys(finalState.cells).length,
+        eventCounts: {},
+        modelQualification: {
+          status: support.status,
+          reasons: support.reasons.length > 0
+            ? support.reasons
+            : ['The crop-model-v2 daily engine has no supported parameter set for this run.'],
+        },
+      },
+    };
+  }
   const frozenObservations = canonicalizeObservations(observations);
   let st = createRun(config, ctx);
   let rainMm = 0;

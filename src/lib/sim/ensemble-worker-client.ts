@@ -14,7 +14,7 @@ export interface CachedEnsembleResult {
   unavailableReason?: string;
 }
 
-export interface RunEnsembleWorkerOptions extends Pick<RunEnsembleOptions, 'maxYears' | 'onProgress' | 'ctx'> {
+export interface RunEnsembleWorkerOptions extends Pick<RunEnsembleOptions, 'maxYears' | 'onProgress' | 'ctx' | 'persistedConfig'> {
   signal?: AbortSignal;
 }
 
@@ -32,7 +32,7 @@ export function runEnsembleInWorker(
 ): Promise<CachedEnsembleResult> {
   if (options.signal?.aborted) return Promise.reject(abortError());
   const key = ensembleCacheKey(config, ensembles, options.maxYears, options.ctx);
-  const unavailableReason = ensembleUnavailableReason(config, ensembles, options.maxYears);
+  const unavailableReason = ensembleUnavailableReason(config, ensembles, options.maxYears, options.persistedConfig);
   if (unavailableReason) return Promise.resolve({ key, result: null, unavailableReason });
   const cached = ensembleResultCache.get(key);
   if (cached) return Promise.resolve({ key, result: cached });
@@ -69,6 +69,7 @@ export function runEnsembleInWorker(
       ensembles,
       maxYears: options.maxYears,
       ctx: options.ctx,
+      persistedConfig: options.persistedConfig,
     });
   });
 }

@@ -14,6 +14,7 @@ import { guessObservationMetric, guessObservationUnit, mapObservationCsv, observ
 import { TWIN_ENABLED } from '@/lib/featureFlags';
 import { fitFarmCalibration } from '@/lib/sim/calibration';
 import type { CalibrationFitResult } from '@/lib/sim/calibration';
+import { inspectRunModelSupport } from '@/lib/sim/model-inputs';
 import { collectRunPredictionPairs, computeTwinScorecards } from '@/lib/sim/scorecard';
 import type { RunRecord } from '@/lib/sim/types';
 import type { Observation, ObservationInput, ObservationMetric, ObservationPatch, SitePlan } from '@/types';
@@ -219,6 +220,7 @@ export function TwinObservationsPanel({ farmId }: { farmId: number }) {
     () => latestTwinRun ? collectRunPredictionPairs(latestTwinRun) : [],
     [latestTwinRun],
   );
+  const latestTwinSupport = latestTwinRun ? inspectRunModelSupport(latestTwinRun.config) : null;
   const scoreAsOfDate = latestTwinRun?.envSeries.at(-1)?.date ?? TODAY();
   const scorecards = useMemo(
     () => computeTwinScorecards(predictionPairs, scoreAsOfDate, 30),
@@ -444,7 +446,13 @@ export function TwinObservationsPanel({ farmId }: { farmId: number }) {
           {latestTwinRun ? (
             <div className="space-y-2 rounded-md border border-border p-2">
               <p className="text-[10px] text-muted-foreground">{latestTwinRun.label} · last 30 days through {scoreAsOfDate}</p>
-              {scorecards.length === 0 ? <p className="text-[10px] text-muted-foreground">No paired metrics in this run have model predictions yet.</p> : (
+              {scorecards.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground">
+                  {latestTwinSupport && !latestTwinSupport.canReplay
+                    ? `No predictions were scored: ${latestTwinSupport.reasons.join(' ')}`
+                    : 'No paired metrics in this run have model predictions yet.'}
+                </p>
+              ) : (
                 <>
                   {scorecards.map((score) => {
                     const metricPairs = predictionPairs.filter((pair) => pair.metric === score.metric && pair.predicted !== null);

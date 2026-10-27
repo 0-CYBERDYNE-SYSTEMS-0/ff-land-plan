@@ -1,6 +1,7 @@
 import { createRun, stepDay, type SimRunCtx } from './engine';
 import type { RunRecord, SimState } from './types';
 import { canonicalizeObservations } from './observations';
+import { inspectRunModelSupport } from './model-inputs';
 
 interface ReplayEntry {
   runId: string;
@@ -69,6 +70,13 @@ export class ReplayStateCache {
 
 export const replayStateCache = new ReplayStateCache(64);
 
+export class UnsupportedRunReplayError extends Error {
+  constructor(readonly reasons: string[]) {
+    super(reasons.join(' ') || 'This run does not have supported frozen model inputs.');
+    this.name = 'UnsupportedRunReplayError';
+  }
+}
+
 type ReplayableRun = Pick<RunRecord, 'id' | 'config' | 'envSeries' | 'observations'>;
 
 /** Fold from the nearest cached completed-day state, then cache each new boundary. */
@@ -78,6 +86,8 @@ export function replayRunToDay(
   ctx: SimRunCtx = {},
   cache: ReplayStateCache = replayStateCache,
 ): SimState {
+  const support = inspectRunModelSupport(run.config);
+  if (!support.canReplay) throw new UnsupportedRunReplayError(support.reasons);
   const requested = Number.isFinite(targetDay) ? Math.round(targetDay) : 0;
   const dayCount = Math.min(run.envSeries.length, Math.max(0, requested));
   const observations = canonicalizeObservations(run.observations ?? []);

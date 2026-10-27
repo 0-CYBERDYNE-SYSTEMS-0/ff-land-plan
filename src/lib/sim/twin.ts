@@ -1,5 +1,5 @@
 import { simulateRun, type SimRunCtx } from './engine';
-import { freezeRunModelInputs } from './model-inputs';
+import { freezeRunModelInputs, inspectRunModelSupport } from './model-inputs';
 import { canonicalizeObservations, observationMatchesRun } from './observations';
 import type { Observation } from '@/types';
 import type { RunRecord } from './types';
@@ -19,6 +19,10 @@ export function createTwinRunRecord(
   ctx: SimRunCtx = {},
   options: CreateTwinRunOptions = {},
 ): RunRecord {
+  const support = inspectRunModelSupport(parent.config);
+  if (!support.canReplay) {
+    throw new Error(support.reasons.join(' ') || 'This run does not have supported frozen model inputs.');
+  }
   const config = structuredClone(parent.config);
   config.modelInputs = freezeRunModelInputs(config, ctx, config.modelInputs);
   const dates = new Set(parent.envSeries.map((day) => day.date));

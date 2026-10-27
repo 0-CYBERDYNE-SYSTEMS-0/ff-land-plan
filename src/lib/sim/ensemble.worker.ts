@@ -9,6 +9,7 @@ interface RunRequest {
   ensembles: SeasonEnsembles;
   maxYears?: number;
   ctx?: SimRunCtx;
+  persistedConfig?: boolean;
 }
 
 type WorkerResponse =
@@ -36,7 +37,7 @@ workerScope.onmessage = ({ data }) => {
         return;
       }
       const year = years[index]!;
-      const sample = runEnsembleYear(data.config, data.ensembles, year, data.ctx);
+      const sample = runEnsembleYear(data.config, data.ensembles, year, data.ctx, data.persistedConfig);
       if (sample) samples.push(sample);
       index += 1;
       workerScope.postMessage({ type: 'progress', completed: index, total: years.length });

@@ -1,6 +1,6 @@
 # BETA-02A crop model and evidence decision record
 
-Status: decision and evidence inventory prepared; tolerance review incorporated; implementation and candidate comparisons have not started.
+Status: source-backed decision and evidence baseline reviewed; explicit model dispatch and unsupported replay guards are in progress; the v2 daily reducer and acceptance remain incomplete. No candidate comparisons have been run.
 Prepared: 2026-10-27
 Scope: BETA-02A only. This record does not claim horticultural validation.
 
@@ -89,6 +89,10 @@ No candidate model output has been compared. The preservation, thermal transcrip
 | Independent held-out harvest-date/yield/biomass error | No universal threshold proposed | Lock a source-specific threshold from measured precision or published independent error, then receive validator approval before comparison. Where daily inputs or variance are unavailable, mark comparison UNVERIFIED and do not invent a threshold. |
 
 The independent validator reviewed and approved the displayed-value rounding tolerances for lettuce plant fresh/dry mass and marketable area yield, the ±0.5 °C·day transcription bound, and the water-balance bound subject to the stated unrounded-pool and residual-reporting conditions. These checks do not authorize predictive-accuracy claims. No candidate comparison has been run.
+
+## Implementation checkpoint
+
+The first implementation checkpoint adds named v1/v2 frozen-input shapes, rejects persisted replay paths that would otherwise use a live crop catalog or soil context, and marks v2 summaries unavailable while its daily reducer is disabled. Unsupported stored records retain their original summaries; guarded derived paths reject or suppress recomputation. Focused regressions and typechecking pass at this checkpoint. This is not an 02A completion claim: the v2 daily reducer, source-backed executable parameter coverage, and the remaining acceptance fixtures are still outstanding.
 
 ## Implementation gates after this record
 

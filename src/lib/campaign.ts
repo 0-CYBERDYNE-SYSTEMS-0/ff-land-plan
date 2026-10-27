@@ -11,6 +11,7 @@ import { cropLibrary } from '@/data/crops';
 import { growingTargetKey, parseTargetCellKey } from '@/lib/growingTargets';
 import { initialNitrogenKgHa } from '@/lib/sim/ecosystem';
 import { simulateRun } from '@/lib/sim/engine';
+import { inspectRunModelSupport } from '@/lib/sim/model-inputs';
 import type { RunRecord } from '@/lib/sim/types';
 
 export type CampaignScopeKey = string;
@@ -182,6 +183,12 @@ export function buildSeasonPreview(
   const farmIds = new Set(runs.map((run) => run.farmId));
   if (farmIds.size > 1) throw new Error('A season preview can only include runs from one farm.');
   assertNoOverlappingRuns(runs);
+  for (const run of runs) {
+    const support = inspectRunModelSupport(run.config);
+    if (!support.canReplay) {
+      throw new Error(`Cannot build a season preview from run ${run.id}: ${support.reasons.join(' ')}`);
+    }
+  }
 
   const explicitSoil = new Map((options.soilIn ?? []).map((entry) => [
     encodedScopeKey(entry.environmentId, entry.target),

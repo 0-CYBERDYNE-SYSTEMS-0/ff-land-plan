@@ -24,13 +24,56 @@ export interface RunAssetPhysicsSnapshot {
   hydroRequiredCells: Partial<Record<GrowingTargetKey, string[]>>;
 }
 
-/** Minimum crop/soil inputs needed to replay new runs independently of later data refreshes. */
-export interface RunModelInputs {
+export type CropModelVersion = 'crop-model-v1' | 'crop-model-v2';
+
+/** Minimum crop/soil inputs frozen by the legacy reducer. */
+export interface RunModelInputsV1 {
   model: 'run-inputs-v1';
   soil: { awcMmPerCm: number | null; organicMatterPct: number | null } | null;
   /** Only crops referenced by the frozen plan or its planting interventions. */
   crops: Crop[];
 }
+
+export interface FrozenCropModelParametersV2 {
+  cropId: number;
+  /** Source-specific thermal reference; cultivar selection may still be required. */
+  thermal: {
+    tBaseC: number;
+    tUpperC?: number;
+    gddToMaturityCdays: readonly [number, number];
+    accumulationStart: string;
+    maturityEndpoint: string;
+    accumulationMethod: string;
+    sourceCitation: string;
+    sourceUrl: string;
+  } | null;
+  production: {
+    rueGPerMjInterceptedPar: number | null;
+    interceptedParFraction: number | null;
+    harvestIndex: number | null;
+    status: 'unsupported' | 'qualified' | 'supported';
+    missing: string[];
+  };
+  rootZone: {
+    effectiveRootDepthCm: number | null;
+    depletionFraction: number | null;
+    status: 'unsupported' | 'qualified' | 'supported';
+    missing: string[];
+  };
+  lifecycle: 'plant' | 'fungus' | 'unsupported';
+}
+
+/** Complete v2 snapshot shape, including explicit missing-parameter status. */
+export interface RunModelInputsV2 {
+  model: 'run-inputs-v2';
+  parameterSetVersion: 'crop-parameters-v2';
+  soil: { awcMmPerCm: number | null; organicMatterPct: number | null } | null;
+  crops: Crop[];
+  cropParameters: FrozenCropModelParametersV2[];
+  qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
+}
+
+export type RunModelInputs = RunModelInputsV1 | RunModelInputsV2;
 
 export interface FarmCalibration {
   version: 'farm-calibration-v1';
@@ -303,6 +346,8 @@ export type SimEvent = {
 
 export interface RunConfig {
   farmId: number;
+  /** Missing on historical records, which retain the v1 equations. */
+  cropModelVersion?: CropModelVersion;
   /** Forked at create time (deep copy) — runs never mutate the live plan. */
   basePlan: PlanState;
   /** Frozen world metadata/layout. Absent only on historical v1 RunRecords;
@@ -368,6 +413,8 @@ export interface RunSummary {
   matureCells: number; // cells at biomass ≥ 1.0 at the end (harvest keeps them standing)
   cellCount: number; // cells alive at the end (harvests mark, not remove)
   eventCounts: Record<string, number>;
+  /** Missing on historical summaries; explicit on newly generated v2 records. */
+  modelQualification?: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
 }
 
 /** Persist run inputs (config, frozen envSeries, optional observations) + summary.

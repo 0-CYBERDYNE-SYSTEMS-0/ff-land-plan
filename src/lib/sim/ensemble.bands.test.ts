@@ -3,7 +3,7 @@ import { cropLibrary } from '@/data/crops';
 import type { SeasonEnsembles, SeasonYear } from '@/lib/ensembles';
 import { freezeRunModelInputs } from './model-inputs';
 import type { RunConfig } from './types';
-import { ensembleCacheKey, EnsembleResultCache, runEnsemble, runEnsembleCached, summarizeEnsemble } from './ensemble';
+import { ensembleCacheKey, ensembleUnavailableReason, EnsembleResultCache, runEnsemble, runEnsembleCached, summarizeEnsemble } from './ensemble';
 
 const lettuce = cropLibrary.find((crop) => crop.slug === 'lettuce')!;
 
@@ -61,6 +61,27 @@ function years(): SeasonEnsembles {
 }
 
 describe('historical ensemble bands', () => {
+  it('does not turn unavailable v2 runs into zero-valued ensemble estimates', () => {
+    const v2 = config();
+    v2.cropModelVersion = 'crop-model-v2';
+    v2.modelInputs = undefined;
+    const reason = ensembleUnavailableReason(v2, years());
+
+    expect(reason).toContain('Frozen crop-model-v2 parameter inputs are missing');
+    expect(runEnsemble(v2, years())).toBeNull();
+  });
+
+  it('does not replay a saved v1 config from a caller-supplied current context', () => {
+    const saved = { ...config(), modelInputs: undefined };
+
+    expect(ensembleUnavailableReason(saved, years(), 5, true))
+      .toContain('Historical record has no frozen model inputs.');
+    expect(runEnsemble(saved, years(), {
+      persistedConfig: true,
+      ctx: { soil: { awcMmPerCm: 2, organicMatterPct: 3 }, crops: [lettuce] },
+    })).toBeNull();
+  });
+
   it('returns deterministic ordered bands for the same frozen inputs', () => {
     const historical = years();
     const first = runEnsemble(config(), historical);

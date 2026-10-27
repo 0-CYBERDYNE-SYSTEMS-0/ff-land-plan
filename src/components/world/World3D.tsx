@@ -19,7 +19,7 @@ import type { DailyEnvironment } from '@/lib/sim/types';
 import type { CellState } from '@/lib/sim/types';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
 import type { ArchetypeId, Environment, GrowingTargetRef, PlanState, PlanSurface, ScenarioType, Weather, WeatherCurrent, Crop } from '@/types';
-import { compareRuns as compareRunSummaries } from '@/lib/sim';
+import { compareRuns as compareRunSummaries, inspectRunModelSupport } from '@/lib/sim';
 import type { RunRecord, SimEvent, SimState } from '@/lib/sim';
 import {
   buildCellDiagnostics,
@@ -2232,7 +2232,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const compareItems = useMemo(() => {
     if (!runActive || !compareRuns) return [];
     return compareRuns
-      .filter((r) => r.id !== runRecord?.id)
+      .filter((r) => r.id !== runRecord?.id && inspectRunModelSupport(r.config).canReplay)
       .map((r) => ({
         id: r.id,
         label: r.label,
@@ -2508,6 +2508,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         climateBaseline={climateBaseline}
         cropProgress={runActive ? runProgressRows : cropProgress}
         runLabel={runRecord?.label}
+        runModelSupport={simRun?.modelSupport ?? undefined}
         runTimeline={simRun?.timeline ? { ...simRun.timeline, dayIndex: runDayIndex } : undefined}
         runPlaying={runPlaying}
         runEnded={runEnded}

@@ -66,14 +66,17 @@ function config(overrides: Partial<RunConfig> = {}): RunConfig {
 }
 
 function record(runConfig: RunConfig, envSeries: DailyEnvironment[]): RunRecord {
+  const frozenConfig = runConfig.modelInputs
+    ? runConfig
+    : { ...runConfig, modelInputs: freezeRunModelInputs(runConfig, ctx) };
   return {
     id: 'run:1:parent',
     farmId: 1,
     label: 'Baseline',
     createdAt: '2026-05-01T00:00:00.000Z',
-    config: runConfig,
+    config: frozenConfig,
     envSeries,
-    summary: simulateRun(runConfig, envSeries, ctx).summary,
+    summary: simulateRun(frozenConfig, envSeries, ctx).summary,
     status: 'complete',
   };
 }
@@ -94,6 +97,14 @@ function prefix(run: RunRecord, afterDayCount: number) {
 }
 
 describe('forkRun', () => {
+  it('rejects forks that would reconstruct an old run from live inputs', () => {
+    const saved = record(config(), weatherSeries());
+    const unsupported = { ...saved, config: { ...saved.config, modelInputs: undefined } };
+
+    expect(() => forkRun(unsupported, 2, {}, ctx))
+      .toThrow('Historical record has no frozen model inputs.');
+  });
+
   it('keeps the completed prefix identical and forks only future management', () => {
     const parent = record(config(), weatherSeries());
     const fork = forkRun(parent, 2, {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRun, simulateRun, stepDay } from './engine';
 import { replayRunToDay, ReplayStateCache } from './replay-cache';
+import { freezeRunModelInputs } from './model-inputs';
 import type { DailyEnvironment, RunConfig, RunRecord, SimState } from './types';
 
 function cachedState(dayIndex: number): SimState {
@@ -28,6 +29,7 @@ function runFixture(): RunRecord {
     precipMultiplier: 1,
     interventions: [],
   };
+  config.modelInputs = freezeRunModelInputs(config);
   const provenance = { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default' } as const;
   const envSeries: DailyEnvironment[] = Array.from({ length: 4 }, (_, index) => ({
     date: `2026-05-0${index + 1}`,
@@ -89,5 +91,13 @@ describe('ReplayStateCache', () => {
     expect(replayed).toEqual(simulateRun(run.config, run.envSeries).finalState);
     expect(cache.get(run.id, 4)).toBe(replayed);
     expect(replayRunToDay(run, 4, {}, cache)).toBe(replayed);
+  });
+
+  it('rejects a historical record that would need the current catalog or caller context', () => {
+    const run = runFixture();
+    const unsupported = { ...run, config: { ...run.config, modelInputs: undefined } };
+
+    expect(() => replayRunToDay(unsupported, 2, { crops: [] }, new ReplayStateCache()))
+      .toThrow('Historical record has no frozen model inputs.');
   });
 });

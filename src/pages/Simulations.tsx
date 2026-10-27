@@ -20,7 +20,7 @@ import { archetypes, ARCHETYPE_FOR_SURFACE } from '@/creative/archetypes';
 import { useFarm } from '@/hooks/useFarms';
 import { useNavigation } from '@/hooks/useNavigation';
 import { SCENARIOS } from '@/lib/growth';
-import { isoDayNumber, isoFromDayNumber } from '@/lib/sim';
+import { isoDayNumber, isoFromDayNumber, runSummaryHasAvailableEstimates } from '@/lib/sim';
 import { growingTargetKey } from '@/lib/growingTargets';
 import { createTwinRunRecord } from '@/lib/sim/twin';
 import type { RunRecord, RunSummary } from '@/lib/sim/types';
@@ -61,16 +61,17 @@ function runWorldContext(run: RunRecord): string {
 
 /** Honest summary tiles — raw RunSummary numbers, no arbitrary scaling. */
 function SummaryTiles({ summary }: { summary: RunSummary }) {
+  const unavailable = summary.modelQualification?.status === 'unsupported';
   const tiles: { icon: typeof Sprout; label: string; val: string }[] = [
-    { icon: Sprout, label: 'Yield', val: `${summary.totalYieldKg} kg` },
-    { icon: CloudRain, label: 'Rain', val: `${summary.rainMm} mm` },
-    { icon: Droplets, label: 'Irrigated', val: `${summary.irrigatedMm} mm` },
-    { icon: Sun, label: 'ET0', val: `${summary.etoMmTotal} mm` },
-    { icon: AlertTriangle, label: 'Stress', val: `${summary.stressCellDays} cell-days` },
+    { icon: Sprout, label: 'Yield', val: unavailable ? '—' : `${summary.totalYieldKg} kg` },
+    { icon: CloudRain, label: 'Rain', val: unavailable ? '—' : `${summary.rainMm} mm` },
+    { icon: Droplets, label: 'Irrigated', val: unavailable ? '—' : `${summary.irrigatedMm} mm` },
+    { icon: Sun, label: 'ET0', val: unavailable ? '—' : `${summary.etoMmTotal} mm` },
+    { icon: AlertTriangle, label: 'Stress', val: unavailable ? '—' : `${summary.stressCellDays} cell-days` },
     {
       icon: FlaskConical,
       label: 'Mature',
-      val: `${summary.matureCells} / ${summary.cellCount} cells`,
+      val: unavailable ? '—' : `${summary.matureCells} / ${summary.cellCount} cells`,
     },
   ];
   return (
@@ -119,6 +120,7 @@ function RunCard({
     window.location.href = openInWorldUrl(run);
   };
 
+  const noEstimates = run.summary.modelQualification?.status === 'unsupported';
   const ready =
     run.summary.harvestReadyDay !== null
       ? `day ${run.summary.harvestReadyDay}`
@@ -192,9 +194,19 @@ function RunCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {run.summary.modelQualification?.status === 'unsupported' && (
+          <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100">
+            <div className="font-semibold">No crop estimates were calculated</div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {run.summary.modelQualification.reasons.slice(0, 3).map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          </div>
+        )}
         <SummaryTiles summary={run.summary} />
         <p className="text-xs italic text-muted-foreground">
-          First harvest-ready: {ready} · {run.summary.daysSimulated} days simulated · seed {run.config.seed}
+          {noEstimates
+            ? `No crop estimates · seed ${run.config.seed}`
+            : `First harvest-ready: ${ready} · ${run.summary.daysSimulated} days simulated · seed ${run.config.seed}`}
         </p>
         <div className={TWIN_ENABLED && run.status === 'complete' && !(run.observations?.length) ? 'grid grid-cols-2 gap-2' : ''}>
           <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={openInWorld}>
@@ -277,6 +289,8 @@ function MetricCell({ value, baseline, better, digits }: {
 
 function ComparePanel({ runs }: { runs: RunRecord[] }) {
   const baseline = runs[0]!;
+  const baselineAvailable = runSummaryHasAvailableEstimates(baseline.summary);
+  const unavailableRuns = runs.filter((run) => !runSummaryHasAvailableEstimates(run.summary));
   return (
     <Card className="border-primary/30 bg-primary/5" data-testid="compare-panel">
       <CardHeader className="pb-2">
@@ -303,6 +317,11 @@ function ComparePanel({ runs }: { runs: RunRecord[] }) {
         </p>
       </CardHeader>
       <CardContent className="overflow-x-auto">
+        {unavailableRuns.length > 0 && (
+          <p role="status" className="mb-2 text-[10px] text-muted-foreground">
+            Comparison values are unavailable for {unavailableRuns.map((run) => run.label).join(', ')}; no numeric comparison is shown for an unavailable baseline.
+          </p>
+        )}
         <table className="w-full text-left text-xs">
           <thead className="text-muted-foreground">
             <tr className="border-b border-border">
@@ -332,8 +351,16 @@ function ComparePanel({ runs }: { runs: RunRecord[] }) {
                     {m.label}
                     {m.unit && <span className="ml-1 text-[10px] text-muted-foreground">{m.unit}</span>}
                   </td>
-                  {runs.map((r, i) =>
-                    i === 0 ? (
+                  {runs.map((r, i) => {
+                    const unavailable = !baselineAvailable || !runSummaryHasAvailableEstimates(r.summary);
+                    if (unavailable) {
+                      return (
+                        <td key={r.id} className="py-1.5 pr-3 text-right text-muted-foreground" title="No comparable estimate is available.">
+                          —
+                        </td>
+                      );
+                    }
+                    return i === 0 ? (
                       <td key={r.id} className="py-1.5 pr-3 text-right tabular-nums">
                         {baseVal.toFixed(m.digits)}
                       </td>
@@ -345,8 +372,8 @@ function ComparePanel({ runs }: { runs: RunRecord[] }) {
                         better={m.better}
                         digits={m.digits}
                       />
-                    ),
-                  )}
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -773,11 +800,11 @@ export function Simulations({ farmId }: { farmId: number }) {
                     <td className={`py-1.5 pr-3 ${SCENARIO_COLOR[r.config.scenario] ?? ''}`}>
                       {r.config.scenario.replace('_', ' ')}
                     </td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.daysSimulated}</td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.totalYieldKg}</td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.rainMm}</td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.irrigatedMm}</td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.stressCellDays}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.modelQualification?.status === 'unsupported' ? '—' : r.summary.daysSimulated}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.modelQualification?.status === 'unsupported' ? '—' : r.summary.totalYieldKg}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.modelQualification?.status === 'unsupported' ? '—' : r.summary.rainMm}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.modelQualification?.status === 'unsupported' ? '—' : r.summary.irrigatedMm}</td>
+                    <td className="py-1.5 pr-3 text-right">{r.summary.modelQualification?.status === 'unsupported' ? '—' : r.summary.stressCellDays}</td>
                   </tr>
                 ))}
               </tbody>

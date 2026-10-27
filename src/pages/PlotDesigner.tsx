@@ -379,6 +379,7 @@ export function PlotDesigner({ farmId }: { farmId: number }) {
       const { key, result, unavailableReason } = await runEnsembleInWorker(active.config, seasons, {
         maxYears: 10,
         ctx: controller.ctx ?? undefined,
+        persistedConfig: true,
         signal: abortController.signal,
         onProgress: (completed, total) => {
           if (isCurrentRequest() && isCurrentRun()) {

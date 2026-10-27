@@ -157,7 +157,7 @@ describe('local sim run physics snapshots', () => {
     expect(mocks.fetchMonthlyDli).not.toHaveBeenCalled();
   });
 
-  it('freezes equipment, climate inputs and DLI into replayable runs when all flags are enabled', async () => {
+  it('freezes versioned v2 inputs and exposes that the daily reducer is unavailable', async () => {
     const { state, localApi, makeEnvironment, simulateRun, persistNow } = await loadApi({
       records: true,
       climate: true,
@@ -186,8 +186,10 @@ describe('local sim run physics snapshots', () => {
     expect(record.config.assetPhysics?.room).toMatchObject({ lightingW: 40, waterStoreL: 200 });
     expect(record.config.climateModel).toBe('environment-v1');
     expect(record.config.climateEquipment?.lightingW).toBe(40);
+    expect(record.config.cropModelVersion).toBe('crop-model-v2');
     expect(record.config.modelInputs).toMatchObject({
-      model: 'run-inputs-v1',
+      model: 'run-inputs-v2',
+      parameterSetVersion: 'crop-parameters-v2',
       soil: { awcMmPerCm: 1.7, organicMatterPct: 3.4 },
       crops: [{ id: cropLibrary.find((entry) => entry.slug === 'lettuce')!.id }],
     });
@@ -195,7 +197,11 @@ describe('local sim run physics snapshots', () => {
     expect(mocks.fetchMonthlyDli).toHaveBeenCalledOnce();
 
     const replay = simulateRun(record.config, record.envSeries, { crops: [...cropLibrary] });
-    expect(replay.finalState.climate?.dliMol).toBeCloseTo(13.4784, 4);
+    expect(record.summary).toMatchObject({
+      daysSimulated: 0,
+      totalYieldKg: 0,
+      modelQualification: { status: 'unsupported' },
+    });
     expect(replay.summary).toEqual(record.summary);
   });
 });

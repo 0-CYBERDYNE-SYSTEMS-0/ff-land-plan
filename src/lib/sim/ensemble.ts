@@ -2,6 +2,7 @@ import type { SeasonEnsembles, SeasonYear } from '@/lib/ensembles';
 import { archetypes } from '@/creative/archetypes';
 import { etoProxyMm, isoDayNumber, isoFromDayNumber } from './environment';
 import { simulateRun, type SimRunCtx } from './engine';
+import { inspectRunModelSupport } from './model-inputs';
 import type { DailyEnvironment, EnsembleBand, RunConfig, RunEnsembleResult } from './types';
 
 const MAX_ENSEMBLE_YEARS = 5;
@@ -17,8 +18,10 @@ export interface EnsembleSample {
 export interface RunEnsembleOptions {
   maxYears?: number;
   onProgress?: (completed: number, total: number) => void;
-  /** Needed only to replay legacy records without frozen modelInputs. */
+  /** Compatibility context for direct transient v1 calculations. */
   ctx?: SimRunCtx;
+  /** Set when the config came from a saved run and must not use live fallbacks. */
+  persistedConfig?: boolean;
 }
 
 function validIsoDate(value: string): boolean {
@@ -163,7 +166,10 @@ export function ensembleUnavailableReason(
   config: RunConfig,
   ensembles: SeasonEnsembles,
   maxYears = MAX_ENSEMBLE_YEARS,
+  persistedConfig = false,
 ): string | null {
+  const support = inspectRunModelSupport(config, persistedConfig);
+  if (!support.canReplay) return `Run model unavailable: ${support.reasons.join(' ')}`;
   if (!naturalLightRequired(config)) return null;
   const years = selectedEnsembleYears(config, ensembles, maxYears);
   if (years.length === 0) return null;
@@ -187,7 +193,9 @@ export function runEnsembleYear(
   ensembles: SeasonEnsembles,
   year: number,
   ctx: SimRunCtx = {},
+  persistedConfig = false,
 ): EnsembleSample | null {
+  if (!inspectRunModelSupport(config, persistedConfig).canReplay) return null;
   const window = historicalWindow(config, ensembles, year);
   if (!window) return null;
   const yearConfig = configForHistoricalYear(config, window.startDate);
@@ -236,11 +244,11 @@ export function runEnsemble(
   ensembles: SeasonEnsembles,
   options: RunEnsembleOptions = {},
 ): RunEnsembleResult | null {
-  if (ensembleUnavailableReason(config, ensembles, options.maxYears)) return null;
+  if (ensembleUnavailableReason(config, ensembles, options.maxYears, options.persistedConfig)) return null;
   const years = selectedEnsembleYears(config, ensembles, options.maxYears);
   const samples: EnsembleSample[] = [];
   years.forEach((year, index) => {
-    const sample = runEnsembleYear(config, ensembles, year, options.ctx);
+    const sample = runEnsembleYear(config, ensembles, year, options.ctx, options.persistedConfig);
     if (sample) samples.push(sample);
     options.onProgress?.(index + 1, years.length);
   });

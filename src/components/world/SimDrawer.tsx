@@ -4,6 +4,7 @@ import { TIMELINE_ENABLED } from '@/lib/featureFlags';
 import type { ScenarioType, WeatherCurrent } from '@/types';
 import type { ComparisonMetric, DailyEnvironment, EnsembleBand, EnvSourceTag, Intervention, RunComparison, RunEnsembleResult } from '@/lib/sim';
 import type { ApplyInterventionResult, CellDiagnosticRow, SimRunTimeline } from '@/hooks/useSimRun';
+import type { RunModelSupport } from '@/lib/sim/model-inputs';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
@@ -263,6 +264,7 @@ export interface SimDrawerProps {
   cropProgress: CropProgressRow[];
   // --- Run transport (RunInspector, spec §3.3) — all presentational ---
   runLabel?: string;
+  runModelSupport?: RunModelSupport;
   runTimeline?: SimRunTimeline;
   runPlaying?: boolean;
   runEnded?: boolean;
@@ -382,6 +384,7 @@ export function SimDrawer({
   climateBaseline,
   cropProgress,
   runLabel,
+  runModelSupport,
   runTimeline,
   runPlaying,
   runEnded,
@@ -458,6 +461,23 @@ export function SimDrawer({
             : 'pointer-events-none translate-x-full max-xl:translate-x-0 max-xl:translate-y-full',
         )}
       >
+        {runModelSupport && !runModelSupport.canReplay && (
+          <div role="status" className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[11px] text-amber-900 dark:text-amber-100">
+            <div className="font-semibold">
+              {runModelSupport.model === 'crop-model-v2' ? 'Crop estimate unavailable' : 'Saved summary preserved'}
+            </div>
+            <p className="mt-0.5">
+              {runModelSupport.model === 'crop-model-v2'
+                ? 'This model version has no enabled daily reducer for these frozen inputs; the saved summary is left unchanged.'
+                : 'This saved record has no supported frozen model version or complete inputs; its stored summary is unchanged.'}
+            </p>
+            {runModelSupport.reasons.length > 0 && (
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {runModelSupport.reasons.slice(0, 3).map((reason) => <li key={reason}>{reason}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">Simulation</h2>
           <button
@@ -711,7 +731,7 @@ export function SimDrawer({
                     </select>
                   ) : (
                     <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-                      No other runs of this farm to compare against yet — create one on the Simulations page.
+                      No replayable comparison runs are available. Saved runs without compatible frozen model inputs cannot be loaded as ghosts.
                     </p>
                   )}
                 </div>
