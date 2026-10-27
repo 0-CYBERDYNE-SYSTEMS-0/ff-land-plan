@@ -71,9 +71,9 @@ Initial values in the existing thermal table are not evidence that the current b
 
 Calibration and holdout are separated by metric. OSU Croptime's reported error is computed on its model-development data and is not an independent holdout. The Michelon lettuce field results are a potential production holdout only if no parameter is fitted to them; the experiment identifies cultivar Green Wave and HS50 as the 50% ETc irrigation treatment. Its reported mean DLI and thermal sum are source summaries, not daily inputs, so the missing daily weather/light and soil series currently prevent an executable comparison. Cabbage thermal values already appear in the current parameter table and are parameter references, not held-out evidence. No claim is green until a reproducible source fixture, crop/cultivar, domain, sample size, metric, held-out error and fixture IDs are present.
 
-## Numerical tolerances — independent review incorporated; one comparison tolerance pending
+## Numerical tolerances — independent review incorporated
 
-No candidate model output has been compared. The preservation, thermal transcription, lettuce plant-mass rounding, water-closure and zero-light checks below were preregistered and reviewed by the independent validator. The area-yield display-rounding tolerance is also preregistered but remains pending independent review. None of these tolerances establishes predictive accuracy.
+No candidate model output has been compared. The preservation, thermal transcription, lettuce plant-mass and area-yield rounding, water-closure and zero-light checks below were preregistered and reviewed by the independent validator. These tolerances cover preservation, display rounding, and numerical closure only; none establishes predictive accuracy.
 
 | Metric/check | Recorded tolerance | Basis and limits |
 |---|---:|---|
@@ -82,13 +82,13 @@ No candidate model output has been compared. The preservation, thermal transcrip
 | Reproduction of a source thermal sum printed as an integer | ±0.5 °C·day after applying the source method, endpoint and stated unit conversion | Half of the displayed C·day unit, for transcription/reproduction only. It is not model-accuracy evidence. Do not compare incompatible accumulation methods or endpoints. |
 | Lettuce fresh-mass means printed as whole g/plant | ±0.5 g/plant | Approved as table-rounding tolerance only, not an acceptable predictive-error band. The article reports three replicate plots but the retrieved table does not give raw observations/variance. |
 | Lettuce dry-mass means printed to 0.1 g/plant | ±0.05 g/plant | Approved as table-rounding tolerance only, not a predictive-error band. |
-| Lettuce marketable area yield printed to 0.01 kg/m² | ±0.005 kg/m² | Proposed half-unit display-rounding tolerance for reproducing the reported 1.90 kg/m² only; pending independent review. It is not a predictive-error band. |
+| Lettuce marketable area yield printed as `1.90 kg/m²` | ±0.005 kg/m² | Approved display-rounding tolerance only; half the 0.01 kg/m² display increment. It applies only to reproducing the published value, not to predictive accuracy. |
 | Daily soil-water balance residual | ≤1e-6 mm per cell-day, conditional on unrounded internal pools | Use `residual = storage_start + inflow - uptake - drainage - runoff - storage_end`; include every boundary flux, retain unrounded state, report signed accumulated residual and maximum absolute daily residual separately. |
 | Dry-matter state/partition closure | ≤1e-6 g DM/m²/day | Numerical-analysis check on additive mass transfers before output rounding; photosynthetic production, allocation and any explicit reserve transfer remain separately accounted. |
 | Known zero usable DLI/PAR photosynthetic production increment | Exactly 0 g DM/m²/day | The production equation must return zero. Any seed or stored-reserve drawdown is a separate finite state transfer and cannot be counted as photosynthetic production. |
 | Independent held-out harvest-date/yield/biomass error | No universal threshold proposed | Lock a source-specific threshold from measured precision or published independent error, then receive validator approval before comparison. Where daily inputs or variance are unavailable, mark comparison UNVERIFIED and do not invent a threshold. |
 
-The independent validator reviewed and approved the displayed-value rounding tolerances for lettuce plant fresh/dry mass, the ±0.5 °C·day transcription bound, and the water-balance bound subject to the stated unrounded-pool and residual-reporting conditions. The 0.01 kg/m² marketable-yield display precision is separately proposed at ±0.005 kg/m² and awaits review. These checks do not authorize predictive-accuracy claims. No candidate comparison has been run.
+The independent validator reviewed and approved the displayed-value rounding tolerances for lettuce plant fresh/dry mass and marketable area yield, the ±0.5 °C·day transcription bound, and the water-balance bound subject to the stated unrounded-pool and residual-reporting conditions. These checks do not authorize predictive-accuracy claims. No candidate comparison has been run.
 
 ## Implementation gates after this record
 

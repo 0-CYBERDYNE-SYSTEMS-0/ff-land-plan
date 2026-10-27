@@ -248,7 +248,10 @@
       "sourceRetrievedDate": "2026-10-27",
       "sourceVersion": "2020 Agronomy 10(5), article 668; version of record",
       "sourceArtifactSha256": "f07bf16a1854cd9ec9aa1000dd61eb6653d0376a53db8923463dbae78df8c317",
-      "sourceLicenseOrReuse": "CC BY 4.0, as stated by the publisher; cite the article and retain a source link."
+      "sourceLicenseOrReuse": "CC BY 4.0, as stated by the publisher; cite the article and retain a source link.",
+      "sourceDisplay": {
+        "marketableYield": "1.90 kg/m²"
+      }
     },
     {
       "id": "THERMAL-CABBAGE-STORAGE-MATURITY",
@@ -2070,7 +2073,7 @@
   ],
   "toleranceReview": {
     "reviewedBy": "independent integration validator",
-    "status": "existing numerical and plant-mass checks approved with stated conditions; marketable-area-yield display tolerance awaits independent review; no candidate comparison authorized yet",
+    "status": "approved with stated display-rounding and numerical-closure conditions; no candidate comparison authorized by approval alone",
     "checks": [
       {
         "id": "supported-frozen-replay",
@@ -2129,7 +2132,7 @@
       {
         "id": "lettuce-marketable-area-yield-rounding",
         "tolerance": "±0.005 kg/m²",
-        "status": "pending-independent-review",
+        "status": "approved-display-only",
         "basis": "half of the article narrative display increment (1.90 kg/m², two decimal places); table rounding only, not predictive accuracy"
       }
     ]
