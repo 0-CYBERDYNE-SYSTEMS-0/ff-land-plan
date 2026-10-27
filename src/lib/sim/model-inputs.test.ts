@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import { lettuceRosalbaRUEReference, lettuceYumaRootProfileReference } from '@/data/cropModelV2LettuceReferences';
 import { cropThermalParams } from '@/data/cropThermalParams';
-import { growingTargetKey } from '@/lib/growingTargets';
+import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
 import type { FrozenCropModelParametersV2, RunConfig, RunModelInputsV2 } from './types';
 import { freezeRunModelInputs, freezeRunModelInputsV2, inspectRunModelSupport } from './model-inputs';
 import { NO_CLIMATE_EQUIPMENT } from './environment-climate';
@@ -28,6 +28,7 @@ function config(overrides: Partial<RunConfig> = {}): RunConfig {
     tempDeltaC: 0,
     precipMultiplier: 1,
     interventions: [],
+    cropStartEvents: { '0,0': 'transplanting' },
     ...overrides,
   };
 }
@@ -41,6 +42,7 @@ function lettuceSourceParameterFixture(): FrozenCropModelParametersV2 {
     'Synthetic integration fixture composes Michelon Green Wave transplant thermal targets with greenhouse Rosalba production RUE and direct-seeded Yuma iceberg/romaine root parameters; it is not a validated cultivar/environment set.',
     'The Michelon thermal target is used only to satisfy the frozen daily engine contract; it shares a source with the potential holdout record and is not independent holdout evidence.',
     'The source RUE is for above-ground dry matter; the fixed 0.5 PAR interception fraction and 0.5 harvest index are synthetic fixture values.',
+    'Initial above-ground dry matter is synthetic zero; no transplant seedling mass, nursery development, or seed reserve is inferred.',
   ];
   return {
     cropId: lettuce.id,
@@ -48,6 +50,7 @@ function lettuceSourceParameterFixture(): FrozenCropModelParametersV2 {
     production: {
       equationFamily: 'LINTUL-net-RUE',
       rueGPerMjInterceptedPar: rue.value,
+      initialDryMatterGPerM2: 0,
       interceptedParFraction: 0.5,
       harvestIndex: 0.5,
       status: 'qualified',
@@ -69,6 +72,7 @@ function lettuceSourceParameterFixture(): FrozenCropModelParametersV2 {
       rootDevelopment: {
         methodVersion: root.methodVersion,
         storageExpansionMethod: root.storageExpansionMethod,
+        startEvent: 'direct-sowing',
         initialRootDepthCm: root.initialRootDepthCm,
         growthStartsAfterCdays: root.growthStartsAfterCdays,
         growthMmPerCday: root.growthMmPerCday,
@@ -96,6 +100,45 @@ function lettuceSourceParameterFixture(): FrozenCropModelParametersV2 {
         sourceUrl: root.sourceUrl,
         validDomain: root.validDomain,
       },
+    },
+    lifecycle: 'plant',
+  };
+}
+
+function syntheticStartEventParameter(
+  cropId: number,
+  thermal: NonNullable<FrozenCropModelParametersV2['thermal']>,
+): FrozenCropModelParametersV2 {
+  const evidence = {
+    evidenceId: 'TEST-SYNTHETIC-START-EVENT',
+    sourceCitation: 'Synthetic software acceptance fixture; no biological claim',
+    sourceUrl: 'test-only:crop-start-event',
+    validDomain: 'software acceptance only',
+  };
+  return {
+    cropId,
+    thermal,
+    production: {
+      equationFamily: 'LINTUL-net-RUE',
+      rueGPerMjInterceptedPar: 2,
+      initialDryMatterGPerM2: 0,
+      interceptedParFraction: 0.5,
+      harvestIndex: 0.5,
+      status: 'qualified',
+      missing: [],
+      limitations: ['Synthetic production values exercise event timing only.'],
+      evidence,
+    },
+    rootZone: {
+      method: 'FAO-56',
+      effectiveRootDepthCm: 20,
+      depletionFraction: 0.5,
+      cropCoefficient: 1,
+      initialStorageFraction: 0.7,
+      status: 'qualified',
+      missing: [],
+      limitations: ['Synthetic static root-zone values exercise event timing only.'],
+      evidence,
     },
     lifecycle: 'plant',
   };
@@ -144,7 +187,7 @@ describe('frozen crop model inputs and replay support', () => {
       crops: [cropLibrary[0]!],
     });
     expect(frozen.model).toBe('run-inputs-v2');
-    expect(frozen.parameterSetVersion).toBe('crop-parameters-v2');
+    expect(frozen.parameterSetVersion).toBe('crop-parameters-v3');
     expect(frozen.soil?.source).toBe('unknown');
     expect(frozen.cropParameters).toHaveLength(1);
     expect(frozen.cropParameters[0]).toMatchObject({
@@ -160,6 +203,225 @@ describe('frozen crop model inputs and replay support', () => {
       canReplay: false,
       preserveStoredSummary: true,
     });
+  });
+
+  it('requires the versioned start-event inputs to replay crop-model-v2 records', () => {
+    const run = config({ cropModelVersion: 'crop-model-v2' });
+    const current = freezeRunModelInputsV2(run, {
+      soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 },
+      crops: [cropLibrary[0]!],
+    });
+    const legacyParameterSet = {
+      ...current,
+      parameterSetVersion: 'crop-parameters-v2',
+    } as unknown as RunModelInputsV2;
+
+    expect(inspectRunModelSupport({ ...run, modelInputs: legacyParameterSet })).toMatchObject({
+      status: 'unsupported',
+      canReplay: false,
+      preserveStoredSummary: true,
+    });
+  });
+
+  it('starts direct-sown and transplanted crops on their respective frozen events', () => {
+    const bean = cropLibrary.find((crop) => crop.id === 27)!;
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const beanThermal = cropThermalParams.find((parameter) => parameter.cropId === bean.id)!;
+    const tomatoThermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const daySeries = Array.from({ length: 5 }, (_, index) => ({
+      date: new Date(Date.parse('2026-10-01T00:00:00Z') + index * 86_400_000).toISOString().slice(0, 10),
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 4,
+      dliNaturalMol: 18,
+      gddBase10C: 15,
+      provenance: { tMinC: 'default' as const, tMaxC: 'default' as const, precipMm: 'default' as const, etoMm: 'default' as const, dliNaturalMol: 'default' as const },
+    }));
+    const directSownRun = config({
+      cropModelVersion: 'crop-model-v2',
+      basePlan: { ...config().basePlan, planting: { '0,0': bean.id } },
+      cropStartEvents: { '0,0': 'direct-sowing' },
+    });
+    const directSownInputs = freezeRunModelInputsV2(directSownRun, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [bean],
+      cropParametersV2: [syntheticStartEventParameter(bean.id, beanThermal)],
+    });
+    const transplantRun = config({
+      cropModelVersion: 'crop-model-v2',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': tomato.id },
+        plantedAt: { '0,0': '2026-10-03' },
+      },
+      cropStartEvents: { '0,0': 'transplanting' },
+    });
+    const transplantInputs = freezeRunModelInputsV2(transplantRun, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [tomato],
+      cropParametersV2: [syntheticStartEventParameter(tomato.id, tomatoThermal)],
+    });
+    const directSown = simulateRun({ ...directSownRun, modelInputs: directSownInputs }, daySeries);
+    const beforeTransplant = simulateRun({ ...transplantRun, modelInputs: transplantInputs }, daySeries.slice(0, 2));
+    const transplanted = simulateRun({ ...transplantRun, modelInputs: transplantInputs }, daySeries);
+    const directSownSupport = inspectRunModelSupport({ ...directSownRun, modelInputs: directSownInputs });
+    const incompatibleStart = inspectRunModelSupport({
+      ...transplantRun,
+      cropStartEvents: { '0,0': 'direct-sowing' },
+      modelInputs: transplantInputs,
+    });
+    const missingAsOfStartState = inspectRunModelSupport({
+      ...transplantRun,
+      basePlan: { ...transplantRun.basePlan, plantedAt: { '0,0': '2026-09-30' } },
+      modelInputs: transplantInputs,
+    });
+
+    expect(directSown.finalState.cells['0,0']?.startEvent).toBe('direct-sowing');
+    expect(directSown.finalState.cells['0,0']?.gddAccumC).toBeGreaterThan(0);
+    expect(directSown.finalState.cells['0,0']?.dryMatterGPerM2).toBeGreaterThan(0);
+    expect(directSown.summary.waterUseMm).toBeGreaterThan(0);
+    expect(directSownSupport.reasons.some((reason) => reason.includes('emergence delay and seed reserves are not modeled'))).toBe(true);
+    expect(beforeTransplant.finalState.cells['0,0']?.gddAccumC).toBe(0);
+    expect(beforeTransplant.finalState.cells['0,0']?.dryMatterGPerM2).toBe(0);
+    expect(transplanted.finalState.cells['0,0']?.startEvent).toBe('transplanting');
+    expect(transplanted.finalState.cells['0,0']?.gddAccumC).toBeGreaterThan(0);
+    expect(transplanted.finalState.cells['0,0']?.gddAccumC).toBeLessThan(directSown.finalState.cells['0,0']!.gddAccumC);
+    expect(incompatibleStart).toMatchObject({ status: 'unsupported', canReplay: false, preserveStoredSummary: true });
+    expect(incompatibleStart.reasons.some((reason) => reason.includes('outside the thermal source start-event domain'))).toBe(true);
+    expect(missingAsOfStartState).toMatchObject({ status: 'unsupported', canReplay: false, preserveStoredSummary: true });
+    expect(missingAsOfStartState.reasons.some((reason) => reason.includes('frozen as-of-start crop state'))).toBe(true);
+  });
+
+  it('scopes v2 irrigation to its target and carries water stress into production', () => {
+    const lettuce = cropLibrary.find((crop) => crop.id === 2)!;
+    const target = { kind: 'growing-level' as const, growingSpaceId: 'space-a', levelId: 'high' };
+    const levelCell = targetCellKey(target, '0,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': lettuce.id },
+        targets: {
+          [growingTargetKey(target)]: {
+            growingSpaceId: target.growingSpaceId,
+            levelId: target.levelId,
+            planting: { '0,0': lettuce.id },
+          },
+        },
+      },
+      cropStartEvents: { '0,0': 'transplanting', [levelCell]: 'transplanting' },
+      interventions: [{ kind: 'irrigate', date: '2026-10-01', target, cells: ['0,0'], mm: 18 }],
+    });
+    const modelInputs = freezeRunModelInputsV2(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [lettuce],
+      cropParametersV2: [lettuceSourceParameterFixture()],
+    });
+    modelInputs.cropParameters[0]!.rootZone.initialStorageFraction = 0;
+    const result = simulateRun({ ...run, modelInputs }, [{
+      date: '2026-10-01',
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 5,
+      dliNaturalMol: 18,
+      gddBase10C: 15,
+      provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default', dliNaturalMol: 'default' },
+    }]);
+
+    expect(result.finalState.cells['0,0']?.rootZoneWaterMm).toBe(0);
+    expect(result.finalState.cells[levelCell]?.rootZoneWaterMm).toBeCloseTo(13, 10);
+    expect(result.finalState.cells['0,0']?.startEvent).toBe('transplanting');
+    expect(result.finalState.cells[levelCell]?.startEvent).toBe('transplanting');
+    expect(result.finalState.cells['0,0']?.dryMatterGPerM2).toBe(0);
+    expect(result.finalState.cells[levelCell]?.dryMatterGPerM2).toBeCloseTo(5.42, 10);
+    expect(result.summary.waterUseMm).toBeCloseTo(2.5, 10);
+    expect(result.events.find((event) => event.kind === 'irrigated')).toMatchObject({ target });
+  });
+
+  it('reconciles v2 dry-matter harvest across floor and elevated occupied cell areas', () => {
+    const lettuce = cropLibrary.find((crop) => crop.id === 2)!;
+    const target = { kind: 'growing-level' as const, growingSpaceId: 'space-a', levelId: 'high' };
+    const firstLevelCell = targetCellKey(target, '0,0');
+    const secondLevelCell = targetCellKey(target, '1,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': lettuce.id },
+        targets: {
+          [growingTargetKey(target)]: {
+            growingSpaceId: target.growingSpaceId,
+            levelId: target.levelId,
+            planting: { '0,0': lettuce.id, '1,0': lettuce.id },
+          },
+        },
+      },
+      cropStartEvents: {
+        '0,0': 'transplanting',
+        [firstLevelCell]: 'transplanting',
+        [secondLevelCell]: 'transplanting',
+      },
+      interventions: [
+        { kind: 'harvest', date: '2026-10-01', cell: '0,0' },
+        { kind: 'harvest', date: '2026-10-01', cell: '0,0', target },
+        { kind: 'harvest', date: '2026-10-01', cell: '1,0', target },
+      ],
+    });
+    const modelInputs = freezeRunModelInputsV2(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      crops: [lettuce],
+      cropParametersV2: [lettuceSourceParameterFixture()],
+    });
+    const frozenRun = { ...run, modelInputs };
+    const state = createRun(frozenRun);
+    for (const [key, cell] of Object.entries(state.cells)) {
+      state.cells[key] = { ...cell, biomassFrac: 1, gddAccumC: 731, dryMatterGPerM2: 100 };
+    }
+    const result = stepDay(state, {
+      date: '2026-10-01',
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 0,
+      dliNaturalMol: 0,
+      gddBase10C: 15,
+      provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default', dliNaturalMol: 'default' },
+    }, frozenRun);
+    const harvests = result.events.filter((event) => event.kind === 'harvested');
+
+    expect(harvests).toHaveLength(3);
+    expect(harvests.filter((event) => event.target?.kind === 'growing-level')).toHaveLength(2);
+    expect(harvests.reduce((sum, event) => sum + (event.kind === 'harvested' ? event.data.yieldKg : 0), 0))
+      .toBeCloseTo(0.009375, 12);
+    expect(Object.values(result.state.cells).every((cell) => cell.harvested)).toBe(true);
+
+    const spacingVariantInputs = structuredClone(modelInputs);
+    spacingVariantInputs.crops[0] = {
+      ...spacingVariantInputs.crops[0]!,
+      spacingCm: 5,
+      rowSpacingCm: 5,
+      yieldKgPerPlant: 1000,
+    };
+    const spacingVariantRun = { ...run, modelInputs: spacingVariantInputs };
+    const spacingVariantState = createRun(spacingVariantRun);
+    for (const [key, cell] of Object.entries(spacingVariantState.cells)) {
+      spacingVariantState.cells[key] = { ...cell, biomassFrac: 1, gddAccumC: 731, dryMatterGPerM2: 100 };
+    }
+    const spacingVariant = stepDay(spacingVariantState, {
+      date: '2026-10-01',
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 0,
+      dliNaturalMol: 0,
+      gddBase10C: 15,
+      provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default', dliNaturalMol: 'default' },
+    }, spacingVariantRun);
+    expect(spacingVariant.events.filter((event) => event.kind === 'harvested')
+      .reduce((sum, event) => sum + (event.kind === 'harvested' ? event.data.yieldKg : 0), 0))
+      .toBeCloseTo(0.009375, 12);
   });
 
   it('freezes soil provenance on v2 inputs and qualifies missing provenance', () => {
@@ -222,7 +484,7 @@ describe('frozen crop model inputs and replay support', () => {
       cropParametersV2: [{
         cropId: 1,
         thermal: null,
-        production: { equationFamily: 'LINTUL-net-RUE', rueGPerMjInterceptedPar: 2, interceptedParFraction: 0.5, harvestIndex: 0.5, status: 'supported', missing: [], evidence: { evidenceId: 'test-only', sourceCitation: 'Synthetic reducer contract fixture', sourceUrl: 'test-only:fixture', validDomain: 'software test only' } },
+        production: { equationFamily: 'LINTUL-net-RUE', rueGPerMjInterceptedPar: 2, initialDryMatterGPerM2: 0, interceptedParFraction: 0.5, harvestIndex: 0.5, status: 'supported', missing: [], evidence: { evidenceId: 'test-only', sourceCitation: 'Synthetic reducer contract fixture', sourceUrl: 'test-only:fixture', validDomain: 'software test only' } },
         rootZone: { method: 'FAO-56', effectiveRootDepthCm: 20, depletionFraction: 0.5, cropCoefficient: 1, initialStorageFraction: 0.7, status: 'supported', missing: [], evidence: { evidenceId: 'test-only', sourceCitation: 'Synthetic reducer contract fixture', sourceUrl: 'test-only:fixture', validDomain: 'software test only' } },
         lifecycle: 'plant',
       }],
@@ -239,13 +501,13 @@ describe('frozen crop model inputs and replay support', () => {
     const thermal = cropThermalParams.find((entry) => entry.cropId === crop.id)!;
     const inputs = {
       model: 'run-inputs-v2' as const,
-      parameterSetVersion: 'crop-parameters-v2' as const,
+      parameterSetVersion: 'crop-parameters-v3' as const,
       soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 },
       crops: [crop],
       cropParameters: [{
         cropId: crop.id,
         thermal,
-        production: { equationFamily: 'LINTUL-net-RUE' as const, rueGPerMjInterceptedPar: 2, interceptedParFraction: 0.5, harvestIndex: 0.5, status: 'supported' as const, missing: [], evidence: { evidenceId: 'test-only', sourceCitation: 'Synthetic reducer contract fixture', sourceUrl: 'test-only:fixture', validDomain: 'software test only' } },
+        production: { equationFamily: 'LINTUL-net-RUE' as const, rueGPerMjInterceptedPar: 2, initialDryMatterGPerM2: 0, interceptedParFraction: 0.5, harvestIndex: 0.5, status: 'supported' as const, missing: [], evidence: { evidenceId: 'test-only', sourceCitation: 'Synthetic reducer contract fixture', sourceUrl: 'test-only:fixture', validDomain: 'software test only' } },
         rootZone: { method: 'FAO-56' as const, effectiveRootDepthCm: 20, depletionFraction: 0.5, cropCoefficient: 1, initialStorageFraction: 0.7, status: 'supported' as const, missing: [], evidence: { evidenceId: 'test-only', sourceCitation: 'Synthetic reducer contract fixture', sourceUrl: 'test-only:fixture', validDomain: 'software test only' } },
         lifecycle: 'plant' as const,
       }],
@@ -471,7 +733,7 @@ describe('frozen crop model inputs and replay support', () => {
     });
     const replantConfig = {
       ...run,
-      interventions: [{ kind: 'plant' as const, date: '2026-10-01', cell: '0,0', cropId: replacementCrop.id }],
+      interventions: [{ kind: 'plant' as const, date: '2026-10-01', cell: '0,0', cropId: replacementCrop.id, startEvent: 'transplanting' as const }],
       modelInputs: replantInputs,
     };
     const replantDay = {
@@ -499,6 +761,7 @@ describe('frozen crop model inputs and replay support', () => {
       },
     }, replantDay, replantConfig);
     expect(replantResult.state.cells['0,0']).toMatchObject({
+      startEvent: 'transplanting',
       rootZoneWaterMm: 17,
       rootZoneResidualAccumulatedMm: 0.125,
       rootZoneResidualMaxAbsMm: 0.001,

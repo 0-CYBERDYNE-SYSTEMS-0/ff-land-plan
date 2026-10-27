@@ -1884,3 +1884,21 @@ snapshots changed, and no application implementation is claimed by this revision
 - Verification: `npm test` (35 files / 156 tests), `npm run typecheck`, `npm run build`,
   `npm run check:private` (477 tracked files), and `git diff --check` passed. No simulation
   equations or golden snapshots changed.
+
+## 2026-10-27 — BETA-02A establishment and partial management acceptance
+
+- `crop-parameters-v3` freezes supported direct-sowing/transplant events and initial above-ground
+  dry matter. V2 replay requires an explicit per-target event; a plantedAt date before run start
+  is unsupported and preserves the saved summary because as-of-start crop state and prior weather
+  are unavailable. V1 dispatch remains unchanged.
+- Synthetic tests cover direct-sown bean and transplanted tomato event timing, pre-transplant zero
+  growth, same-day direct-sowing PAR production and root-zone water use, out-of-domain event
+  rejection, target-scoped irrigation, water-stress reduction of dry matter, floor/elevated harvest
+  area, spacing-independent kg DM/m² payout, and replant storage drainage. The sow-day response is
+  explicitly qualified: emergence, seed reserves and an emergence-dependent canopy are not modeled.
+- The evidence manifest records source-backed event domains separately from synthetic behavior.
+  No candidate comparison was run; measured production/root coverage, biological establishment,
+  full v2 spacing/mortality/management parity and holdout acceptance remain incomplete.
+- Verification: `npm test` (41 files / 207 tests), `npm run build`, `npm run check:private`
+  (499 tracked files), `git diff --check`, and evidence-manifest JSON parsing passed. The build
+  retained the existing Vite config-loader and large-chunk advisories.

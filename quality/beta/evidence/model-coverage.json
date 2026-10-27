@@ -264,6 +264,7 @@
         "marketableYield": "kg/m²"
       },
       "startEvent": "Transplanting; source thermal accumulation begins at transplant",
+      "normalizedStartEvents": ["transplanting"],
       "endEvent": "Harvest 31 days after transplant in experiment 1",
       "validDomain": "Open-field experiment 1 in the Central Dry Zone of Myanmar at Yezin; cultivar Green Wave; 50% ETc Hargreaves–Samani irrigation treatment; no generalization beyond these conditions.",
       "expectedMetricRange": {
@@ -390,6 +391,7 @@
         "headWeight": "kg"
       },
       "startEvent": "Direct seeding or transplanting; source treatment-specific date",
+      "normalizedStartEvents": ["direct-sowing", "transplanting"],
       "endEvent": "Storage cabbage maturity at head density 0.72–0.80 and weight 2.2–3.0 kg",
       "validDomain": "Storage cabbage at Cornell field experiments in 1970 and 1973; the paper reports cultivar and weather-dependent variation.",
       "expectedMetricRange": {
@@ -451,6 +453,7 @@
       },
       "sourceMethod": "EM 9305 Table 1 transplanted broccoli; single sine with horizontal cutoff",
       "startEvent": "Transplant at 2–4 true leaves",
+      "normalizedStartEvents": ["transplanting"],
       "endEvent": "First harvest at approximately 6-inch head diameter",
       "metric": "thermal sum to the stated development endpoint",
       "expectedMetricRange": {
@@ -503,6 +506,7 @@
       },
       "sourceMethod": "EM 9305 Table 2 cucumber; single sine with horizontal cutoff",
       "startEvent": "Direct seeding or transplanting at 2 true leaves",
+      "normalizedStartEvents": ["direct-sowing", "transplanting"],
       "endEvent": "First harvest at market size",
       "metric": "thermal sum to the stated development endpoint",
       "expectedMetricRange": {
@@ -555,6 +559,7 @@
       },
       "sourceMethod": "EM 9305 Table 5 sweet pepper; single sine with horizontal cutoff",
       "startEvent": "Transplant at 4–7 true leaves",
+      "normalizedStartEvents": ["transplanting"],
       "endEvent": "First ripe harvest (four or more fruits show ripe color)",
       "metric": "thermal sum to the stated development endpoint",
       "expectedMetricRange": {
@@ -607,6 +612,7 @@
       },
       "sourceMethod": "EM 9305 Table 3 snap bean; single sine with horizontal cutoff",
       "startEvent": "Direct seeding",
+      "normalizedStartEvents": ["direct-sowing"],
       "endEvent": "Snap-bean harvest at 3.5–4 inches",
       "metric": "thermal sum to the stated development endpoint",
       "expectedMetricRange": {
@@ -667,6 +673,7 @@
         "convertedThermalRange": "°C·day"
       },
       "startEvent": "Transplant at 3–5 true leaves",
+      "normalizedStartEvents": ["transplanting"],
       "endEvent": "First ripe harvest (four or more fruits show ripe color)",
       "validDomain": "Named OSU Croptime tomato cultivar values and transplant method; regional use outside the source domain is unverified.",
       "expectedMetricRange": {
@@ -720,6 +727,7 @@
         "endpointReading": "tenderometer units"
       },
       "startEvent": "Sowing",
+      "normalizedStartEvents": ["direct-sowing"],
       "endEvent": "Green-pea maturity at tenderometer reading 130",
       "validDomain": "Unverified until original paper is retrieved and its environment/cultivar/thermal method are checked.",
       "expectedMetricRange": {
@@ -772,6 +780,7 @@
         "thermalSum": "°C·day"
       },
       "startEvent": "Planting (biofix)",
+      "normalizedStartEvents": ["direct-sowing"],
       "endEvent": "Mature for fresh market",
       "validDomain": "Western Oregon field-study model domain for sweet corn; the source advises local field testing before use elsewhere.",
       "expectedMetricRange": {
@@ -806,6 +815,7 @@
           "baseC": 4,
           "targetCdays": [662, 731],
           "startEvent": "transplanting",
+          "normalizedStartEvents": ["transplanting"],
           "endpoint": "harvest",
           "method": "study thermal-time accumulation, base 4 °C",
           "sourceEvidenceId": "LETTUCE-MICHELON-2020-EXP1-HS50",
@@ -821,6 +831,7 @@
         "rootDevelopment": {
           "methodVersion": "thermal-linear-root-depth-v1",
           "storageExpansionMethod": "uniform-initial-awc-fraction-v1",
+          "startEvent": "direct-sowing",
           "initialRootDepthCm": 12,
           "growthStartsAfterCdays": 200,
           "growthMmPerCday": 1.2,
@@ -833,13 +844,22 @@
           "qualification": "Direct-seeded Yuma iceberg/romaine water-balance profile. The 90 cm maximum was an inferred, site-specific model choice to match managed-field water balance, not a generic measured depth. No transplant inference."
         }
       },
+      "parameterSetVersion": "crop-parameters-v3",
+      "startEventAcceptance": {
+        "classification": "synthetic software behavior only; no biological validation claim",
+        "directSowing": { "cropSlug": "bush-bean", "event": "direct-sowing", "result": "thermal accumulation, synthetic nonzero-light DM gain, and synthetic root-zone water use begin on sowing date; qualified because emergence, seed reserves, and emergence-dependent canopy are not modeled" },
+        "transplanting": { "cropSlug": "tomato", "event": "transplanting", "result": "pre-transplant days add no thermal development or DM" },
+        "outOfDomainEvent": "rejected as unsupported while preserving the stored summary",
+        "preRunEstablishmentDate": "rejected as unsupported because frozen as-of-start crop state and prior environment are missing"
+      },
       "syntheticInputs": {
         "dliMolParM2Day": 18,
         "interceptedParFraction": 0.5,
         "waterStressFactor": 1,
         "initialAvailableWaterFraction": 0.7,
+        "initialDryMatterGPerM2": 0,
         "harvestIndex": 0.5,
-        "note": "Synthetic equation-driving values only; intercepted fraction, initial soil storage, harvest index and crop trajectory are not sourced by the cited records."
+        "note": "Synthetic equation-driving values only; zero initial DM, intercepted fraction, initial soil storage, harvest index and crop trajectory are not sourced by the cited records. Seed reserves and nursery development are excluded."
       },
       "expected": {
         "interceptedParMjM2": 2,

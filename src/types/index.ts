@@ -346,6 +346,9 @@ export type GrowingTargetRef =
   | { kind: 'floor' }
   | { kind: 'growing-level'; growingSpaceId: string; levelId: string };
 
+/** Crop establishment event represented by a run's frozen start date. */
+export type CropStartEvent = 'direct-sowing' | 'transplanting';
+
 /** Stable, encoded key for a non-floor crop target. */
 export type GrowingTargetKey = string;
 

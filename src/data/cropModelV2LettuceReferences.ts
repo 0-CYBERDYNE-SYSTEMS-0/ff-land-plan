@@ -18,6 +18,7 @@ export const lettuceRosalbaRUEReference = {
 export const lettuceYumaRootProfileReference = {
   methodVersion: 'thermal-linear-root-depth-v1',
   storageExpansionMethod: 'uniform-initial-awc-fraction-v1',
+  startEvent: 'direct-sowing',
   initialRootDepthCm: 12,
   growthStartsAfterCdays: 200,
   growthMmPerCday: 1.2,

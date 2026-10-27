@@ -82,6 +82,7 @@ describe('historical ensemble bands', () => {
         thermal: {
           tBaseC: 5,
           gddToMaturityCdays: [700, 800],
+          startEvents: ['transplanting'],
           accumulationStart: 'planting',
           maturityEndpoint: 'first harvest',
           accumulationMethod: 'study thermal-time',
@@ -91,6 +92,7 @@ describe('historical ensemble bands', () => {
         production: {
           equationFamily: 'LINTUL-net-RUE',
           rueGPerMjInterceptedPar: 2,
+          initialDryMatterGPerM2: 0,
           interceptedParFraction: 0.5,
           harvestIndex: 0.5,
           status: 'supported',
@@ -110,6 +112,7 @@ describe('historical ensemble bands', () => {
         lifecycle: 'plant',
       }],
     });
+    v2.cropStartEvents = { '0,0': 'transplanting' };
 
     expect(ensembleUnavailableReason(v2, years()))
       .toContain('cannot represent crop-model-v2 dry-matter output');

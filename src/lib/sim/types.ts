@@ -9,7 +9,7 @@
 //      rewrites).
 //   2. Every environment number traces to a source via EnvSourceTag.
 
-import type { ArchetypeId, Crop, EnvironmentSnapshot, GrowingTargetKey, GrowingTargetRef, Observation, ObservationMetric, PlanState, PlanSurface, ScenarioType, SoilCarry } from '@/types';
+import type { ArchetypeId, Crop, CropStartEvent, EnvironmentSnapshot, GrowingTargetKey, GrowingTargetRef, Observation, ObservationMetric, PlanState, PlanSurface, ScenarioType, SoilCarry } from '@/types';
 import type { EnvironmentClimateDay } from './environment-climate';
 import type { ClimateEquipmentInput } from './environment-climate';
 import type { EquipmentTerms } from './equipment';
@@ -41,6 +41,7 @@ export interface FrozenCropModelParametersV2 {
     tBaseC: number;
     tUpperC?: number;
     gddToMaturityCdays: readonly [number, number];
+    startEvents: readonly CropStartEvent[];
     accumulationStart: string;
     maturityEndpoint: string;
     accumulationMethod: string;
@@ -50,6 +51,8 @@ export interface FrozenCropModelParametersV2 {
   production: {
     equationFamily: 'LINTUL-net-RUE';
     rueGPerMjInterceptedPar: number | null;
+    /** Frozen initial above-ground dry matter; zero is an explicit assumption. */
+    initialDryMatterGPerM2: number | null;
     interceptedParFraction: number | null;
     harvestIndex: number | null;
     status: 'unsupported' | 'qualified' | 'supported';
@@ -69,6 +72,7 @@ export interface FrozenCropModelParametersV2 {
     rootDevelopment?: {
       methodVersion: 'thermal-linear-root-depth-v1';
       storageExpansionMethod: 'uniform-initial-awc-fraction-v1';
+      startEvent: CropStartEvent;
       initialRootDepthCm: number;
       growthStartsAfterCdays: number;
       growthMmPerCday: number;
@@ -89,7 +93,7 @@ export interface FrozenCropModelParametersV2 {
 /** Complete v2 snapshot shape, including explicit missing-parameter status. */
 export interface RunModelInputsV2 {
   model: 'run-inputs-v2';
-  parameterSetVersion: 'crop-parameters-v2';
+  parameterSetVersion: 'crop-parameters-v3';
   soil: { awcMmPerCm: number | null; organicMatterPct: number | null; source?: 'usda-sda' | 'soilgrids' | 'unknown' } | null;
   crops: Crop[];
   cropParameters: FrozenCropModelParametersV2[];
@@ -177,7 +181,7 @@ export type Intervention =
   | { kind: 'irrigate'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; mm: number }
   | { kind: 'fertilize'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; nKgHa: number }
   | { kind: 'refill-water'; date: string; litres: number }
-  | { kind: 'plant'; date: string; cell: string; target?: GrowingTargetRef; cropId: number }
+  | { kind: 'plant'; date: string; cell: string; target?: GrowingTargetRef; cropId: number; startEvent?: CropStartEvent }
   | { kind: 'harvest'; date: string; cell: string; target?: GrowingTargetRef }
   | { kind: 'surface'; date: string; surface: PlanSurface } // greenhouse/tent/etc.
   | { kind: 'weather'; fromDate: string; tempDeltaC?: number; precipMultiplier?: number };
@@ -223,6 +227,8 @@ export interface CellState {
   dryMatterGPerM2?: number;
   /** v2 FAO-56 effective root-zone storage and accumulated closure residual, mm. */
   rootZoneWaterMm?: number;
+  /** Frozen establishment event whose date is represented by plantedAtDay. */
+  startEvent?: CropStartEvent;
   /** v2 root-growth thermal clock and effective rooting depth. */
   rootThermalCdays?: number;
   rootZoneDepthCm?: number;
@@ -399,6 +405,8 @@ export interface RunConfig {
   assetPhysics?: RunAssetPhysicsSnapshot;
   /** New records freeze model-driving soil values and the crops they use; absent on legacy runs. */
   modelInputs?: RunModelInputs;
+  /** v2 event keyed by canonical targetCellKey; basePlan.plantedAt supplies its date. */
+  cropStartEvents?: Record<string, CropStartEvent>;
   /** Frozen equipment contribution used by the climate solver during replay. */
   climateEquipment?: ClimateEquipmentInput;
   /** Frozen light/air terms per growing target; keys use growingTargetKey(). */

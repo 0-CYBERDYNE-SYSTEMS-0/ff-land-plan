@@ -18,7 +18,7 @@ import { effectivePlantingArea } from '@/lib/plan';
 import { growingTargetKey, parseTargetCellKey, targetCellKey } from '@/lib/growingTargets';
 import { effectivePhotoperiodH, environmentDay, NO_CLIMATE_EQUIPMENT, withEnvironmentClimate } from './environment-climate';
 import type { SoilProfile } from '@/lib/soil';
-import type { ArchetypeId, Crop, GrowingTargetRef, SoilCarry } from '@/types';
+import type { ArchetypeId, Crop, CropStartEvent, GrowingTargetRef, SoilCarry } from '@/types';
 import type { Observation } from '@/types';
 import type {
   CellState,
@@ -127,6 +127,7 @@ function initialCell(
   target?: GrowingTargetRef,
   carry?: SoilCarry,
   modelParameters?: FrozenCropModelParametersV2,
+  startEvent?: CropStartEvent,
 ): CellState {
   const rootZone = modelParameters?.rootZone;
   const awc = soil?.awcMmPerCm;
@@ -146,8 +147,9 @@ function initialCell(
     nitrogenKgHa: initialNitrogenKgHa(carry?.organicMatterPct ?? soil?.organicMatterPct, carry?.nPoolKgHa),
     gddAccumC: 0,
     biomassFrac: 0,
-    ...(modelParameters ? { dryMatterGPerM2: 0 } : {}),
+    ...(modelParameters ? { dryMatterGPerM2: modelParameters.production.initialDryMatterGPerM2 ?? 0 } : {}),
     ...(rootZoneWaterMm !== undefined ? { rootZoneWaterMm } : {}),
+    ...(startEvent ? { startEvent } : {}),
     ...(rootZone?.rootDevelopment ? {
       rootThermalCdays: 0,
       rootZoneDepthCm: rootZone.rootDevelopment.initialRootDepthCm,
@@ -384,6 +386,9 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
       FLOOR_TARGET,
       carryForCell(config, ctx, FLOOR_TARGET, key),
       parametersFor(planting[key]),
+      config.cropModelVersion === 'crop-model-v2'
+        ? config.cropStartEvents?.[targetCellKey(FLOOR_TARGET, key)]
+        : undefined,
     );
   }
   for (const targetPlan of Object.values(config.basePlan.targets ?? {})) {
@@ -402,6 +407,9 @@ export function createRun(config: RunConfig, ctx: SimRunCtx = {}): SimState {
         target,
         carryForCell(config, ctx, target, key),
         parametersFor(targetPlan.planting[key]!),
+        config.cropModelVersion === 'crop-model-v2'
+          ? config.cropStartEvents?.[targetCellKey(target, key)]
+          : undefined,
       );
     }
   }
@@ -500,6 +508,7 @@ function sameCell(a: CellState, b: CellState): boolean {
       a.biomassFrac === b.biomassFrac &&
       a.dryMatterGPerM2 === b.dryMatterGPerM2 &&
       a.rootZoneWaterMm === b.rootZoneWaterMm &&
+      a.startEvent === b.startEvent &&
       a.rootThermalCdays === b.rootThermalCdays &&
       a.rootZoneDepthCm === b.rootZoneDepthCm &&
       a.rootZoneExpansionInflowMm === b.rootZoneExpansionInflowMm &&
@@ -630,6 +639,7 @@ export function stepDay(
           target,
           carryForCell(config, ctx, target, iv.cell),
           nextParameters,
+          config.cropModelVersion === 'crop-model-v2' ? iv.startEvent : undefined,
         );
         if (isV2 && existing?.rootZoneWaterMm !== undefined && nextParameters) {
           const awc = soil?.awcMmPerCm;
@@ -1143,6 +1153,7 @@ export function stepDay(
       biomassFrac,
       ...(dryMatterGPerM2 !== undefined ? { dryMatterGPerM2 } : {}),
       ...(rootZoneWaterMm !== undefined ? { rootZoneWaterMm } : {}),
+      ...(prev.startEvent ? { startEvent: prev.startEvent } : {}),
       ...(rootThermalCdays !== undefined ? { rootThermalCdays } : {}),
       ...(rootZoneDepthCm !== undefined ? { rootZoneDepthCm } : {}),
       ...(rootZoneExpansionInflowMm !== undefined ? { rootZoneExpansionInflowMm } : {}),
