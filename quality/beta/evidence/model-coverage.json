@@ -2491,7 +2491,7 @@
   ],
   "toleranceReview": {
     "reviewedBy": "independent integration validator",
-    "status": "prior checks approved; lettuce parameter transcription and synthetic-fixture conditions reviewed preliminarily; no candidate comparison authorized",
+    "status": "limited checks approved: preservation and software invariants, display/transcription bounds, and the Water SA synthetic FI_PAR equation arithmetic; no measured-output or candidate predictive comparison authorized",
     "checks": [
       {
         "id": "supported-frozen-replay",
@@ -2618,6 +2618,20 @@
         "tolerance": "none; source value is an inferred site-specific effective-depth choice, not a directly measured parameter",
         "status": "excluded-from-transcription-accuracy",
         "basis": "The Yuma study selected 0.90 m as reasonable for 11 sites after water-balance analysis; it is not a generic root maximum and is not a held-out reference target."
+      },
+      {
+        "id": "water-sa-2018-parameter-transcription",
+        "tolerance": "half of each source table display increment after same-unit conversion",
+        "status": "approved-transcription-only",
+        "scope": "Table 5 and Table 6 reference-value transcription; not parameter accuracy, full-model calibration, or predictive acceptance",
+        "evidence": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json"
+      },
+      {
+        "id": "water-sa-synthetic-fi-par-equation",
+        "tolerance": "maximum absolute difference ≤1e-12 fraction",
+        "status": "approved-software-math-only; locally verified",
+        "scope": "Synthetic LAI-to-FI_PAR equation arithmetic only; no source trajectory, measured-output comparison, or candidate prediction",
+        "evidence": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json"
       }
     ]
   },

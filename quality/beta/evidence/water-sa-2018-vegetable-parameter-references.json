@@ -961,7 +961,7 @@
   ],
   "preregisteredSyntheticCanopyEquationFixture": {
     "classification": "synthetic software equation fixture only; not a field trajectory or candidate comparison",
-    "implementationStatus": "preregistered; implementation and execution pending",
+    "implementationStatus": "implemented and locally verified by the focused Vitest fixture; this verifies equation arithmetic only, not source-model reproduction or crop prediction",
     "equation": "FI_PAR = 1 − exp(−K_PAR × LAI)",
     "inputs": {
       "kpar": 1.14,
@@ -989,7 +989,7 @@
     "candidateComparison": false
   },
   "toleranceReview": {
-    "status": "independent validator approved source transcription and synthetic canopy equation arithmetic tolerances only; measured-output comparison remains unauthorized",
+    "status": "independent validator approved source parameter transcription bounds and synthetic canopy equation arithmetic tolerance only; the helper test passed locally; measured-output and candidate predictive comparisons remain unauthorized",
     "reviewedDate": "2026-10-27",
     "approvedScope": [
       "Table 5 and Table 6 parameter transcription bounds based on half the source display increment.",
