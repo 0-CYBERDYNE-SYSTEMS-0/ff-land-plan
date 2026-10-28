@@ -708,6 +708,144 @@ describe('frozen crop model inputs and replay support', () => {
     expect(replayError.reasons).toContain(unknownSoilReason);
   });
 
+  it('starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint', () => {
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const tomatoThermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const cellKey = targetCellKey({ kind: 'floor' }, '0,0');
+    const evidence = {
+      classification: 'synthetic' as const,
+      evidenceId: 'A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02',
+      validDomain: 'synthetic reducer timing and maturity-endpoint software invariant only',
+    };
+    const establishment: CropEstablishmentInput = {
+      startEvent: 'transplanting',
+      establishedAtDate: '2026-10-03',
+      initialAboveGroundDryMatterGPerM2: 7,
+      evidence,
+    };
+    const run: RunConfig = {
+      farmId: 1,
+      cropModelVersion: 'crop-model-v3',
+      startDate: '2026-10-01',
+      dayCount: 58,
+      seed: 1,
+      scenario: 'baseline',
+      tempDeltaC: 0,
+      precipMultiplier: 1,
+      interventions: [],
+      autoHarvest: true,
+      basePlan: {
+        farmId: 1,
+        widthM: 1,
+        heightM: 1,
+        cellM: 0.25,
+        allowOutsideBeds: false,
+        ground: {},
+        planting: { '0,0': 1 },
+        updatedAt: '2026-10-01',
+        plantedAt: { '0,0': '2026-10-03' },
+      },
+      cropStartEvents: { '0,0': 'transplanting' },
+    };
+    const parameterInput = syntheticStartEventParameter(tomato.id, tomatoThermal);
+    const modelInputs = freezeRunModelInputsV3(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [tomato],
+      cropParametersV2: [parameterInput],
+      cropEstablishmentByCell: { [cellKey]: establishment },
+    });
+    const activeRun = { ...run, modelInputs };
+    const days = Array.from({ length: 58 }, (_, index) => ({
+      date: new Date(Date.parse('2026-10-01T00:00:00Z') + index * 86_400_000).toISOString().slice(0, 10),
+      tMinC: 25.2,
+      tMaxC: 29.2,
+      precipMm: 0,
+      etoMm: 0,
+      dliNaturalMol: 18,
+      gddBase10C: 17.2,
+      provenance: { tMinC: 'default' as const, tMaxC: 'default' as const, precipMm: 'default' as const, etoMm: 'default' as const, dliNaturalMol: 'default' as const },
+    }));
+
+    expect(tomatoThermal).toMatchObject({
+      cropId: 1,
+      cropSlug: 'tomato',
+      tBaseC: 7.2,
+      tUpperC: 33.3,
+      gddToMaturityCdays: [1024, 1117],
+      startEvents: ['transplanting'],
+      accumulationMethod: 'Single sine with horizontal cutoff; OSU Table 6',
+    });
+    expect(modelInputs).toMatchObject({
+      model: 'run-inputs-v3',
+      parameterSetVersion: 'crop-parameters-v4',
+      establishmentByCell: { [cellKey]: establishment },
+    });
+    expect(modelInputs.crops.map((crop) => crop.id)).toEqual([1]);
+    expect(modelInputs.soil).toEqual({ awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'unknown' });
+    expect(parameterInput).toEqual({
+      cropId: 1,
+      thermal: tomatoThermal,
+      production: {
+        equationFamily: 'LINTUL-net-RUE',
+        rueGPerMjInterceptedPar: 2,
+        initialDryMatterGPerM2: 0,
+        interceptedParFraction: 0.5,
+        harvestIndex: 0.5,
+        status: 'qualified',
+        missing: [],
+        limitations: ['Synthetic production values exercise event timing only.'],
+        evidence: {
+          evidenceId: 'TEST-SYNTHETIC-START-EVENT',
+          sourceCitation: 'Synthetic software acceptance fixture; no biological claim',
+          sourceUrl: 'test-only:crop-start-event',
+          validDomain: 'software acceptance only',
+        },
+      },
+      rootZone: {
+        method: 'FAO-56',
+        effectiveRootDepthCm: 20,
+        depletionFraction: 0.5,
+        cropCoefficient: 1,
+        initialStorageFraction: 0.7,
+        status: 'qualified',
+        missing: [],
+        limitations: ['Synthetic static root-zone values exercise event timing only.'],
+        evidence: {
+          evidenceId: 'TEST-SYNTHETIC-START-EVENT',
+          sourceCitation: 'Synthetic software acceptance fixture; no biological claim',
+          sourceUrl: 'test-only:crop-start-event',
+          validDomain: 'software acceptance only',
+        },
+      },
+      lifecycle: 'plant',
+    });
+    expect(modelInputs.cropParameters.map((parameter) => parameter.cropId)).toEqual([1]);
+    expect(days).toHaveLength(58);
+    expect(days[0]?.date).toBe('2026-10-01');
+    expect(days[57]?.date).toBe('2026-11-27');
+
+    let state = createRun(activeRun);
+    for (const day of days) {
+      const stepped = stepDay(state, day, activeRun);
+      state = stepped.state;
+      const cell = state.cells[cellKey]!;
+      if (day.date === '2026-10-01' || day.date === '2026-10-02') {
+        expect(cell.sourceThermalCdays).toBe(0);
+      }
+      if (day.date === '2026-10-03') {
+        expect(cell.sourceThermalCdays).toBe(20);
+      }
+      if (day.date === '2026-11-26') {
+        expect(cell.sourceThermalCdays).toBe(1100);
+        expect(cell.biomassFrac).toBeLessThan(1);
+      }
+      if (day.date === '2026-11-27') {
+        expect(cell.sourceThermalCdays).toBe(1117);
+        expect(cell.biomassFrac).toBe(1);
+      }
+    }
+  });
+
   it('validates intervention establishment evidence and v3 qualification status', () => {
     const tomato = cropLibrary.find((crop) => crop.id === 1)!;
     const thermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
