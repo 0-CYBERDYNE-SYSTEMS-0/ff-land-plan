@@ -3776,6 +3776,40 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
     expect(replay.summary).toEqual(record.summary);
   });
 
+  it('keeps a mature v3 crop standing when auto-harvest is disabled and replays through the next day', () => {
+    const cellKey = targetCellKey(target, eligibleCells[0]!);
+    const noAutoRun = frozenRun({ cells: [eligibleCells[0]!], autoHarvest: false });
+    expect(noAutoRun.cropModelVersion).toBe('crop-model-v3');
+    const frozenInputs = noAutoRun.modelInputs;
+    if (!frozenInputs || frozenInputs.model !== 'run-inputs-v3') {
+      throw new Error('Expected frozen v3 inputs for the no-auto-harvest case.');
+    }
+    expect(frozenInputs.parameterSetVersion).toBe('crop-parameters-v4');
+    expect(noAutoRun.autoHarvest).toBe(false);
+    expect(noAutoRun.interventions).toEqual([]);
+
+    const maturity = findMaturity(noAutoRun, [cellKey]);
+    expect(maturity.envSeries).toHaveLength(maturity.dayIndex + 2);
+    const original = simulateRun(noAutoRun, maturity.envSeries);
+    const record = runRecord('run:v3:no-auto-harvest-maturity', noAutoRun, maturity.envSeries, original.summary);
+    const replay = simulateRun(record.config, record.envSeries);
+    const cell = original.finalState.cells[cellKey];
+
+    expect(original.summary.daysSimulated).toBe(maturity.dayIndex + 2);
+    expect(original.summary.totalYieldKg).toBe(0);
+    expect(original.summary.yieldKgByCrop).toEqual({});
+    expect(original.events.filter((event) => event.kind === 'harvested')).toHaveLength(0);
+    expect(cell).toMatchObject({
+      biomassFrac: 1,
+      sourceThermalCdays: maturityTarget,
+    });
+    expect(cell?.dead).not.toBe(true);
+    expect(cell?.harvested).not.toBe(true);
+    expect(replay.events).toEqual(original.events);
+    expect(replay.finalState).toEqual(original.finalState);
+    expect(replay.summary).toEqual(record.summary);
+  });
+
   it('auto-harvests v3 on the actual frozen maturity endpoint once and replays the saved summary', () => {
     const baseline = frozenRun({ cells: eligibleCells, autoHarvest: false });
     const maturity = findMaturity(baseline, eligibleCells.map((cell) => targetCellKey(target, cell)));

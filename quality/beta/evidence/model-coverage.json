@@ -2249,6 +2249,45 @@
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "status": "Synthetic reducer/replay software checks executed; S2 replay/version and S3 climate-boundary reviews approved; the follow-up frozen-crop replay-isolation assertion is independently approved and passes locally. JSON-loaded replay under a changed same-ID live crop exactly matches baseline events, final cells, qualification reasons and summary. Exact-head PR #82 CI passed on fc900dca01d3492a8f40710cf6df03c215f0c90b (run 40616564088), all four named checks green and Pages smoke 3/3. Enclosed v6 environment-v1/v2 coupling is fail-closed and untested. No candidate, calibration/holdout, measured-output, reference-agreement or predictive comparison. A-03 and 02A remain UNVERIFIED."
+    },
+    {
+      "id": "V3-NO-AUTO-HARVEST-MATURITY-REPLAY-SYNTHETIC-01",
+      "classification": "synthetic crop-model-v3 reducer/replay behavior regression; not a crop benchmark",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "not asserted; catalog identity selects the existing synthetic fixture only"
+      },
+      "environment": "one synthetic floor cell advanced with the existing dailyEnvironment fixture; no weather reproduction or site observation",
+      "modelVersion": "crop-model-v3 with frozen run-inputs-v3 and crop-parameters-v4",
+      "syntheticInputs": {
+        "cellCount": 1,
+        "target": "floor cell",
+        "autoHarvest": false,
+        "interventions": [],
+        "environmentSeries": "first tick at which biomassFrac reaches 1 plus the following daily tick",
+        "productionInputs": "existing synthetic frozenRun fixture values"
+      },
+      "expected": {
+        "maturityEndpoint": "biomassFrac=1 and sourceThermalCdays equals the frozen fixture maturityTarget",
+        "followingDay": "crop remains alive, mature, and unharvested",
+        "harvestedEventCount": 0,
+        "totalYieldKg": 0,
+        "yieldKgByCrop": {},
+        "replay": "events, final state, and summary exactly equal using the in-memory RunRecord; durable-storage serialization is not exercised"
+      },
+      "tolerance": "No numeric crop-output comparison; maturity/gating assertions and replay equality are exact structural software invariants.",
+      "evidence": "src/lib/sim/model-inputs.test.ts",
+      "reproduction": "Focused: npx vitest run src/lib/sim/model-inputs.test.ts -t \"keeps a mature v3 crop standing when auto-harvest is disabled\" (1 passed, 31 skipped). Full local: npm test (48 files/258 tests), typecheck, standard/demo/Pages builds, private guard (536 tracked), git diff --check, and npm run test:e2e (3/3, 3.8m). PR CI pending on the code/evidence SHA.",
+      "acceptance": {
+        "row": "A-07",
+        "status": "PASS for this no-auto-harvest subcase; UNVERIFIED overall",
+        "owner": "S3 implementation worker; S2 independent reviewer; lead integration",
+        "retest": "Repeat the focused Vitest command above; full acceptance still requires the remaining A-07 parity cases and evidence."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Synthetic v3 no-auto-harvest and in-memory replay software evidence only. S2 independently approved; local focused/full tests and build/browser gates passed. Exact-head PR CI is pending. This does not establish durable persistence, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, or predictive validity. A-07 and 02A remain UNVERIFIED overall."
     }
   ],
   "coverageSummary": {

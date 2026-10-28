@@ -261,6 +261,12 @@ At the first no-auto-harvest tick where all seven cells are mature, the test req
 
 Evidence fixture: quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json
 
+## A-07 synthetic v3 no-auto-harvest maturity replay regression — 2026-10-28
+
+The new case in `src/lib/sim/model-inputs.test.ts` exercises one frozen v3 floor cell with `autoHarvest=false` and no interventions. The run reaches the fixture's source-thermal maturity endpoint and includes the following day; the final crop remains alive and unharvested with zero harvested events and zero yield. A replay from the in-memory `RunRecord` exactly matches events, final state, and summary. Explicit model identities are crop-model-v3, run-inputs-v3, and crop-parameters-v4. This is a synthetic software behavior check, not durable-storage serialization, harvest-timing validation, or crop-accuracy evidence.
+
+Acceptance: PASS for this one A-07 no-auto-harvest invariant; A-07 overall and 02A remain UNVERIFIED. Owner: S3 implementation worker; S2 independently reviewed; lead integrated. Retest: `npx vitest run src/lib/sim/model-inputs.test.ts -t "keeps a mature v3 crop standing when auto-harvest is disabled"`. The exact structural assertions are not a candidate-model comparison and no model parameter was retuned. The focused test passed (1 passed, 31 skipped); `npm test` passed 48 files / 258 tests; typecheck, standard/demo/Pages builds, private-file guard (536 tracked files), `git diff --check`, and production Pages E2E (3/3 in 3.8m) passed locally. PR CI is pending for the code/evidence commit.
+
 ## Remaining 02A gates
 
 1. Expand source-backed executable production/root-zone parameter coverage and dynamic canopy/interception parameters. The environment-v2 water-coupling slice is implemented only as qualified synthetic software behavior; A-05 remains UNVERIFIED overall.
