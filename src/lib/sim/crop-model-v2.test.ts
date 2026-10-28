@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import { cropThermalParams } from '@/data/cropThermalParams';
+import a02TomatoThermalFixture from '../../../quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json';
 import rootReferenceCoverageRecord from '../../../quality/beta/evidence/fao56-root-reference-coverage.json';
 import waterSaParameterReferences from '../../../quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json';
 import {
@@ -14,6 +15,9 @@ import {
   thermalDevelopmentRange,
   type RootZoneState,
 } from './crop-model-v2';
+import type { DailyEnvironment, FrozenCropModelParametersV2, RunConfig, SimState } from './types';
+import { freezeRunModelInputsV2 } from './model-inputs';
+import { createRun, stepDay } from './engine';
 
 const rootReferenceCoverage = rootReferenceCoverageRecord as {
   catalogCoverage: Array<{
@@ -59,6 +63,119 @@ const rootReferenceCoverage = rootReferenceCoverageRecord as {
     candidateComparison: boolean;
   };
 };
+
+const a02SourceEvidence = a02TomatoThermalFixture.syntheticReducerInputs.productionParameters.evidence;
+const a02RootEvidence = a02TomatoThermalFixture.syntheticReducerInputs.rootZoneParameters.evidence;
+const a02Thermal: NonNullable<FrozenCropModelParametersV2['thermal']> = {
+  tBaseC: a02TomatoThermalFixture.frozenThermalParameters.tBaseC,
+  tUpperC: a02TomatoThermalFixture.frozenThermalParameters.tUpperC,
+  gddToMaturityCdays: [...a02TomatoThermalFixture.frozenThermalParameters.gddToMaturityCdays] as [number, number],
+  startEvents: ['transplanting'],
+  accumulationStart: a02TomatoThermalFixture.frozenThermalParameters.accumulationStart,
+  maturityEndpoint: a02TomatoThermalFixture.frozenThermalParameters.maturityEndpoint,
+  accumulationMethod: a02TomatoThermalFixture.frozenThermalParameters.accumulationMethod,
+  sourceCitation: a02TomatoThermalFixture.source.citation,
+  sourceUrl: a02TomatoThermalFixture.source.url,
+};
+
+const a02SyntheticCropParameters: FrozenCropModelParametersV2 = {
+  cropId: a02TomatoThermalFixture.syntheticReducerInputs.cropParameterAssembly.cropId,
+  thermal: a02Thermal,
+  production: {
+    equationFamily: 'LINTUL-net-RUE',
+    rueGPerMjInterceptedPar: a02TomatoThermalFixture.syntheticReducerInputs.productionParameters.rueGPerMjInterceptedPar,
+    initialDryMatterGPerM2: a02TomatoThermalFixture.syntheticReducerInputs.productionParameters.initialDryMatterGPerM2,
+    interceptedParFraction: a02TomatoThermalFixture.syntheticReducerInputs.productionParameters.interceptedParFraction,
+    harvestIndex: a02TomatoThermalFixture.syntheticReducerInputs.productionParameters.harvestIndex,
+    status: 'qualified',
+    missing: [],
+    limitations: a02TomatoThermalFixture.syntheticReducerInputs.productionParameters.limitations,
+    evidence: a02SourceEvidence,
+  },
+  rootZone: {
+    method: 'FAO-56',
+    effectiveRootDepthCm: a02TomatoThermalFixture.syntheticReducerInputs.rootZoneParameters.effectiveRootDepthCm,
+    depletionFraction: a02TomatoThermalFixture.syntheticReducerInputs.rootZoneParameters.depletionFraction,
+    cropCoefficient: a02TomatoThermalFixture.syntheticReducerInputs.rootZoneParameters.cropCoefficient,
+    initialStorageFraction: a02TomatoThermalFixture.syntheticReducerInputs.rootZoneParameters.initialStorageFraction,
+    status: 'qualified',
+    missing: [],
+    limitations: a02TomatoThermalFixture.syntheticReducerInputs.rootZoneParameters.limitations,
+    evidence: a02RootEvidence,
+  },
+  lifecycle: 'plant',
+};
+
+function a02BaseConfig(): RunConfig {
+  const { basePlan, runConfig } = a02TomatoThermalFixture.syntheticReducerInputs;
+  return {
+    farmId: runConfig.farmId,
+    basePlan: { ...basePlan, updatedAt: runConfig.startDate },
+    cropModelVersion: 'crop-model-v2',
+    startDate: runConfig.startDate,
+    dayCount: a02TomatoThermalFixture.samePrefixHorizonControl.longHorizonDays,
+    seed: runConfig.seed,
+    scenario: 'baseline',
+    tempDeltaC: runConfig.tempDeltaC,
+    precipMultiplier: runConfig.precipMultiplier,
+    interventions: [],
+    autoHarvest: false,
+    cropStartEvents: { ...runConfig.cropStartEvents } as NonNullable<RunConfig['cropStartEvents']>,
+  };
+}
+
+function a02WeatherDays(
+  startDate: string,
+  days: number,
+  tMinC: number,
+  tMaxC: number,
+): DailyEnvironment[] {
+  const startMs = Date.parse(`${startDate}T00:00:00Z`);
+  const common = a02TomatoThermalFixture.syntheticReducerInputs.commonDailyFields;
+  return Array.from({ length: days }, (_, index) => ({
+    date: new Date(startMs + index * 86_400_000).toISOString().slice(0, 10),
+    tMinC,
+    tMaxC,
+    precipMm: common.precipMm,
+    etoMm: common.etoMm,
+    dliNaturalMol: common.dliNaturalMol,
+    gddBase10C: common.gddBase10C,
+    provenance: {
+      tMinC: 'default' as const,
+      tMaxC: 'default' as const,
+      precipMm: 'default' as const,
+      etoMm: 'default' as const,
+      dliNaturalMol: 'default' as const,
+    },
+  }));
+}
+
+function a02Checkpoints(config: RunConfig, days: DailyEnvironment[]): { day5: SimState; final: SimState } {
+  let state = createRun(config);
+  let day5: SimState | undefined;
+  for (const day of days.slice(0, config.dayCount)) {
+    state = stepDay(state, day, config).state;
+    if (state.dayIndex === 5) day5 = state;
+  }
+  return { day5: day5!, final: state };
+}
+
+function expectA02ThermalState(
+  state: SimState,
+  expectedGddAccumC: number,
+  expectedBiomassFrac: number,
+): void {
+  const cell = state.cells['0,0']!;
+  expect(Math.abs(cell.gddAccumC - expectedGddAccumC))
+    .toBeLessThanOrEqual(a02TomatoThermalFixture.tolerances.gddAccumC.maximumAbsoluteDeviation);
+  expect(Math.abs(cell.biomassFrac - expectedBiomassFrac))
+    .toBeLessThanOrEqual(a02TomatoThermalFixture.tolerances.biomassFrac.maximumAbsoluteDeviation);
+}
+
+function expectA02ThermalStatesEqual(first: SimState, second: SimState): void {
+  const secondCell = second.cells['0,0']!;
+  expectA02ThermalState(first, secondCell.gddAccumC, secondCell.biomassFrac);
+}
 
 describe('crop model v2 equation helpers', () => {
   it('produces exactly zero photosynthetic dry matter at known zero usable light', () => {
@@ -341,5 +458,105 @@ describe('crop model v2 equation helpers', () => {
     expect(result.capacityMm).toBeCloseTo(19.8, 12);
     expect(result.state.waterMm).toBeCloseTo(previousStorageMm + rootGrowthStorageMm, 12);
     expect(result.residualMm).toBeCloseTo(0, 12);
+  });
+
+  it('runs frozen tomato thermal state across synthetic locations and horizons', () => {
+    const baseConfig = a02BaseConfig();
+    const tomato = cropLibrary.find((crop) => crop.id === a02TomatoThermalFixture.crop.catalogCropId)!;
+    const modelInputs = freezeRunModelInputsV2(baseConfig, {
+      soil: {
+        awcMmPerCm: a02TomatoThermalFixture.syntheticReducerInputs.soil.awcMmPerCm,
+        organicMatterPct: a02TomatoThermalFixture.syntheticReducerInputs.soil.organicMatterPct,
+      },
+      crops: [tomato],
+      cropParametersV2: [a02SyntheticCropParameters],
+    });
+    const targetRange = a02TomatoThermalFixture.frozenThermalParameters.gddToMaturityCdays;
+
+    expect(modelInputs.qualification.status)
+      .toBe(a02TomatoThermalFixture.syntheticReducerInputs.cropParameterAssembly.qualificationAfterFreeze.expectedStatus);
+    expect(modelInputs.cropParameters[0]?.thermal?.gddToMaturityCdays).toEqual(targetRange);
+
+    for (const weatherCase of a02TomatoThermalFixture.weatherCases) {
+      const days = a02WeatherDays(
+        baseConfig.startDate,
+        weatherCase.days,
+        weatherCase.dailyTMinC,
+        weatherCase.dailyTMaxC,
+      );
+      const shortConfig: RunConfig = { ...baseConfig, dayCount: 5, modelInputs };
+      const longConfig: RunConfig = { ...baseConfig, dayCount: weatherCase.days, modelInputs };
+      expect({ ...longConfig, dayCount: shortConfig.dayCount }).toEqual(shortConfig);
+      expect(shortConfig.modelInputs).toBe(longConfig.modelInputs);
+      expect(shortConfig.modelInputs?.model).toBe('run-inputs-v2');
+      expect(shortConfig.modelInputs?.model === 'run-inputs-v2'
+        ? shortConfig.modelInputs.cropParameters[0]?.thermal?.gddToMaturityCdays
+        : undefined).toEqual([1024, 1117]);
+
+      const shortRun = a02Checkpoints(shortConfig, days);
+      const longRun = a02Checkpoints(longConfig, days);
+      expectA02ThermalState(
+        shortRun.day5,
+        weatherCase.expectedGddAccumCAfter5Days,
+        weatherCase.expectedBiomassFracAfter5Days,
+      );
+      expectA02ThermalState(
+        longRun.day5,
+        weatherCase.expectedGddAccumCAfter5Days,
+        weatherCase.expectedBiomassFracAfter5Days,
+      );
+      expectA02ThermalStatesEqual(shortRun.day5, longRun.day5);
+      expectA02ThermalState(
+        longRun.final,
+        weatherCase.expectedGddAccumCAfter10Days,
+        weatherCase.expectedBiomassFracAfter10Days,
+      );
+    }
+
+    const control = a02TomatoThermalFixture.meanDailyGddCIndependenceControl;
+    const warmCase = a02TomatoThermalFixture.weatherCases.find((weatherCase) =>
+      weatherCase.locationTag === control.locationTag && weatherCase.windowTag === control.windowTag)!;
+    const warmDays = a02WeatherDays(baseConfig.startDate, control.horizonDays, warmCase.dailyTMinC, warmCase.dailyTMaxC);
+    const meanDailyGddZero: RunConfig = {
+      ...baseConfig,
+      dayCount: control.horizonDays,
+      modelInputs,
+      meanDailyGddC: control.pairedConfigs[0]!.meanDailyGddC,
+    };
+    const meanDailyGddFourteen: RunConfig = {
+      ...meanDailyGddZero,
+      meanDailyGddC: control.pairedConfigs[1]!.meanDailyGddC,
+    };
+    expect({ ...meanDailyGddFourteen, meanDailyGddC: meanDailyGddZero.meanDailyGddC })
+      .toEqual(meanDailyGddZero);
+    expect(meanDailyGddZero.modelInputs).toBe(meanDailyGddFourteen.modelInputs);
+    expect(meanDailyGddZero.modelInputs?.model === 'run-inputs-v2'
+      ? meanDailyGddZero.modelInputs.cropParameters[0]?.thermal?.gddToMaturityCdays
+      : undefined).toEqual(control.expectedBoth.targetRangeCdays);
+
+    const zeroRun = a02Checkpoints(meanDailyGddZero, warmDays);
+    const fourteenRun = a02Checkpoints(meanDailyGddFourteen, warmDays);
+    expectA02ThermalState(
+      zeroRun.day5,
+      control.expectedBoth.gddAccumCAfter5Days,
+      control.expectedBoth.biomassFracAfter5Days,
+    );
+    expectA02ThermalState(
+      zeroRun.final,
+      control.expectedBoth.gddAccumCAfter10Days,
+      control.expectedBoth.biomassFracAfter10Days,
+    );
+    expectA02ThermalState(
+      fourteenRun.day5,
+      control.expectedBoth.gddAccumCAfter5Days,
+      control.expectedBoth.biomassFracAfter5Days,
+    );
+    expectA02ThermalState(
+      fourteenRun.final,
+      control.expectedBoth.gddAccumCAfter10Days,
+      control.expectedBoth.biomassFracAfter10Days,
+    );
+    expectA02ThermalStatesEqual(zeroRun.day5, fourteenRun.day5);
+    expectA02ThermalStatesEqual(zeroRun.final, fourteenRun.final);
   });
 });
