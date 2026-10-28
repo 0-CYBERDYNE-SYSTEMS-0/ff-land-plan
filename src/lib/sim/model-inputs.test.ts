@@ -6,6 +6,7 @@ import fao56V2AwcVariantFixture from '../../../quality/beta/evidence/fao56-v2-aw
 import fao56V2PositiveDrainageFixture from '../../../quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json';
 import fao56V2RootDrydownFixture from '../../../quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json';
 import fao56V2TomatoRootDepthFixture from '../../../quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json';
+import v3AutoHarvestMixedTargetFixture from '../../../quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
 import type { CropStartEvent, Observation } from '@/types';
 import type {
@@ -2678,6 +2679,7 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
     elevatedCells?: string[];
     autoHarvest: boolean;
     interventions?: RunConfig['interventions'];
+    omitSoilSource?: boolean;
   }): RunConfig {
     const elevatedCells = options.elevatedCells ?? [];
     const cellKeys = [
@@ -2714,7 +2716,11 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
       cropStartEvents: Object.fromEntries(cellKeys.map((key) => [key, 'transplanting' as const])),
     });
     const modelInputs = freezeRunModelInputsV3(run, {
-      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'usda-sda' },
+      soil: {
+        awcMmPerCm: 1.5,
+        organicMatterPct: 2.4,
+        ...(!options.omitSoilSource ? { source: 'usda-sda' as const } : {}),
+      },
       crops: [crop],
       cropParametersV2: [
         {
@@ -2971,6 +2977,142 @@ describe('crop-model-v3 frozen-input harvest payout', () => {
     expect(record.summary.totalYieldKg).toBe(0.01);
     expect(original.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
     expect(record.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+    expect(replay.events).toEqual(original.events);
+    expect(replay.finalState).toEqual(original.finalState);
+    expect(replay.summary).toEqual(record.summary);
+  });
+
+  it('auto-harvests v3 floor and elevated targets once at the frozen maturity endpoint and replays exactly', () => {
+    const baseline = frozenRun({
+      cells: [floorSiblingCell],
+      elevatedCells: eligibleCells,
+      autoHarvest: false,
+      omitSoilSource: true,
+    });
+    const expectedCellKeys = [
+      targetCellKey(target, floorSiblingCell),
+      ...eligibleCells.map((cell) => targetCellKey(elevatedTarget, cell)),
+    ];
+    const frozenInputs = baseline.modelInputs;
+    expect(baseline.cropModelVersion).toBe('crop-model-v3');
+    expect(frozenInputs).toMatchObject({
+      model: 'run-inputs-v3',
+      parameterSetVersion: 'crop-parameters-v4',
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'unknown' },
+    });
+    if (!frozenInputs || frozenInputs.model !== 'run-inputs-v3') {
+      throw new Error('Expected frozen crop-model-v3 run inputs.');
+    }
+    expect(frozenInputs.qualification.status).toBe('qualified');
+    const registeredCropSnapshot = Object.fromEntries(
+      Object.entries(v3AutoHarvestMixedTargetFixture.syntheticInputs.catalogCropSnapshot)
+        .filter(([key]) => key !== 'source'),
+    );
+    expect(frozenInputs.crops).toHaveLength(1);
+    expect(frozenInputs.crops[0]).toEqual(registeredCropSnapshot);
+    expect(frozenInputs.cropParameters).toHaveLength(1);
+    expect(frozenInputs.cropParameters[0]?.production).toMatchObject({
+      equationFamily: 'LINTUL-net-RUE',
+      rueGPerMjInterceptedPar: 2,
+      harvestIndex,
+      status: 'qualified',
+    });
+    expect(Object.prototype.hasOwnProperty.call(
+      frozenInputs.cropParameters[0]?.production,
+      'initialDryMatterGPerM2',
+    )).toBe(false);
+    expect(frozenInputs.cropParameters[0]?.rootZone).toMatchObject({
+      method: 'FAO-56',
+      effectiveRootDepthCm: 20,
+      depletionFraction: 0.5,
+      cropCoefficient: 1,
+      initialStorageFraction: 0.7,
+      status: 'qualified',
+    });
+    expect(frozenInputs.cropParameters[0]?.lifecycle).toBe('plant');
+    const registeredThermal = v3AutoHarvestMixedTargetFixture.syntheticInputs.thermal;
+    expect(registeredThermal).toMatchObject({
+      tBaseC: 7.2,
+      tUpperC: 33.3,
+      gddToMaturityCdays: [1024, 1117],
+      startEvents: ['transplanting'],
+      accumulationStart: 'Transplanting at 3–5 true leaves',
+      maturityEndpoint: 'First ripe harvest (four or more fruits show ripe color)',
+      accumulationMethod: 'Single sine with horizontal cutoff; OSU Table 6',
+    });
+    const frozenThermal = frozenInputs.cropParameters[0]?.thermal;
+    expect({
+      tBaseC: frozenThermal?.tBaseC,
+      tUpperC: frozenThermal?.tUpperC,
+      gddToMaturityCdays: frozenThermal?.gddToMaturityCdays,
+      startEvents: frozenThermal?.startEvents,
+      accumulationStart: frozenThermal?.accumulationStart,
+      maturityEndpoint: frozenThermal?.maturityEndpoint,
+      accumulationMethod: frozenThermal?.accumulationMethod,
+    }).toEqual(registeredThermal);
+    expect(Object.keys(frozenInputs.establishmentByCell).sort()).toEqual([...expectedCellKeys].sort());
+    expect(Object.keys(baseline.cropStartEvents ?? {}).sort()).toEqual([...expectedCellKeys].sort());
+    for (const key of expectedCellKeys) {
+      expect(baseline.cropStartEvents?.[key]).toBe('transplanting');
+      expect(frozenInputs.establishmentByCell[key]).toMatchObject({
+        startEvent: 'transplanting',
+        establishedAtDate: startDate,
+        initialAboveGroundDryMatterGPerM2: initialDryMatterGPerM2,
+      });
+    }
+
+    const support = inspectRunModelSupport(baseline);
+    expect(support).toMatchObject({ status: 'qualified', canReplay: true });
+    const maturity = findMaturity(baseline, expectedCellKeys);
+    const maturityEnvironment = maturity.envSeries[maturity.dayIndex];
+    const nextDayEnvironment = maturity.envSeries[maturity.dayIndex + 1];
+    expect(maturityEnvironment?.date).toBe(dateAtOffset(maturity.dayIndex));
+    expect(nextDayEnvironment?.date).toBe(dateAtOffset(maturity.dayIndex + 1));
+    expect(maturity.envSeries).toHaveLength(maturity.dayIndex + 2);
+
+    const autoRun = { ...baseline, autoHarvest: true };
+    expect(inspectRunModelSupport(autoRun)).toMatchObject({ status: 'qualified', canReplay: true });
+    const original = simulateRun(autoRun, maturity.envSeries);
+    const record = runRecord('run:v3:auto-harvest-mixed-target', autoRun, maturity.envSeries, original.summary);
+    const replay = simulateRun(record.config, record.envSeries);
+    const harvested = original.events.filter((event) => event.kind === 'harvested');
+
+    expect(harvested).toHaveLength(7);
+    expect(harvested.map((event) => event.cell).sort()).toEqual([...expectedCellKeys].sort());
+    expect(new Set(harvested.map((event) => event.cell)).size).toBe(7);
+    expect(harvested.every((event) => event.dayIndex === maturity.dayIndex)).toBe(true);
+    expect(harvested.every((event) => event.date === maturityEnvironment?.date)).toBe(true);
+    const floorHarvest = harvested.find((event) => event.cell === targetCellKey(target, floorSiblingCell));
+    expect(floorHarvest).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(floorHarvest, 'target')).toBe(false);
+    for (const event of harvested) {
+      if (event.kind !== 'harvested') continue;
+      if (event.cell === targetCellKey(target, floorSiblingCell)) {
+        expect(Object.prototype.hasOwnProperty.call(event, 'target')).toBe(false);
+      } else {
+        expect(event.target).toEqual(elevatedTarget);
+      }
+      expect(Math.abs(event.data.yieldKg - expectedPayoutKg)).toBeLessThanOrEqual(1e-12);
+    }
+    const totalPayoutKg = harvested.reduce((sum, event) => (
+      sum + (event.kind === 'harvested' ? event.data.yieldKg : 0)
+    ), 0);
+    expect(Math.abs(totalPayoutKg - 0.00672)).toBeLessThanOrEqual(1e-12);
+    expect(original.events.filter((event) => (
+      event.kind === 'harvested' && event.dayIndex === maturity.dayIndex + 1
+    ))).toHaveLength(0);
+
+    for (const key of expectedCellKeys) {
+      expect(original.finalState.cells[key]).toMatchObject({
+        biomassFrac: 1,
+        readyAtDay: maturity.dayIndex,
+        harvested: true,
+      });
+    }
+    expect(original.summary.totalYieldKg).toBe(0.01);
+    expect(original.summary.yieldKgByCrop).toEqual({ [String(crop.id)]: 0.01 });
+    expect(replay.summary.totalYieldKg).toBe(0.01);
+    expect(replay.summary.yieldKgByCrop).toEqual({ [String(crop.id)]: 0.01 });
     expect(replay.events).toEqual(original.events);
     expect(replay.finalState).toEqual(original.finalState);
     expect(replay.summary).toEqual(record.summary);
