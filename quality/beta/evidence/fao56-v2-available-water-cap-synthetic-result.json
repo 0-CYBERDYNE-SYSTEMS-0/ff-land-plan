@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-AVAILABLE-WATER-CAP-SYNTHETIC-01-CANDIDATE-RESULT",
+  "status": "focused synthetic candidate test and independent review PASS; local suite, typecheck, builds, and production Pages journeys PASS; staged-artifact private scan and exact-head candidate CI pending",
+  "classification": "synthetic crop-model-v2 reducer/software result only; not soil, crop, or predictive validation",
+  "preregistration": {
+    "fixture": "quality/beta/evidence/fao56-v2-available-water-cap-synthetic.json",
+    "commit": "6526af7ab27b13b7ba6368c65f7f7c1a07b97591",
+    "ciRun": "40649451133",
+    "frozenInputsAndTolerancesChanged": false
+  },
+  "documentationReconciliationCI": {
+    "commit": "2a687bcbded64b2792819c52800766cf8af13aca",
+    "runId": "40650583845",
+    "result": "PASS; all four named contexts passed before candidate implementation"
+  },
+  "implementation": {
+    "testFile": "src/lib/sim/model-inputs.test.ts",
+    "testName": "caps v2 actual uptake at frozen available root-zone water",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"caps v2 actual uptake at frozen available root-zone water\"",
+    "result": "1 passed; 29 skipped; 1 test file passed",
+    "durationMs": 157,
+    "localDate": "2026-10-28",
+    "candidateCodeEvidenceCommit": "pending",
+    "testConstructionCorrections": [
+      "The first focused attempt read lifecycle from rootZone; it belongs to the frozen crop-parameter object. The assertion path was corrected.",
+      "The next focused attempt referenced an unregistered calculation.oneDayWaterUseMm key; it was corrected to calculation.actualTranspirationMm. No frozen input, expected result, or tolerance changed."
+    ]
+  },
+  "observedDispatch": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsVersion": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "climateRoute": "standard open-field; no environment-v2 snapshot",
+    "cellKey": "0,0",
+    "cellCount": 1
+  },
+  "observed": {
+    "frozenRouteInputs": {
+      "cropSnapshotMatched": true,
+      "thermalInputsMatched": true,
+      "soilSource": "unknown",
+      "awcMmPerCm": 1,
+      "effectiveRootDepthCm": 5,
+      "capacityMm": 5,
+      "initialStorageFraction": 0.2,
+      "initialStorageMm": 1,
+      "tableDepletionFractionP": 0.4,
+      "referenceEvapotranspirationMmDay": 5,
+      "cropCoefficient": 1.2,
+      "potentialTranspirationMm": 6,
+      "precipMm": 0,
+      "irrigationMm": 0,
+      "runoffMm": 0,
+      "capillaryRiseMm": "omitted; reducer defaults to 0",
+      "rootGrowthStorageMm": 0
+    },
+    "directRootZoneStep": {
+      "capacityMm": 5,
+      "readilyAvailableWaterMm": 1.8000000000000003,
+      "stressCoefficientKs": 0.3125,
+      "actualTranspirationMm": 1,
+      "deepDrainageMm": 0,
+      "finalStorageMm": 0,
+      "endDepletionMm": 5,
+      "residualMm": 0
+    },
+    "rootZoneCallThrough": {
+      "callCount": 1,
+      "stateBefore": { "waterMm": 1 },
+      "parameters": {
+        "awcMmPerCm": 1,
+        "effectiveRootDepthCm": 5,
+        "depletionFractionObserved": 0.36000000000000004
+      },
+      "fluxes": {
+        "precipMm": 0,
+        "irrigationMm": 0,
+        "runoffMm": 0,
+        "capillaryRiseMm": "omitted",
+        "rootGrowthStorageMm": 0,
+        "potentialTranspirationMm": 6
+      },
+      "reducerOutput": {
+        "capacityMm": 5,
+        "readilyAvailableWaterMm": 1.8000000000000003,
+        "stressCoefficientKs": 0.3125,
+        "actualTranspirationMm": 1,
+        "deepDrainageMm": 0,
+        "finalStorageMm": 0,
+        "endDepletionMm": 5,
+        "residualMm": 0
+      }
+    },
+    "uptakeCap": {
+      "adjustedDepletionFractionP": 0.36000000000000004,
+      "ksAdjustedPotentialTranspirationMm": 1.875,
+      "availableWaterBeforeTranspirationMm": 1,
+      "actualTranspirationMm": 1,
+      "finalStorageMm": 0,
+      "deepDrainageMm": 0,
+      "endDepletionMm": 5,
+      "waterBalanceResidualMm": 0
+    },
+    "stepDay": {
+      "date": "2026-10-01",
+      "unroundedWaterUseMm": 1,
+      "finalRootZoneStorageMm": 0,
+      "rootZoneResidualAccumulatedMm": 0,
+      "rootZoneResidualMaxAbsMm": 0,
+      "harvestedEvents": 0,
+      "events": [
+        {
+          "dayIndex": 0,
+          "date": "2026-10-01",
+          "kind": "stress-onset",
+          "cell": "0,0",
+          "cropId": 1,
+          "message": "water stress onset for Tomato at 0,0",
+          "data": { "value": 0.69 }
+        }
+      ]
+    },
+    "simulateRun": {
+      "daysSimulated": 1,
+      "rainMm": 0,
+      "etoMmTotal": 5,
+      "waterUseMm": 1,
+      "totalYieldKg": 0,
+      "modelQualificationStatus": "qualified",
+      "finalRootZoneStorageMm": 0,
+      "rootZoneBalanceResidualAccumulatedMm": 0,
+      "rootZoneBalanceResidualMaxAbsMm": 0,
+      "harvestedEvents": 0
+    }
+  },
+  "replay": {
+    "sameFrozenInputsAndEnvironment": true,
+    "eventsMatchExactly": true,
+    "finalStateMatchesExactly": true,
+    "summaryMatchesExactly": true
+  },
+  "verification": {
+    "preregistrationCI": {
+      "status": "PASS",
+      "headSha": "6526af7ab27b13b7ba6368c65f7f7c1a07b97591",
+      "runId": "40649451133",
+      "scope": "preregistration only; not candidate execution"
+    },
+    "independentReview": {
+      "status": "APPROVED",
+      "reviewers": [
+        "GPT-6 Luna max S1 arithmetic/output review",
+        "GPT-6 Luna max S2 false-pass/replay review"
+      ],
+      "scope": "Frozen arithmetic, candidate result, route/input pins, call-through observation, cleanup, replay, and synthetic-only claim boundaries; no remaining findings."
+    },
+    "fullLocalGates": {
+      "status": "PASS with final staged-artifact private-file scan pending",
+      "workingTreeBaseSha": "d15dbab9f1d002524731970d14ce652270b83986",
+      "unitTests": "npm test: 48 files / 256 tests passed",
+      "typecheck": "PASS",
+      "buildProfiles": {
+        "standard": "PASS",
+        "demo": "PASS",
+        "pages": "PASS",
+        "beta": "not configured in package.json"
+      },
+      "privateFileGuard": "PASS for 532 tracked files after the A-08 transport commit; rerun after staging the untracked candidate result JSON",
+      "jsonAndWhitespace": "PASS",
+      "productionPagesPlaywright": {
+        "status": "PASS",
+        "command": "npm run test:e2e -- --trace=off",
+        "result": "3 passed / 3 tests in 2.3m",
+        "cases": [
+          "production Pages base-path boot",
+          "unsupported environment-v2 stored-summary retention",
+          "unsupported v4 lifecycle explanation and stored-summary retention"
+        ]
+      },
+      "warnings": "Existing Vite native-config-loader compatibility notice and large-chunk advisory; all builds passed."
+    },
+    "candidateExactHeadCI": "PENDING; candidate code/evidence commit has not been created",
+    "focusedTestWarning": "Vite reported the existing native-config-loader extension/__dirname compatibility notice; the focused test passed."
+  },
+  "toleranceAndBoundary": {
+    "tolerance": "Frozen bounds only: <=1e-12 mm for one-step water arithmetic and <=1e-12 dimensionless for adjusted p/Ks; no retuning or comparison tolerance.",
+    "scope": "Synthetic software behavior only. No soil/media, biological, measured/reference, crop-accuracy, or predictive claim. A-05 and 02A remain UNVERIFIED overall."
+  }
+}
