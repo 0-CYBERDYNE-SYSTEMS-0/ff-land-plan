@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2 and partial source-equation coverage remain qualified synthetic software evidence. A-05 available-water-cap passed focused candidate review, local gates, and exact-head PR #82 CI on 5cded74/run 40657181987. Same-day drainage-after-ET is independently preregistered; candidate execution is gated on exact-head documentation CI. A-05/02A remain UNVERIFIED overall; no model-output or measured comparison is claimed.",
+  "status": "Environment-v2 and partial source-equation coverage remain qualified synthetic software evidence. A-05 available-water-cap is accepted as a synthetic software regression only. The complete same-day drainage-after-ET rerun preregistration is independently approved; focused attempts against the superseded incomplete record are non-qualifying. Candidate execution is gated on exact-head CI for the preregistration/documentation commit. A-05/02A remain UNVERIFIED overall; no model-output or measured comparison is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -377,7 +377,9 @@
         "marketableYield": "kg/m²"
       },
       "startEvent": "Transplanting; source thermal accumulation begins at transplant",
-      "normalizedStartEvents": ["transplanting"],
+      "normalizedStartEvents": [
+        "transplanting"
+      ],
       "endEvent": "Harvest 31 days after transplant in experiment 1",
       "validDomain": "Open-field experiment 1 in the Central Dry Zone of Myanmar at Yezin; cultivar Green Wave; 50% ETc Hargreaves–Samani irrigation treatment; no generalization beyond these conditions.",
       "expectedMetricRange": {
@@ -449,12 +451,32 @@
       "environment": "Twelve field sites in Yuma, Arizona, under commercial irrigation management; the cited soil-water analysis used observed weather/irrigation, eddy-covariance ET, and site soil water properties.",
       "metric": "Daily effective rooting depth used in a root-zone water-balance analysis",
       "parameter": {
-        "initialRootDepth": { "value": 0.12, "unit": "m at direct seeding/planting", "transcriptionTolerance": "±0.005 m, displayed precision only" },
-        "growthLag": { "value": 200, "unit": "°C·day cumulative GDD", "transcriptionTolerance": "±0.5 °C·day, displayed precision only" },
-        "rootDepthGrowthRate": { "value": 1.2, "unit": "mm per °C·day after lag", "transcriptionTolerance": "±0.05 mm/°C·day, displayed precision only; original Thorup-Kristensen source independently reports approximately this lettuce rate" },
+        "initialRootDepth": {
+          "value": 0.12,
+          "unit": "m at direct seeding/planting",
+          "transcriptionTolerance": "±0.005 m, displayed precision only"
+        },
+        "growthLag": {
+          "value": 200,
+          "unit": "°C·day cumulative GDD",
+          "transcriptionTolerance": "±0.5 °C·day, displayed precision only"
+        },
+        "rootDepthGrowthRate": {
+          "value": 1.2,
+          "unit": "mm per °C·day after lag",
+          "transcriptionTolerance": "±0.05 mm/°C·day, displayed precision only; original Thorup-Kristensen source independently reports approximately this lettuce rate"
+        },
         "thermalMethod": "Single-sine horizontal cutoff, basal 4.5°C and upper 28°C, per the source's Yuma lettuce GDD method.",
-        "maximumRootDepth": { "value": 0.90, "unit": "m", "status": "inferred site-specific effective depth; selected by the authors' water-balance analysis for 11 sites, not a generic or directly measured maximum" },
-        "depletionFraction": { "value": 0.40, "unit": "fraction of TAW at ETc 5 mm/day", "method": "adjust daily with FAO-56 Table 22 footnote 2" }
+        "maximumRootDepth": {
+          "value": 0.9,
+          "unit": "m",
+          "status": "inferred site-specific effective depth; selected by the authors' water-balance analysis for 11 sites, not a generic or directly measured maximum"
+        },
+        "depletionFraction": {
+          "value": 0.4,
+          "unit": "fraction of TAW at ETc 5 mm/day",
+          "method": "adjust daily with FAO-56 Table 22 footnote 2"
+        }
       },
       "sampleSize": "12 field sites; 0.90 m was judged a reasonable effective-depth assumption for 11 sites based on inferred water-stress behavior; no raw root-depth trajectory is supplied for independent validation.",
       "startEvent": "Direct seeding/planting; the source's soil-water balance begins at seed wet-up. Do not infer this initial profile for transplanted lettuce.",
@@ -504,7 +526,10 @@
         "headWeight": "kg"
       },
       "startEvent": "Direct seeding or transplanting; source treatment-specific date",
-      "normalizedStartEvents": ["direct-sowing", "transplanting"],
+      "normalizedStartEvents": [
+        "direct-sowing",
+        "transplanting"
+      ],
       "endEvent": "Storage cabbage maturity at head density 0.72–0.80 and weight 2.2–3.0 kg",
       "validDomain": "Storage cabbage at Cornell field experiments in 1970 and 1973; the paper reports cultivar and weather-dependent variation.",
       "expectedMetricRange": {
@@ -566,7 +591,9 @@
       },
       "sourceMethod": "EM 9305 Table 1 transplanted broccoli; single sine with horizontal cutoff",
       "startEvent": "Transplant at 2–4 true leaves",
-      "normalizedStartEvents": ["transplanting"],
+      "normalizedStartEvents": [
+        "transplanting"
+      ],
       "endEvent": "First harvest at approximately 6-inch head diameter",
       "metric": "thermal sum to the stated development endpoint",
       "expectedMetricRange": {
@@ -619,7 +646,10 @@
       },
       "sourceMethod": "EM 9305 Table 2 cucumber; single sine with horizontal cutoff",
       "startEvent": "Direct seeding or transplanting at 2 true leaves",
-      "normalizedStartEvents": ["direct-sowing", "transplanting"],
+      "normalizedStartEvents": [
+        "direct-sowing",
+        "transplanting"
+      ],
       "endEvent": "First harvest at market size",
       "metric": "thermal sum to the stated development endpoint",
       "expectedMetricRange": {
@@ -672,7 +702,9 @@
       },
       "sourceMethod": "EM 9305 Table 5 sweet pepper; single sine with horizontal cutoff",
       "startEvent": "Transplant at 4–7 true leaves",
-      "normalizedStartEvents": ["transplanting"],
+      "normalizedStartEvents": [
+        "transplanting"
+      ],
       "endEvent": "First ripe harvest (four or more fruits show ripe color)",
       "metric": "thermal sum to the stated development endpoint",
       "expectedMetricRange": {
@@ -725,7 +757,9 @@
       },
       "sourceMethod": "EM 9305 Table 3 snap bean; single sine with horizontal cutoff",
       "startEvent": "Direct seeding",
-      "normalizedStartEvents": ["direct-sowing"],
+      "normalizedStartEvents": [
+        "direct-sowing"
+      ],
       "endEvent": "Snap-bean harvest at 3.5–4 inches",
       "metric": "thermal sum to the stated development endpoint",
       "expectedMetricRange": {
@@ -786,7 +820,9 @@
         "convertedThermalRange": "°C·day"
       },
       "startEvent": "Transplant at 3–5 true leaves",
-      "normalizedStartEvents": ["transplanting"],
+      "normalizedStartEvents": [
+        "transplanting"
+      ],
       "endEvent": "First ripe harvest (four or more fruits show ripe color)",
       "validDomain": "Named OSU Croptime tomato cultivar values and transplant method; regional use outside the source domain is unverified.",
       "expectedMetricRange": {
@@ -840,7 +876,9 @@
         "endpointReading": "tenderometer units"
       },
       "startEvent": "Sowing",
-      "normalizedStartEvents": ["direct-sowing"],
+      "normalizedStartEvents": [
+        "direct-sowing"
+      ],
       "endEvent": "Green-pea maturity at tenderometer reading 130",
       "validDomain": "Unverified until original paper is retrieved and its environment/cultivar/thermal method are checked.",
       "expectedMetricRange": {
@@ -893,7 +931,9 @@
         "thermalSum": "°C·day"
       },
       "startEvent": "Planting (biofix)",
-      "normalizedStartEvents": ["direct-sowing"],
+      "normalizedStartEvents": [
+        "direct-sowing"
+      ],
       "endEvent": "Mature for fresh market",
       "validDomain": "Western Oregon field-study model domain for sweet corn; the source advises local field testing before use elsewhere.",
       "expectedMetricRange": {
@@ -922,11 +962,23 @@
       },
       "environment": "Laboratory temperature and water-potential treatments; not a field seedbed.",
       "inputs": {
-        "temperatureRangeC": [5, 40],
-        "waterPotentialRangeMpa": [-1.5, -0.2],
-        "reportedBeanGerminationBaseTemperatureCByLot": [5.1, 9.6],
+        "temperatureRangeC": [
+          5,
+          40
+        ],
+        "waterPotentialRangeMpa": [
+          -1.5,
+          -0.2
+        ],
+        "reportedBeanGerminationBaseTemperatureCByLot": [
+          5.1,
+          9.6
+        ],
         "reportedGerminationBaseWaterPotentialMpa": -2,
-        "shootElongationBaseTemperatureOffsetC": [3, 6]
+        "shootElongationBaseTemperatureOffsetC": [
+          3,
+          6
+        ]
       },
       "endpoint": "Seed germination and seedling shoot elongation responses measured separately.",
       "metric": "Germination and early seedling response to temperature and water potential",
@@ -945,7 +997,9 @@
         "waterPotential": "MPa"
       },
       "startEvent": "Seed imbibition/germination; distinct from field emergence and later crop thermal development.",
-      "normalizedStartEvents": ["direct-sowing"],
+      "normalizedStartEvents": [
+        "direct-sowing"
+      ],
       "endEvent": "Germination or shoot elongation endpoints; not emergence above field soil.",
       "validDomain": "The tested common-bean seed genotypes/lots and controlled laboratory temperature/water-potential treatments only.",
       "sourceMethod": "Laboratory response curves separate germination from shoot elongation; seed-lot variation is reported.",
@@ -972,9 +1026,18 @@
       "inputs": {
         "seedLots": 4,
         "fieldSites": 2,
-        "fieldYears": [2004, 2005],
-        "observedFinalEmergenceRatePercent": [56, 90],
-        "observedEmergenceDurationDays": [9, 28]
+        "fieldYears": [
+          2004,
+          2005
+        ],
+        "observedFinalEmergenceRatePercent": [
+          56,
+          90
+        ],
+        "observedEmergenceDurationDays": [
+          9,
+          28
+        ]
       },
       "endpoint": "Observed seedling emergence from field seedbed; final emergence rate and duration.",
       "metric": "Final field emergence rate and duration of emergence",
@@ -993,7 +1056,9 @@
         "emergenceDuration": "days"
       },
       "startEvent": "Sowing into a specified field seedbed.",
-      "normalizedStartEvents": ["direct-sowing"],
+      "normalizedStartEvents": [
+        "direct-sowing"
+      ],
       "endEvent": "Seedling emergence at soil surface; distinct from germination and post-emergence crop growth.",
       "validDomain": "French canning bean cv Booster, four reported seed lots, and the observed Mons/Angers 2004–2005 field seedbeds only; no generic bean threshold is inferred.",
       "sourceMethod": "Field observations compared against SIMPLE emergence simulations; the method uses seed-lot properties, sowing depth/seedbed structure, and layered soil temperature and water-potential inputs.",
@@ -1018,7 +1083,11 @@
       },
       "environment": "WOFOST daily crop model methodology, not a measured crop trial.",
       "inputs": {
-        "emergenceParameters": ["TSUMEM", "TBASEM", "TEFFMX"],
+        "emergenceParameters": [
+          "TSUMEM",
+          "TBASEM",
+          "TEFFMX"
+        ],
         "initialDryWeightParameter": "TDWI"
       },
       "endpoint": "Emergence from a source-defined sowing event, followed by post-emergence crop state initialization.",
@@ -1039,7 +1108,9 @@
         "TDWI": "initial total crop dry weight, kg/ha; WOFOST partitions it at emergence according to its own crop-model parameters"
       },
       "startEvent": "Sowing, or an explicitly selected emergence start with known initial crop state.",
-      "normalizedStartEvents": ["direct-sowing"],
+      "normalizedStartEvents": [
+        "direct-sowing"
+      ],
       "endEvent": "Crop emergence as defined by the model; not a source measurement for a FarmFriend crop.",
       "validDomain": "WOFOST crop-specific model configurations only; method structure is referenced without transferring parameters or implementation.",
       "sourceMethod": "The model accumulates effective temperature from sowing to a crop-specific TSUMEM using TBASEM and TEFFMX, then initializes crop growth from source-defined state/TDWI.",
@@ -1139,9 +1210,14 @@
       "sourceParameters": {
         "thermalDevelopment": {
           "baseC": 4,
-          "targetCdays": [662, 731],
+          "targetCdays": [
+            662,
+            731
+          ],
           "startEvent": "transplanting",
-          "normalizedStartEvents": ["transplanting"],
+          "normalizedStartEvents": [
+            "transplanting"
+          ],
           "endpoint": "harvest",
           "method": "study thermal-time accumulation, base 4 °C",
           "sourceEvidenceId": "LETTUCE-MICHELON-2020-EXP1-HS50",
@@ -1173,8 +1249,16 @@
       "parameterSetVersion": "crop-parameters-v3",
       "startEventAcceptance": {
         "classification": "synthetic software behavior only; no biological validation claim",
-        "directSowing": { "cropSlug": "bush-bean", "event": "direct-sowing", "result": "thermal accumulation, synthetic nonzero-light DM gain, and synthetic root-zone water use begin on sowing date; qualified because emergence, seed reserves, and emergence-dependent canopy are not modeled" },
-        "transplanting": { "cropSlug": "tomato", "event": "transplanting", "result": "pre-transplant days add no thermal development or DM" },
+        "directSowing": {
+          "cropSlug": "bush-bean",
+          "event": "direct-sowing",
+          "result": "thermal accumulation, synthetic nonzero-light DM gain, and synthetic root-zone water use begin on sowing date; qualified because emergence, seed reserves, and emergence-dependent canopy are not modeled"
+        },
+        "transplanting": {
+          "cropSlug": "tomato",
+          "event": "transplanting",
+          "result": "pre-transplant days add no thermal development or DM"
+        },
         "outOfDomainEvent": "rejected as unsupported while preserving the stored summary",
         "preRunEstablishmentDate": "rejected as unsupported because frozen as-of-start crop state and prior environment are missing"
       },
@@ -1193,10 +1277,22 @@
         "tolerance": "equation-level assertion; exact helper result within 1e-12 in implementation arithmetic, not a candidate/reference comparison"
       },
       "rootDepthChecks": [
-        { "cumulativeRootThermalCdays": 0, "expectedDepthCm": 12 },
-        { "cumulativeRootThermalCdays": 200, "expectedDepthCm": 12 },
-        { "cumulativeRootThermalCdays": 300, "expectedDepthCm": 24 },
-        { "cumulativeRootThermalCdays": 1000, "expectedDepthCm": 90 }
+        {
+          "cumulativeRootThermalCdays": 0,
+          "expectedDepthCm": 12
+        },
+        {
+          "cumulativeRootThermalCdays": 200,
+          "expectedDepthCm": 12
+        },
+        {
+          "cumulativeRootThermalCdays": 300,
+          "expectedDepthCm": 24
+        },
+        {
+          "cumulativeRootThermalCdays": 1000,
+          "expectedDepthCm": 90
+        }
       ],
       "waterClosure": {
         "tolerance": "≤1e-6 mm/cell-day",
@@ -1348,9 +1444,18 @@
           "2026-10-03"
         ],
         "dailyTMinTMaxC": [
-          [20, 25],
-          [-2, 3],
-          [20, 25]
+          [
+            20,
+            25
+          ],
+          [
+            -2,
+            3
+          ],
+          [
+            20,
+            25
+          ]
         ],
         "sequence": "warm living tick, terminal-frost tick, warm post-death tick",
         "warmDayGddBase10C": 12.5,
@@ -1435,8 +1540,16 @@
           "gddBase10C": 15
         },
         "manualInterventions": [
-          { "kind": "harvest", "date": "2026-12-03", "cell": "0,0" },
-          { "kind": "harvest", "date": "2026-12-03", "cell": "0,0" }
+          {
+            "kind": "harvest",
+            "date": "2026-12-03",
+            "cell": "0,0"
+          },
+          {
+            "kind": "harvest",
+            "date": "2026-12-03",
+            "cell": "0,0"
+          }
         ]
       },
       "expected": {
@@ -1451,7 +1564,9 @@
         "harvestedEventYieldKg": 0.007875,
         "finalCellHarvested": true,
         "totalYieldKg": 0.01,
-        "yieldKgByCrop": { "1": 0.01 },
+        "yieldKgByCrop": {
+          "1": 0.01
+        },
         "replay": "events, final state, and summary exactly equal for identical frozen config and environment series; does not exercise durable storage serialization",
         "tolerance": "Harvest event payout within 1e-12 kg; event count, rounded summaries, state and frozen-input replay exact. Software invariant only; no fitted or empirical tolerance."
       },
@@ -1485,8 +1600,16 @@
           "gddBase10C": 15
         },
         "manualInterventions": [
-          { "kind": "harvest", "date": "2026-10-01", "cell": "0,0" },
-          { "kind": "harvest", "date": "2026-12-03", "cell": "0,0" }
+          {
+            "kind": "harvest",
+            "date": "2026-10-01",
+            "cell": "0,0"
+          },
+          {
+            "kind": "harvest",
+            "date": "2026-12-03",
+            "cell": "0,0"
+          }
         ]
       },
       "expected": {
@@ -1507,7 +1630,9 @@
         "harvestedEventYieldKg": 0.007875,
         "finalCellHarvested": true,
         "totalYieldKg": 0.01,
-        "yieldKgByCrop": { "1": 0.01 },
+        "yieldKgByCrop": {
+          "1": 0.01
+        },
         "replay": "events, final state, and summary exactly equal for identical frozen config and environment series; does not exercise durable storage serialization",
         "tolerance": "Day-0 rejection payload, event counts, readiness summary, state, rounded summaries, and frozen-input replay are exact; eligible payout is within 1e-12 kg for JavaScript arithmetic only. The 0.8 threshold is a synthetic software rule, not a biological claim."
       },
@@ -1707,8 +1832,13 @@
       "thermalParameters": {
         "tBaseC": 7.2,
         "tUpperC": 33.3,
-        "gddToMaturityCdays": [1024, 1117],
-        "startEvents": ["transplanting"],
+        "gddToMaturityCdays": [
+          1024,
+          1117
+        ],
+        "startEvents": [
+          "transplanting"
+        ],
         "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6",
         "usage": "Frozen route input only; no maturity-timing claim."
       },
@@ -1811,7 +1941,193 @@
       "evidence": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic.json",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Preregistered after independent S2 approval of source ordering, arithmetic, frozen inputs, observable assertions, tolerances, and synthetic-only boundary. Candidate test/reducer not run. It is gated on exact-head PR CI for the preregistration/documentation commit; A-05/02A remain UNVERIFIED."
+      "status": "Historical incomplete preregistration; superseded for candidate execution by FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-RERUN-01. Focused attempts against this record used an unfrozen tomato catalog object and are non-qualifying; no result is accepted. Original fixture values and tolerances remain unchanged.",
+      "supersededBy": "FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-RERUN-01"
+    },
+    {
+      "id": "FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-RERUN-01",
+      "classification": "preregistered synthetic crop-model-v2 one-day same-day water-balance ordering invariant; not a crop or soil benchmark",
+      "sourceId": "FAO-56-1998",
+      "sourceArtifact": {
+        "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+        "retrievedDate": "2026-10-27",
+        "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+        "bytes": 137909,
+        "licenseOrReuse": "No reuse license was identified for the cited publication; equations are referenced/paraphrased only, with no code or substantial source text copied."
+      },
+      "sourceReference": "FAO-56 Chapter 8 Eq. 85 defines the daily root-zone balance; accompanying text states that excess water drains after the same day's ET; Eq. 88 calculates that deep percolation. No source output or trajectory is reproduced or compared.",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "identity": "Repository catalog object frozen for deterministic software routing only; no cultivar or accuracy claim.",
+        "catalogSnapshotSource": {
+          "sourcePath": "src/data/crops.ts",
+          "gitCommit": "488fccc59ab2731d08faca8975c6aa9d9b881ce5",
+          "gitBlob": "4ac9c7700170c36e5a2eb7e32a98d3fbe6052350",
+          "sourceFileSha256": "7911ef22a7fc085a4aaf5f33df7136017a1ae9d1230b4652c5bcf878d903e087",
+          "objectCanonicalization": "SHA-256 over UTF-8 bytes of Python json.dumps(object, ensure_ascii=False, sort_keys=True, separators=(',', ':')).",
+          "objectSha256": "5437c81621b28f76d45671cf8058a388d43b23e5c1922a3e1dee8a3b268fa0ce",
+          "domainLimit": "Exact repository catalog object for deterministic software routing only. It is not a cultivar-specific measured or validated parameter set."
+        },
+        "startEvent": "transplanting"
+      },
+      "environment": {
+        "startDate": "2026-10-01",
+        "dayCount": 1,
+        "intervalDays": 1,
+        "tMinC": 20,
+        "tMaxC": 30,
+        "precipMm": 5,
+        "etoMm": 5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 15,
+        "runtimeProvenanceTags": "default",
+        "waterFieldSource": "This rerun record's syntheticInputs.dailyForcing; it overrides the parent's ten-day dry-down forcing."
+      },
+      "modelVersion": "crop-model-v2",
+      "runInputsVersion": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "syntheticInputs": {
+        "soil": {
+          "awcMmPerCm": 2,
+          "effectiveRootDepthCm": 80,
+          "totalAvailableWaterMm": 160,
+          "initialPlantAvailableStorageMm": 159,
+          "initialDepletionMm": 1,
+          "initialStorageFraction": 0.99375,
+          "sourceStatus": "AWC, depth, and storage are synthetic software inputs; no soil, media, or site claim."
+        },
+        "rootZoneMethod": {
+          "tableDepletionFractionP": 0.4,
+          "tablePReferenceEtoMmDay": 5,
+          "referenceEvapotranspirationMm": 5,
+          "cropCoefficient": 1.2,
+          "potentialCropTranspirationMm": 6,
+          "adjustedDepletionFractionP": 0.36,
+          "readilyAvailableWaterMm": 57.6,
+          "startingStressCoefficientKs": 1,
+          "adjustedPCalculation": "p = 0.4 + 0.04 * (5 - 6) = 0.36; RAW = p * TAW = 0.36 * 160 = 57.6 mm; starting depletion 1 mm is below RAW, so Ks = 1."
+        },
+        "dailyForcing": {
+          "dayCount": 1,
+          "startDate": "2026-10-01",
+          "precipitationMm": 5,
+          "etoMm": 5,
+          "runoffMm": 0,
+          "irrigationMm": 0,
+          "capillaryRiseMm": 0,
+          "rootGrowthStorageMm": 0,
+          "potentialTranspirationMm": 6,
+          "ancillaryRoutingInputs": {
+            "tMinC": 20,
+            "tMaxC": 30,
+            "dliNaturalMol": 18,
+            "gddBase10C": 15,
+            "note": "Fixed synthetic routing fields retained from the existing positive-drainage fixture; they are not evaluated by this water-ordering invariant."
+          }
+        }
+      },
+      "expected": {
+        "equations": {
+          "eq88DeepPercolationMm": "max(0, (P - runoff) + irrigation - ETc - initialDepletion) = max(0, (5 - 0) + 0 - 6 - 1) = 0 mm",
+          "eq85EndDepletionMm": "initialDepletion - (P - runoff) - irrigation - capillaryRise + actualETc + deepPercolation = 1 - 5 - 0 - 0 + 6 + 0 = 2 mm",
+          "endStorageMm": "TAW - endDepletion = 160 - 2 = 158 mm",
+          "storageBalanceResidualMm": "initialStorage + precipitation - runoff - irrigation - capillaryRise - actualTranspiration - deepPercolation - endStorage = 159 + 5 - 0 - 0 - 0 - 6 - 0 - 158 = 0 mm"
+        },
+        "deepPercolationMm": 0,
+        "actualTranspirationMm": 6,
+        "endDepletionMm": 2,
+        "endStorageMm": 158,
+        "waterBalanceResidualMm": 0,
+        "endDepletionBoundsMm": "0 <= 2 <= TAW (160)"
+      },
+      "tolerance": "Arithmetic only: absolute deviation <=1e-12 mm for the frozen one-step water arithmetic and <=1e-6 mm per cell-day for the existing engine diagnostic residual; no model-error or tuning tolerance.",
+      "evidence": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json",
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "S2 independently approved the complete superseding preregistration before qualified candidate execution. Earlier attempts against the superseded incomplete record are excluded. candidateResult remains null; the preregistration/documentation commit must pass exact-head PR #82 CI before candidate execution. Synthetic software behavior only; A-05/02A remain UNVERIFIED.",
+      "sourceContext": {
+        "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Eqs. 85 and 88.",
+        "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+        "retrievedDate": "2026-10-27",
+        "artifactSha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+        "artifactBytes": 137909,
+        "artifactStatus": "Official Chapter 8 HTML snapshot retrieved and hashed 2026-10-27; snapshot not committed.",
+        "licenseOrReuse": "FAO publication cited as a method reference; no code or substantial source text copied.",
+        "sourceLocations": {
+          "eq85": "Chapter 8, Eq. 85, lines 308-320: daily root-zone depletion balance and term definitions.",
+          "sameDayOrdering": "Chapter 8, lines 321-322: above-field-capacity water is lost by deep percolation the same day, following any ET for that day.",
+          "eq88": "Chapter 8, Eq. 88, lines 342-346: deep percolation calculation after ET and zero-drainage condition while depletion remains positive."
+        },
+        "equationScope": "Eq. 85 defines the daily depletion balance. The accompanying Chapter 8 text states that water above field capacity is lost by deep percolation on the same day, following that day's ET. Eq. 88 calculates deep percolation after ET. These equations define the preregistered ordering expectation.",
+        "reuseBoundary": "Equation references and paraphrase only; no source artifact, code, or source text copied. No source output or trajectory is reproduced or compared."
+      },
+      "parentFixture": {
+        "id": "FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01",
+        "path": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json",
+        "gitCommit": "488fccc59ab2731d08faca8975c6aa9d9b881ce5",
+        "gitBlob": "2569f88987ce56230b0c47f2bf11b4ab0c6e710c",
+        "sha256": "1c2892db9cde9ba338c2a87a7db19683d93b7560106d240688756c4df7b8ae91",
+        "useLimit": "Source for frozen non-water reducer-routing inputs only; the same-day water values below override its multi-day dry-down water settings."
+      },
+      "inputRecordSha256": "4ad5e0a55e81ba2d1ab0dcfb6458a12046c8b8444f3e8868b98529bdfc3afe64",
+      "candidateAssertions": {
+        "inputsAndRoute": "Pin the stated model/input/parameter versions, one-cell standard open-field route, no environment-v2, synthetic soil source unknown, fixed 80 cm effective depth, initial storage 159 mm, and all daily forcing and zero flux inputs exactly.",
+        "rootStep": "Check that the one-day v2 route invokes the root-zone reducer with starting storage 159 mm, AWC 2 mm/cm, effective depth 80 cm, pTable 0.4, ETo 5 mm, potential transpiration 6 mm, precipitation 5 mm, and runoff, irrigation, capillary rise, and root-growth storage all zero. Verify the expected adjusted p/RAW/Ks and the returned deep percolation 0 mm, actual transpiration 6 mm, end storage 158 mm, end depletion 2 mm, and zero residual. A call-through observation may be used to establish the invocation belongs to the standard route.",
+        "routeOutcome": "Verify one simulated cell-day, unrounded actual water use 6 mm, final root-zone storage 158 mm, end depletion 2 mm, and defined water-balance residual 0 mm within the preregistered limits. Assert drainage from the root-step result if exposed; do not infer it solely from a rounded run summary."
+      },
+      "unitsAndEvidenceBoundary": {
+        "water": "mm; AWC in mm/cm; effective root depth in cm",
+        "production": "g dry matter/m² and g dry matter/MJ intercepted PAR; inherited values are synthetic routing-only",
+        "thermal": "°C and °C-days; inherited values are synthetic routing-only",
+        "nitrogen": "kg/ha; inherited initialization is a software isolation input, not a fertility claim",
+        "soil": "AWC, depth, storage, and organic matter are synthetic; soil source remains unknown",
+        "cropCatalog": "Repository catalog object is pinned by source commit and digest for deterministic software routing; no crop/cultivar accuracy claim.",
+        "sourceLicenseAndReuse": "FAO publication cited as a method reference; no code or substantial source text copied.",
+        "sourceSnapshotLimit": "Official Chapter 8 HTML snapshot retrieved and hashed 2026-10-27; snapshot not committed.",
+        "overallLimit": "Synthetic software invariant only; no soil/media result, crop prediction, measured/reference agreement, or full A-05/02A acceptance claim.",
+        "catalogSourceReuse": "The catalog snapshot is copied from the repository source file at the recorded commit. This record makes no additional third-party data or license claim; it pins code inputs for deterministic routing only."
+      },
+      "priorAttemptDisposition": "Focused attempts using the superseded record are non-qualifying because inherited non-water routing inputs were not frozen. Their outputs must not be copied into this record or counted as candidate evidence.",
+      "supersedes": "FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-01",
+      "candidateResult": null,
+      "tolerances": {
+        "oneStepWaterArithmetic": "absolute deviation <=1e-12 mm for the preregistered one-step water arithmetic only, including drainage, transpiration, storage, depletion, and the directly calculated residual.",
+        "cellDayWaterBalanceResidual": "absolute engine diagnostic residual <=1e-6 mm per cell-day, the existing water-residual limit.",
+        "rationaleAndLimit": "Both bounds are frozen before candidate execution and apply to arithmetic/software checks only: <=1e-12 mm for the explicit one-step expected arithmetic and <=1e-6 mm for the engine's cell-day diagnostic residual. They are not source-display bounds, soil uncertainty, model-error tolerances, or crop/prediction acceptance thresholds."
+      },
+      "frozenInputDependencies": {
+        "completeRecord": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json",
+        "completeRecordSha256": "4ad5e0a55e81ba2d1ab0dcfb6458a12046c8b8444f3e8868b98529bdfc3afe64",
+        "parentFixture": {
+          "id": "FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01",
+          "path": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json",
+          "gitCommit": "488fccc59ab2731d08faca8975c6aa9d9b881ce5",
+          "gitBlob": "2569f88987ce56230b0c47f2bf11b4ab0c6e710c",
+          "sha256": "1c2892db9cde9ba338c2a87a7db19683d93b7560106d240688756c4df7b8ae91",
+          "useLimit": "Source for frozen non-water reducer-routing inputs only; the same-day water values below override its multi-day dry-down water settings."
+        },
+        "tomatoCatalog": {
+          "sourcePath": "src/data/crops.ts",
+          "gitCommit": "488fccc59ab2731d08faca8975c6aa9d9b881ce5",
+          "gitBlob": "4ac9c7700170c36e5a2eb7e32a98d3fbe6052350",
+          "sourceFileSha256": "7911ef22a7fc085a4aaf5f33df7136017a1ae9d1230b4652c5bcf878d903e087",
+          "objectCanonicalization": "SHA-256 over UTF-8 bytes of Python json.dumps(object, ensure_ascii=False, sort_keys=True, separators=(',', ':')).",
+          "objectSha256": "5437c81621b28f76d45671cf8058a388d43b23e5c1922a3e1dee8a3b268fa0ce",
+          "domainLimit": "Exact repository catalog object for deterministic software routing only. It is not a cultivar-specific measured or validated parameter set."
+        },
+        "inheritedInputCategories": [
+          "full tomato catalog object",
+          "thermal parameters",
+          "production parameters",
+          "root-zone metadata",
+          "crop start event",
+          "soil organic matter",
+          "nitrogen pool initialization",
+          "daily environment routing",
+          "run configuration"
+        ]
+      }
     },
     {
       "id": "FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01",
