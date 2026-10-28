@@ -469,7 +469,7 @@ interface SimEventBase {
   dayIndex: number;
   date: string;
   cell?: string;
-  /** Omitted only for historic floor events; elevated cell keys are also qualified. */
+  /** Omitted for floor events to preserve the legacy x,y event payload; elevated cell keys are target-qualified. */
   target?: GrowingTargetRef;
   cropId?: number;
   message: string;
