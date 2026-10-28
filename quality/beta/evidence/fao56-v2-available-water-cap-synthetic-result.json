@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "FAO56-V2-AVAILABLE-WATER-CAP-SYNTHETIC-01-CANDIDATE-RESULT",
-  "status": "focused synthetic candidate test and independent review PASS; local suite, typecheck, builds, and production Pages journeys PASS; staged-artifact private scan and exact-head candidate CI pending",
+  "status": "focused synthetic candidate test, independent review, full local gates, and exact-head PR CI PASS; synthetic software behavior only",
   "classification": "synthetic crop-model-v2 reducer/software result only; not soil, crop, or predictive validation",
   "preregistration": {
     "fixture": "quality/beta/evidence/fao56-v2-available-water-cap-synthetic.json",
@@ -21,7 +21,7 @@
     "result": "1 passed; 29 skipped; 1 test file passed",
     "durationMs": 157,
     "localDate": "2026-10-28",
-    "candidateCodeEvidenceCommit": "pending",
+    "candidateCodeEvidenceCommit": "5cded74b7da23b1506ad06668c10f3c8afa2721c",
     "testConstructionCorrections": [
       "The first focused attempt read lifecycle from rootZone; it belongs to the frozen crop-parameter object. The assertion path was corrected.",
       "The next focused attempt referenced an unregistered calculation.oneDayWaterUseMm key; it was corrected to calculation.actualTranspirationMm. No frozen input, expected result, or tolerance changed."
@@ -156,7 +156,7 @@
       "scope": "Frozen arithmetic, candidate result, route/input pins, call-through observation, cleanup, replay, and synthetic-only claim boundaries; no remaining findings."
     },
     "fullLocalGates": {
-      "status": "PASS with final staged-artifact private-file scan pending",
+      "status": "PASS",
       "workingTreeBaseSha": "d15dbab9f1d002524731970d14ce652270b83986",
       "unitTests": "npm test: 48 files / 256 tests passed",
       "typecheck": "PASS",
@@ -166,7 +166,7 @@
         "pages": "PASS",
         "beta": "not configured in package.json"
       },
-      "privateFileGuard": "PASS for 532 tracked files after the A-08 transport commit; rerun after staging the untracked candidate result JSON",
+      "privateFileGuard": "PASS for 533 tracked files after staging the candidate result JSON",
       "jsonAndWhitespace": "PASS",
       "productionPagesPlaywright": {
         "status": "PASS",
@@ -180,7 +180,7 @@
       },
       "warnings": "Existing Vite native-config-loader compatibility notice and large-chunk advisory; all builds passed."
     },
-    "candidateExactHeadCI": "PENDING; candidate code/evidence commit has not been created",
+    "candidateExactHeadCI": "PASS on exact code/evidence SHA 5cded74b7da23b1506ad06668c10f3c8afa2721c; PR #82 run 40657181987: test + typecheck + build (29s), Playwright production Pages-path smoke (3/3; suite 5.5m, job 6m2s), secret + private-file scan (11s), and GitGuardian Security Checks (2s).",
     "focusedTestWarning": "Vite reported the existing native-config-loader extension/__dirname compatibility notice; the focused test passed."
   },
   "toleranceAndBoundary": {

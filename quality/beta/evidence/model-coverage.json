@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down, paired tomato root-depth, and A-03 total-solar replay fixtures passed local gates and exact-head implementation CI (A-05 d4e8216/run 40607076825; tomato root-depth 3857470/run 40640752345; A-03 a7c3d0a/run 40614576932); A-07 mixed-target v3 routing/payout passed focused execution and local gates, then exact-head PR #82 CI on 22cd5f5/run 40646657273; A-05 available-water-cap fixture is preregistered and independently reviewed but not executed; all are synthetic software evidence only; candidate comparisons not run",
+  "status": "Environment-v2 and partial source-equation coverage remain qualified synthetic software evidence. A-05 available-water-cap passed focused candidate review, local gates, and exact-head PR #82 CI on 5cded74/run 40657181987. Same-day drainage-after-ET is independently preregistered; candidate execution is gated on exact-head documentation CI. A-05/02A remain UNVERIFIED overall; no model-output or measured comparison is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -1754,9 +1754,64 @@
       },
       "tolerance": "Arithmetic only: absolute deviation <=1e-12 mm for one-step water values and <=1e-12 dimensionless for adjusted p and Ks, derived from one-step double-precision operations. Frozen inputs, route, call count, zero precipitation/irrigation/runoff/root-growth inputs, omitted/default-zero capillary rise, 6 mm/day potential transpiration, nonnegative storage, and replay equality are exact structural checks; no comparison/tuning tolerance.",
       "evidence": "quality/beta/evidence/fao56-v2-available-water-cap-synthetic.json",
+      "candidateResult": "quality/beta/evidence/fao56-v2-available-water-cap-synthetic-result.json",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Preregistration reviewed by S1 (arithmetic) and S2 (novelty, contract, provenance). Exact preregistration head 6526af7ab27b13b7ba6368c65f7f7c1a07b97591 passed all four PR #82 contexts in run 40649451133: test + typecheck + build (40s); Playwright production Pages-path smoke (3/3; tests 5.6m, job 6m14s); secret + private-file scan (18s); GitGuardian Security Checks (2s). Pages journeys: production Pages boot; unsupported environment-v2 stored-summary retention; unsupported v4 lifecycle explanation and stored-summary retention. This verifies the preregistration commit only. Candidate not executed; it remains gated on exact-head PR CI for this documentation-reconciliation commit. A-05 and 02A remain UNVERIFIED overall."
+      "status": "Preregistration passed exact-head CI on 6526af7ab27b13b7ba6368c65f7f7c1a07b97591 (run 40649451133). Focused candidate test passed (1 passed, 29 skipped); S1 independently approved arithmetic/result pins and S2 approved route, replay, provenance and boundary. Full local gates passed (48 files/256 tests, typecheck, standard/demo/Pages builds, private-file guard 533, JSON/whitespace, production Pages Playwright 3/3 in 2.3m). Exact code/evidence SHA 5cded74b7da23b1506ad06668c10f3c8afa2721c passed all four PR #82 contexts in run 40657181987: test + typecheck + build (29s), Playwright production Pages-path smoke (3/3; suite 5.5m, job 6m2s), secret + private-file scan (11s), GitGuardian Security Checks (2s). Synthetic software behavior only; no model-output or measured comparison; A-05/02A remain UNVERIFIED."
+    },
+    {
+      "id": "FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v2 one-day drainage-after-ET water-balance ordering invariant; not a crop or soil benchmark",
+      "sourceId": "FAO-56-1998",
+      "sourceArtifact": {
+        "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+        "retrievedDate": "2026-10-27",
+        "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+        "bytes": 137909,
+        "licenseOrReuse": "No reuse license was identified for the cited publication; equations are referenced/paraphrased only, with no code or substantial source text copied."
+      },
+      "sourceReference": "FAO-56 Chapter 8 Eq. 85 defines the daily root-zone balance; accompanying text states that excess water drains after the same day's ET; Eq. 88 calculates that deep percolation. No source output or trajectory is reproduced or compared.",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "identity": "Routing identity only; no cultivar equivalence or crop-accuracy claim."
+      },
+      "environment": "One-day synthetic standard open-field v2 route; ETo=5 mm/day, TMin/TMax=20/30 C, DLI=18 mol/m2/day; no environment-v2 snapshot.",
+      "modelVersion": "crop-model-v2",
+      "runInputsVersion": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "syntheticInputs": {
+        "awcMmPerCm": 2,
+        "effectiveRootDepthCm": 80,
+        "totalAvailableWaterMm": 160,
+        "initialStorageMm": 159,
+        "initialDepletionMm": 1,
+        "tableDepletionFractionP": 0.4,
+        "referenceEtoMmDay": 5,
+        "cropCoefficient": 1.2,
+        "potentialTranspirationMm": 6,
+        "precipitationMm": 5,
+        "runoffMm": 0,
+        "irrigationMm": 0,
+        "capillaryRiseMm": 0,
+        "rootGrowthStorageMm": 0,
+        "soilSource": "unknown; hydraulic values are synthetic software inputs"
+      },
+      "expected": {
+        "adjustedP": 0.36,
+        "readilyAvailableWaterMm": 57.6,
+        "startingStressCoefficientKs": 1,
+        "deepPercolationMm": 0,
+        "actualTranspirationMm": 6,
+        "endDepletionMm": 2,
+        "endStorageMm": 158,
+        "waterBalanceResidualMm": 0
+      },
+      "tolerance": "Absolute deviation <=1e-12 mm for the preregistered one-step arithmetic and <=1e-6 mm per cell-day for the existing engine diagnostic residual. Arithmetic-only bounds; frozen inputs, route, no-root-growth condition, reducer call-through and deterministic replay are structural checks. No model-error or tuning tolerance.",
+      "evidence": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic.json",
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Preregistered after independent S2 approval of source ordering, arithmetic, frozen inputs, observable assertions, tolerances, and synthetic-only boundary. Candidate test/reducer not run. It is gated on exact-head PR CI for the preregistration/documentation commit; A-05/02A remain UNVERIFIED."
     },
     {
       "id": "FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01",
