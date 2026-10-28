@@ -2278,7 +2278,7 @@
       },
       "tolerance": "No numeric crop-output comparison; maturity/gating assertions and replay equality are exact structural software invariants.",
       "evidence": "src/lib/sim/model-inputs.test.ts",
-      "reproduction": "Focused: npx vitest run src/lib/sim/model-inputs.test.ts -t \"keeps a mature v3 crop standing when auto-harvest is disabled\" (1 passed, 31 skipped). Full local: npm test (48 files/258 tests), typecheck, standard/demo/Pages builds, private guard (536 tracked), git diff --check, and npm run test:e2e (3/3, 3.8m). PR CI pending on the code/evidence SHA.",
+      "reproduction": "Focused: npx vitest run src/lib/sim/model-inputs.test.ts -t keeps-a-mature-v3-crop-standing-when-auto-harvest-is-disabled (1 passed, 31 skipped). Full local: npm test (48 files/258 tests), typecheck, standard/demo/Pages builds, private guard (536 tracked), git diff --check, and production Pages E2E (3/3, 3.8m). Exact-head PR #82 run 40675181594 on SHA bbf0235fff81badc36a39776d5d006197432a230 passed all four named contexts; production Pages smoke passed 3/3 (3.4m).",
       "acceptance": {
         "row": "A-07",
         "status": "PASS for this no-auto-harvest subcase; UNVERIFIED overall",
@@ -2287,7 +2287,7 @@
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Synthetic v3 no-auto-harvest and in-memory replay software evidence only. S2 independently approved; local focused/full tests and build/browser gates passed. Exact-head PR CI is pending. This does not establish durable persistence, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, or predictive validity. A-07 and 02A remain UNVERIFIED overall."
+      "status": "Synthetic v3 no-auto-harvest and in-memory replay software evidence only. S2 independently approved; local focused/full tests and build/browser gates passed. Exact-head PR #82 run 40675181594 on SHA bbf0235fff81badc36a39776d5d006197432a230 passed all four named contexts, including production Pages smoke 3/3. This does not establish durable persistence, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, or predictive validity. A-07 and 02A remain UNVERIFIED overall."
     }
   ],
   "coverageSummary": {
