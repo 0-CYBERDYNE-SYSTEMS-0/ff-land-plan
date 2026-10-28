@@ -8,6 +8,7 @@ import fao56V2PositiveDrainageFixture from '../../../quality/beta/evidence/fao56
 import fao56V2RootDrydownFixture from '../../../quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json';
 import fao56V2SameDayDrainageEtRerunFixture from '../../../quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json';
 import fao56V2TomatoRootDepthFixture from '../../../quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json';
+import a08AllCatalogMissingProfileFixture from '../../../quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json';
 import v3AutoHarvestMixedTargetFixture from '../../../quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
 import { effectivePlantingArea } from '@/lib/plan';
@@ -34,6 +35,7 @@ import { NO_CLIMATE_EQUIPMENT } from './environment-climate';
 import * as cropModelV2 from './crop-model-v2';
 import { stepFao56RootZone } from './crop-model-v2';
 import { createRun, simulateRun, stepDay } from './engine';
+import { ReplayStateCache, UnsupportedRunReplayError, replayRunToDay } from './replay-cache';
 import { collectRunPredictionPairs } from './scorecard';
 
 function config(overrides: Partial<RunConfig> = {}): RunConfig {
@@ -324,6 +326,85 @@ describe('frozen crop model inputs and replay support', () => {
       canReplay: false,
       preserveStoredSummary: true,
     });
+  });
+
+  it('fails closed for every catalog crop without a complete v2 profile', () => {
+    const snapshot = a08AllCatalogMissingProfileFixture.syntheticSetup.catalogSnapshot;
+    const lifecycle = a08AllCatalogMissingProfileFixture.syntheticSetup.caseTemplate.catalogCropLifecycle;
+    const reasonTemplates = a08AllCatalogMissingProfileFixture.syntheticSetup.caseTemplate.requiredReasonTemplates;
+    const expectedRoster = snapshot.entriesSortedByCropId;
+    const currentRoster = [...cropLibrary]
+      .sort((left, right) => left.id - right.id)
+      .map((crop) => ({ cropId: crop.id, slug: crop.slug }));
+
+    expect(currentRoster).toHaveLength(snapshot.expectedEntryCount);
+    expect(new Set(currentRoster.map((entry) => entry.cropId)).size).toBe(snapshot.expectedEntryCount);
+    expect(currentRoster).toEqual(expectedRoster);
+
+    for (const { cropId } of expectedRoster) {
+      const crop = cropLibrary.find((entry) => entry.id === cropId)!;
+      const run = config({
+        cropModelVersion: 'crop-model-v2',
+        basePlan: { ...config().basePlan, planting: { '0,0': cropId } },
+        cropStartEvents: { '0,0': 'transplanting' },
+      });
+      const modelInputs = freezeRunModelInputsV2(run, {
+        soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 },
+        crops: [crop],
+      });
+      const frozenRun = { ...run, modelInputs };
+      const parameter = modelInputs.cropParameters[0]!;
+      const isFungus = snapshot.coverageSummaryAtRegistration.fungalCropIds.includes(cropId);
+      const expectedProductionMissing = isFungus
+        ? lifecycle.fungalProductionMissing
+        : lifecycle.plantCropProductionMissing;
+      const invalidProfileReason = reasonTemplates.invalidV2Profile.replace('{cropId}', String(cropId));
+
+      expect(run.basePlan.planting['0,0']).toBe(cropId);
+      expect(modelInputs.model).toBe('run-inputs-v2');
+      expect(modelInputs.parameterSetVersion).toBe('crop-parameters-v3');
+      expect(modelInputs.crops).toHaveLength(1);
+      expect(modelInputs.crops[0]?.id).toBe(cropId);
+      expect(modelInputs.cropParameters).toHaveLength(1);
+      expect(parameter.cropId).toBe(cropId);
+      expect(parameter.production.status).toBe('unsupported');
+      expect(parameter.production.missing).toEqual(expectedProductionMissing);
+      expect(parameter.rootZone.status).toBe('unsupported');
+      expect(parameter.rootZone.missing).toEqual(lifecycle.rootZoneMissing);
+      expect(modelInputs.qualification.status).toBe('unsupported');
+
+      const support = inspectRunModelSupport(frozenRun);
+      expect(support).toMatchObject({
+        model: 'crop-model-v2',
+        status: 'unsupported',
+        canReplay: false,
+        preserveStoredSummary: true,
+      });
+      expect(support.reasons).toContain(invalidProfileReason);
+
+      let replayError: unknown;
+      try {
+        replayRunToDay({
+          id: `a08-missing-v2-profile-${cropId}`,
+          config: frozenRun,
+          envSeries: [],
+        }, 0, {}, new ReplayStateCache());
+      } catch (error) {
+        replayError = error;
+      }
+      expect(replayError).toBeInstanceOf(UnsupportedRunReplayError);
+      if (!(replayError instanceof UnsupportedRunReplayError)) {
+        throw new Error(`Expected unsupported replay for crop ${cropId}.`);
+      }
+      expect(replayError.reasons).toContain(invalidProfileReason);
+
+      if (isFungus) {
+        const fungalLifecycleReason = reasonTemplates.fungalLifecycle.replace('{cropId}', String(cropId));
+        expect(parameter.lifecycle).toBe('fungus');
+        expect(modelInputs.qualification.reasons).toContain(fungalLifecycleReason);
+        expect(support.reasons).toContain(fungalLifecycleReason);
+      }
+    }
   });
 
   it('requires the versioned start-event inputs to replay crop-model-v2 records', () => {
