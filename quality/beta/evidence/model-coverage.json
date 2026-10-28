@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2, partial source-equation, A-01, and preregistered A-02 evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 has a preregistered four-case v2 reducer fixture; candidate tests and comparisons have not run, so A-02 through A-07 and overall 02A remain UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed.",
+  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -2338,7 +2338,7 @@
     },
     {
       "id": "A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01",
-      "classification": "preregistered synthetic crop-model-v2 reducer-state software fixture; not a crop benchmark",
+      "classification": "executed preregistered synthetic crop-model-v2 reducer-state software fixture; not a crop benchmark",
       "crop": {
         "slug": "tomato",
         "catalogCropId": 1,
@@ -2442,17 +2442,35 @@
         "Independent measured/reference outcomes and a held-out comparison design"
       ],
       "evidence": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json",
-      "reproduction": "Planned, not run: npx vitest run src/lib/sim/crop-model-v2.test.ts -t \"runs frozen tomato thermal state across synthetic locations and horizons\"",
-      "preregistrationCheckpoint": "Base code SHA 1df6d6c9d015172fabb1dda5003ef4d785f85f8b passed exact-head run 40692311970. That run predates this preregistration artifact and does not cover candidate code.",
+      "reproduction": "Passed: npx vitest run src/lib/sim/crop-model-v2.test.ts -t \"runs frozen tomato thermal state across synthetic locations and horizons\" (1 passed, 16 skipped). Full local npm test passed (48 files/261 tests); typecheck, standard/demo/Pages builds, private guard (537 tracked files), duplicate-key-safe JSON parse, diff check, and production Pages E2E (3/3) passed. Result: quality/beta/evidence/a02-tomato-thermal-location-window-synthetic-result.json",
+      "preregistrationCheckpoint": "Preregistration SHA 140b7aa2b88c77c942da2a0fb627e2b57c755f01 passed exact-head PR #82 run 40696641450 with all four named checks. Earlier base code SHA 1df6d6c9d015172fabb1dda5003ef4d785f85f8b passed run 40692311970; that run predates and does not verify the preregistration artifact or candidate code.",
+      "candidateExecution": {
+        "candidateSha": "c3412132bf4aee7cb54ff9d856edf43e6736ec82",
+        "changeScope": "Test-only candidate in src/lib/sim/crop-model-v2.test.ts.",
+        "exactHeadCi": {
+          "pr": 82,
+          "runId": "40699895074",
+          "headSha": "c3412132bf4aee7cb54ff9d856edf43e6736ec82",
+          "result": "success",
+          "checks": [
+            { "name": "test + typecheck + build", "result": "passed", "duration": "39s" },
+            { "name": "Playwright production Pages-path smoke", "result": "passed", "reportedDuration": "6m37s" },
+            { "name": "secret + private-file scan", "result": "passed", "duration": "20s" },
+            { "name": "GitGuardian Security Checks", "result": "passed", "duration": "13s" }
+          ]
+        },
+        "review": "S2 independently approved the preregistration, post-fix test, and execution record."
+      },
+      "resultRecord": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic-result.json",
       "acceptance": {
         "row": "A-02",
-        "status": "UNVERIFIED; preregistered, candidate not run",
+        "status": "PASS for the bounded synthetic reducer-state software contract; A-02 domain/empirical acceptance remains UNVERIFIED.",
         "owner": "Crop-model engineer; independent thermal/source reviewer; lead integration",
-        "retest": "Implement the focused reducer fixture only after preregistration acceptance; run the focused test and exact-head CI. No crop accuracy claim."
+        "retest": "Retest this bounded software subcase if code or frozen inputs change. Keep A-02 domain/empirical acceptance UNVERIFIED pending cultivar mapping, measured location weather/outcomes, and an independent held-out comparison; no crop accuracy claim."
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Preregistered synthetic reducer-state behavior only. Candidate tests and comparisons have not run. No cultivar accuracy, biological validity, location-weather resolution, measured/reference agreement, or prediction is established; A-02 and overall 02A remain UNVERIFIED."
+      "status": "PASS only for the bounded preregistered synthetic reducer-state software contract; S2 independently reviewed and approved this execution record. Candidate and measured-output comparisons remain false. No cultivar accuracy, biological validity, location-weather resolution, measured/reference agreement, or prediction is established; A-02 domain/empirical acceptance and overall 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
