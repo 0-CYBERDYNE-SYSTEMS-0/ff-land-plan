@@ -3014,6 +3014,12 @@ describe('frozen crop model inputs and replay support', () => {
     const harvestedEvents = productive.events.filter((event) => event.kind === 'harvested');
     expect(harvestedEvents).toHaveLength(1);
     expect(harvestedEvents[0]?.dayIndex).toBe(62);
+    expect(harvestedEvents[0]).toMatchObject({
+      dayIndex: 62,
+      date: '2026-12-02',
+      cell: '0,0',
+      kind: 'harvested',
+    });
     const harvestIndex = inputs.cropParameters[0]!.production.harvestIndex;
     const expectedPayoutKg = 252 * 0.25 * 0.25 * harvestIndex / 1000;
     expect(harvestIndex).toBe(0.5);
@@ -3052,6 +3058,47 @@ describe('frozen crop model inputs and replay support', () => {
     const firstEligibleDate = sunnySeries[firstEligibleDayIndex]!.date;
     expect(firstEligibleDayIndex).toBe(63);
     expect(firstEligibleDate).toBe('2026-12-03');
+    const preManualControl = simulateRun(
+      autoHarvestDisabledRun,
+      sunnySeries.slice(0, firstEligibleDayIndex),
+    );
+    expect(preManualControl.summary.harvestReadyDay).toBe(62);
+    expect(preManualControl.finalState.cells['0,0']?.biomassFrac).toBe(1);
+    expect(preManualControl.finalState.cells['0,0']?.dryMatterGPerM2).toBeCloseTo(252, 8);
+
+    const singleManualHarvestRequest = {
+      kind: 'harvest' as const,
+      date: firstEligibleDate,
+      cell: '0,0',
+    };
+    const singleManualHarvestRun = {
+      ...autoHarvestDisabledRun,
+      interventions: [singleManualHarvestRequest],
+    };
+    expect(singleManualHarvestRun.interventions).toEqual([singleManualHarvestRequest]);
+    const singleManualHarvest = simulateRun(singleManualHarvestRun, sunnySeries);
+    const singleManualHarvestReplay = simulateRun(singleManualHarvestRun, sunnySeries);
+    const singleManualHarvestEvents = singleManualHarvest.events.filter((event) => event.kind === 'harvested');
+    expect(singleManualHarvestEvents).toHaveLength(1);
+    expect(singleManualHarvestEvents[0]).toMatchObject({
+      dayIndex: firstEligibleDayIndex,
+      date: firstEligibleDate,
+      cell: '0,0',
+      kind: 'harvested',
+    });
+    const singleManualHarvestEvent = singleManualHarvestEvents[0];
+    if (singleManualHarvestEvent?.kind === 'harvested' && harvestedEvent?.kind === 'harvested') {
+      expect(Math.abs(singleManualHarvestEvent.data.yieldKg - expectedPayoutKg)).toBeLessThanOrEqual(1e-12);
+      expect(Math.abs(singleManualHarvestEvent.data.yieldKg - harvestedEvent.data.yieldKg))
+        .toBeLessThanOrEqual(1e-12);
+    }
+    expect(singleManualHarvest.finalState.cells['0,0']?.harvested).toBe(true);
+    expect(singleManualHarvest.summary.totalYieldKg).toBe(0.01);
+    expect(singleManualHarvest.summary.yieldKgByCrop[String(crop.id)]).toBe(0.01);
+    expect(singleManualHarvestReplay.events).toEqual(singleManualHarvest.events);
+    expect(singleManualHarvestReplay.finalState).toEqual(singleManualHarvest.finalState);
+    expect(singleManualHarvestReplay.summary).toEqual(singleManualHarvest.summary);
+
     const duplicateHarvestRequest = {
       kind: 'harvest' as const,
       date: firstEligibleDate,
