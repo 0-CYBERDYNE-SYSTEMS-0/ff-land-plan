@@ -79,6 +79,22 @@ function newObservationId(): string {
   return `obs:${Date.now().toString(36)}:${observationSequence.toString(36)}`;
 }
 
+function newSimRunId(farmId: number): string {
+  const cryptoApi = globalThis.crypto;
+  try {
+    const uuid = cryptoApi?.randomUUID?.();
+    if (uuid) return `run:${farmId}:${uuid}`;
+  } catch {
+    // Fall back to getRandomValues when randomUUID is unavailable.
+  }
+  if (!cryptoApi?.getRandomValues) {
+    throw new Error('Secure randomness is unavailable; cannot create a unique sim run ID.');
+  }
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+  const token = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `run:${farmId}:${token}`;
+}
+
 function newestRunFirst(a: RunRecord, b: RunRecord): number {
   return Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id);
 }
@@ -882,7 +898,7 @@ export const localApi: Api = {
       : undefined;
     const config: RunConfig = {
       farmId: input.farmId,
-      cropModelVersion: 'crop-model-v1',
+      cropModelVersion: input.cropModelVersion ?? 'crop-model-v1',
       // Deep fork: a run never aliases the live plan (which keeps mutating).
       basePlan: structuredClone(plan),
       ...(ENV_RECORDS_ENABLED && environment ? { environment: environmentSnapshot(environment) } : {}),
@@ -935,7 +951,7 @@ export const localApi: Api = {
     config.modelInputs = freezeRunModelInputs(config, runCtx);
     const { summary } = simulateRun(config, envSeries, runCtx);
     const record: RunRecord = {
-      id: `run:${input.farmId}:${Date.now().toString(36)}`,
+      id: newSimRunId(input.farmId),
       farmId: input.farmId,
       // Two identical-param creates must not share a label — the RunInspector
       // reads "solid = X · ghost = X" when A/B-ing same-labeled runs.

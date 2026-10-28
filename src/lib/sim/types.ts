@@ -627,6 +627,8 @@ export interface RunRecord {
  * (localApi) / by the backend (rest) — callers never ship a PlanState. */
 export interface CreateSimRunInput {
   farmId: number;
+  /** Omission preserves the ordinary v1 default; v2 is an explicit opt-in. */
+  cropModelVersion?: 'crop-model-v1' | 'crop-model-v2';
   /** New callers name the environment. Omission is a legacy one-world adapter. */
   environmentId?: string;
   label?: string;

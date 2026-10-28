@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2 and partial source-equation coverage remain qualified synthetic software evidence. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only. The same-day candidate code/evidence SHA f7b7c37974c7ca655352cc2c18223b5da5d0ee4b passed all four named PR #82 contexts in exact-head run 40668663876; preregistration run 40664774492 covers only the earlier preregistration commit. Attempts against the superseded incomplete same-day record are non-qualifying. A-05/02A remain UNVERIFIED overall; no model-output or measured comparison is claimed.",
+  "status": "Environment-v2, partial source-equation, and A-01 creation/replay coverage remain qualified software evidence. A-01 local subcases exercise historical v1 replay after catalog mutation and distinct default-v1/explicit-v2 local create/list records; A-01 remains UNVERIFIED pending whole-row journeys and exact-head CI. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only. The same-day candidate code/evidence SHA f7b7c37974c7ca655352cc2c18223b5da5d0ee4b passed all four named PR #82 contexts in exact-head run 40668663876; preregistration run 40664774492 covers only the earlier preregistration commit. Attempts against the superseded incomplete same-day record are non-qualifying. 02A remains UNVERIFIED overall; no model-output or measured comparison is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -2288,6 +2288,39 @@
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "status": "Synthetic v3 no-auto-harvest and in-memory replay software evidence only. S2 independently approved; local focused/full tests and build/browser gates passed. Exact-head PR #82 run 40675181594 on SHA bbf0235fff81badc36a39776d5d006197432a230 passed all four named contexts, including production Pages smoke 3/3. This does not establish durable persistence, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, or predictive validity. A-07 and 02A remain UNVERIFIED overall."
+    },
+    {
+      "id": "A01-VERSIONED-CREATE-AND-HISTORICAL-REPLAY-SOFTWARE-01",
+      "classification": "synthetic local-API creation/list and deterministic replay regression; not a crop benchmark",
+      "crop": {
+        "slug": "not applicable to the empty-plan creation subcase",
+        "catalogCropId": null,
+        "cultivar": "not asserted"
+      },
+      "environment": "one-day synthetic local API input for record creation plus a separate in-memory historical v1 replay fixture; no weather reproduction, site observation, or crop-output comparison",
+      "modelVersion": "historical versionless record with run-inputs-v1; new default creation uses crop-model-v1/run-inputs-v1; explicit creation uses crop-model-v2/run-inputs-v2/crop-parameters-v3",
+      "syntheticInputs": {
+        "creation": "same frozen timestamp and one-day date window; empty plan; mocked environment, climate, soil, database and local storage; deterministic test entropy supplied through Web Crypto getRandomValues",
+        "historicalReplay": "versionless v1 RunRecord with frozen run-inputs-v1; current catalog name, daysToMaturity and yieldKgPerPlant are changed before replay",
+        "secureIdFailure": "Web Crypto randomUUID and getRandomValues are absent; creation must fail before changing the two existing records"
+      },
+      "expected": {
+        "creation": "omitted cropModelVersion freezes v1; explicit v2 freezes run-inputs-v2/crop-parameters-v3; equal-time records have distinct IDs and both are returned by listSimRuns",
+        "historicalReplay": "events, final state and summary exactly equal the original v1 result after current catalog fields change",
+        "unsupportedEntropy": "creation fails closed and existing records remain unchanged"
+      },
+      "tolerance": "No crop-output tolerance or comparison. Record identity and replay structure are exact assertions; generated IDs are required to be distinct for the fixed test entropy values.",
+      "evidence": "src/lib/localApi.sim-runs.test.ts; src/lib/sim/model-inputs.test.ts",
+      "reproduction": "Focused: npx vitest run src/lib/localApi.sim-runs.test.ts src/lib/sim/model-inputs.test.ts. Candidate full local: npm test (48 files/260 tests), npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run check:private (536 tracked files), and git diff --check passed. npm run test:e2e was blocked before browser startup because the preview server could not bind 127.0.0.1:4173 (listen EPERM); no local browser journey ran. Exact-head PR CI pending.",
+      "acceptance": {
+        "row": "A-01",
+        "status": "UNVERIFIED overall; local PASS for historical replay after catalog mutation and distinct local create/list identity subcases; exact-head CI pending",
+        "owner": "S3 implementation worker; S2 independent code reviewer; lead integration",
+        "retest": "Repeat the focused Vitest command above, then cover a distinct versioned archived record replayed after catalog/default/cache changes with its stored summary preserved; run exact-head PR CI."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Synthetic local API and in-memory replay software evidence only. The create/list case uses an empty plan and mocked persistence services; it does not establish crop behavior or native browser IndexedDB durability. Historical replay changes catalog values only and does not exercise archived serialization, changed defaults/cache, or a combined distinct-version replay journey. No crop accuracy, biological validity, measured/reference agreement, or predictive validity is established. A-01 and 02A remain UNVERIFIED overall."
     }
   ],
   "coverageSummary": {

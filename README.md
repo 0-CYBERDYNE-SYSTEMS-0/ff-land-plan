@@ -172,7 +172,8 @@ assumption: assigning a cell's crop posts to `/api/farms/:id/cells` with
 `{ id, cropId }`, since the table defines only GET/POST on that collection.
 Sim runs (`src/lib/sim/`) are deterministic engine runs over a forked plan:
 `POST /sim-runs` takes a `CreateSimRunInput` (farm, dates, scenario,
-interventions — never a full plan) and the server composes + replays the run,
+interventions, optional `cropModelVersion` — never a full plan) and the server
+composes + replays the run,
 returning a `RunRecord` (config + frozen daily env series + summary; per-tick
 state is never stored — replay rebuilds it). `PUT /sim-runs/:id` accepts the
 complete frozen record to persist a management fork or its small cached
@@ -196,8 +197,11 @@ is qualified and unvalidated. The shape tag does not choose the equations. Compl
 record with no `cropModelVersion` retain v1 replay semantics; a missing model
 version plus missing frozen inputs, or an unknown version, must preserve the
 stored summary and must not be replayed from the current catalog or caller
-context. While the v2 reducer and acceptance gates are incomplete, local run
-creation continues to use v1. Incomplete or out-of-domain v2 inputs are
+context. `CreateSimRunInput.cropModelVersion` accepts `crop-model-v1` and
+`crop-model-v2`; omission keeps ordinary local run creation on v1, while an
+explicit v2 request freezes `run-inputs-v2` with
+`parameterSetVersion: 'crop-parameters-v3'`. Selecting v2 does not qualify a
+crop run: incomplete or out-of-domain v2 inputs are
 unsupported and preserve their stored summary; complete v2 inputs remain
 qualified and expose their assumptions rather than being represented as
 zero-valued estimates.

@@ -185,6 +185,51 @@ describe('frozen crop model inputs and replay support', () => {
     }, frozen).crops[0]?.name).toBe('Frozen tomato');
   });
 
+  it('replays a historical versionless v1 record exactly after the live crop catalog changes', () => {
+    const historicalConfig = config({ dayCount: 3 });
+    const originalCrop = cropLibrary.find((crop) => crop.id === 1)!;
+    const soil = { awcMmPerCm: 1.7, organicMatterPct: 2.4 };
+    const modelInputs = freezeRunModelInputs(historicalConfig, { soil, crops: [originalCrop] });
+    const frozenConfig = { ...historicalConfig, modelInputs };
+    const envSeries = Array.from({ length: 3 }, (_, offset) => {
+      const date = new Date('2026-10-01T00:00:00.000Z');
+      date.setUTCDate(date.getUTCDate() + offset);
+      return {
+        date: date.toISOString().slice(0, 10),
+        tMinC: 15,
+        tMaxC: 20,
+        precipMm: 0,
+        etoMm: 1,
+        gddBase10C: 7.5,
+        provenance: { tMinC: 'default' as const, tMaxC: 'default' as const, precipMm: 'default' as const, etoMm: 'default' as const },
+      };
+    });
+    const original = simulateRun(frozenConfig, envSeries, { soil, crops: [originalCrop] });
+    const record: RunRecord = {
+      id: 'run:1:historical-v1',
+      farmId: 1,
+      label: 'Historical v1 record',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      config: frozenConfig,
+      envSeries,
+      summary: original.summary,
+      status: 'complete',
+    };
+    const changedCurrentCatalog = cropLibrary.map((crop) => crop.id === originalCrop.id
+      ? { ...crop, name: 'Changed live tomato', daysToMaturity: 1, yieldKgPerPlant: 999 }
+      : crop);
+    const changedCrop = changedCurrentCatalog.find((crop) => crop.id === originalCrop.id)!;
+
+    expect(record.config.cropModelVersion).toBeUndefined();
+    expect(record.config.modelInputs?.model).toBe('run-inputs-v1');
+    expect(changedCrop).not.toEqual(record.config.modelInputs?.crops[0]);
+
+    const replay = simulateRun(record.config, record.envSeries, { soil, crops: changedCurrentCatalog });
+    expect(replay.events).toEqual(original.events);
+    expect(replay.finalState).toEqual(original.finalState);
+    expect(replay.summary).toEqual(record.summary);
+  });
+
   it('marks persisted records without frozen model inputs unsupported and preserves their summary', () => {
     const support = inspectRunModelSupport(config());
     expect(support).toMatchObject({

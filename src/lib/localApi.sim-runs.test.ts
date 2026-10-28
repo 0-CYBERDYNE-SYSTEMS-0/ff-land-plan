@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyEnvironment, EnvironmentModelInputsV2, RunRecord } from '@/lib/sim/types';
+import type { SoilProfile } from '@/lib/soil';
 import type { PlanState } from '@/types';
 import { freezeEnvironmentModelInputsV2 } from '@/lib/sim/model-inputs';
 
 const dbState = vi.hoisted(() => ({ records: new Map<string, Map<string, unknown>>() }));
+const createRunMocks = vi.hoisted(() => ({
+  buildEnvSeries: vi.fn(),
+  fetchClimateNormals: vi.fn(),
+  fetchSoilProfile: vi.fn(),
+}));
 
 vi.mock('@/lib/db', () => ({
   getRecord: vi.fn(async (store: string, key: string) => dbState.records.get(store)?.get(key)),
@@ -35,6 +41,12 @@ vi.mock('@/lib/db', () => ({
   dispatchStorageSaved: vi.fn(),
   dispatchStorageConflict: vi.fn(),
 }));
+vi.mock('@/lib/sim/environment', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/sim/environment')>();
+  return { ...actual, buildEnvSeries: createRunMocks.buildEnvSeries };
+});
+vi.mock('@/lib/climate', () => ({ fetchClimateNormals: createRunMocks.fetchClimateNormals }));
+vi.mock('@/lib/soil', () => ({ fetchSoilProfile: createRunMocks.fetchSoilProfile }));
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -121,6 +133,23 @@ function solarEnvironmentSeries(): DailyEnvironment[] {
   ];
 }
 
+function createdRunEnvironmentSeries(startDate: string, dayCount: number): DailyEnvironment[] {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  return Array.from({ length: dayCount }, (_, offset) => {
+    const date = new Date(start);
+    date.setUTCDate(date.getUTCDate() + offset);
+    return {
+      date: date.toISOString().slice(0, 10),
+      tMinC: 15,
+      tMaxC: 20,
+      precipMm: 0,
+      etoMm: 0,
+      gddBase10C: 7.5,
+      provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default' },
+    };
+  });
+}
+
 function environmentV2Run(): RunRecord {
   const base = run('run:env2:local-roundtrip');
   const environment = {
@@ -176,6 +205,22 @@ async function loadApi(timeline: boolean, campaign = false) {
   vi.stubEnv('VITE_FF_CAMPAIGN', String(campaign));
   vi.resetModules();
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: new MemoryStorage() });
+  createRunMocks.buildEnvSeries.mockReset();
+  createRunMocks.fetchClimateNormals.mockReset();
+  createRunMocks.fetchSoilProfile.mockReset();
+  createRunMocks.buildEnvSeries.mockImplementation(async (startDate: string, dayCount: number) =>
+    createdRunEnvironmentSeries(startDate, dayCount));
+  createRunMocks.fetchClimateNormals.mockResolvedValue(null);
+  createRunMocks.fetchSoilProfile.mockResolvedValue({
+    source: 'usda-sda',
+    name: 'Synthetic test profile',
+    texture: null,
+    ph: null,
+    organicMatterPct: 2.4,
+    cecCmolKg: null,
+    awcMmPerCm: 1.7,
+    soilType: null,
+  } satisfies SoilProfile);
   const { localApi } = await import('@/lib/localApi');
   const { state } = await import('@/lib/store');
   return { localApi, state };
@@ -183,8 +228,55 @@ async function loadApi(timeline: boolean, campaign = false) {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
   vi.resetModules();
   dbState.records.clear();
+});
+
+describe('localApi.createSimRun', () => {
+  it('keeps v1 as the default and persists an explicit supported v2 version separately at a fixed time', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-24T00:00:00.000Z'));
+    let entropy = 0;
+    const getRandomValues = vi.fn((bytes: Uint8Array) => {
+      bytes.fill(++entropy);
+      return bytes;
+    });
+    vi.stubGlobal('crypto', { getRandomValues });
+    const { localApi, state } = await loadApi(true);
+    state.plans[1] = structuredClone(basePlan);
+
+    const v1 = await localApi.createSimRun({ farmId: 1, startDate: '2026-10-24', dayCount: 1 });
+    const v2 = await localApi.createSimRun({
+      farmId: 1,
+      startDate: '2026-10-24',
+      dayCount: 1,
+      cropModelVersion: 'crop-model-v2',
+    });
+    const records = await localApi.listSimRuns(1);
+
+    expect(v1.createdAt).toBe(v2.createdAt);
+    expect(v1.id).not.toBe(v2.id);
+    expect(getRandomValues).toHaveBeenCalledTimes(2);
+    expect(records).toHaveLength(2);
+    expect(new Set(records.map((record) => record.id))).toEqual(new Set([v1.id, v2.id]));
+    expect(v1.config.cropModelVersion).toBe('crop-model-v1');
+    expect(v1.config.modelInputs).toMatchObject({ model: 'run-inputs-v1' });
+    expect(v2.config.cropModelVersion).toBe('crop-model-v2');
+    expect(v2.config.modelInputs).toMatchObject({
+      model: 'run-inputs-v2',
+      parameterSetVersion: 'crop-parameters-v3',
+      qualification: { status: 'supported' },
+    });
+    expect(records.find((record) => record.id === v1.id)).toEqual(v1);
+    expect(records.find((record) => record.id === v2.id)).toEqual(v2);
+
+    vi.stubGlobal('crypto', {});
+    await expect(localApi.createSimRun({ farmId: 1, startDate: '2026-10-24', dayCount: 1 }))
+      .rejects.toThrow('Secure randomness is unavailable');
+    expect(await localApi.listSimRuns(1)).toHaveLength(2);
+  });
 });
 
 describe('localApi.saveSimRun', () => {
