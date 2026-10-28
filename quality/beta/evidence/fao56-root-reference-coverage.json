@@ -7,8 +7,9 @@
     "url": "https://www.fao.org/4/x0490e/x0490e0e.htm",
     "retrievedDate": "2026-10-27",
     "sourceVersion": "FAO-56 (1998), Chapter 8, Table 22; official HTML chapter page.",
-    "artifactSha256": null,
-    "artifactStatus": "Official HTML source reviewed online; no local snapshot or digest captured.",
+    "artifactSha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+    "artifactBytes": 137909,
+    "artifactStatus": "Official Chapter 8 HTML snapshot retrieved 2026-10-27 and hashed locally; snapshot is not committed.",
     "licenseOrReuse": "FAO publication; this file records derived numerical values and short labels only. No table text, code or substantial prose is copied."
   },
   "interpretation": {

@@ -92,7 +92,13 @@
       "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56.",
       "url": "https://www.fao.org/4/x0490e/x0490e00.htm",
       "retrievedDate": "2026-10-27",
-      "artifact": null,
+      "artifact": {
+        "type": "official FAO-56 Chapter 8 HTML snapshot",
+        "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+        "bytes": 137909,
+        "localPath": null,
+        "status": "retrieved and hashed 2026-10-27; snapshot not committed"
+      },
       "licenseOrReuse": "FAO publication; cited as method reference, no code or substantial text copied."
     },
     {
@@ -1678,6 +1684,29 @@
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "status": "PASS for the preregistered synthetic one-day software invariant. Focused test: npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\" (1 passed, 25 skipped). Full npm test: 47 files / 250 tests. npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run check:private (525 tracked files), JSON parsing and git diff --check passed. No build:beta profile exists; the Vite native-config-loader and large-chunk advisories remain. S2 independently approved the completed test; S3 found no observer false-pass or cleanup leak in the current excerpt. The initial no-observer pass, full-observer strict comparison against decimal 0.6, and unregistered 15-decimal-tolerance pass remain not accepted. Exact-head preregistration CI run 40627410935 passed on docs-only SHA 75bf26f35a45d3aa00a9850b4907c5639a654a2f; it predates the candidate test. Exact-head code/evidence commit 2ac708fa58719d69f7d19863bccf97d226c4cba8 passed PR #82 run 40628921459: all four named checks — test + typecheck + build (36s), Playwright production Pages-path smoke (3/3 in 4.7m; job 5m14s), secret + private-file scan (14s), and GitGuardian Security Checks (2s). Pages journeys passed: production build boots under the GitHub Pages project base path; unsupported environment-v2 run opens under Pages and retains its stored summary; unsupported v4 crop lifecycle is explained in World and retains its stored summary. This verifies synthetic equation/software behavior and repository checks only; no crop accuracy, biological validity, measured/reference agreement, or predictive claim. A-05 and 02A remain UNVERIFIED overall."
+    },
+    {
+      "id": "FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v2 root-depth and production-response software fixture; not a crop benchmark",
+      "sourceId": "FAO-56-1998",
+      "sourceArtifact": {
+        "url": "https://www.fao.org/4/x0490e/x0490e0e.htm",
+        "retrievedDate": "2026-10-27",
+        "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+        "bytes": 137909,
+        "licenseOrReuse": "FAO publication; numerical root-reference values and equations are cited, not copied. Both soil and crop production inputs in the fixture are synthetic."
+      },
+      "sourceReference": "FAO-56 Table 22 gives tomato maximum effective root depth 0.7–1.5 m and p=0.40 at ETc≈5 mm/day. Its footnote identifies larger depths for unrestricted profiles and soil-water-stress/rainfed modeling. The fixture uses 70 and 150 cm as synthetic fixed-depth boundary scenarios only.",
+      "modelVersion": "crop-model-v2",
+      "runInputsVersion": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "syntheticInputs": "Paired ten-day open-field tomato runs; only fixed effective root depth differs (70 versus 150 cm). AWC=1.5 mm/cm, OM=2.4%, pTable=0.40, ETo=5 mm/day, Kc=1.2, adjusted p=0.36, full initial storage, zero inflows/runoff/root growth, DLI=18 mol/m²/day, synthetic RUE=2 g DM/MJ intercepted PAR, interception=0.5. Crop thermal values are frozen only to keep the run active and immature.",
+      "expected": "Preregistered daily FAO-56/v2 recurrence: shallow TAW/RAW=105/37.8 mm, stress begins day 8 and day-10 synthetic DM=38.27543048469388 g/m²; deep TAW/RAW=225/81 mm, no stress within ten days and day-10 synthetic DM=40 g/m². Every daily storage, depletion, transpiration, Ks and DM output is frozen in the linked fixture.",
+      "tolerance": "p/RAW/Ks ≤1e-12 absolute; per-day water flux, storage, depletion and residual ≤1e-9 mm; daily DM gain ≤1e-9 g/m² and cumulative DM ≤1e-8 g/m². Scenario inputs, depth/capacity dispatch, day-8 onset, nonnegative storage, outcome direction and deterministic replay are exact.",
+      "evidence": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json",
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "S2 independently approved preregistration before candidate execution on 2026-10-27. No candidate, measured-output or reference-model comparison authorized."
     },
     {
       "id": "FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01",
@@ -3329,6 +3358,14 @@
         "basis": "Per-cell arithmetic is 12 g DM/m² × 0.4² m² × synthetic harvest index 0.5 / 1000 = 0.00096 kg; six cells sum to 0.00576 kg before the existing two-decimal summary rounding. The 1e-12 kg bound checks JavaScript arithmetic only; it is not a model or prediction tolerance.",
         "scope": "Synthetic crop-model-v3 frozen-input regression with known zero light: manual established/live/mature payout, unestablished/dead/immature gates, repeated same-date manual request suppression, actual source maturity endpoint auto-payout, next-day no-repeat, aggregate rounding, and deterministic replay. One manually seeded impossible mature-but-unestablished state isolates an eligibility guard; no mortality model behavior is inferred.",
         "evidence": "src/lib/sim/model-inputs.test.ts"
+      },
+      {
+        "id": "fao56-v2-tomato-root-depth-drydown",
+        "tolerance": "p/RAW/Ks ≤1e-12 absolute; per-day water flux/storage/depletion/residual ≤1e-9 mm; daily DM gain ≤1e-9 g/m²; cumulative DM ≤1e-8 g/m²",
+        "status": "independently reviewed and approved before candidate execution by GPT-6 Luna max S2; candidate execution not authorized",
+        "basis": "Independent double-precision recurrence from the frozen FAO-56 p adjustment/root-zone method and synthetic v2 RUE path over at most ten updates. Numerical bounds cover arithmetic only, not crop error.",
+        "scope": "Paired synthetic fixed-depth tomato scenarios at the FAO-56 Table 22 maximum-root-depth range endpoints. Exact inputs, depth/capacity dispatch, day-8 stress onset, direction, no-maturity/no-harvest conditions and replay are structural checks. Not a root-growth profile, candidate comparison, measured trial, or crop prediction.",
+        "evidence": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json"
       },
       {
         "id": "fao56-v2-adjusted-p-root-drydown-integration",

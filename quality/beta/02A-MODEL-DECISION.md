@@ -190,6 +190,16 @@ The first local candidate attempt, based on test-file Git blob 76504c076765f633e
 
 Evidence fixture: quality/beta/evidence/fao56-v2-awc-variant-positive-drainage-synthetic.json
 
+## A-05 synthetic tomato root-depth dry-down preregistration — 2026-10-27
+
+FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01 freezes a paired ten-day open-field v2 software scenario. FAO-56 Table 22 gives tomato a maximum effective-root-depth range of 0.7–1.5 m and p=0.40 at ETc≈5 mm/day; the source footnote associates larger depths with unrestricted soil profiles and soil-water-stress/rainfed modeling. The official Chapter 8 HTML snapshot was retrieved and hashed (f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98, 137909 bytes). The two range endpoints are used only as synthetic fixed-depth boundaries, not as active defaults or a root-growth trajectory.
+
+Freeze AWC=1.5 mm/cm, synthetic organicMatterPct=2.4 with source tag unknown, full initial storage, pTable=0.40, ETo=5 mm/day, Kc=1.2, adjusted p=0.36, zero inflows/runoff/root growth, and ten synthetic days. The paired runs differ only in effective depth (70 versus 150 cm), yielding TAW/RAW of 105/37.8 versus 225/81 mm. Synthetic DLI=18 mol/m²/day, intercepted PAR fraction=0.5, RUE=2 g DM/MJ intercepted PAR and initial DM=0 isolate the v2 water-stress production multiplier. Frozen tomato thermal inputs keep the crop active and below maturity; no cultivar equivalence is asserted.
+
+The independently calculated recurrence predicts the shallow run's first Ks<1 on day 8 and day-10 synthetic DM=38.27543048469388 g/m²; the deep run remains unstressed through day 10 at 40 g/m². All daily values, equations, dispatch, and exact paired-input differences are frozen in the fixture. Preregistered arithmetic-only tolerances are p/RAW/Ks ≤1e-12, per-day water flux/storage/depletion/residual ≤1e-9 mm, daily DM gain ≤1e-9 g/m², and cumulative DM ≤1e-8 g/m². Structural scenario assertions and replay equality are exact. These bounds cover double-precision software arithmetic only, not model error. S2 independently verified the Table 22 values and footnotes, recomputed all 20 recurrence rows (maximum deviation 7.11e-15), and approved the preregistration before candidate execution. No candidate test has been run or comparison authorized. S3 estimated 4–6 worker hours plus 1–2 review hours, assuming the two depths remain synthetic endpoints and all soil/production values stay explicitly synthetic. A-05 and 02A remain UNVERIFIED.
+
+Evidence fixture: quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json
+
 ## Remaining 02A gates
 
 1. Expand source-backed executable production/root-zone parameter coverage and dynamic canopy/interception parameters. The environment-v2 water-coupling slice is implemented only as qualified synthetic software behavior; A-05 remains UNVERIFIED overall.
