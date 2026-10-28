@@ -10,12 +10,13 @@ import fao56V2SameDayDrainageEtRerunFixture from '../../../quality/beta/evidence
 import fao56V2TomatoRootDepthFixture from '../../../quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json';
 import v3AutoHarvestMixedTargetFixture from '../../../quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
-import type { CropStartEvent, Observation } from '@/types';
+import type { Crop, CropStartEvent, Observation } from '@/types';
 import type {
   CropEstablishmentInput,
   FrozenCropModelParametersV2,
   FrozenCropModelParametersV4,
   RunConfig,
+  RunModelInputsV1,
   RunModelInputsV2,
   RunRecord,
 } from './types';
@@ -185,26 +186,66 @@ describe('frozen crop model inputs and replay support', () => {
     }, frozen).crops[0]?.name).toBe('Frozen tomato');
   });
 
-  it('replays a historical versionless v1 record exactly after the live crop catalog changes', () => {
-    const historicalConfig = config({ dayCount: 3 });
-    const originalCrop = cropLibrary.find((crop) => crop.id === 1)!;
-    const soil = { awcMmPerCm: 1.7, organicMatterPct: 2.4 };
-    const modelInputs = freezeRunModelInputs(historicalConfig, { soil, crops: [originalCrop] });
-    const frozenConfig = { ...historicalConfig, modelInputs };
-    const envSeries = Array.from({ length: 3 }, (_, offset) => {
-      const date = new Date('2026-10-01T00:00:00.000Z');
-      date.setUTCDate(date.getUTCDate() + offset);
-      return {
-        date: date.toISOString().slice(0, 10),
-        tMinC: 15,
-        tMaxC: 20,
-        precipMm: 0,
-        etoMm: 1,
-        gddBase10C: 7.5,
-        provenance: { tMinC: 'default' as const, tMaxC: 'default' as const, precipMm: 'default' as const, etoMm: 'default' as const },
-      };
-    });
-    const original = simulateRun(frozenConfig, envSeries, { soil, crops: [originalCrop] });
+  it('replays a JSON-archived versionless v1 record against changed live crop and soil context', () => {
+    const frozenCrop: Crop = {
+      id: 1,
+      name: 'Frozen tomato',
+      scientificName: 'Solanum lycopersicum',
+      category: 'vegetable',
+      growthDays: 75,
+      waterNeedMmDay: 4,
+      nitrogenNeed: 'medium',
+      sunRequirement: 'full',
+      minTempC: 10,
+      maxTempC: 35,
+      yieldTonHa: 25,
+      colorHex: '#d34a3f',
+      description: 'Fixed archive-replay fixture crop.',
+      isCustom: false,
+      slug: 'tomato',
+      yieldKgPerPlant: 0.5,
+    };
+    const frozenInputs: RunModelInputsV1 = {
+      model: 'run-inputs-v1',
+      soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 },
+      crops: [frozenCrop],
+    };
+    const frozenConfig: RunConfig = {
+      farmId: 1,
+      basePlan: {
+        farmId: 1,
+        widthM: 1,
+        heightM: 1,
+        cellM: 0.25,
+        allowOutsideBeds: false,
+        ground: {},
+        planting: { '0,0': frozenCrop.id },
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+      modelInputs: frozenInputs,
+      startDate: '2026-10-01',
+      dayCount: 3,
+      seed: 1,
+      scenario: 'baseline',
+      tempDeltaC: 0,
+      precipMultiplier: 1,
+      interventions: [],
+    };
+    const envSeries: RunRecord['envSeries'] = [
+      {
+        date: '2026-10-01', tMinC: 15, tMaxC: 20, precipMm: 0, etoMm: 1, gddBase10C: 7.5,
+        provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default' },
+      },
+      {
+        date: '2026-10-02', tMinC: 15, tMaxC: 20, precipMm: 0, etoMm: 1, gddBase10C: 7.5,
+        provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default' },
+      },
+      {
+        date: '2026-10-03', tMinC: 15, tMaxC: 20, precipMm: 0, etoMm: 1, gddBase10C: 7.5,
+        provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default' },
+      },
+    ];
+    const original = simulateRun(frozenConfig, envSeries);
     const record: RunRecord = {
       id: 'run:1:historical-v1',
       farmId: 1,
@@ -215,19 +256,27 @@ describe('frozen crop model inputs and replay support', () => {
       summary: original.summary,
       status: 'complete',
     };
-    const changedCurrentCatalog = cropLibrary.map((crop) => crop.id === originalCrop.id
-      ? { ...crop, name: 'Changed live tomato', daysToMaturity: 1, yieldKgPerPlant: 999 }
-      : crop);
-    const changedCrop = changedCurrentCatalog.find((crop) => crop.id === originalCrop.id)!;
+    const archivedRecord: RunRecord = JSON.parse(JSON.stringify(record));
+    const changedLiveCrop: Crop = { ...frozenCrop, name: 'Changed live tomato', growthDays: 1, yieldKgPerPlant: 999 };
+    const changedSoil = { awcMmPerCm: 0.1, organicMatterPct: 99 };
+    const archivedInputs = archivedRecord.config.modelInputs;
 
-    expect(record.config.cropModelVersion).toBeUndefined();
-    expect(record.config.modelInputs?.model).toBe('run-inputs-v1');
-    expect(changedCrop).not.toEqual(record.config.modelInputs?.crops[0]);
+    expect(archivedRecord.config.cropModelVersion).toBeUndefined();
+    expect(archivedInputs).toEqual(frozenInputs);
+    expect(changedLiveCrop.id).toBe(frozenCrop.id);
+    if (!archivedInputs || archivedInputs.model !== 'run-inputs-v1') {
+      throw new Error('Expected the archived record to retain its frozen v1 inputs.');
+    }
+    expect(changedLiveCrop).not.toEqual(archivedInputs.crops[0]);
+    expect(changedSoil).not.toEqual(frozenInputs.soil);
 
-    const replay = simulateRun(record.config, record.envSeries, { soil, crops: changedCurrentCatalog });
+    const replay = simulateRun(archivedRecord.config, archivedRecord.envSeries, {
+      soil: changedSoil,
+      crops: [changedLiveCrop],
+    });
     expect(replay.events).toEqual(original.events);
     expect(replay.finalState).toEqual(original.finalState);
-    expect(replay.summary).toEqual(record.summary);
+    expect(replay.summary).toEqual(archivedRecord.summary);
   });
 
   it('marks persisted records without frozen model inputs unsupported and preserves their summary', () => {

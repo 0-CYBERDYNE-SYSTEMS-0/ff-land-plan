@@ -272,6 +272,25 @@ describe('localApi.createSimRun', () => {
     expect(records.find((record) => record.id === v1.id)).toEqual(v1);
     expect(records.find((record) => record.id === v2.id)).toEqual(v2);
 
+    const archivedV1: RunRecord = JSON.parse(JSON.stringify(v1));
+    const archivedV2: RunRecord = JSON.parse(JSON.stringify(v2));
+    await expect(localApi.saveSimRun(archivedV1)).resolves.toEqual(archivedV1);
+    await expect(localApi.saveSimRun(archivedV2)).resolves.toEqual(archivedV2);
+    const archivedRecords = await localApi.listSimRuns(1);
+
+    expect(archivedRecords).toHaveLength(2);
+    expect(archivedRecords.find((record) => record.id === archivedV1.id)).toEqual(archivedV1);
+    expect(archivedRecords.find((record) => record.id === archivedV2.id)).toEqual(archivedV2);
+    expect(archivedV1.config.cropModelVersion).toBe('crop-model-v1');
+    expect(archivedV1.config.modelInputs).toMatchObject({ model: 'run-inputs-v1' });
+    expect(archivedV2.config.cropModelVersion).toBe('crop-model-v2');
+    expect(archivedV2.config.modelInputs).toMatchObject({
+      model: 'run-inputs-v2',
+      parameterSetVersion: 'crop-parameters-v3',
+    });
+    expect(archivedRecords.find((record) => record.id === archivedV1.id)?.summary).toEqual(v1.summary);
+    expect(archivedRecords.find((record) => record.id === archivedV2.id)?.summary).toEqual(v2.summary);
+
     vi.stubGlobal('crypto', {});
     await expect(localApi.createSimRun({ farmId: 1, startDate: '2026-10-24', dayCount: 1 }))
       .rejects.toThrow('Secure randomness is unavailable');
