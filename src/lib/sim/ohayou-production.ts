@@ -8,9 +8,12 @@ const OHAYOU_SPRING_CONTROL_RUE_G_DM_PER_MJ_INTERCEPTED_SOLAR = 1.16;
 
 export interface OhayouSpringControlDailyProductionInput {
   /** Total solar radiation (MJ/m²/day), not PAR or DLI. */
-  solarRadiationMJPerM2Day: number | null | undefined;
+  solarRadiationMJm2Day: number | null | undefined;
   /** Leaf area index (m² leaf/m² ground). */
   leafAreaIndexM2PerM2: number | null | undefined;
+  extinctionCoefficientK?: number;
+  rueGPerMjInterceptedTotalSolar?: number;
+  stressFactor?: number;
 }
 
 export type OhayouSpringControlDailyProductionResult =
@@ -28,7 +31,7 @@ export type OhayouSpringControlDailyProductionResult =
 export function ohayouSpringControlDailyProduction(
   input: OhayouSpringControlDailyProductionInput,
 ): OhayouSpringControlDailyProductionResult {
-  const solarRadiation = input.solarRadiationMJPerM2Day;
+  const solarRadiation = input.solarRadiationMJm2Day;
   if (solarRadiation === null || solarRadiation === undefined || !Number.isFinite(solarRadiation)) {
     return { status: 'unavailable', reason: 'Daily total solar radiation is missing or non-finite.' };
   }
@@ -44,13 +47,27 @@ export function ohayouSpringControlDailyProduction(
     return { status: 'unavailable', reason: 'Leaf area index must be nonnegative.' };
   }
 
+  const extinctionCoefficientK = input.extinctionCoefficientK ?? OHAYOU_SPRING_CONTROL_K_SOLAR;
+  const rueGPerMjInterceptedTotalSolar = input.rueGPerMjInterceptedTotalSolar
+    ?? OHAYOU_SPRING_CONTROL_RUE_G_DM_PER_MJ_INTERCEPTED_SOLAR;
+  const stressFactor = input.stressFactor ?? 1;
+  if (!Number.isFinite(extinctionCoefficientK) || extinctionCoefficientK < 0) {
+    return { status: 'unavailable', reason: 'Total-solar extinction coefficient must be nonnegative and finite.' };
+  }
+  if (!Number.isFinite(rueGPerMjInterceptedTotalSolar) || rueGPerMjInterceptedTotalSolar < 0) {
+    return { status: 'unavailable', reason: 'Total-solar RUE must be nonnegative and finite.' };
+  }
+  if (!Number.isFinite(stressFactor) || stressFactor < 0 || stressFactor > 1) {
+    return { status: 'unavailable', reason: 'Production stress factor must be between zero and one.' };
+  }
+
   const interceptedSolarRadiationMJPerM2Day = solarRadiation
-    * (1 - Math.exp(-OHAYOU_SPRING_CONTROL_K_SOLAR * lai));
+    * (1 - Math.exp(-extinctionCoefficientK * lai));
   if (!Number.isFinite(interceptedSolarRadiationMJPerM2Day)) {
     return { status: 'unavailable', reason: 'Calculated intercepted solar radiation is non-finite.' };
   }
-  const dryMatterGainGPerM2Day = OHAYOU_SPRING_CONTROL_RUE_G_DM_PER_MJ_INTERCEPTED_SOLAR
-    * interceptedSolarRadiationMJPerM2Day;
+  const dryMatterGainGPerM2Day = rueGPerMjInterceptedTotalSolar
+    * interceptedSolarRadiationMJPerM2Day * stressFactor;
   if (!Number.isFinite(dryMatterGainGPerM2Day)) {
     return { status: 'unavailable', reason: 'Calculated dry-matter gain is non-finite.' };
   }

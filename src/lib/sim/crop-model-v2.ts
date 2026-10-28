@@ -106,6 +106,12 @@ export function dailyThermalUnits(
   if (method.includes('study thermal-time') || method.includes('study heat-unit')) {
     return Math.max(0, (tMinC + tMaxC) / 2 - param.tBaseC);
   }
+  if (method.includes('synthetic daily thermal clock')) {
+    const cap = param.tUpperC ?? Number.POSITIVE_INFINITY;
+    const low = Math.max(param.tBaseC, Math.min(tMinC, cap));
+    const high = Math.max(param.tBaseC, Math.min(tMaxC, cap));
+    return Math.max(0, (low + high) / 2 - param.tBaseC);
+  }
   return null;
 }
 

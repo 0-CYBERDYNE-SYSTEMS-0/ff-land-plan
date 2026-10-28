@@ -110,28 +110,45 @@ export type FrozenCropModelParametersV3 = Omit<FrozenCropModelParametersV2, 'pro
   production: Omit<FrozenCropModelParametersV2['production'], 'initialDryMatterGPerM2'>;
 };
 
-export type FrozenCropModelParametersV4 = Omit<FrozenCropModelParametersV3, 'production'> & {
-  production: {
+type FrozenCropModelProductionV4Common = {
+  status: 'unsupported' | 'qualified' | 'supported';
+  missing: string[];
+  limitations?: string[];
+  evidence: FrozenCropModelParametersV2['production']['evidence'];
+  canopy: {
+    specificLeafAreaM2PerKg: number | null;
+    leafStemPartitionParameterM2PerKg: number | null;
+    evidence: FrozenCropModelParametersV2['production']['evidence'];
+  };
+  allocation: {
+    canopyShare: number | null;
+    harvestableShare: number | null;
+    classification: 'measured' | 'explicit-assumption' | 'synthetic';
+    evidenceId: string;
+    validDomain: string;
+  };
+};
+
+export type FrozenCropModelProductionV4 = FrozenCropModelProductionV4Common & (
+  | {
     equationFamily: 'LINTUL-net-RUE';
     rueGPerMjInterceptedPar: number | null;
-    status: 'unsupported' | 'qualified' | 'supported';
-    missing: string[];
-    limitations?: string[];
-    evidence: FrozenCropModelParametersV2['production']['evidence'];
-    canopy: {
-      kPar: number | null;
-      specificLeafAreaM2PerKg: number | null;
-      leafStemPartitionParameterM2PerKg: number | null;
-      evidence: FrozenCropModelParametersV2['production']['evidence'];
+    canopy: FrozenCropModelProductionV4Common['canopy'] & { kPar: number | null };
+  }
+  | {
+    equationFamily: 'OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1';
+    rueGPerMjInterceptedTotalSolar: number | null;
+    stressFactor: number | null;
+    stressFactorClassification: 'synthetic';
+    canopy: FrozenCropModelProductionV4Common['canopy'] & {
+      kTotalSolar: number | null;
+      laiMappingClassification: 'synthetic';
     };
-    allocation: {
-      canopyShare: number | null;
-      harvestableShare: number | null;
-      classification: 'measured' | 'explicit-assumption' | 'synthetic';
-      evidenceId: string;
-      validDomain: string;
-    };
-  };
+  }
+);
+
+export type FrozenCropModelParametersV4 = Omit<FrozenCropModelParametersV3, 'production'> & {
+  production: FrozenCropModelProductionV4;
 };
 
 export interface CropEstablishmentInput {
@@ -180,7 +197,8 @@ export interface RunModelInputsV3 {
 /** V4 adds canopy-derived interception and a single-pass two-pool DM balance. */
 export interface RunModelInputsV4 {
   model: 'run-inputs-v4';
-  parameterSetVersion: 'crop-parameters-v5';
+  /** Keep unknown persisted versions representable so replay/freezing can fail closed without rewriting them. */
+  parameterSetVersion: string;
   soil: RunModelInputsV2['soil'];
   crops: Crop[];
   cropParameters: FrozenCropModelParametersV4[];
@@ -227,6 +245,8 @@ export type EnvSourceTag =
   | 'scenario-delta' // = raw source value + run scenario perturbation (see `raw`)
   | 'default'; // documented built-in fallback (no site data at all)
 
+export type SolarRadiationSourceTag = EnvSourceTag | 'synthetic';
+
 /** One composed day. Effective values include the run scenario; when the
  * scenario perturbed a field, that field's tag becomes 'scenario-delta' and
  * the pre-scenario value + its source tag move into `raw`. */
@@ -240,6 +260,8 @@ export interface DailyEnvironment {
   etoMm: number;
   /** Outdoor monthly-mean DLI input, frozen when light data is available. */
   dliNaturalMol?: number;
+  /** Total solar radiation in MJ/m²/day; never inferred from DLI. */
+  solarRadiationMJm2Day?: number | null;
   /** max(0, (tMin + tMax)/2 − 10), °C·day — computed from EFFECTIVE temps so
    * climate scenarios actually move the GDD clock. */
   gddBase10C: number;
@@ -249,6 +271,7 @@ export interface DailyEnvironment {
     precipMm: EnvSourceTag;
     etoMm: EnvSourceTag;
     dliNaturalMol?: EnvSourceTag;
+    solarRadiationMJm2Day?: SolarRadiationSourceTag;
   };
   /** Derived interior values attached only to the current effective day. */
   climate?: EnvironmentClimateDay;

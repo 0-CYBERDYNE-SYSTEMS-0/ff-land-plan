@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { freezeEnvironmentModelInputsV2 } from '@/lib/sim/model-inputs';
-import type { EnvironmentModelInputsV2, RunRecord } from '@/lib/sim/types';
+import type { DailyEnvironment, EnvironmentModelInputsV2, RunRecord } from '@/lib/sim/types';
 import type { PlanState } from '@/types';
 import { createRestApi } from './restApi';
 
@@ -63,7 +63,7 @@ function environmentV2Record(): RunRecord {
     label: 'Environment-v2 round-trip',
     createdAt: '2026-10-27T00:00:00.000Z',
     config: { ...config, environmentModelInputs },
-    envSeries: [],
+    envSeries: solarEnvironmentSeries(),
     summary: {
       daysSimulated: 17,
       rainMm: 3.25,
@@ -89,6 +89,31 @@ function environmentV2Record(): RunRecord {
 
 function jsonCopy<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function solarEnvironmentSeries(): DailyEnvironment[] {
+  const base = {
+    tMinC: 15,
+    tMaxC: 20,
+    precipMm: 0,
+    etoMm: 0,
+    gddBase10C: 7.5,
+    provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default' },
+  } as const;
+  return [
+    {
+      ...base,
+      date: '2026-10-27',
+      solarRadiationMJm2Day: 0,
+      provenance: { ...base.provenance, solarRadiationMJm2Day: 'synthetic' },
+    },
+    {
+      ...base,
+      date: '2026-10-28',
+      solarRadiationMJm2Day: null,
+      provenance: { ...base.provenance, solarRadiationMJm2Day: 'synthetic' },
+    },
+  ];
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -122,9 +147,11 @@ describe('REST sim-run API contract', () => {
     expect(putBody.config.climateModel).toBe('environment-v2');
     expect(putBody.config.environmentModelInputs).toEqual(saved.config.environmentModelInputs);
     expect(putBody.summary).toEqual(saved.summary);
+    expect(putBody.envSeries.map((day) => day.solarRadiationMJm2Day)).toEqual([0, null]);
     expect(returned).toEqual(jsonSaved);
     expect(listed).toEqual([jsonSaved]);
     expect(listed[0]?.config.environmentModelInputs).toEqual(jsonSaved.config.environmentModelInputs);
     expect(listed[0]?.summary).toEqual(jsonSaved.summary);
+    expect(listed[0]?.envSeries.map((day) => day.solarRadiationMJm2Day)).toEqual([0, null]);
   });
 });

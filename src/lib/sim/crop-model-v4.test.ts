@@ -320,6 +320,41 @@ describe('crop-model-v4 dynamic canopy and two-pool production', () => {
     expect(summary.modelQualification?.status).toBe('qualified');
   });
 
+  it('keeps the preregistered v5 control on LINTUL PAR when total-solar forcing is present', () => {
+    const run = frozenRun();
+    expect(run.modelInputs).toMatchObject({ model: 'run-inputs-v4', parameterSetVersion: 'crop-parameters-v5' });
+    expect(run.modelInputs?.model === 'run-inputs-v4'
+      ? run.modelInputs.cropParameters[0]?.production
+      : null).toMatchObject({ equationFamily: 'LINTUL-net-RUE', canopy: { kPar: fixture.source.sourceParameters.kPar } });
+
+    const withoutTotalSolar = [dailyEnvironment('2026-10-01'), dailyEnvironment('2026-10-02')];
+    const withTotalSolar = withoutTotalSolar.map((env) => ({
+      ...env,
+      solarRadiationMJm2Day: 18,
+      provenance: { ...env.provenance, solarRadiationMJm2Day: 'synthetic' as const },
+    }));
+    const baseline = simulateRun(run, withoutTotalSolar);
+    const forced = simulateRun(run, withTotalSolar);
+    expect(forced.events).toEqual(baseline.events);
+    expect(forced.finalState.cells).toEqual(baseline.finalState.cells);
+    expect(forced.summary).toEqual(baseline.summary);
+
+    const record: RunRecord = {
+      id: 'run:v4:water-sa-v5-solar-control',
+      farmId: run.farmId,
+      label: fixture.id,
+      createdAt: `${run.startDate}T00:00:00.000Z`,
+      config: run,
+      envSeries: withTotalSolar,
+      summary: forced.summary,
+      status: 'complete',
+    };
+    const replay = simulateRun(record.config, record.envSeries);
+    expect(replay.events).toEqual(forced.events);
+    expect(replay.finalState.cells).toEqual(forced.finalState.cells);
+    expect(replay.summary).toEqual(record.summary);
+  });
+
   it('holds both pools on known-zero and unknown-light days', () => {
     const run = frozenRun();
     const start = createRun(run);

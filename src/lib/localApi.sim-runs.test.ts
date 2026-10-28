@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EnvironmentModelInputsV2, RunRecord } from '@/lib/sim/types';
+import type { DailyEnvironment, EnvironmentModelInputsV2, RunRecord } from '@/lib/sim/types';
 import type { PlanState } from '@/types';
 import { freezeEnvironmentModelInputsV2 } from '@/lib/sim/model-inputs';
 
@@ -96,6 +96,31 @@ function run(id: string): RunRecord {
   };
 }
 
+function solarEnvironmentSeries(): DailyEnvironment[] {
+  const base = {
+    tMinC: 15,
+    tMaxC: 20,
+    precipMm: 0,
+    etoMm: 0,
+    gddBase10C: 7.5,
+    provenance: { tMinC: 'default', tMaxC: 'default', precipMm: 'default', etoMm: 'default' },
+  } as const;
+  return [
+    {
+      ...base,
+      date: '2026-10-01',
+      solarRadiationMJm2Day: 0,
+      provenance: { ...base.provenance, solarRadiationMJm2Day: 'synthetic' },
+    },
+    {
+      ...base,
+      date: '2026-10-02',
+      solarRadiationMJm2Day: null,
+      provenance: { ...base.provenance, solarRadiationMJm2Day: 'synthetic' },
+    },
+  ];
+}
+
 function environmentV2Run(): RunRecord {
   const base = run('run:env2:local-roundtrip');
   const environment = {
@@ -134,6 +159,7 @@ function environmentV2Run(): RunRecord {
   return {
     ...base,
     config: { ...config, environmentModelInputs },
+    envSeries: solarEnvironmentSeries(),
     summary: {
       ...base.summary,
       daysSimulated: 17,
@@ -173,6 +199,7 @@ describe('localApi.saveSimRun', () => {
     expect(listed?.config.climateModel).toBe('environment-v2');
     expect(listed?.config.environmentModelInputs).toEqual(saved.config.environmentModelInputs);
     expect(listed?.summary).toEqual(saved.summary);
+    expect(listed?.envSeries.map((day) => day.solarRadiationMJm2Day)).toEqual([0, null]);
   });
 
   it('upserts complete frozen records at the front and enforces the 40-run cap', async () => {

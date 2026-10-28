@@ -84,6 +84,7 @@ import {
 } from './ecosystem';
 import { isoDayNumber } from './environment';
 import { inspectRunModelSupport } from './model-inputs';
+import { ohayouSpringControlDailyProduction } from './ohayou-production';
 import {
   dailyDryMatterProduction,
   dailyThermalUnits,
@@ -152,7 +153,8 @@ function isCanopyEstablishmentInput(
 function interceptionFromCanopyGPerM2(
   canopyDryMatterGPerM2: number,
   parameter: FrozenCropModelParametersV4['production']['canopy'],
-): number {
+): number | undefined {
+  if (!('kPar' in parameter)) return undefined;
   const lai = leafAreaIndexFromCanopyDryMatter(
     canopyDryMatterGPerM2 / 1000,
     parameter.specificLeafAreaM2PerKg ?? 0,
@@ -1404,33 +1406,69 @@ export function stepDay(
           ));
         }
         if (prev.biomassFrac < 1 && !prev.harvested && !diedFromFrost) {
-          const production = dailyDryMatterProduction({
-            dliMolParM2: dli,
-            interceptedParFraction: interceptionForModelCell(
-              config,
-              canopyDryMatterGPerM2 ?? 0,
-              modelParameters,
-            ),
-            rueGPerMjInterceptedPar: modelParameters.production.rueGPerMjInterceptedPar,
-            stressFactor: Math.max(0, 1 - (isEstablishedModel
-              ? Math.max(maxStress, Math.min(1, pestPressure * 0.8))
-              : water)),
-          });
-          if (production.status === 'supported') {
+          let dryMatterGainGPerM2Day: number | null = null;
+          let unavailableReason: string | undefined;
+          const frozenProduction = modelParameters.production;
+          if (isV4 && 'equationFamily' in frozenProduction
+            && frozenProduction.equationFamily === 'OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1') {
+            const lai = leafAreaIndexFromCanopyDryMatter(
+              (canopyDryMatterGPerM2 ?? 0) / 1000,
+              frozenProduction.canopy.specificLeafAreaM2PerKg ?? 0,
+              frozenProduction.canopy.leafStemPartitionParameterM2PerKg ?? 0,
+            );
+            const production = ohayouSpringControlDailyProduction({
+              solarRadiationMJm2Day: env2.solarRadiationMJm2Day,
+              leafAreaIndexM2PerM2: lai,
+              extinctionCoefficientK: frozenProduction.canopy.kTotalSolar ?? 0,
+              rueGPerMjInterceptedTotalSolar: frozenProduction.rueGPerMjInterceptedTotalSolar ?? 0,
+              stressFactor: frozenProduction.stressFactor ?? 0,
+            });
+            if (production.status === 'calculated') {
+              dryMatterGainGPerM2Day = production.dryMatterGainGPerM2Day;
+            } else {
+              unavailableReason = production.reason;
+            }
+          } else if ('rueGPerMjInterceptedPar' in frozenProduction) {
+            const production = dailyDryMatterProduction({
+              dliMolParM2: dli,
+              interceptedParFraction: interceptionForModelCell(
+                config,
+                canopyDryMatterGPerM2 ?? 0,
+                modelParameters,
+              ),
+              rueGPerMjInterceptedPar: frozenProduction.rueGPerMjInterceptedPar,
+              stressFactor: Math.max(0, 1 - (isEstablishedModel
+                ? Math.max(maxStress, Math.min(1, pestPressure * 0.8))
+                : water)),
+            });
+            if (production.status === 'supported') {
+              dryMatterGainGPerM2Day = production.dryMatterGainGM2;
+            } else {
+              unavailableReason = production.reason;
+            }
+          } else {
+            unavailableReason = 'Frozen production equation family is unsupported.';
+          }
+
+          if (dryMatterGainGPerM2Day !== null) {
             if (isV4) {
               const allocation = 'allocation' in modelParameters.production
                 ? modelParameters.production.allocation
                 : { canopyShare: 1, harvestableShare: 0 };
               canopyDryMatterGPerM2 = (canopyDryMatterGPerM2 ?? 0)
-                + production.dryMatterGainGM2 * (allocation.canopyShare ?? 0);
+                + dryMatterGainGPerM2Day * (allocation.canopyShare ?? 0);
               harvestableDryMatterGPerM2 = (harvestableDryMatterGPerM2 ?? 0)
-                + production.dryMatterGainGM2 * (allocation.harvestableShare ?? 0);
+                + dryMatterGainGPerM2Day * (allocation.harvestableShare ?? 0);
               dryMatterGPerM2 = canopyDryMatterGPerM2 + harvestableDryMatterGPerM2;
             } else {
-              dryMatterGPerM2 = (dryMatterGPerM2 ?? 0) + production.dryMatterGainGM2;
+              dryMatterGPerM2 = (dryMatterGPerM2 ?? 0) + dryMatterGainGPerM2Day;
             }
-          } else {
-            modelQualificationReasons.add(dailyModelQualification(prev.cropId, production.reason));
+          } else if (unavailableReason) {
+            modelQualificationReasons.add(isV4
+              && 'equationFamily' in frozenProduction
+              && frozenProduction.equationFamily === 'OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1'
+              ? `Crop ${prev.cropId}: ${unavailableReason}`
+              : dailyModelQualification(prev.cropId, unavailableReason));
           }
         }
         stage = stageForBiomass(biomassFrac);

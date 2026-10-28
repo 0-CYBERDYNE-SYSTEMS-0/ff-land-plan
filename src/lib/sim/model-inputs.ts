@@ -217,6 +217,21 @@ function thermalParametersComplete(parameter: FrozenCropModelParametersV2['therm
     && supportedMethod;
 }
 
+function thermalParametersV6Complete(parameter: FrozenCropModelParametersV2['thermal']): boolean {
+  if (thermalParametersComplete(parameter)) return true;
+  if (!parameter || !Array.isArray(parameter.gddToMaturityCdays)
+    || parameter.gddToMaturityCdays.length !== 2
+    || parameter.accumulationMethod !== 'Synthetic daily thermal clock; no source method is asserted.'
+    || !Array.isArray(parameter.startEvents) || parameter.startEvents.length === 0
+    || !parameter.startEvents.every((event) => event === 'direct-sowing' || event === 'transplanting')) return false;
+  return Number.isFinite(parameter.tBaseC)
+    && (parameter.tUpperC === undefined || (Number.isFinite(parameter.tUpperC) && parameter.tUpperC > parameter.tBaseC))
+    && parameter.gddToMaturityCdays.every((target) => Number.isFinite(target) && target > 0)
+    && parameter.gddToMaturityCdays[0] <= parameter.gddToMaturityCdays[1]
+    && [parameter.accumulationStart, parameter.maturityEndpoint, parameter.sourceCitation, parameter.sourceUrl]
+      .every((value) => typeof value === 'string' && value.trim().length > 0);
+}
+
 function productionParametersComplete(
   parameter: FrozenCropProductionParameters,
   requireInitialDryMatter = true,
@@ -247,25 +262,21 @@ function productionParametersComplete(
 }
 
 function productionParametersV4Complete(parameter: FrozenCropModelParametersV4['production']): boolean {
-  const evidenceComplete = (evidence: FrozenCropModelParametersV4['production']['evidence']) =>
-    !!evidence && [evidence.evidenceId, evidence.sourceCitation, evidence.sourceUrl, evidence.validDomain]
-      .every((value) => typeof value === 'string' && value.trim().length > 0);
+  if (!parameter || parameter.equationFamily !== 'LINTUL-net-RUE') return false;
   const canopy = parameter?.canopy;
   const allocation = parameter?.allocation;
-  return !!parameter
-    && Array.isArray(parameter.missing)
-    && parameter.equationFamily === 'LINTUL-net-RUE'
+  return Array.isArray(parameter.missing)
     && (parameter.status === 'supported'
       || (parameter.status === 'qualified' && (parameter.limitations?.length ?? 0) > 0))
     && parameter.missing.length === 0
     && parameter.rueGPerMjInterceptedPar !== null
     && Number.isFinite(parameter.rueGPerMjInterceptedPar)
     && parameter.rueGPerMjInterceptedPar >= 0
-    && evidenceComplete(parameter.evidence)
+    && evidenceCompleteV4(parameter.evidence)
     && !!canopy
     && [canopy.kPar, canopy.specificLeafAreaM2PerKg, canopy.leafStemPartitionParameterM2PerKg]
       .every((value) => value !== null && Number.isFinite(value) && value >= 0)
-    && evidenceComplete(canopy.evidence)
+    && evidenceCompleteV4(canopy.evidence)
     && !!allocation
     && allocation.canopyShare !== null
     && Number.isFinite(allocation.canopyShare)
@@ -274,11 +285,53 @@ function productionParametersV4Complete(parameter: FrozenCropModelParametersV4['
     && Number.isFinite(allocation.harvestableShare)
     && allocation.harvestableShare >= 0 && allocation.harvestableShare <= 1
     && allocation.canopyShare + allocation.harvestableShare === 1
+    && allocationCompleteV4(allocation);
+}
+
+function evidenceCompleteV4(evidence: FrozenCropModelParametersV4['production']['evidence']): boolean {
+  return !!evidence && [evidence.evidenceId, evidence.sourceCitation, evidence.sourceUrl, evidence.validDomain]
+    .every((value) => typeof value === 'string' && value.trim().length > 0);
+}
+
+function allocationCompleteV4(allocation: FrozenCropModelParametersV4['production']['allocation']): boolean {
+  return !!allocation
     && (allocation.classification === 'measured'
       || allocation.classification === 'explicit-assumption'
       || allocation.classification === 'synthetic')
     && typeof allocation.evidenceId === 'string' && allocation.evidenceId.trim().length > 0
     && typeof allocation.validDomain === 'string' && allocation.validDomain.trim().length > 0;
+}
+
+function productionParametersV6Complete(parameter: FrozenCropModelParametersV4['production']): boolean {
+  if (!parameter || parameter.equationFamily !== 'OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1') return false;
+  const canopy = parameter.canopy;
+  const allocation = parameter.allocation;
+  return Array.isArray(parameter.missing)
+    && (parameter.status === 'supported'
+      || (parameter.status === 'qualified' && (parameter.limitations?.length ?? 0) > 0))
+    && parameter.missing.length === 0
+    && parameter.rueGPerMjInterceptedTotalSolar !== null
+    && Number.isFinite(parameter.rueGPerMjInterceptedTotalSolar)
+    && parameter.rueGPerMjInterceptedTotalSolar >= 0
+    && parameter.stressFactor !== null
+    && Number.isFinite(parameter.stressFactor)
+    && parameter.stressFactor >= 0 && parameter.stressFactor <= 1
+    && parameter.stressFactorClassification === 'synthetic'
+    && evidenceCompleteV4(parameter.evidence)
+    && !!canopy
+    && [canopy.kTotalSolar, canopy.specificLeafAreaM2PerKg, canopy.leafStemPartitionParameterM2PerKg]
+      .every((value) => value !== null && Number.isFinite(value) && value >= 0)
+    && canopy.laiMappingClassification === 'synthetic'
+    && evidenceCompleteV4(canopy.evidence)
+    && !!allocation
+    && allocation.canopyShare !== null
+    && Number.isFinite(allocation.canopyShare)
+    && allocation.canopyShare >= 0 && allocation.canopyShare <= 1
+    && allocation.harvestableShare !== null
+    && Number.isFinite(allocation.harvestableShare)
+    && allocation.harvestableShare >= 0 && allocation.harvestableShare <= 1
+    && allocation.canopyShare + allocation.harvestableShare === 1
+    && allocationCompleteV4(allocation);
 }
 
 function rootDevelopmentParametersComplete(
@@ -787,13 +840,16 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
   }
 
   if (config.cropModelVersion === 'crop-model-v4') {
-    if (inputs?.model !== 'run-inputs-v4' || inputs.parameterSetVersion !== 'crop-parameters-v5') {
+    if (inputs?.model !== 'run-inputs-v4'
+      || (inputs.parameterSetVersion !== 'crop-parameters-v5' && inputs.parameterSetVersion !== 'crop-parameters-v6')) {
       return {
         model: 'crop-model-v4', status: 'unsupported', canReplay: false, preserveStoredSummary: persisted,
         reasons: ['Frozen crop-model-v4 canopy-pool inputs are missing or have an unknown version.'],
       };
     }
     if (!Array.isArray(inputs.crops) || !Array.isArray(inputs.cropParameters)
+      || !inputs.cropParameters.every((parameter) => !!parameter && typeof parameter === 'object'
+        && Number.isInteger(parameter.cropId))
       || !inputs.establishmentByCell || typeof inputs.establishmentByCell !== 'object'
       || !inputs.qualification
       || !['supported', 'qualified', 'unsupported'].includes(inputs.qualification.status)
@@ -804,11 +860,17 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
         reasons: ['Frozen crop-model-v4 inputs have an invalid shape.'],
       };
     }
+    const productionComplete = inputs.parameterSetVersion === 'crop-parameters-v6'
+      ? productionParametersV6Complete
+      : productionParametersV4Complete;
+    const thermalComplete = inputs.parameterSetVersion === 'crop-parameters-v6'
+      ? thermalParametersV6Complete
+      : thermalParametersComplete;
     const parameterIds = new Set(inputs.cropParameters.map((parameter) => parameter.cropId));
     const missingParameters = requiredCropIds.filter((cropId) => !parameterIds.has(cropId));
     const invalidParameters = inputs.cropParameters.filter((parameter) =>
-      !thermalParametersComplete(parameter.thermal)
-      || !productionParametersV4Complete(parameter.production)
+      !thermalComplete(parameter.thermal)
+      || !productionComplete(parameter.production)
       || !rootZoneParametersComplete(parameter.rootZone)
       || parameter.lifecycle !== 'plant',
     );
@@ -816,6 +878,12 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
     const establishment = cropCanopyEstablishmentChecks(config, inputs.establishmentByCell, inputs.cropParameters);
     const environmentIssues = climateModel === 'environment-v2'
       ? environmentModelInputsV2Issues(config)
+      : [];
+    const v6EnclosureCouplingIssues = inputs.parameterSetVersion === 'crop-parameters-v6'
+      && (climateModel === 'environment-v1' || climateModel === 'environment-v2')
+      && !!config.environment
+      && archetypes[config.environment.archetype]?.kind !== 'open'
+      ? ['Crop-model-v4 v6 total-solar production with a non-open environment-v1/v2 climate is unsupported until joint coupling is tested.']
       : [];
     const reasons = [
       ...inputs.qualification.reasons,
@@ -830,10 +898,11 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
       ...starts.issues,
       ...establishment.issues,
       ...environmentIssues,
+      ...v6EnclosureCouplingIssues,
       ...(usesSoillessTarget(config) ? ['Soilless targets require the separate 02B resource model.'] : []),
       ...invalidParameters.flatMap((parameter) => {
-        const hasInvalidValues = !thermalParametersComplete(parameter.thermal)
-          || !productionParametersV4Complete(parameter.production)
+        const hasInvalidValues = !thermalComplete(parameter.thermal)
+          || !productionComplete(parameter.production)
           || !rootZoneParametersComplete(parameter.rootZone);
         const nonPlantLifecycle = parameter.lifecycle !== 'plant';
         return [
@@ -854,10 +923,11 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
       && starts.issues.length === 0
       && establishment.issues.length === 0
       && environmentIssues.length === 0
+      && v6EnclosureCouplingIssues.length === 0
       && inputs.qualification.status !== 'unsupported'
       && inputs.cropParameters.every((parameter) =>
-        thermalParametersComplete(parameter.thermal)
-        && productionParametersV4Complete(parameter.production)
+        thermalComplete(parameter.thermal)
+        && productionComplete(parameter.production)
         && rootZoneParametersComplete(parameter.rootZone)
         && parameter.lifecycle === 'plant',
       );
@@ -872,10 +942,19 @@ export function inspectRunModelSupport(config: RunConfig, persisted = true): Run
           'Empirical v4 crop-model accuracy remains UNVERIFIED; this synthetic integration does not authorize predictive comparisons.',
           'Direct-sown crop production and root-zone fluxes begin only at the frozen emergence date; no seed-reserve dynamics or field-emergence prediction is modeled.',
           'A separate source-event thermal clock controls the source maturity endpoint; intermediate stage mapping remains unavailable and the 3D crop pose is an illustrative juvenile placeholder.',
-          'V4 derives daily PAR interception from the beginning-of-day canopy-only DM pool, then partitions each net DM increment once into canopy and harvestable pools; the source p/SLA relation does not determine those allocation shares and no additional harvest-index multiplier is applied.',
-          'Water SA K_PAR/SLA/p values are selected seasonal references; its total-solar RUE is not used in the intercepted-PAR production equation. Broccoli K_PAR differs between source Tables 5 and 6 without a resolved attribution.',
+          ...(inputs.parameterSetVersion === 'crop-parameters-v6'
+            ? [
+                'The v6 Ohayou equation uses beginning-of-day canopy DM for synthetic LAI, source-domain total-solar K/RUE, one frozen synthetic stress factor, and one partition of each net DM increment; all LAI, stress, and allocation inputs remain synthetic.',
+                'Ohayou Spring Control K and RUE are source-derived coefficients for the cited treatment only; this daily synthetic integration does not reproduce source observations or establish crop accuracy.',
+              ]
+            : [
+                'V4 derives daily PAR interception from the beginning-of-day canopy-only DM pool, then partitions each net DM increment once into canopy and harvestable pools; the source p/SLA relation does not determine those allocation shares and no additional harvest-index multiplier is applied.',
+                'Water SA K_PAR/SLA/p values are selected seasonal references; its total-solar RUE is not used in the intercepted-PAR production equation. Broccoli K_PAR differs between source Tables 5 and 6 without a resolved attribution.',
+              ]),
           'Canopy dry matter and net production use synthetic assumptions in the approved software fixture; crop and cultivar accuracy remain UNVERIFIED.',
-          'Canopy FI_PAR is an interception input and a qualified cover proxy only; it is not a crop transpiration coefficient.',
+          ...(inputs.parameterSetVersion === 'crop-parameters-v6'
+            ? ['Total-solar interception is a production input, not a crop transpiration coefficient.']
+            : ['Canopy FI_PAR is an interception input and a qualified cover proxy only; it is not a crop transpiration coefficient.']),
           ...(climateModel === 'environment-v2'
             ? ['Environment-v2 reuses each unrounded FAO-56 actual-transpiration flux once for root-zone storage loss and once as the room-vapour source; potential ET uses the previous frozen room ET factor.']
             : ['Enclosure transpiration retains the existing lagged potential-ET proxy and is not coupled to current root-zone Ks.']),
@@ -1162,7 +1241,9 @@ function priorV3FromV4(prior: RunModelInputsV4): RunModelInputsV3 {
       lifecycle: parameter.lifecycle,
       production: {
         equationFamily: 'LINTUL-net-RUE',
-        rueGPerMjInterceptedPar: parameter.production.rueGPerMjInterceptedPar,
+        rueGPerMjInterceptedPar: parameter.production.equationFamily === 'LINTUL-net-RUE'
+          ? parameter.production.rueGPerMjInterceptedPar
+          : null,
         interceptedParFraction: null,
         harvestIndex: null,
         status: 'unsupported',
@@ -1227,6 +1308,25 @@ export function freezeRunModelInputsV4(
   source: RunModelSource = {},
   prior?: RunModelInputs,
 ): RunModelInputsV4 {
+  if (prior?.model === 'run-inputs-v4'
+    && prior.parameterSetVersion !== 'crop-parameters-v5'
+    && prior.parameterSetVersion !== 'crop-parameters-v6') {
+    return {
+      ...structuredClone(prior),
+      qualification: {
+        status: 'unsupported',
+        reasons: [
+          ...prior.qualification.reasons,
+          `Frozen crop-model-v4 parameter set '${prior.parameterSetVersion}' is unknown and was preserved without re-freezing.`,
+        ],
+      },
+    };
+  }
+  const priorUsesV6 = prior?.model === 'run-inputs-v4' && prior.parameterSetVersion === 'crop-parameters-v6';
+  const suppliedV6 = source.cropParametersV4?.some((parameter) =>
+    parameter.production.equationFamily === 'OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1',
+  ) ?? false;
+  const usesV6 = priorUsesV6 || suppliedV6;
   const priorV3 = prior?.model === 'run-inputs-v4'
     ? priorV3FromV4(prior)
     : prior?.model === 'run-inputs-v3' ? prior : undefined;
@@ -1236,7 +1336,13 @@ export function freezeRunModelInputsV4(
     : undefined;
   const suppliedParameters = new Map((source.cropParametersV4 ?? []).map((parameter) => [parameter.cropId, parameter]));
   const cropParameters = frozen.crops.map((crop) => {
-    const parameter = priorParameters?.get(crop.id) ?? suppliedParameters.get(crop.id);
+    const priorParameter = priorParameters?.get(crop.id);
+    const suppliedParameter = suppliedParameters.get(crop.id);
+    const parameter = priorUsesV6
+      ? priorParameter ?? suppliedParameter
+      : suppliedParameter?.production.equationFamily === 'OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1'
+        ? suppliedParameter
+        : priorParameter ?? suppliedParameter;
     if (parameter) return structuredClone(parameter);
     const base = frozen.cropParameters.find((entry) => entry.cropId === crop.id);
     return base ? v4ParametersWithoutCanopyReference(base) : null;
@@ -1249,8 +1355,12 @@ export function freezeRunModelInputsV4(
   const starts = cropStartEventChecks(config, cropParameters);
   const establishment = cropCanopyEstablishmentChecks(config, establishmentByCell, cropParameters);
   const unsupported = cropParameters.length !== frozen.crops.length
-    || cropParameters.some((parameter) => !thermalParametersComplete(parameter.thermal)
-      || !productionParametersV4Complete(parameter.production)
+    || cropParameters.some((parameter) => !(usesV6
+      ? thermalParametersV6Complete(parameter.thermal)
+      : thermalParametersComplete(parameter.thermal))
+      || !(usesV6
+        ? productionParametersV6Complete(parameter.production)
+        : productionParametersV4Complete(parameter.production))
       || !rootZoneParametersComplete(parameter.rootZone)
       || parameter.lifecycle !== 'plant')
     || starts.issues.length > 0
@@ -1258,7 +1368,9 @@ export function freezeRunModelInputsV4(
     || (frozen.soil?.awcMmPerCm ?? 0) <= 0
     || usesSoillessTarget(config);
   const reasons = [
-    ...(prior?.model === 'run-inputs-v4' ? prior.qualification.reasons : []),
+    ...(prior?.model === 'run-inputs-v4' && prior.parameterSetVersion === (usesV6 ? 'crop-parameters-v6' : 'crop-parameters-v5')
+      ? prior.qualification.reasons
+      : []),
     ...cropParameters.flatMap((parameter) => [
       ...parameter.production.missing.map((missing) => `Crop ${parameter.cropId}: missing ${missing}`),
       ...(parameter.production.limitations ?? []).map((limitation) => `Crop ${parameter.cropId}: ${limitation}`),
@@ -1274,7 +1386,7 @@ export function freezeRunModelInputsV4(
   ];
   return {
     model: 'run-inputs-v4',
-    parameterSetVersion: 'crop-parameters-v5',
+    parameterSetVersion: usesV6 ? 'crop-parameters-v6' : 'crop-parameters-v5',
     soil: frozen.soil,
     crops: frozen.crops,
     cropParameters,

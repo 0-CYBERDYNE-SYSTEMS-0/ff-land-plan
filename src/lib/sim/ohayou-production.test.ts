@@ -6,7 +6,7 @@ describe('Ohayou spring-control total-solar production equation', () => {
 
   it('produces exactly zero dry matter at zero total solar radiation', () => {
     expect(ohayouSpringControlDailyProduction({
-      solarRadiationMJPerM2Day: 0,
+      solarRadiationMJm2Day: 0,
       leafAreaIndexM2PerM2: syntheticLeafAreaIndexM2PerM2,
     })).toEqual({
       status: 'calculated',
@@ -20,11 +20,11 @@ describe('Ohayou spring-control total-solar production equation', () => {
     const higherSolarFixtureMJPerM2Day = 18;
     const interceptedFraction = 1 - Math.exp(-1.09 * syntheticLeafAreaIndexM2PerM2);
     const lowSolar = ohayouSpringControlDailyProduction({
-      solarRadiationMJPerM2Day: lowSolarFixtureMJPerM2Day,
+      solarRadiationMJm2Day: lowSolarFixtureMJPerM2Day,
       leafAreaIndexM2PerM2: syntheticLeafAreaIndexM2PerM2,
     });
     const higherSolar = ohayouSpringControlDailyProduction({
-      solarRadiationMJPerM2Day: higherSolarFixtureMJPerM2Day,
+      solarRadiationMJm2Day: higherSolarFixtureMJPerM2Day,
       leafAreaIndexM2PerM2: syntheticLeafAreaIndexM2PerM2,
     });
 
@@ -46,9 +46,9 @@ describe('Ohayou spring-control total-solar production equation', () => {
   it('does not return numeric production when total solar radiation or LAI is missing or non-finite', () => {
     const invalidValues = [null, undefined, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY] as const;
 
-    for (const solarRadiationMJPerM2Day of invalidValues) {
+    for (const solarRadiationMJm2Day of invalidValues) {
       const result = ohayouSpringControlDailyProduction({
-        solarRadiationMJPerM2Day,
+        solarRadiationMJm2Day,
         leafAreaIndexM2PerM2: syntheticLeafAreaIndexM2PerM2,
       });
       expect(result.status).toBe('unavailable');
@@ -57,7 +57,7 @@ describe('Ohayou spring-control total-solar production equation', () => {
 
     for (const invalidLai of invalidValues) {
       const result = ohayouSpringControlDailyProduction({
-        solarRadiationMJPerM2Day: 0,
+        solarRadiationMJm2Day: 0,
         leafAreaIndexM2PerM2: invalidLai,
       });
       expect(result.status).toBe('unavailable');
@@ -67,15 +67,15 @@ describe('Ohayou spring-control total-solar production equation', () => {
 
   it('does not return numeric production for negative inputs or an overflowing result', () => {
     const negativeSolar = ohayouSpringControlDailyProduction({
-      solarRadiationMJPerM2Day: -1,
+      solarRadiationMJm2Day: -1,
       leafAreaIndexM2PerM2: syntheticLeafAreaIndexM2PerM2,
     });
     const negativeLai = ohayouSpringControlDailyProduction({
-      solarRadiationMJPerM2Day: 1,
+      solarRadiationMJm2Day: 1,
       leafAreaIndexM2PerM2: -1,
     });
     const overflowingGain = ohayouSpringControlDailyProduction({
-      solarRadiationMJPerM2Day: Number.MAX_VALUE,
+      solarRadiationMJm2Day: Number.MAX_VALUE,
       leafAreaIndexM2PerM2: Number.MAX_VALUE,
     });
 

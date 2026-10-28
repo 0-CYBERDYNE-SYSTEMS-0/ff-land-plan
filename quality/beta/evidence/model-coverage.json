@@ -1622,16 +1622,17 @@
     },
     {
       "id": "OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01",
-      "classification": "synthetic crop-model-v4 production/replay preregistration; not a crop benchmark",
+      "classification": "executed synthetic crop-model-v4 production/replay software fixture; not a crop benchmark",
       "sourceId": "OHISHI-2023-HORTJ-OHAYOU",
       "modelVersion": "crop-model-v4 structural pool model + run-inputs-v4 + crop-parameters-v6 equation family OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1",
       "syntheticInputs": "Five-day single-cell software fixture. Source K=1.09 and RUE=1.16 apply only to the Ohayou Spring Control total-solar light equation; LAI mapping, initial pools, allocation, thermal/root/stress values and solar forcing are synthetic. Null and omitted solar values have DLI decoys and must not fall back.",
       "expected": "Five preregistered daily rows for LAI, intercepted total solar radiation, DM gain and two-pool state; known-zero solar holds pools, unavailable solar holds pools and qualifies the run, and persisted RunRecord replay is exact.",
       "tolerance": "LAI, intercepted fraction/radiation, daily DM gain, pool state, and unrounded daily pool closure are within 1e-12 in their stated arithmetic units only. Dispatch, zero/null/omitted handling, serialization, freeze/fork/twin preservation, v5 compatibility, unsupported-summary preservation, and persisted replay equality are exact.",
       "evidence": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json",
+      "reproduction": "Focused: npx vitest run src/lib/sim/ohayou-v4.integration.test.ts src/lib/sim/crop-model-v4.test.ts src/lib/sim/model-inputs.test.ts src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts; 9 files / 70 focused tests passed. Full local gates: npm test (47 files / 250 tests), npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run test:e2e (3/3), npm run check:private (523 tracked files), and git diff --check passed. Exact-head code/evidence PR CI pending.",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Preregistration independently reviewed; v6 implementation and candidate execution not run. A-03 and 02A remain UNVERIFIED."
+      "status": "Synthetic reducer/replay software checks executed; S2 replay/version review and S3 climate-boundary review approved; exact-head code/evidence PR CI pending. Enclosed v6 environment-v1/v2 coupling is fail-closed and untested. No candidate, calibration/holdout, measured-output, reference-agreement or predictive comparison. A-03 and 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
@@ -1648,8 +1649,8 @@
     "reviewedSourceParameterTranscriptionSets": 2,
     "preregisteredSyntheticCanopyEquationFixtures": 2,
     "executedSyntheticCanopyEquationFixtures": 2,
-    "preregisteredDynamicCanopyEngineFixtures": 1,
-    "executedDynamicCanopyEngineFixtures": 1,
+    "preregisteredDynamicCanopyEngineFixtures": 2,
+    "executedDynamicCanopyEngineFixtures": 2,
     "executableSyntheticParameterFixtures": 1,
     "measuredEmpiricallyValidatedCrops": 0,
     "measuredValidationClaims": 0,
@@ -3228,9 +3229,9 @@
       {
         "id": "ohayou-v4-total-solar-replay-integration",
         "tolerance": "LAI, intercepted solar fraction/radiation, daily DM gain, pool state, and unrounded daily pool closure ≤1e-12 in their respective arithmetic units; dispatch, zero/null/omitted serialization, v5 compatibility, preservation and replay checks exact",
-        "status": "preregistration independently reviewed; implementation not run",
+        "status": "preregistration independently reviewed; synthetic integration executed and locally verified; S2 replay/version and S3 climate-boundary reviews approved; exact-head code/evidence PR CI pending",
         "basis": "Bounds apply only to independent double-precision equation recurrence, synthetic DM pool additions and arithmetic closure. They are not source-display, crop-error, calibration, or prediction tolerances.",
-        "scope": "Synthetic crop-model-v4 structural two-pool integration using the opt-in run-inputs-v4 / crop-parameters-v6 Ohayou total-solar equation family. Freezes source K/RUE, synthetic LAI mapping/pools/allocation/thermal/root/stress/forcing, known zero, null and omitted solar with DLI decoys, JSON serialization, freeze/fork/twin preservation, unsupported-summary preservation, exact persisted replay, and crop-parameters-v5 LINTUL compatibility. No engine execution, candidate comparison, measured evidence, or crop accuracy claim.",
+        "scope": "Executed synthetic crop-model-v4 structural two-pool integration using the opt-in run-inputs-v4 / crop-parameters-v6 Ohayou total-solar equation family. Freezes source K/RUE, synthetic LAI mapping/pools/allocation/thermal/root/stress/forcing, known zero, null and omitted solar with DLI decoys, JSON serialization, freeze/fork/twin preservation, unsupported replay rejection and stored-summary retention, and crop-parameters-v5 LINTUL compatibility. V6 with non-open environment-v1/v2 climate fails closed pending a separate coupling fixture. No candidate comparison, measured evidence, or crop accuracy claim.",
         "evidence": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json"
       }
     ]
