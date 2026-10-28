@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "V2-TARGET-CELL-EFFECTIVE-COUNT-HARVEST-MASS-SYNTHETIC-01",
   "preparedDate": "2026-10-28",
-  "status": "Preregistered after independent S2 tolerance/contract review and S3 claim-boundary review; implementation and execution have not started.",
+  "status": "Preregistered before implementation. A local one-day candidate passed the focused test but was rejected because it could not satisfy the registered RunSummary replay assertion; see the result record. Registered inputs and metrics remain unchanged.",
   "acceptanceContract": {
     "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
     "row": "A-07",
@@ -121,7 +121,7 @@
   },
   "reproduction": {
     "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 effective plant count with target-scoped area harvest mass\"",
-    "status": "Not run; implementation has not started."
+    "status": "A local candidate ran and passed its focused test, but did not meet the full registered summary-replay criterion and was not committed; see quality/beta/evidence/v2-target-cell-effective-count-harvest-mass-synthetic-result.json."
   },
   "implementationEstimate": {
     "engineerHours": "1.0-1.5",

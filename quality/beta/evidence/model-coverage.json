@@ -34,6 +34,8 @@
     "v2AutoManualHarvestParityPreregistration": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic.json",
     "v2AutoManualHarvestParityResult": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic-result.json",
     "v2TargetCellEffectiveCountHarvestMassPreregisteredFixture": "quality/beta/evidence/v2-target-cell-effective-count-harvest-mass-synthetic.json",
+    "v2TargetCellEffectiveCountHarvestMassSeededCandidateResult": "quality/beta/evidence/v2-target-cell-effective-count-harvest-mass-synthetic-result.json",
+    "v2TargetCellEffectiveCountHarvestMassFullRunPreregisteredFixture": "quality/beta/evidence/v2-target-cell-effective-count-harvest-mass-fullrun-synthetic.json",
     "v2EarlyManualHarvestRetrySoftwareFixture": "V2-EARLY-MANUAL-HARVEST-RETRY-SYNTHETIC-01",
     "v3ElevatedTargetManualHarvestPreregisteredFixture": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01",
     "v3MixedTargetAutoHarvestPreregisteredFixture": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01",

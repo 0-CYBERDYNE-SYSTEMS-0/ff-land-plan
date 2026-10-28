@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "id": "V2-TARGET-CELL-EFFECTIVE-COUNT-HARVEST-MASS-FULLRUN-SYNTHETIC-01",
+  "preparedDate": "2026-10-28",
+  "status": "Preregistered after S2 exact-record and S3 claim-boundary review; the full-run test and two-cell execution have not started.",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-07",
+    "requirement": "A bounded synthetic full-run software check of spacing-derived effective count, target-scoped area-based harvest mass, finite deterministic replay and full RunSummary equality; A-07 overall remains UNVERIFIED."
+  },
+  "classification": "synthetic crop-model-v2 full-run target/count/harvest software invariant; not a crop or model-accuracy benchmark",
+  "comparisonType": "one frozen software fixture with repeated identical simulateRun execution; not a candidate-model, reference-model, measured-output, calibration or holdout comparison",
+  "registeredAgainstCodeSha": "84278906321f4bc3b16f38ffbe00ded78f801289",
+  "syntheticSetupSha256": {
+    "value": "44963e4245440d2f1b8133ea05d71b6db5825f240890ad2760a14746b1c6420b",
+    "algorithm": "SHA-256 over UTF-8 canonical JSON for syntheticSetup, with recursively sorted keys and no whitespace separators."
+  },
+  "followUpTo": {
+    "fixtureId": "V2-TARGET-CELL-EFFECTIVE-COUNT-HARVEST-MASS-SYNTHETIC-01",
+    "preregistration": "quality/beta/evidence/v2-target-cell-effective-count-harvest-mass-synthetic.json",
+    "result": "quality/beta/evidence/v2-target-cell-effective-count-harvest-mass-synthetic-result.json",
+    "reason": "The one-day seeded-state candidate could not produce the registered full RunSummary replay through existing APIs and was rejected. This is a distinct full-run fixture; the earlier metrics remain unchanged."
+  },
+  "inputFixtureReferences": [
+    {
+      "id": "V2-AUTO-MANUAL-HARVEST-PAYOUT-PARITY-SYNTHETIC-01",
+      "path": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic.json",
+      "role": "Reuse the existing frozen crop-model-v2 inputs, 80-day synthetic series, maturity-day pool and area-payout derivation. The two-cell target result is not established by the one-cell fixture."
+    }
+  ],
+  "syntheticSetup": {
+    "model": {
+      "cropModelVersion": "crop-model-v2",
+      "modelInputsVersion": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "simulationApi": "simulateRun(config, envSeries); compare SimulateResult.events, finalState, and summary (RunSummary) exactly across two identical executions."
+    },
+    "cropSnapshot": {
+      "slug": "tomato",
+      "catalogCropId": 1,
+      "cultivar": "not asserted; catalog id is used for routing only",
+      "frozenPath": "RunModelInputsV2.crops[0]",
+      "spacingCm": 25,
+      "rowSpacingCm": 25,
+      "spacingOverride": "explicit synthetic software input chosen so one 0.25 m x 0.25 m target cell yields exactly one effective modeled plant; not a sourced or crop-valid density"
+    },
+    "run": {
+      "cellM": 0.25,
+      "cellAreaM2": 0.0625,
+      "floorCell": "0,0",
+      "elevatedTarget": {
+        "kind": "growing-level",
+        "growingSpaceId": "space-a",
+        "levelId": "high"
+      },
+      "elevatedTargetLocalCell": "0,0",
+      "elevatedTargetKey": "generated with targetCellKey(target, '0,0')",
+      "planting": {
+        "floor": { "0,0": 1 },
+        "elevatedTarget": { "0,0": 1 }
+      },
+      "cropStartEvents": {
+        "floor": "transplanting",
+        "elevatedTarget": "transplanting"
+      },
+      "startDate": "2026-10-01",
+      "configDayCount": 7,
+      "providedEnvironmentSeriesDays": 80,
+      "management": {
+        "autoHarvest": false,
+        "manualInterventions": [
+          {
+            "kind": "harvest",
+            "date": "2026-12-03",
+            "localCell": "0,0",
+            "target": "the elevatedTarget above"
+          }
+        ]
+      }
+    },
+    "frozenParameters": {
+      "soil": {
+        "awcMmPerCm": 1.7,
+        "organicMatterPct": 2.4,
+        "source": "omitted from the existing input object; the engine interprets the missing provenance as unknown"
+      },
+      "production": {
+        "equationFamily": "LINTUL-net-RUE",
+        "rueGPerMjInterceptedPar": 2,
+        "initialDryMatterGPerM2": 0,
+        "interceptedParFraction": 0.5,
+        "harvestIndex": 0.5,
+        "evidence": "test-only synthetic reducer contract fixture"
+      },
+      "rootZone": {
+        "method": "FAO-56",
+        "effectiveRootDepthCm": 20,
+        "depletionFraction": 0.5,
+        "cropCoefficient": 1,
+        "initialStorageFraction": 0.7,
+        "evidence": "test-only synthetic reducer contract fixture"
+      },
+      "thermal": "Reuse the exact existing frozen tomato cropThermalParams input and source event endpoint from the registered one-cell full-run test. Its crop/cultivar/domain accuracy is not assessed here."
+    },
+    "dailyEnvironment": {
+      "seriesSource": "the existing deterministic local sunnySeries constant in src/lib/sim/model-inputs.test.ts, test 'runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified'",
+      "seriesStartDate": "2026-10-01",
+      "seriesLengthDays": 80,
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipMm": 3,
+      "etoMm": 2,
+      "dliNaturalMol": 18,
+      "gddBase10C": 15,
+      "weather": "deterministic synthetic series; not observed or geographically resolved weather"
+    },
+    "stateInitialization": "No manually seeded mature state. Both cells are initialized by createRun and advance through the frozen daily series so simulateRun can produce a full RunSummary."
+  },
+  "registeredMetrics": [
+    {
+      "id": "spacing-derived-effective-plant-count",
+      "expected": "1 effective modeled plant for the one-cell elevated target",
+      "equation": "floor((1 cell * 0.25 m * 0.25 m) / ((25 cm / 100) * (25 cm / 100))) = 1",
+      "tolerance": "Exact integer equality.",
+      "basis": "Use the exact frozen RunModelInputsV2.crops[0] spacing snapshot and RunConfig cellM with effectivePlantingArea. This is not an observed physical count."
+    },
+    {
+      "id": "target-harvest-event-and-payout",
+      "expected": {
+        "harvestedEventCount": 1,
+        "targetKey": "targetCellKey(elevatedTarget, '0,0')",
+        "dayIndex": 63,
+        "date": "2026-12-03",
+        "yieldKg": 0.007875
+      },
+      "equation": "252 g/m2 * 0.25 m * 0.25 m * 0.5 / 1000 = 0.007875 kg",
+      "tolerance": "Absolute deviation <= 1e-12 kg for the event payout only.",
+      "basis": "Filter the returned events by kind=harvested before asserting the count; other event kinds may occur. The arithmetic/conversion bound is reused from the existing frozen v2 payout fixture. The two-cell target-specific output is a prospective expected value and has not been run."
+    },
+    {
+      "id": "same-coordinate-floor-isolation",
+      "expected": "The floor sibling at 0,0 reaches the registered mature state but remains unharvested; the only harvested event carries the exact elevated target reference. Other non-harvest event kinds are not counted by harvestedEventCount.",
+      "tolerance": "Exact event count, target key/reference, harvest flags, and expected harvestReadyDay 62.",
+      "basis": "Deterministic target-routing and management invariants."
+    },
+    {
+      "id": "full-summary-and-replay",
+      "expected": {
+        "yieldBasis": "dry-matter",
+        "totalYieldKg": 0.01,
+        "yieldKgByCrop": { "1": 0.01 },
+        "replay": "Run simulateRun twice with identical frozen config and environment; compare events, finalState, and full summary (RunSummary) exactly."
+      },
+      "tolerance": "Exact fields and structural equality; existing two-decimal summary rounding is retained.",
+      "basis": "The existing one-cell full-run fixture establishes one 0.007875 kg event rounds to 0.01 kg; the combined two-cell configuration and target route remain prospective."
+    },
+    {
+      "id": "finite-output",
+      "expected": "Every numeric leaf in each complete SimulateResult (events, finalState, and full summary) is finite on both identical executions.",
+      "tolerance": "Exact: every numeric leaf must satisfy Number.isFinite.",
+      "basis": "Structural replay equality alone can reproduce NaN or Infinity; this explicitly covers the finite-output portion of the A-07 requirement without adding a numerical prediction tolerance."
+    }
+  ],
+  "toleranceReview": {
+    "status": "Approved before implementation and execution; registered tolerances and exact finite-output condition accepted.",
+    "reviewedBy": "S2 independent GPT-6 Luna evidence auditor",
+    "reviewedDate": "2026-10-28"
+  },
+  "claimBoundaryReview": {
+    "status": "Approved before implementation and execution; count scope is effective modeled only, and outputs remain prospective synthetic expectations.",
+    "reviewedBy": "S3 independent GPT-6 Luna claim adversary",
+    "reviewedDate": "2026-10-28"
+  },
+  "reproduction": {
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 effective target plant count with target-scoped full-run harvest mass\"",
+    "status": "Not run; this two-cell full-run fixture remains unexecuted."
+  },
+  "implementationEstimate": {
+    "engineerHours": "0.5-1.0",
+    "source": "S1 inspect-only estimate",
+    "assumptions": [
+      "Add a test within the existing v2 full-run case/setup so the frozen tomato inputs, sunnySeries, maturity calculation and RunSummary path are reused.",
+      "No production API or equation changes are needed.",
+      "The two-cell expected day 63, payout and summary remain test expectations until run; any mismatch is recorded without widening tolerance.",
+      "Independent review, full local gates, evidence documentation and CI are excluded."
+    ]
+  },
+  "sourceReferences": [
+    {
+      "id": "OSU-EM9305-2021-HTML",
+      "manifestPath": "quality/beta/evidence/model-coverage.json",
+      "sourceSha256": "6b8b1968750692bafa698f9435ef415cdce4dbaf9512604208a8a9de0522c396",
+      "use": "Existing tomato thermal endpoint input only; the fixture does not assess source transferability or crop accuracy.",
+      "units": "degrees C and degree C-days, as stored in cropThermalParams",
+      "licenseOrReuse": "The source is copyrighted and states no dataset license; only the already-derived parameter facts are referenced. No source text or code is reproduced in this fixture."
+    }
+  ],
+  "sourceBoundary": "No external weather, measured plant count, yield trial, or independent reference-model output is introduced. Soil, production/root inputs, spacing override, and sunnySeries are synthetic test inputs. The existing thermal target is a frozen source parameter used only to exercise the software endpoint; biological accuracy is not assessed.",
+  "missingInputs": [
+    "No observed physical plant count, survival, or field harvest mass.",
+    "No cultivar-specific validation of the synthetic spacing, harvest index, or frozen crop profile.",
+    "No independent measured/reference output, held-out outcomes, or site observations."
+  ],
+  "acceptanceBoundary": "If approved and passed, this closes only one bounded synthetic software subcase for an effective spacing-derived target count, target-scoped area payout, and deterministic full-summary replay. It does not establish physical plant counts, per-plant mass allocation, crop accuracy, biological validity, measured/reference agreement, predictive validity, or overall A-07/02A acceptance.",
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false
+}
