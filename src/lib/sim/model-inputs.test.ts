@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import { lettuceRosalbaRUEReference, lettuceYumaRootProfileReference } from '@/data/cropModelV2LettuceReferences';
 import { cropThermalParams } from '@/data/cropThermalParams';
+import fao56V2AwcVariantFixture from '../../../quality/beta/evidence/fao56-v2-awc-variant-positive-drainage-synthetic.json';
 import fao56V2PositiveDrainageFixture from '../../../quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json';
 import fao56V2RootDrydownFixture from '../../../quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
@@ -1351,6 +1352,247 @@ describe('frozen crop model inputs and replay support', () => {
     expect(drainageRunResult.summary.rootZoneBalanceResidualMaxAbsMm).toBeDefined();
     expect(drainageRunResult.summary.rootZoneBalanceResidualMaxAbsMm).toBe(0);
     expect(drainageRunCell).toEqual(drainageFinalCell);
+  });
+
+  it('reconciles v2 frozen AWC variant with positive root drainage', () => {
+    const fixture = fao56V2AwcVariantFixture;
+    const input = fixture.syntheticInputs;
+    const expected = fixture.expected;
+    const parent = fao56V2RootDrydownFixture.syntheticInputs;
+    const cellKey = parent.crop.cell;
+    const cellM = 0.25;
+    const startDate = input.dailyEnvironment.startDate;
+    const tomato = cropLibrary.find((entry) => entry.id === parent.crop.catalogCropId)!;
+    const thermal = parent.crop.thermalParameters;
+    const root = parent.rootZone;
+    const production = parent.production;
+    const requireCropStartEvent = (event: string): CropStartEvent => {
+      if (event === 'direct-sowing' || event === 'transplanting') return event;
+      throw new Error(`Unsupported crop start event in fixture: ${event}`);
+    };
+    const frozenStartEvents = thermal.startEvents.map(requireCropStartEvent);
+    const cropStartEvent = requireCropStartEvent(parent.crop.startEvent);
+    const frozenParameter: FrozenCropModelParametersV2 = {
+      cropId: parent.crop.catalogCropId,
+      thermal: {
+        tBaseC: thermal.tBaseC,
+        tUpperC: thermal.tUpperC,
+        gddToMaturityCdays: [thermal.gddToMaturityCdays[0]!, thermal.gddToMaturityCdays[1]!],
+        startEvents: frozenStartEvents,
+        accumulationStart: thermal.accumulationStart,
+        maturityEndpoint: thermal.maturityEndpoint,
+        accumulationMethod: thermal.accumulationMethod,
+        sourceCitation: thermal.sourceCitation,
+        sourceUrl: thermal.sourceUrl,
+      },
+      production: {
+        equationFamily: 'LINTUL-net-RUE',
+        rueGPerMjInterceptedPar: production.rueGPerMjInterceptedPar,
+        initialDryMatterGPerM2: production.initialDryMatterGPerM2,
+        interceptedParFraction: production.interceptedParFraction,
+        harvestIndex: production.harvestIndex,
+        status: 'qualified',
+        missing: [...production.missing],
+        limitations: [...production.limitations],
+        evidence: { ...production.evidence },
+      },
+      rootZone: {
+        method: 'FAO-56',
+        effectiveRootDepthCm: input.soil.effectiveRootDepthCm,
+        depletionFraction: root.tableDepletionFractionP,
+        cropCoefficient: root.cropCoefficient,
+        initialStorageFraction: input.rootZone.initialStorageFraction,
+        status: 'qualified',
+        missing: [...root.missing],
+        limitations: [...root.limitations],
+        evidence: { ...root.evidence },
+      },
+      lifecycle: 'plant',
+    };
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      startDate,
+      dayCount: input.dailyEnvironment.dayCount,
+      autoHarvest: parent.crop.autoHarvest,
+      basePlan: {
+        ...config().basePlan,
+        widthM: cellM,
+        heightM: cellM,
+        cellM,
+        planting: { [cellKey]: parent.crop.catalogCropId },
+        plantedAt: { [cellKey]: startDate },
+      },
+      cropStartEvents: { [cellKey]: cropStartEvent },
+    });
+    const modelInputs = freezeRunModelInputsV2(run, {
+      soil: { awcMmPerCm: input.soil.awcMmPerCm, organicMatterPct: input.soil.organicMatterPct },
+      crops: [tomato],
+      cropParametersV2: [frozenParameter],
+    });
+    const drainageRun = { ...run, modelInputs };
+    const drainageSoil = drainageRun.modelInputs.soil;
+    if (!drainageSoil || typeof drainageSoil.awcMmPerCm !== 'number') {
+      throw new Error('Expected frozen AWC variant inputs with a numeric AWC.');
+    }
+    const capacityMm = drainageSoil.awcMmPerCm * input.soil.effectiveRootDepthCm;
+
+    expect(fixture.id).toBe('FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01');
+    expect(fixture.parentFixture.id).toBe(fao56V2PositiveDrainageFixture.id);
+    expect(parent.soil.awcMmPerCm).toBe(2);
+    expect(parent.soil.effectiveRootDepthCm).toBe(80);
+    expect(input.soil.awcMmPerCm).toBe(1.0);
+    expect(input.soil.effectiveRootDepthCm).toBe(80);
+    expect(input.soil.totalAvailableWaterMm).toBe(80);
+    expect(input.soil.organicMatterPct).toBe(2.4);
+    expect(input.rootZone.initialStorageFraction).toBe(0.99375);
+    expect(input.rootZone.initialStorageMm).toBe(79.5);
+    expect(input.dailyEnvironment).toMatchObject({
+      startDate: '2026-10-01',
+      dayCount: 1,
+      intervalDays: 1,
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 5,
+      etoMm: 0,
+      dliNaturalMol: 18,
+      gddBase10C: 15,
+    });
+    expect(fixture.frozenModelInputs.cropModelVersion).toBe('crop-model-v2');
+    expect(drainageRun.cropModelVersion).toBe('crop-model-v2');
+    expect(drainageRun.modelInputs.model).toBe('run-inputs-v2');
+    expect(drainageRun.modelInputs.parameterSetVersion).toBe('crop-parameters-v3');
+    expect(drainageRun.environment).toBeUndefined();
+    expect(fixture.frozenModelInputs.climateRoute).toContain('no environment-v2');
+    expect(drainageRun.modelInputs.soil?.source).toBe('unknown');
+    expect(drainageRun.modelInputs.soil?.awcMmPerCm).toBe(1.0);
+    expect(drainageRun.modelInputs.soil?.organicMatterPct).toBe(2.4);
+    expect(input.rootZone.rootDevelopment).toContain('none');
+    expect(drainageRun.modelInputs.cropParameters[0]?.rootZone.rootDevelopment).toBeUndefined();
+    expect(drainageRun.modelInputs.cropParameters[0]?.rootZone.effectiveRootDepthCm).toBe(80);
+    expect(drainageRun.modelInputs.cropParameters[0]?.rootZone.depletionFraction).toBe(0.4);
+    expect(drainageRun.modelInputs.cropParameters[0]?.rootZone.cropCoefficient).toBe(1.2);
+    expect(drainageRun.modelInputs.cropParameters[0]?.rootZone.initialStorageFraction).toBe(0.99375);
+    expect(drainageRun.modelInputs.cropParameters[0]?.lifecycle).toBe(fixture.frozenModelInputs.cropLifecycle);
+    expect(capacityMm).toBe(expected.calculation.capacityMm);
+    expect(capacityMm).toBe(80);
+    expect(drainageRun.modelInputs.qualification.status).toBe('qualified');
+
+    const initialState = createRun(drainageRun);
+    const initialCell = initialState.cells[cellKey]!;
+    expect(cellKey).toBe(fixture.frozenModelInputs.cell);
+    expect(Object.keys(drainageRun.basePlan.planting)).toHaveLength(fixture.frozenModelInputs.cellCount);
+    expect(Object.keys(drainageRun.basePlan.planting)).toEqual([cellKey]);
+    expect(drainageRun.dayCount).toBe(1);
+    expect(initialCell.rootZoneWaterMm).toBeDefined();
+    expect(initialCell.rootZoneWaterMm).toBe(expected.calculation.initialStorageMm);
+    expect(initialCell.rootZoneWaterMm).toBe(79.5);
+    expect(initialCell.rootZoneDepthCm).toBeUndefined();
+    expect(initialCell.rootThermalCdays).toBeUndefined();
+    expect(initialCell.rootZoneExpansionInflowMm).toBeUndefined();
+
+    const depletionFraction = cropModelV2.fao56AdjustedDepletionFraction(
+      input.rootZone.tableDepletionFractionP,
+      input.rootZone.potentialTranspirationMmDay,
+    );
+    const directStep = stepFao56RootZone(
+      { waterMm: input.rootZone.initialStorageMm },
+      {
+        awcMmPerCm: input.soil.awcMmPerCm,
+        effectiveRootDepthCm: input.rootZone.effectiveRootDepthCm,
+        depletionFraction,
+      },
+      {
+        precipMm: input.rootZone.precipitationMm,
+        irrigationMm: input.rootZone.irrigationMm,
+        runoffMm: input.rootZone.runoffMm,
+        capillaryRiseMm: input.rootZone.capillaryRiseMm,
+        rootGrowthStorageMm: input.rootZone.rootGrowthStorageMm,
+        potentialTranspirationMm: input.rootZone.potentialTranspirationMmDay,
+      },
+    );
+    expect(Math.abs(directStep.deepDrainageMm - expected.directRootZoneStep.deepDrainageMm))
+      .toBeLessThanOrEqual(1e-12);
+    expect(directStep.capacityMm).toBe(80);
+    expect(directStep.state.waterMm).toBe(expected.directRootZoneStep.finalWaterMm);
+    expect(directStep.depletionMm).toBe(expected.calculation.endDepletionMm);
+    expect(directStep.rootGrowthStorageMm).toBe(0);
+    expect(directStep.actualTranspirationMm).toBe(expected.calculation.actualTranspirationMm);
+    expect(directStep.residualMm).toBe(expected.directRootZoneStep.residualMm);
+    expect(directStep.state.residualAccumulatedMm).toBeDefined();
+    expect(directStep.state.residualAccumulatedMm).toBe(0);
+
+    const environment = input.dailyEnvironment;
+    const day = {
+      date: environment.startDate,
+      tMinC: environment.tMinC,
+      tMaxC: environment.tMaxC,
+      precipMm: environment.precipMm,
+      etoMm: environment.etoMm,
+      dliNaturalMol: environment.dliNaturalMol,
+      gddBase10C: environment.gddBase10C,
+      provenance: {
+        tMinC: 'default' as const,
+        tMaxC: 'default' as const,
+        precipMm: 'default' as const,
+        etoMm: 'default' as const,
+        dliNaturalMol: 'default' as const,
+      },
+    };
+    const step = (() => {
+      const rootStepSpy = vi.spyOn(cropModelV2, 'stepFao56RootZone');
+      try {
+        const result = stepDay(initialState, day, drainageRun);
+        expect(rootStepSpy).toHaveBeenCalledTimes(1);
+        const observedCall = rootStepSpy.mock.calls[0];
+        if (!observedCall) throw new Error('Expected the stepDay root-zone call to be observed.');
+        const [observedState, observedParameters, observedFluxes] = observedCall;
+        expect(observedState.waterMm).toBe(79.5);
+        expect(observedParameters.awcMmPerCm).toBe(1.0);
+        expect(observedParameters.effectiveRootDepthCm).toBe(80);
+        expect(observedParameters.depletionFraction).toBe(cropModelV2.fao56AdjustedDepletionFraction(0.4, 0));
+        expect(observedFluxes.precipMm).toBe(5);
+        expect(observedFluxes.irrigationMm).toBe(0);
+        expect(observedFluxes.runoffMm).toBe(0);
+        expect(observedFluxes.capillaryRiseMm).toBeUndefined();
+        expect(Object.prototype.hasOwnProperty.call(observedFluxes, 'capillaryRiseMm')).toBe(false);
+        expect(observedFluxes.rootGrowthStorageMm).toBe(0);
+        expect(observedFluxes.potentialTranspirationMm).toBe(0);
+        return result;
+      } finally {
+        rootStepSpy.mockRestore();
+      }
+    })();
+    const finalCell = step.state.cells[cellKey]!;
+    expect(step.effectiveEnv.precipMm).toBe(5);
+    expect(step.dayStats.waterUseMm).toBe(0);
+    expect(finalCell.rootZoneWaterMm).toBe(80);
+    expect(finalCell.rootZoneExpansionInflowMm).toBeUndefined();
+    expect(finalCell.rootZoneResidualAccumulatedMm).toBeDefined();
+    expect(finalCell.rootZoneResidualAccumulatedMm).toBe(0);
+    expect(finalCell.rootZoneResidualMaxAbsMm).toBeDefined();
+    expect(finalCell.rootZoneResidualMaxAbsMm).toBe(0);
+    const inferredDrainageMm = initialCell.rootZoneWaterMm!
+      + step.effectiveEnv.precipMm
+      - step.dayStats.waterUseMm
+      - finalCell.rootZoneWaterMm!
+      - finalCell.rootZoneResidualAccumulatedMm!;
+    expect(Math.abs(inferredDrainageMm - expected.calculation.deepDrainageMm)).toBeLessThanOrEqual(1e-12);
+
+    const runResult = simulateRun(drainageRun, [day]);
+    const runCell = runResult.finalState.cells[cellKey]!;
+    expect(runResult.summary.daysSimulated).toBe(1);
+    expect(runResult.summary.rainMm).toBe(5);
+    expect(runResult.summary.waterUseMm).toBe(0);
+    expect(runCell.rootZoneWaterMm).toBe(80);
+    expect(runCell.rootZoneResidualAccumulatedMm).toBeDefined();
+    expect(runCell.rootZoneResidualAccumulatedMm).toBe(0);
+    expect(runCell.rootZoneResidualMaxAbsMm).toBeDefined();
+    expect(runCell.rootZoneResidualMaxAbsMm).toBe(0);
+    expect(runResult.summary.rootZoneBalanceResidualAccumulatedMm).toBeDefined();
+    expect(runResult.summary.rootZoneBalanceResidualAccumulatedMm).toBe(0);
+    expect(runResult.summary.rootZoneBalanceResidualMaxAbsMm).toBeDefined();
+    expect(runResult.summary.rootZoneBalanceResidualMaxAbsMm).toBe(0);
+    expect(runCell).toEqual(finalCell);
   });
 
   it('runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified', () => {

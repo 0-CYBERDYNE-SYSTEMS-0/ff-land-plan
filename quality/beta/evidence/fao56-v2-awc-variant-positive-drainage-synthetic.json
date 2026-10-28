@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01",
   "classification": "preregistered synthetic crop-model-v2 one-day root-zone capacity variant; not a crop or soil benchmark",
-  "status": "A local candidate attempt after the original preregistration reported 1 passed and 26 skipped, but is UNACCEPTED because organicMatterPct=2.4 was frozen without registration. The corrected preregistration now records this inherited synthetic input; no candidate has been run under the corrected preregistration. Exact-head CI is required before rerun. A-05 and 02A remain UNVERIFIED.",
+  "status": "The original candidate attempt (1 passed, 26 skipped) is UNACCEPTED because organicMatterPct=2.4 was frozen without registration. S2 approved the corrected preregistration; docs commit 79eff1f1c221e5c201764c8c9166ca30c2687309 passed all four named PR checks in run 40633832876. The corrected candidate focused test and S2 review passed. Full local gates also passed; exact-head code/evidence PR CI remains pending. A-05 and 02A remain UNVERIFIED.",
   "preparedDate": "2026-10-27",
   "review": {
-    "S2": "APPROVE corrected preregistration: organicMatterPct=2.4 is registered as an inherited synthetic input and the test must assert it. Arithmetic and the <=1e-12 mm arithmetic-only tolerance are unchanged. The prior candidate remains unaccepted; corrected-doc exact-head CI is still required before rerun.",
+    "S2": "Approved the corrected preregistration and candidate test, then approved the final local-gate record. The test consumes/asserts inherited synthetic organicMatterPct=2.4, preserves the arithmetic and <=1e-12 mm arithmetic-only tolerance, and passes the registered focused command. Full local gates are recorded as passed; exact-head code/evidence PR CI remains pending.",
     "S3": "Initial preregistration boundary review found no source or accuracy overclaim. S3 implemented the candidate test and is not its independent validator."
   },
   "sourceContext": {
@@ -128,15 +128,28 @@
     "The fixture is synthetic software evidence only; no crop, measured, source-trajectory, or prediction claim is made.",
     "A-05 and 02A remain UNVERIFIED."
   ],
-  "acceptanceOwner": "A-05 simulator acceptance owner; independent S2 and S3 review required.",
-  "acceptanceStatus": "The first local candidate attempt passed its focused test (1 passed, 26 skipped) under the incomplete preregistration and is not accepted. S2 found the unregistered inherited synthetic organicMatterPct=2.4, then approved the corrected preregistration that registers and requires assertion of this value. No candidate has run under the corrected preregistration, and exact-head CI is required before rerun.",
+  "acceptanceOwner": "A-05 simulator acceptance owner; independent candidate validator S2. S3 provided the initial preregistration boundary review and implemented the candidate test.",
+  "acceptanceStatus": "The first local candidate attempt passed its focused test (1 passed, 26 skipped) under the incomplete preregistration and is not accepted. After S2 approved the corrected preregistration and docs commit 79eff1f passed all four named PR checks, the candidate consumed and asserted registered organicMatterPct=2.4; its focused run passed (1 passed, 26 skipped), and S2 approved the candidate review. Full local gates passed: 47 test files/251 tests, typecheck, standard/demo/Pages builds, private-file guard (526 tracked files), JSON parsing, and whitespace checks. No beta-specific build script exists. Exact-head code/evidence PR CI remains pending, so the fixture stage is not yet accepted.",
   "reproductionOwner": "Assigned simulator test implementer.",
   "retest": {
     "testTitle": "reconciles v2 frozen AWC variant with positive root drainage",
     "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 frozen AWC variant with positive root drainage\"",
-    "gate": "The initial local attempt under the incomplete preregistration is unaccepted. S2 approved the corrected preregistration; rerun only after its documentation commit passes exact-head CI.",
+    "gate": "The initial local attempt under the incomplete preregistration is unaccepted. The corrected candidate focused test and S2 review passed; full local gates are green. Obtain exact-head code/evidence PR CI before accepting this fixture stage.",
     "candidateExecuted": true,
     "candidateAcceptedUnderCorrectedPreregistration": false,
+    "localVerification": {
+      "npmTest": "PASS: 47 test files, 251 tests",
+      "typecheck": "PASS: npm run typecheck",
+      "builds": {
+        "standard": "PASS: npm run build",
+        "demo": "PASS: npm run build:demo",
+        "pages": "PASS: npm run build:pages",
+        "betaProfile": "No beta-specific build script is defined in package.json."
+      },
+      "privateFileGuard": "PASS: 526 tracked files",
+      "jsonAndWhitespace": "PASS: jq empty and git diff --check",
+      "productionBrowserJourneys": "Awaiting exact-head code/evidence PR CI."
+    },
     "priorAttempt": {
       "baseSha": "e51a8f37604e4f4f0a0bced361ea580ca8b8ef59",
       "candidateTestFileBlob": "76504c076765f633ecd7805e5aad3c6103e5e29d",
@@ -148,6 +161,16 @@
       ],
       "accepted": false,
       "reason": "The test supplied inherited synthetic organicMatterPct=2.4 from the root-drydown fixture without registering that frozen input."
+    },
+    "correctedPreregistrationAttempt": {
+      "baseSha": "79eff1f1c221e5c201764c8c9166ca30c2687309",
+      "candidateTestFileBlob": "ba062d8548a83214bc93625ebe35f34614c24821",
+      "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 frozen AWC variant with positive root drainage\"",
+      "preliminaryFailure": "The first rerun after the corrected docs CI failed on an obsolete exact sourceStatus wording assertion; the assertion was removed because the corrected fixture now describes both inherited values as synthetic.",
+      "reportedResult": "1 passed, 26 skipped",
+      "independentReview": "S2 approved the candidate review and confirmed exact registered-input and frozen-input assertions, reducer observation, cleanup, and arithmetic bounds.",
+      "accepted": false,
+      "reason": "Focused synthetic test and independent review passed; full local gates passed, but exact-head code/evidence PR CI remains pending."
     }
   }
 }
