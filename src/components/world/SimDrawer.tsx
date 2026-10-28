@@ -426,6 +426,7 @@ export function SimDrawer({
   };
 
   const days = Math.max(1, runTimeline?.days ?? 1);
+  const runTransportAvailable = runModelSupport?.canReplay !== false;
   const comparisonYieldUnit = yieldMassUnit(runComparison?.yieldBasis);
   const comparisonYieldLabel = comparisonYieldUnit === 'kg DM' ? 'Harvestable dry matter' : 'Yield';
   const cropModelLabel = runModelSupport?.model === 'crop-model-v2' ? 'v2'
@@ -547,22 +548,24 @@ export function SimDrawer({
                 )}
               </div>
               <div className="mt-2 flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={runPlaying ? onRunPause : onRunPlay}
-                  disabled={runEnded}
-                  title={runEnded ? 'Run complete' : runPlaying ? 'Pause the run' : 'Play the run'}
-                  className={cn(
-                    'min-w-[72px] rounded px-2 py-1 text-xs font-medium',
-                    runEnded
-                      ? 'bg-muted text-muted-foreground/60'
-                      : runPlaying
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground',
-                  )}
-                >
-                  {runPlaying ? '⏸ Pause' : '▶ Play'}
-                </button>
+                {runTransportAvailable && (
+                  <button
+                    type="button"
+                    onClick={runPlaying ? onRunPause : onRunPlay}
+                    disabled={runEnded}
+                    title={runEnded ? 'Run complete' : runPlaying ? 'Pause the run' : 'Play the run'}
+                    className={cn(
+                      'min-w-[72px] rounded px-2 py-1 text-xs font-medium',
+                      runEnded
+                        ? 'bg-muted text-muted-foreground/60'
+                        : runPlaying
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground',
+                    )}
+                  >
+                    {runPlaying ? '⏸ Pause' : '▶ Play'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onRunStop}
@@ -576,14 +579,16 @@ export function SimDrawer({
                 </span>
               </div>
               <div className="relative mt-3">
-                <Slider
-                  aria-label="Seek to run day"
-                  value={[Math.min(runTimeline.dayIndex, runTimeline.days)]}
-                  min={0}
-                  max={runTimeline.days}
-                  step={1}
-                  onValueChange={(v) => onRunSeek?.(v[0] ?? 0)}
-                />
+                {runTransportAvailable && (
+                  <Slider
+                    aria-label="Seek to run day"
+                    value={[Math.min(runTimeline.dayIndex, runTimeline.days)]}
+                    min={0}
+                    max={runTimeline.days}
+                    step={1}
+                    onValueChange={(v) => onRunSeek?.(v[0] ?? 0)}
+                  />
+                )}
                 <div className="pointer-events-none absolute inset-x-2 top-1/2 h-0 -translate-y-1/2">
                   {runTimeline.interventions.map((m, i) => (
                     <span
@@ -623,29 +628,31 @@ export function SimDrawer({
                   </ul>
                 </details>
               )}
-              <div className="mt-1.5 flex items-center gap-2">
-                <span id="ff-run-speed-label" className="shrink-0 text-xs text-muted-foreground">
-                  Speed
-                </span>
-                <Select
-                  value={String(runSpeed != null && runSpeed >= 15 ? 30 : runSpeed != null && runSpeed >= 4 ? 7 : 1)}
-                  onValueChange={(v) => onRunSpeed?.(Number(v))}
-                >
-                  <SelectTrigger
-                    aria-labelledby="ff-run-speed-label"
-                    title="Simulated days per real second"
-                    className="h-7 min-w-0 flex-1 text-xs"
+              {runTransportAvailable && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span id="ff-run-speed-label" className="shrink-0 text-xs text-muted-foreground">
+                    Speed
+                  </span>
+                  <Select
+                    value={String(runSpeed != null && runSpeed >= 15 ? 30 : runSpeed != null && runSpeed >= 4 ? 7 : 1)}
+                    onValueChange={(v) => onRunSpeed?.(Number(v))}
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  {/* Portal renders at body level: lift above the z-[150] drawer */}
-                  <SelectContent className="z-[200]">
-                    <SelectItem value="1">1 day/s</SelectItem>
-                    <SelectItem value="7">1 week/s</SelectItem>
-                    <SelectItem value="30">1 month/s</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                    <SelectTrigger
+                      aria-labelledby="ff-run-speed-label"
+                      title="Simulated days per real second"
+                      className="h-7 min-w-0 flex-1 text-xs"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    {/* Portal renders at body level: lift above the z-[150] drawer */}
+                    <SelectContent className="z-[200]">
+                      <SelectItem value="1">1 day/s</SelectItem>
+                      <SelectItem value="7">1 week/s</SelectItem>
+                      <SelectItem value="30">1 month/s</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {onToggleMoisture && (
                 <div className="mt-2">
                   <div className="flex items-center justify-between">

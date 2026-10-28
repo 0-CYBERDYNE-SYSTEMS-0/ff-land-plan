@@ -288,7 +288,7 @@ test('unsupported environment-v2 run opens under Pages and retains its stored su
     /This model version cannot replay these frozen inputs; its saved summary is left unchanged\.[\s\S]*Frozen environment-v2 inputs are missing or have an unknown version\./,
   );
   await expect(page.getByRole('button', { name: 'Replay unavailable', exact: true })).toBeDisabled();
-  await expect(simulationDrawer.getByRole('button', { name: /play/i })).toHaveCount(0);
+  await expect(simulationDrawer.getByRole('button', { name: /\b(?:Play|Pause)\b/i })).toHaveCount(0);
   await expect(simulationDrawer.getByRole('slider', { name: 'Seek to run day' })).toHaveCount(0);
 
   await page.goto('/ff-land-plan/#/farms/1/simulations', { waitUntil: 'domcontentloaded' });
@@ -343,7 +343,7 @@ test('unsupported v4 crop lifecycle is explained in World and retains its stored
   await expect(unsupportedStatus).not.toContainText('Frozen environment-v2 inputs are missing or have an unknown version.');
   await expect(unsupportedStatus).not.toContainText('one or more frozen v4 parameter values are missing, invalid, or unsupported.');
   await expect(page.getByRole('button', { name: 'Replay unavailable', exact: true })).toBeDisabled();
-  await expect(simulationDrawer.getByRole('button', { name: /play/i })).toHaveCount(0);
+  await expect(simulationDrawer.getByRole('button', { name: /\b(?:Play|Pause)\b/i })).toHaveCount(0);
   await expect(simulationDrawer.getByRole('slider', { name: 'Seek to run day' })).toHaveCount(0);
 
   await page.goto('/ff-land-plan/#/farms/1/simulations', { waitUntil: 'domcontentloaded' });
