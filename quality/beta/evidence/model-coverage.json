@@ -44,6 +44,8 @@
     "a02TomatoThermalLocationWindowPreregisteredFixture": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json (A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01)",
     "a03OhayouV4SameThermalLightResponsePreregisteredFixture": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json (A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01)",
     "a03OhayouV4SameThermalLightResponseResult": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic-result.json",
+    "a04V3TransplantMissingEstablishmentPreregisteredFixture": "A04-V3-TRANSPLANT-MISSING-ESTABLISHMENT-FAIL-CLOSED-SYNTHETIC-01",
+    "a04V3TransplantMissingEstablishmentPreregistration": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic.json",
     "a08AllCatalogV2MissingProfilePreregisteredFixture": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
     "a08AllCatalogV2MissingProfilePreregistration": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json",
     "a08AllCatalogV2MissingProfileResult": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic-result.json"
@@ -2584,6 +2586,34 @@
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "status": "PASS for the preregistered synthetic software subcase on code SHA a8b5505db8c110840c3f45dc4dcc5626ce30c34e; exact-head PR #82 run 40752622374 passed all four named checks. No crop support, accuracy, actual stored-summary retention, measured/reference agreement, or predictive claim."
+    },
+    {
+      "id": "A04-V3-TRANSPLANT-MISSING-ESTABLISHMENT-FAIL-CLOSED-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v3 missing-transplant-establishment fail-closed software check; not measured transplant state or crop accuracy",
+      "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
+      "preregistration": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic.json",
+      "setupDigest": "f4f9a279e8c671122ca60d656b1d053016b2dd68f9e51cf29d3864fb6e7a78cd",
+      "inputFixtureReferences": [
+        "src/lib/sim/model-inputs.test.ts#syntheticStartEventParameter, registered against code SHA 4a2ba4382587272ba27f8e43c9a4934d6a8bea6e",
+        "src/lib/sim/model-inputs.ts#freezeRunModelInputsV3",
+        "src/data/cropThermalParams.ts#cropId-1-tomato",
+        "src/data/crops.ts#cropLibrary-id-1-tomato"
+      ],
+      "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "syntheticInputs": "One floor tomato cell (crop id 1, key 0,0) with a transplant event and planted date 2026-10-01; complete synthetic frozen production/root inputs, source thermal row pinned, soil AWC 1.5 mm/cm and organicMatterPct 2.4 tagged unknown, and an empty establishmentByCell map. Replay uses the complete frozen config with empty weather and observations.",
+      "expected": "inspectRunModelSupport reports crop-model-v3, unsupported, canReplay false, and preserveStoredSummary true as a policy flag only; its reasons contain the exact string 'Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0.'. replayRunToDay for the registered run at day 0 throws UnsupportedRunReplayError whose reasons contain that same exact string. Compare structural fields and exact string membership only; do not compare the full reasons array or numeric output.",
+      "tolerance": "Exact structural and string checks only; no numerical tolerance applies because no numeric model output is compared.",
+      "evidence": "src/lib/sim/model-inputs.test.ts",
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell lacks frozen establishment state\"; not run. Candidate execution is prohibited pending exact-head PR CI.",
+      "acceptance": {
+        "row": "A-04",
+        "status": "S3 preregistration JSON audit and cross-document consistency review PASS on 2026-10-28. S2 audit unavailable because its pane reported a Codex token refresh failure after logout/account switch; exact-head PR CI pending; candidate execution prohibited. A-04 and overall 02A remain UNVERIFIED.",
+        "owner": "S1 documentation integrator; S2 independent technical reviewer; S3 claim-boundary reviewer; lead integration",
+        "retest": "Do not run the registered candidate until this documentation head passes exact-head PR CI; then run only the focused command above."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Preregistered synthetic software fail-closed behavior only; candidate not executed. No measured nursery mass, crop accuracy, actual stored-summary retention, biological validity, or A-04/02A completion claim."
     }
   ],
   "coverageSummary": {
