@@ -31,7 +31,8 @@
     "v2MatureWithoutAutoHarvestSoftwareFixture": "V2-MATURE-WITHOUT-AUTO-HARVEST-SYNTHETIC-01",
     "v2DuplicateManualHarvestSoftwareFixture": "V2-DUPLICATE-MANUAL-HARVEST-SYNTHETIC-01",
     "v2EarlyManualHarvestRetrySoftwareFixture": "V2-EARLY-MANUAL-HARVEST-RETRY-SYNTHETIC-01",
-    "v3ElevatedTargetManualHarvestPreregisteredFixture": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01"
+    "v3ElevatedTargetManualHarvestPreregisteredFixture": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01",
+    "ohayouV4ReplayIntegrationPreregisteredFixture": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json (OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01)"
   },
   "sources": [
     {
@@ -308,6 +309,15 @@
         "sha256": "0a35ee61c09774e9ef1523909030f03f6fad25a9ae1134cb69f46c32032c745b",
         "localPath": null
       },
+      "accessedArtifacts": [
+        {
+          "type": "publisher HTML",
+          "url": "https://www.jstage.jst.go.jp/article/hortj/92/1/92_QH-022/_html/-char/en",
+          "sha256": "12ec8066769951c8ac0ccf044dd5106a24245f8c0572ba0fe2f3afd63003eda4",
+          "localPath": null,
+          "digestStatus": "Lead rehashed the local publisher HTML; source HTML is not committed to the repository."
+        }
+      ],
       "licenseOrReuse": "The publisher page states © 2023 Japanese Society for Horticultural Science and All rights reserved; no open reuse license was identified. This manifest records derived parameter facts and a citation; it does not redistribute article text, figures, tables, or raw data.",
       "sourceVersion": "2023 version of record, Horticulture Journal 92(1), pages 77–87; J-STAGE PDF retrieved 2026-10-27"
     }
@@ -1609,6 +1619,19 @@
       "reproduction": "Verified locally: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\" (1 passed, 25 skipped); full test suite 46 files / 245 tests; typecheck and standard/demo/Pages builds passed; private-file guard passed on 522 tracked files; git diff --check passed. Exact-head PR #82 run 40607076825 passed all four named contexts on SHA d4e82168685e19d258f54f18d6a864661ba7a235; Pages smoke passed 3/3 in 5.5m (job 6m03s).",
       "candidateComparison": false,
       "status": "Focused synthetic reducer integration test and full local gates passed; independent code/acceptance reviews approved; exact-head PR #82 run 40607076825 passed on d4e8216 with all four named contexts and Pages smoke 3/3; no calibration/holdout comparison; A-05 and 02A remain UNVERIFIED. Preregistration exact-head CI passed on ec0876a (run 40604271469)."
+    },
+    {
+      "id": "OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01",
+      "classification": "synthetic crop-model-v4 production/replay preregistration; not a crop benchmark",
+      "sourceId": "OHISHI-2023-HORTJ-OHAYOU",
+      "modelVersion": "crop-model-v4 structural pool model + run-inputs-v4 + crop-parameters-v6 equation family OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1",
+      "syntheticInputs": "Five-day single-cell software fixture. Source K=1.09 and RUE=1.16 apply only to the Ohayou Spring Control total-solar light equation; LAI mapping, initial pools, allocation, thermal/root/stress values and solar forcing are synthetic. Null and omitted solar values have DLI decoys and must not fall back.",
+      "expected": "Five preregistered daily rows for LAI, intercepted total solar radiation, DM gain and two-pool state; known-zero solar holds pools, unavailable solar holds pools and qualifies the run, and persisted RunRecord replay is exact.",
+      "tolerance": "LAI, intercepted fraction/radiation, daily DM gain, pool state, and unrounded daily pool closure are within 1e-12 in their stated arithmetic units only. Dispatch, zero/null/omitted handling, serialization, freeze/fork/twin preservation, v5 compatibility, unsupported-summary preservation, and persisted replay equality are exact.",
+      "evidence": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json",
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Preregistration independently reviewed; v6 implementation and candidate execution not run. A-03 and 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
@@ -3201,6 +3224,14 @@
         "basis": "Independent recurrence from the frozen FAO-56 p-adjustment and root-zone equations plus the v2 RUE equation; bounds account for double-precision operation order and ten daily state updates only, not model error.",
         "scope": "Synthetic v2 reducer integration with source-derived reference inputs adapted to v2 p adjustment (p 0.40→0.36), zero inflows, fixed depth, a paired wet control, and synthetic known-light production response. No Example 37 reproduction, drainage/root-depth/media/nutrient coverage, measured validation, or reference agreement.",
         "evidence": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json"
+      },
+      {
+        "id": "ohayou-v4-total-solar-replay-integration",
+        "tolerance": "LAI, intercepted solar fraction/radiation, daily DM gain, pool state, and unrounded daily pool closure ≤1e-12 in their respective arithmetic units; dispatch, zero/null/omitted serialization, v5 compatibility, preservation and replay checks exact",
+        "status": "preregistration independently reviewed; implementation not run",
+        "basis": "Bounds apply only to independent double-precision equation recurrence, synthetic DM pool additions and arithmetic closure. They are not source-display, crop-error, calibration, or prediction tolerances.",
+        "scope": "Synthetic crop-model-v4 structural two-pool integration using the opt-in run-inputs-v4 / crop-parameters-v6 Ohayou total-solar equation family. Freezes source K/RUE, synthetic LAI mapping/pools/allocation/thermal/root/stress/forcing, known zero, null and omitted solar with DLI decoys, JSON serialization, freeze/fork/twin preservation, unsupported-summary preservation, exact persisted replay, and crop-parameters-v5 LINTUL compatibility. No engine execution, candidate comparison, measured evidence, or crop accuracy claim.",
+        "evidence": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json"
       }
     ]
   },
