@@ -10,6 +10,7 @@ import fao56V2SameDayDrainageEtRerunFixture from '../../../quality/beta/evidence
 import fao56V2TomatoRootDepthFixture from '../../../quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json';
 import v3AutoHarvestMixedTargetFixture from '../../../quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
+import { effectivePlantingArea } from '@/lib/plan';
 import type { Crop, CropStartEvent, Observation } from '@/types';
 import type {
   CropEstablishmentInput,
@@ -19,6 +20,7 @@ import type {
   RunModelInputsV1,
   RunModelInputsV2,
   RunRecord,
+  RunSummary,
 } from './types';
 import {
   freezeEnvironmentModelInputsV2,
@@ -993,6 +995,142 @@ describe('frozen crop model inputs and replay support', () => {
     expect(spacingVariant.events.filter((event) => event.kind === 'harvested')
       .reduce((sum, event) => sum + (event.kind === 'harvested' ? event.data.yieldKg : 0), 0))
       .toBeCloseTo(0.009375, 12);
+  });
+
+  it('reconciles v2 effective target plant count with target-scoped full-run harvest mass', () => {
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const thermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const target = { kind: 'growing-level' as const, growingSpaceId: 'space-a', levelId: 'high' };
+    const targetCell = targetCellKey(target, '0,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v2',
+      autoHarvest: false,
+      basePlan: {
+        ...config().basePlan,
+        cellM: 0.25,
+        planting: { '0,0': tomato.id },
+        targets: {
+          [growingTargetKey(target)]: {
+            growingSpaceId: target.growingSpaceId,
+            levelId: target.levelId,
+            planting: { '0,0': tomato.id },
+          },
+        },
+      },
+      cropStartEvents: {
+        '0,0': 'transplanting',
+        [targetCell]: 'transplanting',
+      },
+      interventions: [{ kind: 'harvest', date: '2026-12-03', cell: '0,0', target }],
+    });
+    const modelInputs: RunModelInputsV2 = {
+      model: 'run-inputs-v2',
+      parameterSetVersion: 'crop-parameters-v3',
+      soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 },
+      crops: [{ ...tomato, spacingCm: 25, rowSpacingCm: 25 }],
+      cropParameters: [{
+        cropId: tomato.id,
+        thermal,
+        production: {
+          equationFamily: 'LINTUL-net-RUE',
+          rueGPerMjInterceptedPar: 2,
+          initialDryMatterGPerM2: 0,
+          interceptedParFraction: 0.5,
+          harvestIndex: 0.5,
+          status: 'supported',
+          missing: [],
+          evidence: {
+            evidenceId: 'test-only',
+            sourceCitation: 'Synthetic reducer contract fixture',
+            sourceUrl: 'test-only:fixture',
+            validDomain: 'software test only',
+          },
+        },
+        rootZone: {
+          method: 'FAO-56',
+          effectiveRootDepthCm: 20,
+          depletionFraction: 0.5,
+          cropCoefficient: 1,
+          initialStorageFraction: 0.7,
+          status: 'supported',
+          missing: [],
+          evidence: {
+            evidenceId: 'test-only',
+            sourceCitation: 'Synthetic reducer contract fixture',
+            sourceUrl: 'test-only:fixture',
+            validDomain: 'software test only',
+          },
+        },
+        lifecycle: 'plant',
+      }],
+      qualification: { status: 'supported', reasons: [] },
+    };
+    const frozenRun = { ...run, modelInputs };
+    const elevatedPlanting = run.basePlan.targets?.[growingTargetKey(target)]?.planting ?? {};
+    expect(elevatedPlanting).toEqual({ '0,0': tomato.id });
+    const elevatedPlantingCellCount = Object.keys(elevatedPlanting).length;
+    const targetEffectiveModeledPlantCount = effectivePlantingArea(modelInputs.crops[0]!, [
+      { cells: elevatedPlantingCellCount, cellM: run.basePlan.cellM },
+    ]);
+    const sunnySeries = Array.from({ length: 80 }, (_, index) => ({
+      date: new Date(Date.parse('2026-10-01T00:00:00Z') + index * 86_400_000).toISOString().slice(0, 10),
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 3,
+      etoMm: 2,
+      dliNaturalMol: 18,
+      gddBase10C: 15,
+      provenance: { tMinC: 'default' as const, tMaxC: 'default' as const, precipMm: 'default' as const, etoMm: 'default' as const, dliNaturalMol: 'default' as const },
+    }));
+    const result = simulateRun(frozenRun, sunnySeries);
+    const replay = simulateRun(frozenRun, sunnySeries);
+    const summary: RunSummary = result.summary;
+    const replaySummary: RunSummary = replay.summary;
+    const harvests = result.events.filter((event) => event.kind === 'harvested');
+    const harvestedEvent = harvests[0];
+
+    expect(run.cropModelVersion).toBe('crop-model-v2');
+    expect(modelInputs.model).toBe('run-inputs-v2');
+    expect(modelInputs.parameterSetVersion).toBe('crop-parameters-v3');
+    expect(modelInputs.crops[0]).toMatchObject({ id: 1, slug: 'tomato', spacingCm: 25, rowSpacingCm: 25 });
+    expect(targetEffectiveModeledPlantCount).toBe(1);
+    expect(harvests).toHaveLength(1);
+    expect(harvestedEvent).toMatchObject({
+      dayIndex: 63,
+      date: '2026-12-03',
+      kind: 'harvested',
+      cell: targetCell,
+      target,
+    });
+    if (harvestedEvent?.kind === 'harvested') {
+      expect(Math.abs(harvestedEvent.data.yieldKg - 0.007875)).toBeLessThanOrEqual(1e-12);
+    }
+    expect(summary.harvestReadyDay).toBe(62);
+    expect(result.finalState.cells[targetCell]?.harvested).toBe(true);
+    expect(result.finalState.cells['0,0']?.biomassFrac).toBe(1);
+    expect(result.finalState.cells['0,0']?.harvested).not.toBe(true);
+    expect(summary).toMatchObject({
+      daysSimulated: 80,
+      yieldBasis: 'dry-matter',
+      totalYieldKg: 0.01,
+      yieldKgByCrop: { '1': 0.01 },
+    });
+    expect(replay.events).toEqual(result.events);
+    expect(replay.finalState).toEqual(result.finalState);
+    expect(replaySummary).toEqual(summary);
+
+    function expectFiniteNumericLeaves(value: unknown, path: string): void {
+      if (typeof value === 'number') {
+        expect(Number.isFinite(value), `${path} must be finite`).toBe(true);
+      } else if (value !== null && typeof value === 'object') {
+        for (const [key, child] of Object.entries(value)) {
+          expectFiniteNumericLeaves(child, `${path}.${key}`);
+        }
+      }
+    }
+
+    expectFiniteNumericLeaves(result, 'result');
+    expectFiniteNumericLeaves(replay, 'replay');
   });
 
   it('freezes soil provenance on v2 inputs and qualifies missing provenance', () => {
