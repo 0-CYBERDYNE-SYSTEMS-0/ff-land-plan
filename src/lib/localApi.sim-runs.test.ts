@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cropLibrary } from '@/data/crops';
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 import type { DailyEnvironment, EnvironmentModelInputsV2, RunRecord } from '@/lib/sim/types';
 import type { SoilProfile } from '@/lib/soil';
 import type { PlanState } from '@/types';
 import { simulateRun } from '@/lib/sim/engine';
 import { freezeEnvironmentModelInputsV2 } from '@/lib/sim/model-inputs';
+import type { SimRunController } from '@/hooks/useSimRun';
 
 const dbState = vi.hoisted(() => ({ records: new Map<string, Map<string, unknown>>() }));
 const createRunMocks = vi.hoisted(() => ({
@@ -247,17 +249,47 @@ describe('localApi.createSimRun', () => {
     });
     vi.stubGlobal('crypto', { getRandomValues });
     const { localApi, state } = await loadApi(true);
-    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const { cropLibrary: createCropLibrary } = await import('@/data/crops');
+    const tomato = createCropLibrary.find((crop) => crop.id === 1)!;
     const plantedPlan = { ...structuredClone(basePlan), planting: { '0,0': tomato.id } };
     state.plans[1] = plantedPlan;
 
+    const soilProfileA = {
+      source: 'usda-sda',
+      name: 'Synthetic test profile',
+      texture: null,
+      ph: null,
+      organicMatterPct: 2.4,
+      cecCmolKg: null,
+      awcMmPerCm: 1.7,
+      soilType: null,
+    } satisfies SoilProfile;
+    createRunMocks.fetchSoilProfile.mockResolvedValue(soilProfileA);
     const v1 = await localApi.createSimRun({ farmId: 1, startDate: '2026-10-24', dayCount: 1 });
+    expect(v1.config.modelInputs).toMatchObject({
+      model: 'run-inputs-v1',
+      soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 },
+    });
+    const soilProfileB = {
+      source: 'usda-sda',
+      name: 'Changed synthetic test profile',
+      texture: null,
+      ph: null,
+      organicMatterPct: 8.5,
+      cecCmolKg: null,
+      awcMmPerCm: 0.8,
+      soilType: null,
+    } satisfies SoilProfile;
+    createRunMocks.fetchSoilProfile.mockResolvedValue(soilProfileB);
     const v2 = await localApi.createSimRun({
       farmId: 1,
       startDate: '2026-10-24',
       dayCount: 1,
       cropModelVersion: 'crop-model-v2',
     });
+    expect(createRunMocks.fetchSoilProfile).toHaveBeenCalledTimes(2);
+    expect(await Promise.all(createRunMocks.fetchSoilProfile.mock.results.map((result) => result.value)))
+      .toEqual([soilProfileA, soilProfileB]);
     const records = await localApi.listSimRuns(1);
 
     expect(v1.createdAt).toBe(v2.createdAt);
@@ -271,6 +303,7 @@ describe('localApi.createSimRun', () => {
     expect(v2.config.modelInputs).toMatchObject({
       model: 'run-inputs-v2',
       parameterSetVersion: 'crop-parameters-v3',
+      soil: { awcMmPerCm: 0.8, organicMatterPct: 8.5 },
       qualification: { status: 'unsupported' },
     });
     expect(records.find((record) => record.id === v1.id)).toEqual(v1);
@@ -286,11 +319,15 @@ describe('localApi.createSimRun', () => {
     expect(archivedRecords.find((record) => record.id === archivedV1.id)).toEqual(archivedV1);
     expect(archivedRecords.find((record) => record.id === archivedV2.id)).toEqual(archivedV2);
     expect(archivedV1.config.cropModelVersion).toBe('crop-model-v1');
-    expect(archivedV1.config.modelInputs).toMatchObject({ model: 'run-inputs-v1' });
+    expect(archivedV1.config.modelInputs).toMatchObject({
+      model: 'run-inputs-v1',
+      soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 },
+    });
     expect(archivedV2.config.cropModelVersion).toBe('crop-model-v2');
     expect(archivedV2.config.modelInputs).toMatchObject({
       model: 'run-inputs-v2',
       parameterSetVersion: 'crop-parameters-v3',
+      soil: { awcMmPerCm: 0.8, organicMatterPct: 8.5 },
       qualification: { status: 'unsupported' },
     });
     expect(archivedRecords.find((record) => record.id === archivedV1.id)?.summary).toEqual(v1.summary);
@@ -311,6 +348,7 @@ describe('localApi.createSimRun', () => {
     if (!storedHistoricalV1 || storedHistoricalV1.config.modelInputs?.model !== 'run-inputs-v1') {
       throw new Error('Expected the listed historical record to retain frozen v1 crop inputs.');
     }
+    const storedHistoricalSummary = structuredClone(storedHistoricalV1.summary);
     expect(archivedHistoricalV1.config.basePlan.planting).toEqual({ '0,0': tomato.id });
     const frozenV1Inputs = archivedHistoricalV1.config.modelInputs;
     if (!frozenV1Inputs || frozenV1Inputs.model !== 'run-inputs-v1') {
@@ -340,7 +378,7 @@ describe('localApi.createSimRun', () => {
       yieldKgPerPlant: 999,
     };
     const changedContext = {
-      soil: { awcMmPerCm: 0.1, organicMatterPct: 99 },
+      soil: { awcMmPerCm: soilProfileB.awcMmPerCm, organicMatterPct: soilProfileB.organicMatterPct },
       crops: [changedTomato],
     };
     const replayAfterContextChange = simulateRun(
@@ -356,6 +394,110 @@ describe('localApi.createSimRun', () => {
     expect(replayAfterContextChange.events).toEqual(originalReplay.events);
     expect(replayAfterContextChange.finalState).toEqual(originalReplay.finalState);
     expect(replayAfterContextChange.summary).toEqual(storedHistoricalV1.summary);
+
+    const observedReplayCalls: unknown[][] = [];
+    const replayId = storedHistoricalV1.id;
+    const soilProviderCallsBeforeHook = createRunMocks.fetchSoilProfile.mock.calls.length;
+    let hookController: SimRunController | undefined;
+    let invalidateReplayCache = () => {};
+    let restoreReplayCatalog = () => {};
+    let undoSimBarrelMock = false;
+    try {
+      vi.resetModules();
+      const { cropLibrary: replayCropLibrary } = await import('@/data/crops');
+      const replayCropIndex = replayCropLibrary.findIndex((crop) => crop.id === tomato.id);
+      const replayCurrentCrop = replayCropLibrary[replayCropIndex];
+      if (!replayCurrentCrop) throw new Error('Expected the current replay catalog crop.');
+      replayCropLibrary[replayCropIndex] = changedTomato;
+      restoreReplayCatalog = () => { replayCropLibrary[replayCropIndex] = replayCurrentCrop; };
+      expect(replayCropLibrary[replayCropIndex]).toEqual(changedTomato);
+
+      vi.doMock('@/lib/sim', async (importOriginal) => {
+        const actual = await importOriginal<typeof import('@/lib/sim')>();
+        return {
+          ...actual,
+          replayRunToDay: (...args: Parameters<typeof actual.replayRunToDay>) => {
+            observedReplayCalls.push(args);
+            return actual.replayRunToDay(...args);
+          },
+        };
+      });
+      undoSimBarrelMock = true;
+      const sim = await import('@/lib/sim');
+      invalidateReplayCache = () => sim.replayStateCache.invalidateRun(replayId);
+      const hookInputs = storedHistoricalV1.config.modelInputs;
+      if (!hookInputs || hookInputs.model !== 'run-inputs-v1' || !hookInputs.soil) {
+        throw new Error('Expected archived v1 inputs before production hook replay.');
+      }
+      const frozenContext = { soil: hookInputs.soil, crops: hookInputs.crops };
+      const changedLiveContext = {
+        soil: { awcMmPerCm: soilProfileB.awcMmPerCm, organicMatterPct: soilProfileB.organicMatterPct },
+        crops: [changedTomato],
+      };
+      const targetDay = storedHistoricalV1.envSeries.length;
+      const expectedHookState = sim.replayRunToDay(
+        storedHistoricalV1,
+        targetDay,
+        frozenContext,
+        new sim.ReplayStateCache(),
+      );
+      observedReplayCalls.length = 0;
+      const poisonedHookState = structuredClone(expectedHookState);
+      const expectedHookCell = poisonedHookState.cells['0,0'];
+      if (!expectedHookCell) throw new Error('Expected the archived tomato cell in the hook replay.');
+      poisonedHookState.cells = {
+        ...poisonedHookState.cells,
+        '0,0': { ...expectedHookCell, biomassFrac: expectedHookCell.biomassFrac + 0.5 },
+      };
+      expect(poisonedHookState).not.toEqual(expectedHookState);
+      invalidateReplayCache();
+      sim.replayStateCache.set(replayId, targetDay, poisonedHookState);
+      expect(sim.replayStateCache.get(replayId, targetDay)).toEqual(poisonedHookState);
+
+      const { useSimRun } = await import('@/hooks/useSimRun');
+      const capture: { controller?: SimRunController } = {};
+      function CaptureUseSimRun() {
+        capture.controller = useSimRun();
+        return null;
+      }
+      renderToString(createElement(CaptureUseSimRun));
+      hookController = capture.controller;
+      if (!hookController) throw new Error('Expected the server-rendered replay controller.');
+
+      hookController.startRun(storedHistoricalV1);
+      await Promise.resolve(); // flush startRun's frozen-context microtask
+      expect(hookController.simStateRef.current?.dayIndex).toBe(0);
+      expect(sim.replayStateCache.get(replayId, targetDay)).toBeUndefined();
+      const dayZeroCall = observedReplayCalls.find((args) =>
+        (args[0] as RunRecord).id === replayId && args[1] === 0);
+      expect(dayZeroCall?.[2]).toEqual(frozenContext);
+      expect(dayZeroCall?.[2]).not.toEqual(changedLiveContext);
+
+      hookController.seekDay(targetDay);
+      expect(hookController.simStateRef.current).toEqual(expectedHookState);
+      const seekCall = observedReplayCalls.find((args) =>
+        (args[0] as RunRecord).id === replayId && args[1] === targetDay);
+      expect(seekCall?.[2]).toEqual(frozenContext);
+      expect(seekCall?.[2]).not.toEqual(changedLiveContext);
+      expect(observedReplayCalls.filter((args) => (args[0] as RunRecord).id === replayId))
+        .toHaveLength(2);
+      expect(storedHistoricalV1.summary).toEqual(storedHistoricalSummary);
+      expect(createRunMocks.fetchSoilProfile).toHaveBeenCalledTimes(soilProviderCallsBeforeHook);
+    } finally {
+      try {
+        hookController?.stopRun();
+      } finally {
+        try {
+          invalidateReplayCache();
+        } finally {
+          try {
+            restoreReplayCatalog();
+          } finally {
+            if (undoSimBarrelMock) vi.doUnmock('@/lib/sim');
+          }
+        }
+      }
+    }
 
     vi.stubGlobal('crypto', {});
     await expect(localApi.createSimRun({ farmId: 1, startDate: '2026-10-24', dayCount: 1 }))
