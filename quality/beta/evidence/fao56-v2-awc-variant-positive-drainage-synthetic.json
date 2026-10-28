@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01",
   "classification": "preregistered synthetic crop-model-v2 one-day root-zone capacity variant; not a crop or soil benchmark",
-  "status": "Independently reviewed preregistration; candidate not executed. Exact-head CI is still required before candidate test execution. A-05 and 02A remain UNVERIFIED.",
+  "status": "A local candidate attempt after the original preregistration reported 1 passed and 26 skipped, but is UNACCEPTED because organicMatterPct=2.4 was frozen without registration. The corrected preregistration now records this inherited synthetic input; no candidate has been run under the corrected preregistration. Exact-head CI is required before rerun. A-05 and 02A remain UNVERIFIED.",
   "preparedDate": "2026-10-27",
   "review": {
-    "S2": "APPROVE: arithmetic, assertions, and the <=1e-12 mm arithmetic-only tolerance. Notes that zero ET does not test ordering when transpiration and drainage are both positive; preregistration review only, candidate not executed.",
-    "S3": "No findings; no scope overclaim identified. Preregistration review only, candidate not executed."
+    "S2": "APPROVE corrected preregistration: organicMatterPct=2.4 is registered as an inherited synthetic input and the test must assert it. Arithmetic and the <=1e-12 mm arithmetic-only tolerance are unchanged. The prior candidate remains unaccepted; corrected-doc exact-head CI is still required before rerun.",
+    "S3": "Initial preregistration boundary review found no source or accuracy overclaim. S3 implemented the candidate test and is not its independent validator."
   },
   "sourceContext": {
     "evidenceId": "FAO-56-1998",
@@ -17,13 +17,13 @@
     "sourceArtifactSha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
     "artifactBytes": 137909,
     "artifactStatus": "Official chapter HTML retrieved 2026-10-27; 137909 bytes. No source artifact copied or committed.",
-    "licenseOrReuse": "No reuse license found on the source page; no source artifact copied or committed. Only FAO-56 equations are referenced; AWC 1.0 mm/cm remains a synthetic software input, not a source-derived soil value, default, or soil/media profile.",
-    "reuseLimit": "The FAO-56 equation references are reused from the parent positive-drainage fixture. AWC 1.0 mm/cm is an explicit synthetic software input, not a source-derived soil value, default, or soil/media profile."
+    "licenseOrReuse": "No reuse license found on the source page; no source artifact copied or committed. Only FAO-56 equations are referenced; AWC 1.0 mm/cm and inherited organicMatterPct 2.4 are synthetic software inputs, not source-derived soil values, defaults, or a soil/media profile.",
+    "reuseLimit": "The FAO-56 equation references are reused from the parent positive-drainage fixture. AWC 1.0 mm/cm is an explicit synthetic software input; organicMatterPct 2.4 is inherited from the root-drydown fixture used by the parent test construction. Neither value is a sourced soil value, default, or soil/media profile."
   },
   "parentFixture": {
     "id": "FAO56-V2-POSITIVE-ROOT-DRAINAGE-SYNTHETIC-01",
     "path": "quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json",
-    "reuseLimit": "Keep the parent crop, thermal, production, root-depth, route, and one-day weather forcing. Change only frozen soil AWC from 2 to 1.0 mm/cm; derive capacity and starting storage from the same 80 cm fixed depth and 0.99375 initial storage fraction."
+    "reuseLimit": "Keep the parent crop, thermal, production, root-depth, route, one-day weather forcing, and organicMatterPct=2.4 inherited from the referenced root-drydown fixture in the parent test construction. This organic-matter value is synthetic, not a sourced or observed soil property. Change only frozen soil AWC from 2 to 1.0 mm/cm; derive capacity and starting storage from the same 80 cm fixed depth and 0.99375 initial storage fraction."
   },
   "frozenModelInputs": {
     "cropModelVersion": "crop-model-v2",
@@ -38,9 +38,10 @@
   "syntheticInputs": {
     "soil": {
       "awcMmPerCm": 1.0,
+      "organicMatterPct": 2.4,
       "effectiveRootDepthCm": 80,
       "totalAvailableWaterMm": 80,
-      "sourceStatus": "Synthetic software input only; not a soil/media default, source value, or observed profile."
+      "sourceStatus": "AWC=1.0 mm/cm and organicMatterPct=2.4 are inherited synthetic software inputs; neither is a sourced soil/media value, default, or observed profile. organicMatterPct is carried from the referenced root-drydown fixture used by the parent test."
     },
     "rootZone": {
       "method": "FAO-56 root-zone balance as integrated by crop-model-v2",
@@ -128,12 +129,25 @@
     "A-05 and 02A remain UNVERIFIED."
   ],
   "acceptanceOwner": "A-05 simulator acceptance owner; independent S2 and S3 review required.",
-  "acceptanceStatus": "S2 approved arithmetic/assertions/tolerance and S3 found no findings; candidate not executed; exact-head CI is still required before candidate test execution.",
+  "acceptanceStatus": "The first local candidate attempt passed its focused test (1 passed, 26 skipped) under the incomplete preregistration and is not accepted. S2 found the unregistered inherited synthetic organicMatterPct=2.4, then approved the corrected preregistration that registers and requires assertion of this value. No candidate has run under the corrected preregistration, and exact-head CI is required before rerun.",
   "reproductionOwner": "Assigned simulator test implementer.",
   "retest": {
     "testTitle": "reconciles v2 frozen AWC variant with positive root drainage",
     "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 frozen AWC variant with positive root drainage\"",
-    "gate": "Run only after S2/S3 preregistration review, documentation commit, and exact-head CI pass.",
-    "candidateExecuted": false
+    "gate": "The initial local attempt under the incomplete preregistration is unaccepted. S2 approved the corrected preregistration; rerun only after its documentation commit passes exact-head CI.",
+    "candidateExecuted": true,
+    "candidateAcceptedUnderCorrectedPreregistration": false,
+    "priorAttempt": {
+      "baseSha": "e51a8f37604e4f4f0a0bced361ea580ca8b8ef59",
+      "candidateTestFileBlob": "76504c076765f633ecd7805e5aad3c6103e5e29d",
+      "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 frozen AWC variant with positive root drainage\"",
+      "reportedResult": "1 passed, 26 skipped",
+      "preliminaryFailures": [
+        "Initial focused run read frozenModelInputs from syntheticInputs; corrected to the top-level fixture record.",
+        "Next focused run read climateRoute from syntheticInputs; corrected to the top-level frozenModelInputs record."
+      ],
+      "accepted": false,
+      "reason": "The test supplied inherited synthetic organicMatterPct=2.4 from the root-drydown fixture without registering that frozen input."
+    }
   }
 }

@@ -1688,9 +1688,9 @@
         "retrievedDate": "2026-10-27",
         "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
         "bytes": 137909,
-        "licenseOrReuse": "No reuse license found on the source page; no source artifact copied or committed. Only FAO-56 equations are referenced; synthetic AWC 1.0 mm/cm is not sourced."
+        "licenseOrReuse": "No reuse license found on the source page; no source artifact copied or committed. Only FAO-56 equations are referenced; AWC 1.0 mm/cm and inherited organicMatterPct 2.4 are synthetic and not sourced."
       },
-      "sourceReference": "FAO-56 Chapter 8 equations are referenced for the balance only; AWC 1.0 mm/cm is synthetic and not a sourced soil value.",
+      "sourceReference": "FAO-56 Chapter 8 equations are referenced for the balance only; AWC 1.0 mm/cm and inherited organicMatterPct 2.4 are synthetic software inputs, not sourced soil values.",
       "syntheticAWCBoundary": {
         "awcMmPerCm": 1.0,
         "effectiveRootDepthCm": 80,
@@ -1702,6 +1702,9 @@
       "parameterSetVersion": "crop-parameters-v3",
       "climateVersion": "standard open-field one-day forcing; no environment-v2 snapshot",
       "syntheticInputs": {
+        "awcMmPerCm": 1.0,
+        "organicMatterPct": 2.4,
+        "organicMatterSource": "Inherited synthetic value from the root-drydown fixture used by the positive-drainage parent test; not a soil/fertility claim.",
         "initialStorageFraction": 0.99375,
         "initialStorageMm": 79.5,
         "precipMm": 5,
@@ -1727,7 +1730,7 @@
       "evidence": "quality/beta/evidence/fao56-v2-awc-variant-positive-drainage-synthetic.json",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "S2 approved arithmetic/assertions/tolerance and S3 found no findings. Preregistered; not executed. Exact-head CI is required before candidate execution. A-05 and 02A remain UNVERIFIED."
+      "status": "The first local focused attempt reported 1 passed, 26 skipped under the original preregistration, but S2 found unregistered inherited synthetic organicMatterPct=2.4; the attempt is UNACCEPTED. S2 approved the corrected preregistration, which registers that value and requires an exact assertion. No candidate has run under the corrected preregistration; exact-head docs CI is required before rerun. A-05 and 02A remain UNVERIFIED."
     },
     {
       "id": "OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01",
