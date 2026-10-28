@@ -192,7 +192,16 @@ function record(): RunRecord {
 function expectRecordReplay(saved: RunRecord): void {
   const persisted = JSON.parse(JSON.stringify(saved)) as RunRecord;
   const original = simulateRun(saved.config, saved.envSeries, ctx, saved.observations ?? []);
-  const replay = simulateRun(persisted.config, persisted.envSeries, ctx, persisted.observations ?? []);
+  const frozenCrop = persisted.config.modelInputs?.model === 'run-inputs-v4'
+    ? persisted.config.modelInputs.crops.find((entry) => entry.id === CROP_ID)
+    : undefined;
+  const conflictingCrop = { ...crop, minTempC: 40, maxTempC: 41 };
+  expect(frozenCrop).toMatchObject({ id: CROP_ID, minTempC: crop.minTempC, maxTempC: crop.maxTempC });
+  expect(conflictingCrop).toMatchObject({ id: CROP_ID, minTempC: 40, maxTempC: 41 });
+  expect(conflictingCrop.minTempC).not.toBe(frozenCrop?.minTempC);
+  expect(conflictingCrop.maxTempC).not.toBe(frozenCrop?.maxTempC);
+  const conflictingCtx = { ...ctx, crops: [conflictingCrop] };
+  const replay = simulateRun(persisted.config, persisted.envSeries, conflictingCtx, persisted.observations ?? []);
   expect(replay.events).toEqual(original.events);
   expect(replay.finalState.cells).toEqual(original.finalState.cells);
   expect(replay.finalState.modelQualificationReasons).toEqual(original.finalState.modelQualificationReasons);
