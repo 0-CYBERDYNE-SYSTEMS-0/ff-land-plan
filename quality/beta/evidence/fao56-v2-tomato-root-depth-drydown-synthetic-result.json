@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01-CANDIDATE-RESULT",
-  "status": "focused candidate test passed and S2 independently approved; full local gates passed; exact-head code/evidence CI pending",
+  "status": "candidate code/evidence commit 38574708bacacd58bbdf9c1f1326372312f31230 passed exact-head PR CI run 40640752345; S2 independently approved and all local gates passed",
   "classification": "synthetic crop-model-v2 reducer/software result only; not tomato validation or prediction",
   "preregistration": {
     "fixture": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json",
@@ -15,7 +15,7 @@
     "result": "1 passed; 27 skipped; 1 test file passed",
     "durationMs": 182,
     "localDate": "2026-10-27",
-    "exactHeadCodeEvidenceCI": "pending after candidate code/evidence commit"
+    "codeEvidenceCommit": "38574708bacacd58bbdf9c1f1326372312f31230"
   },
   "verification": {
     "independentReview": {
@@ -49,7 +49,18 @@
       "Vite native-config-loader compatibility warning; build succeeded.",
       "Vite chunk-size advisory above 500 kB; build succeeded."
     ],
-    "exactHeadCodeEvidenceCI": "pending after candidate code/evidence commit"
+    "exactHeadCodeEvidenceCI": {
+      "status": "PASS",
+      "commit": "38574708bacacd58bbdf9c1f1326372312f31230",
+      "runId": "40640752345",
+      "url": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40640752345",
+      "namedChecks": {
+        "test + typecheck + build": "PASS; 36s",
+        "Playwright production Pages-path smoke": "PASS; 3/3 journeys; job 4m57s",
+        "secret + private-file scan": "PASS; 15s",
+        "GitGuardian Security Checks": "PASS"
+      }
+    }
   },
   "observedDispatch": {
     "cropModelVersion": "crop-model-v2",

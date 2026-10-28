@@ -1707,7 +1707,7 @@
       "candidateResult": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic-result.json",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Focused candidate test passed locally against the frozen preregistration; S2 independently approved after the type-only correction. Full local verification passed (47 test files/252 tests, typecheck, standard/demo/Pages builds, private-file guard 527 tracked, JSON/whitespace, production Pages Playwright 3/3). Exact-head code/evidence CI remains pending. Synthetic software fixture slice only; A-05 and 02A remain UNVERIFIED overall. No measured-output or external-reference comparison was performed."
+      "status": "Focused candidate test passed locally against the frozen preregistration; S2 independently approved after the type-only correction. Full local verification passed (47 test files/252 tests, typecheck, standard/demo/Pages builds, private-file guard 527 tracked, JSON/whitespace, production Pages Playwright 3/3). Exact-head PR CI passed all four named contexts on code/evidence SHA 38574708bacacd58bbdf9c1f1326372312f31230 in run 40640752345. Synthetic software fixture slice only; A-05 and 02A remain UNVERIFIED overall. No measured-output or external-reference comparison was performed."
     },
     {
       "id": "FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01",
@@ -3363,7 +3363,7 @@
       {
         "id": "fao56-v2-tomato-root-depth-drydown",
         "tolerance": "p/RAW/Ks ≤1e-12 absolute; per-day water flux/storage/depletion/residual ≤1e-9 mm; daily DM gain ≤1e-9 g/m²; cumulative DM ≤1e-8 g/m²",
-        "status": "Tolerance approved before candidate execution by GPT-6 Luna max S2 on 2026-10-27; candidate independently approved by S2 after review and type-only fixes. Focused test and full local gates passed; exact-head code/evidence CI is pending. No measured-output or external-reference comparison was performed.",
+        "status": "Tolerance approved before candidate execution by GPT-6 Luna max S2 on 2026-10-27; candidate independently approved by S2 after review and type-only fixes. Focused test and full local gates passed. Exact-head code/evidence SHA 38574708bacacd58bbdf9c1f1326372312f31230 passed all four named PR CI contexts in run 40640752345. No measured-output or external-reference comparison was performed.",
         "basis": "Independent double-precision recurrence from the frozen FAO-56 p adjustment/root-zone method and synthetic v2 RUE path over at most ten updates. Numerical bounds cover arithmetic only, not crop error.",
         "scope": "Paired synthetic fixed-depth tomato scenarios at the FAO-56 Table 22 maximum-root-depth range endpoints. Exact inputs, depth/capacity dispatch, day-8 stress onset, direction, no-maturity/no-harvest conditions and replay are structural checks. Not a root-growth profile, candidate comparison, measured trial, or crop prediction.",
         "evidence": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json"
