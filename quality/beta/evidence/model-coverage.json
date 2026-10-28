@@ -1621,6 +1621,40 @@
       "status": "Focused synthetic reducer integration test and full local gates passed; independent code/acceptance reviews approved; exact-head PR #82 run 40607076825 passed on d4e8216 with all four named contexts and Pages smoke 3/3; no calibration/holdout comparison; A-05 and 02A remain UNVERIFIED. Preregistration exact-head CI passed on ec0876a (run 40604271469)."
     },
     {
+      "id": "FAO56-V2-POSITIVE-ROOT-DRAINAGE-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v2 one-day root-zone balance invariant; not a crop benchmark",
+      "sourceId": "FAO-56-1998",
+      "sourceArtifact": {
+        "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+        "retrievedDate": "2026-10-27",
+        "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+        "bytes": 137909,
+        "licenseOrReuse": "No reuse license found on the source page; no source artifact copied or committed."
+      },
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "not asserted; catalog identity is routing only"
+      },
+      "environment": "One-day synthetic open-field crop-model-v2 route without an environment-v2 climate snapshot; precipMm=5, ETo=0. Temperature, DLI, and GDD base are ancillary routing inputs inherited from the linked dry-down fixture.",
+      "modelVersion": "crop-model-v2 with run-inputs-v2 and crop-parameters-v3; standard open-field root-step path, not environment-v2; ancillary inputs reused from the linked synthetic dry-down fixture",
+      "integratedPreStepAssertions": {
+        "cellRootZoneWaterMm": 159,
+        "capacityMm": 160,
+        "capacityCalculation": "frozen soil AWC 2 mm/cm × fixed effectiveRootDepthCm 80 cm",
+        "rootDevelopment": "none; runtime parameter omitted; fixed effective depth",
+        "rootGrowthStorageMmAdded": 0
+      },
+      "syntheticInputs": "AWC 2 mm/cm × 80 cm effective root depth = TAW 160 mm; initial storage is 159 mm of plant-available water above wilting point (depletion = TAW − storage = 1 mm); precipitation 5 mm; runoff, irrigation, capillary rise, root-growth storage, ETo, ETc, and actual transpiration are 0. All precipitation is treated as root-zone inflow and runoff is fixed at 0 as an explicit synthetic boundary.",
+      "expected": "FAO-56 Eq. 88 with zero capillary rise gives same-day deep percolation 4 mm; Eq. 85 gives end depletion 0 mm and Eq. 86 bounds it to 0..160 mm; final storage is 160 mm and water-balance residual is 0 mm. A direct stepFao56RootZone assertion observes deepDrainageMm=4. The standard open-field stepDay/simulateRun path asserts exact effective precipitation 5 mm, unrounded water use 0, final storage 160 mm and stored zero residual; mass balance implies 4 mm drainage with engine runoff fixed at 0. Summary rain/water-use are rounded and are not the sole proof. The v2 reducer computes pre-ET overflow, which coincides here because ETc=0; nonzero same-day ET/overflow ordering and environment-v2 precipitation are not covered.",
+      "tolerance": "Absolute deviation ≤1e-12 mm for direct helper drainage/storage/residual arithmetic and one-step engine mass-balance inference; exact frozen input values, one-day count, stepDay effective precipitation (5 mm), and unrounded water use (0 mm). Arithmetic only; no source-display, soil-parameter, or model-error tolerance.",
+      "evidence": "quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json",
+      "reproduction": "Not executed; S2/S3 approved preregistration. Proposed focused regression extends the adjusted-p test: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\". Include direct stepFao56RootZone output, exact createRun pre-step storage/capacity/no-root-growth assertions, and one-cell stepDay/simulateRun assertions. Candidate execution is gated on exact-head preregistration CI.",
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Preregistered after independent S2/S3 review of integrated pre-step storage/capacity/no-root-growth assertions; not executed. Nonzero same-day ET/overflow order and environment-v2 precipitation remain uncovered. Synthetic equation software behavior only; no crop, biological, measurement, or prediction claim. A-05 and 02A remain UNVERIFIED."
+    },
+    {
       "id": "OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01",
       "classification": "executed synthetic crop-model-v4 production/replay software fixture; not a crop benchmark",
       "sourceId": "OHISHI-2023-HORTJ-OHAYOU",
@@ -3225,6 +3259,14 @@
         "basis": "Independent recurrence from the frozen FAO-56 p-adjustment and root-zone equations plus the v2 RUE equation; bounds account for double-precision operation order and ten daily state updates only, not model error.",
         "scope": "Synthetic v2 reducer integration with source-derived reference inputs adapted to v2 p adjustment (p 0.40→0.36), zero inflows, fixed depth, a paired wet control, and synthetic known-light production response. No Example 37 reproduction, drainage/root-depth/media/nutrient coverage, measured validation, or reference agreement.",
         "evidence": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json"
+      },
+      {
+        "id": "fao56-v2-positive-root-drainage-synthetic",
+        "tolerance": "absolute deviation <=1e-12 mm for the direct helper drainage/storage/residual arithmetic and one-step mass-balance inference; one-step double-precision arithmetic only",
+        "status": "S2 and S3 approved the revised preregistration including integrated pre-step state/capacity/no-root-growth assertions; not executed; tolerance unchanged and arithmetic-only",
+        "basis": "Copied from the frozen fixture: the ≤1e-12 mm bound covers direct helper drainage/storage/residual arithmetic and one-step mass-balance inference using double-precision arithmetic only. It is not a source-display, soil-parameter, or model-error tolerance.",
+        "scope": "Synthetic one-day crop-model-v2 positive-drainage fixture. It preregisters direct stepFao56RootZone output plus standard open-field stepDay/simulateRun effective-precipitation, unrounded-water-use, final-storage, and residual assertions. No crop, biological, measured, or predictive claim.",
+        "evidence": "quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json"
       },
       {
         "id": "ohayou-v4-total-solar-replay-integration",

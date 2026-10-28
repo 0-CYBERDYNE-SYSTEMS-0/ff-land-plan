@@ -170,6 +170,12 @@ The test-only integration now passes locally: the focused test passed 1/25 cases
 
 This narrow fixture does not exercise positive drainage, infiltration/runoff, irrigation delivery, capillary rise, root-depth or media variants, full nutrient behavior, measured trials, or independent reference-model agreement. A-05 and 02A remain UNVERIFIED. Any production-code change requires a separate design, estimate, and independent review.
 
+## A-05 synthetic v2 positive root-drainage preregistration — 2026-10-27
+
+`FAO56-V2-POSITIVE-ROOT-DRAINAGE-SYNTHETIC-01` preregisters a one-day synthetic v2 case: AWC 2 mm/cm × 80 cm = TAW 160 mm; initial storage 159 mm; precipitation 5 mm; all other water fluxes, ETo and ETc are zero. The expected direct root-step deep percolation is 4 mm, final storage 160 mm, end depletion 0 mm and residual 0 mm. It includes a direct `stepFao56RootZone` assertion and the standard open-field `stepDay`/`simulateRun` route with exact effective precipitation and unrounded water-use checks. This revision also freezes the integrated pre-step cell `rootZoneWaterMm` at 159 mm and asserts capacity as frozen AWC 2 mm/cm × fixed effective depth 80 cm = 160 mm. `rootDevelopment` is none, fixed depth is used, and no root-growth storage is added. Runoff/infiltration is an explicit synthetic boundary; this is not an Example 37/source trajectory or a crop, biological, measurement, or prediction claim.
+
+S3 identified that helper input alone did not prove the reducer-created starting cell had 159 mm; the revised preregistration now pins that pre-step state, fixed capacity, and absence of root-development/growth inputs. S2 and S3 approved the revised record. The ≤1e-12 mm tolerance is unchanged and arithmetic-only for the direct helper and one-step balance checks; no candidate reducer or test has run. S1 estimated 1–2 hours for the focused test after preregistration, or 3–4 hours total including preregistration. The preregistration remains subject to its exact-head CI gate before implementation. A-05 and 02A remain UNVERIFIED.
+
 ## Remaining 02A gates
 
 1. Expand source-backed executable production/root-zone parameter coverage and dynamic canopy/interception parameters. The environment-v2 water-coupling slice is implemented only as qualified synthetic software behavior; A-05 remains UNVERIFIED overall.

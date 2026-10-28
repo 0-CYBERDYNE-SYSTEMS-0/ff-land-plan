@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-POSITIVE-ROOT-DRAINAGE-SYNTHETIC-01",
+  "classification": "preregistered synthetic crop-model-v2 one-day root-zone balance invariant; not a crop benchmark",
+  "status": "Preregistered after independent S2/S3 review of direct-helper, integrated-route, and pre-step storage/capacity assertions; not executed. A-05 and 02A remain UNVERIFIED.",
+  "preparedDate": "2026-10-27",
+  "review": {
+    "S2": "Approved revised arithmetic, tolerance, and integrated initial-state/capacity assertions for preregistration only; no test or candidate execution.",
+    "S3": "Approved revised pre-step storage/capacity and no-root-growth guard; prior false-positive closed; no test or candidate execution."
+  },
+  "sourceContext": {
+    "evidenceId": "FAO-56-1998",
+    "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Eqs. 82, 85, 86, and 88.",
+    "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+    "retrievedDate": "2026-10-27",
+    "sourceVersion": "FAO-56 (1998), Chapter 8; official HTML chapter page",
+    "artifactSha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+    "artifactStatus": "Official chapter HTML retrieved 2026-10-27; 137909 bytes. Digest is from the source acquisition record; no source artifact copied or committed.",
+    "licenseOrReuse": "No reuse license was found on the retrieved source page. No source artifact or substantial source text is copied; the fixture records equation references and synthetic arithmetic only.",
+    "methodAdaptation": "The cited FAO-56 equations motivate a one-day synthetic storage-capacity and deep-percolation balance. This fixture is not an Example 37 reproduction and does not use or claim a source trajectory."
+  },
+  "frozenModelInputs": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsModel": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "soilSourceTag": "unknown; hydraulic values are synthetic software inputs, not an observed profile",
+    "cropLifecycle": "plant",
+    "ancillaryReducerInputs": "Reuse the crop, thermal, production, nitrogen, and open-field routing inputs from FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01 solely to enter the existing v2 reducer. They are not evaluated by this fixture's acceptance checks.",
+    "climateRoute": "Standard open-field crop-model-v2 root-step path; no environment snapshot and no environment-v2 climate model. This route forwards effective precipitation to the root step and supplies zero surface runoff in the current engine."
+  },
+  "candidateComparison": false,
+  "syntheticInputs": {
+    "reusedFixture": {
+      "id": "FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01",
+      "path": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json",
+      "reuseLimit": "Reuse only ancillary frozen v2 crop/reducer routing values. Override the root storage and one-day weather values exactly as recorded below."
+    },
+    "soil": {
+      "awcMmPerCm": 2,
+      "effectiveRootDepthCm": 80,
+      "totalAvailableWaterMm": 160,
+      "sourceStatus": "Synthetic software inputs. AWC and depth are not an observed site soil profile or measured root zone."
+    },
+    "rootZone": {
+      "method": "FAO-56 root-zone balance as integrated by crop-model-v2",
+      "tableDepletionFractionP": 0.4,
+      "cropCoefficient": 1.2,
+      "effectiveRootDepthCm": 80,
+      "rootDevelopment": "none; no runtime rootDevelopment parameter is supplied, so the effective root depth is fixed at 80 cm",
+      "initialStorageMm": 159,
+      "initialStorageFraction": 0.99375,
+      "initialDepletionMm": 1,
+      "precipitationMm": 5,
+      "runoffMm": 0,
+      "irrigationMm": 0,
+      "capillaryRiseMm": 0,
+      "rootGrowthStorageMm": 0,
+      "referenceEvapotranspirationMmDay": 0,
+      "potentialTranspirationMmDay": 0,
+      "actualTranspirationMmDay": 0,
+      "runoffAndInfiltrationBoundary": "All 5 mm precipitation is treated as root-zone inflow and runoff is fixed at 0 for this synthetic software boundary. This does not establish infiltration or runoff behavior for a real soil or site.",
+      "status": "qualified synthetic software inputs with explicit limitations",
+      "missing": [],
+      "missingEvidenceForSiteOrAccuracyClaims": [
+        "Measured infiltration or surface runoff",
+        "Observed root-zone storage or deep percolation",
+        "Site soil hydraulic profile"
+      ],
+      "limitations": [
+        "No crop, biological, measurement, or prediction claim is made.",
+        "This is not an Example 37 reproduction or source trajectory.",
+        "A-05 and 02A remain UNVERIFIED."
+      ],
+      "evidence": {
+        "evidenceId": "FAO-56-1998",
+        "sourceCitation": "Allen et al. (1998), FAO-56, Chapter 8, Eqs. 82, 85, 86, and 88.",
+        "sourceUrl": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+        "validDomain": "One-day synthetic crop-model-v2 root-zone software arithmetic only; no source trajectory or crop accuracy claim."
+      },
+      "storageBasis": "Plant-available root-zone water relative to wilting point; 0 mm is at wilting point and TAW (160 mm) is at field capacity under this single-bucket convention.",
+      "depletionDefinition": "depletionMm = totalAvailableWaterMm - plantAvailableStorageMm.",
+      "expectedAdjustedDepletionFractionP": 0.6,
+      "expectedReadilyAvailableWaterMm": 96,
+      "expectedStressCoefficientAtStart": 1
+    },
+    "dailyEnvironment": {
+      "startDate": "2026-10-01",
+      "dayCount": 1,
+      "intervalDays": 1,
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipMm": 5,
+      "etoMm": 0,
+      "dliNaturalMol": 18,
+      "gddBase10C": 15,
+      "weatherStatus": "Synthetic single-day forcing. Temperature, DLI, and GDD base retain the ancillary reducer routing values from the referenced dry-down fixture; only precipitation and ETo are overridden for this case."
+    },
+    "otherWaterBalanceTermsMm": {
+      "surfaceRunoff": 0,
+      "irrigation": 0,
+      "capillaryRise": 0,
+      "rootGrowthStorage": 0,
+      "actualTranspiration": 0
+    }
+  },
+  "expected": {
+    "equations": "FAO-56 Eq. 82: TAW = AWC × effective root depth. Initial depletion = TAW - initial plant-available storage. FAO-56 Eq. 88, with capillary rise fixed at 0 for this fixture: deep percolation = max(0, (precipitation - runoff) + irrigation - ETc - initial depletion). FAO-56 Eq. 85 then gives end depletion = initial depletion - (precipitation - runoff) - irrigation - capillary rise + ETc + deep percolation, bounded by 0..TAW under Eq. 86; end storage = TAW - end depletion. The storage-form residual is initial storage + inflows - runoff - deep percolation - actual ETc - end storage. The existing v2 reducer computes drainage from pre-ET overflow; because ETc is 0 in this case, its result equals the cited equations. Nonzero same-day ET/overflow ordering is not covered.",
+    "calculation": {
+      "totalAvailableWaterMm": 160,
+      "initialStorageMm": 159,
+      "initialDepletionMm": 1,
+      "precipitationMm": 5,
+      "beforeDrainageStorageMm": 164,
+      "deepPercolationMm": 4,
+      "endStorageMm": 160,
+      "endDepletionMm": 0,
+      "actualTranspirationMm": 0,
+      "waterBalanceResidualMm": 0
+    },
+    "integratedPreStepState": {
+      "cellRootZoneWaterMm": 159,
+      "capacityMm": 160,
+      "capacityEquation": "soil.awcMmPerCm * rootZone.effectiveRootDepthCm = 2 * 80",
+      "initialStorageEquation": "soil.awcMmPerCm * rootZone.effectiveRootDepthCm * rootZone.initialStorageFraction = 2 * 80 * 0.99375",
+      "rootDevelopment": "none; no runtime rootDevelopment parameter is supplied; fixed effectiveRootDepthCm=80 cm",
+      "rootGrowthStorageMm": 0
+    },
+    "storedReducerObservables": {
+      "finalCellRootZoneWaterMm": 160,
+      "finalCellRootZoneResidualAccumulatedMm": 0,
+      "finalCellRootZoneResidualMaxAbsMm": 0,
+      "summaryRainMm": 5,
+      "summaryWaterUseMm": 0,
+      "summaryRootZoneBalanceResidualAccumulatedMm": 0,
+      "summaryRootZoneBalanceResidualMaxAbsMm": 0,
+      "deepPercolationObservation": "The direct stepFao56RootZone result exposes deepDrainageMm=4. The engine does not persist a dedicated daily drainage field. The one-cell stepDay/simulateRun path must independently show exact effective precipitation, unrounded zero water use, final storage and zero residual so the integrated 4 mm is implied by the mass balance under the standard route with runoff fixed at 0. Do not describe deep drainage as a persisted output. This zero-ET fixture does not test nonzero same-day ET/overflow ordering."
+    },
+    "massBalanceIdentity": "159 + 5 - 0 - 4 - 0 - 160 = 0 mm",
+    "directRootZoneStep": {
+      "input": "RootZoneState waterMm=159; awcMmPerCm=2; effectiveRootDepthCm=80; depletionFraction=0.6; precipMm=5; runoffMm=0; irrigationMm=0; capillaryRiseMm=0; rootGrowthStorageMm=0; potentialTranspirationMm=0.",
+      "deepDrainageMm": 4,
+      "endingWaterMm": 160,
+      "actualTranspirationMm": 0,
+      "residualMm": 0
+    },
+    "stepDayAndRunAssertions": {
+      "configRoute": "One planted cell; crop-model-v2 frozen inputs; standard open-field path without environment-v2; no environment climate snapshot.",
+      "stepDay": "Before the tick, createRun's cell rootZoneWaterMm is exactly 159 and root-zone capacity is exactly 160 mm from frozen AWC 2 mm/cm × fixed effective depth 80 cm. The frozen rootDevelopment is none and no root-growth storage is added. effectiveEnv.precipMm is exactly 5; dayStats.waterUseMm is exactly 0 (unrounded); final cell rootZoneWaterMm is 160; cell accumulated and max absolute residuals are 0.",
+      "simulateRun": "One-day summary rainMm is 5 and waterUseMm is 0; the same frozen pre-step state is rootZoneWaterMm=159 with capacity 160 mm; rootDevelopment is none and root-growth storage is 0; final cell root-zone water is 160; aggregate accumulated and maximum absolute residuals are 0.",
+      "inferredDeepPercolationMm": 4,
+      "inference": "With a one-cell normal v2 root step, precipitation 5 mm, engine runoff fixed at 0, other inflows 0, unrounded actual water use 0, initial storage 159 mm, final storage 160 mm, and stored residual 0, the mass balance implies exactly 4 mm deep drainage. Summary rain/water-use fields are rounded to 0.1 mm and are not the sole proof; assert stepDay effectiveEnv and dayStats values."
+    }
+  },
+  "tolerances": {
+    "rootZoneFluxesStorageDepletionAndResidual": "absolute deviation <=1e-12 mm for the direct helper drainage/storage/residual arithmetic and one-step mass-balance inference; one-step double-precision arithmetic only",
+    "exactChecks": "Frozen input values, one-day count, no environment-v2 route, zero non-precipitation fluxes, exact stepDay effective precipitation (5 mm), and exact unrounded stepDay water use (0 mm).",
+    "scope": "The tolerance is for arithmetic only; it is not a source-display bound, soil-parameter uncertainty, crop-model error tolerance, biological validation threshold, or prediction threshold."
+  },
+  "notCovered": [
+    "Infiltration/runoff partitioning or surface runoff response",
+    "Multi-day wetting, drainage, or dry-down trajectories",
+    "Irrigation delivery, capillary rise, or root-depth development",
+    "Measured soil, crop, or weather observations",
+    "Example 37 output reproduction or source trajectory",
+    "Crop accuracy, biological validity, measured agreement, prediction validity, or full A-05 acceptance",
+    "Nonzero same-day ET with excess water and the ordering of ET versus drainage; ETc is zero here so this fixture cannot distinguish the implementation order.",
+    "Environment-v2 precipitation coupling; the fixture deliberately uses the standard open-field v2 crop root-step path."
+  ],
+  "reproduction": "Not executed; S2/S3 approved preregistration. Proposed focused regression: extend the one-day assertions in the existing adjusted-p test and run npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\". Include direct stepFao56RootZone output, exact createRun pre-step storage/capacity/no-root-growth assertions, and one-cell stepDay/simulateRun assertions. Candidate execution is gated on exact-head preregistration CI."
+}
