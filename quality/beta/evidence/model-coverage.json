@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed. The A-03 preregistered matched one-step v4 total-solar fixture passed as a bounded synthetic reducer-state software subcase on candidate SHA 29f378443f37802c826dd7b6868721105af56eec; exact-head PR #82 run 40713005198 passed all four named checks. A-03 and overall 02A remain UNVERIFIED; no measured-output or external-reference comparison is claimed. A bounded A-07 synthetic v2 finite-deterministic-replay subcase passed on code SHA eb38f8da346b9d05303d4e62c40a42ded75e9dad; the three GitHub Actions workflow jobs passed on exact head eb38f8da346b9d05303d4e62c40a42ded75e9dad, and the PR status-check rollup also shows the separate GitGuardian Security Checks check passing. A-07 and overall 02A remain UNVERIFIED; no candidate or measured-output comparison is claimed. The v2 automatic/single-manual payout parity subcase is preregistered as V2-AUTO-MANUAL-HARVEST-PAYOUT-PARITY-SYNTHETIC-01; its 1e-12 kg arithmetic bound was independently approved before implementation, and the dayIndex 63 manual intervention reads the post-dayIndex 62 pre-growth pool. The comparison has not been executed. A-07 and overall 02A remain UNVERIFIED.",
+  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed. The A-03 preregistered matched one-step v4 total-solar fixture passed as a bounded synthetic reducer-state software subcase on candidate SHA 29f378443f37802c826dd7b6868721105af56eec; exact-head PR #82 run 40713005198 passed all four named checks. A-03 and overall 02A remain UNVERIFIED; no measured-output or external-reference comparison is claimed. A bounded A-07 synthetic v2 finite-deterministic-replay subcase passed on code SHA eb38f8da346b9d05303d4e62c40a42ded75e9dad; the three GitHub Actions workflow jobs passed on exact head eb38f8da346b9d05303d4e62c40a42ded75e9dad, and the PR status-check rollup also shows the separate GitGuardian Security Checks check passing. A-07 and overall 02A remain UNVERIFIED; no candidate or measured-output comparison is claimed. The preregistered v2 automatic/single-manual payout parity subcase passed as a bounded software invariant on code SHA b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8; exact-head PR #82 run 40733075575 passed all three GitHub Actions jobs and the separate GitGuardian Security Checks. Its 1e-12 kg arithmetic bound was reviewed before implementation; the dayIndex 63 manual intervention reads the post-dayIndex 62 pre-growth pool. See quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic-result.json. A-07 and overall 02A remain UNVERIFIED.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -32,6 +32,7 @@
     "v2DuplicateManualHarvestSoftwareFixture": "V2-DUPLICATE-MANUAL-HARVEST-SYNTHETIC-01",
     "v2AutoManualHarvestParityPreregisteredFixture": "V2-AUTO-MANUAL-HARVEST-PAYOUT-PARITY-SYNTHETIC-01",
     "v2AutoManualHarvestParityPreregistration": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic.json",
+    "v2AutoManualHarvestParityResult": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic-result.json",
     "v2EarlyManualHarvestRetrySoftwareFixture": "V2-EARLY-MANUAL-HARVEST-RETRY-SYNTHETIC-01",
     "v3ElevatedTargetManualHarvestPreregisteredFixture": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01",
     "v3MixedTargetAutoHarvestPreregisteredFixture": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01",
@@ -2540,17 +2541,17 @@
       "expected": "Automatic harvest at dayIndex 62/date 2026-12-02 and single-manual harvest at dayIndex 63/date 2026-12-03; one event per arm for cell 0,0, 0.007875 kg per event, 0.01 kg total and per-crop summaries, and exact per-arm replay. A no-harvest 63-day prefix through dayIndex 62 must show the registered 252 g DM/m2 mature pool.",
       "tolerance": "Event payout and paired payout difference <=1e-12 kg, reusing the existing arithmetic/conversion bound without widening; pre-manual pool uses the existing toBeCloseTo(252, 8) precision; event indices/count/cell, summaries and replay exact.",
       "evidence": "src/lib/sim/model-inputs.test.ts",
-      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\"; preregistered, not yet executed.",
-      "executionRecord": null,
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\"; passed 1/32 skipped on code SHA b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8.",
+      "executionRecord": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic-result.json",
       "acceptance": {
         "row": "A-07",
-        "status": "PREREGISTERED; tolerance review approved before implementation; not executed; A-07 and 02A remain UNVERIFIED.",
+        "status": "PASS for this bounded synthetic software invariant; broader A-07 and 02A remain UNVERIFIED.",
         "owner": "S1 implementation worker; S2 independent validator; lead integration",
-        "retest": "Run the focused Vitest command above only after this approved preregistration is committed in its separate documentation change."
+        "retest": "Rerun the focused Vitest command above if this software invariant changes; broader A-07 acceptance still requires the full version-specific spacing, mortality, management, target, and golden suite."
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "No code comparison or test execution has occurred; software-only fixture. No biological, measured, reference-model, or predictive claim."
+      "status": "Synthetic software invariant executed and passed on code SHA b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8; no biological, measured, reference-model, or predictive claim."
     }
   ],
   "coverageSummary": {
@@ -4188,7 +4189,7 @@
       {
         "id": "v2-auto-manual-harvest-payout-parity",
         "tolerance": "Event payout and automatic/manual payout difference <=1e-12 kg; pre-manual dry matter reuses toBeCloseTo(252, 8); event timing/count/cell, rounded summaries, and replay exact.",
-        "status": "approved by independent S2 review before implementation; not yet executed",
+        "status": "executed and passed on code SHA b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8; exact-head PR #82 run 40733075575 passed all three GitHub Actions workflow jobs; the PR head check rollup separately shows GitGuardian Security Checks passed",
         "basis": "No tolerance is widened. The payout and paired-difference bound is the already registered 1e-12 kg arithmetic/conversion limit for the v2 automatic and duplicate-manual payout fixtures. The pool assertion reuses the existing precision for the same synthetic test case. None is a crop-error or prediction tolerance.",
         "scope": "Paired automatic versus single-manual management software invariant on the same frozen one-cell v2 tomato inputs and 80-day synthetic series. The expected event-day offset (62 versus 63) is explicit. Duplicate-request idempotency remains a separate fixture; no model-candidate or measured comparison.",
         "evidence": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic.json",
