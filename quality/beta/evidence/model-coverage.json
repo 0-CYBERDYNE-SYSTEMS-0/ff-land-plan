@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed. A-03 now has a preregistered matched one-step v4 total-solar fixture; its candidate is not run and A-03 and overall 02A remain UNVERIFIED.",
+  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed. The A-03 preregistered matched one-step v4 total-solar fixture passed as a bounded synthetic reducer-state software subcase on candidate SHA 29f378443f37802c826dd7b6868721105af56eec; exact-head PR #82 run 40713005198 passed all four named checks. A-03 and overall 02A remain UNVERIFIED; no measured-output or external-reference comparison is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -35,7 +35,8 @@
     "v3MixedTargetAutoHarvestPreregisteredFixture": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01",
     "ohayouV4ReplayIntegrationPreregisteredFixture": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json (OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01)",
     "a02TomatoThermalLocationWindowPreregisteredFixture": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json (A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01)",
-    "a03OhayouV4SameThermalLightResponsePreregisteredFixture": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json (A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01)"
+    "a03OhayouV4SameThermalLightResponsePreregisteredFixture": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json (A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01)",
+    "a03OhayouV4SameThermalLightResponseResult": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic-result.json"
   },
   "sources": [
     {
@@ -2482,10 +2483,11 @@
       "expected": "Independent one-step equation values for LAI, interception, DM gain, and two-pool state are frozen in the artifact. Known zero has exactly zero gain and unchanged pools; positive level 2 gain exceeds level 1; null solar is unavailable despite the DLI decoy and holds pools. Thermal outputs are exactly equal across arms.",
       "tolerance": "LAI, intercepted fraction/radiation, daily DM gain, pool state, and daily pool closure ≤1e-12 in stated arithmetic units; all shared-input equality, thermal-state equality, dispatch, zero/null semantics, unavailable status, and DLI non-fallback are exact. One-step double-precision arithmetic only; no crop-error tolerance.",
       "evidence": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json",
-      "reproduction": "Candidate test planned in src/lib/sim/ohayou-v4.integration.test.ts; candidate execution and focused command are pending.",
+      "reproduction": "npx vitest run src/lib/sim/ohayou-v4.integration.test.ts -t \"holds thermal state fixed across matched total-solar inputs\"; passed on candidate SHA 29f378443f37802c826dd7b6868721105af56eec. Exact-head PR #82 run 40713005198 passed all four named checks.",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Preregistered only; candidate not run. A-03 remains UNVERIFIED overall because biological light limits, documented reserves, fungus/lifecycle, and independent measured/reference evidence remain incomplete."
+      "executionRecord": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic-result.json",
+      "status": "Executed and passed for this bounded synthetic reducer-state software subcase only; A-03 remains UNVERIFIED overall because biological light limits, documented reserves, fungus/lifecycle, and independent measured/reference evidence remain incomplete."
     }
   ],
   "coverageSummary": {
@@ -2501,7 +2503,7 @@
     "cropSpecificProductionReferenceCrops": 5,
     "reviewedSourceParameterTranscriptionSets": 2,
     "preregisteredSyntheticCanopyEquationFixtures": 3,
-    "executedSyntheticCanopyEquationFixtures": 2,
+    "executedSyntheticCanopyEquationFixtures": 3,
     "preregisteredDynamicCanopyEngineFixtures": 2,
     "executedDynamicCanopyEngineFixtures": 2,
     "executableSyntheticParameterFixtures": 1,
@@ -4114,10 +4116,11 @@
       {
         "id": "a03-ohayou-v4-same-thermal-light-response",
         "tolerance": "LAI, intercepted fraction/radiation, daily DM gain, pool state, and daily pool closure ≤1e-12 in stated arithmetic units; shared inputs, thermal equality, zero/null semantics, and DLI non-fallback exact",
-        "status": "Preregistered only; candidate not run; A-03 remains UNVERIFIED overall",
+        "status": "Executed and passed for the bounded synthetic reducer-state software subcase on candidate SHA 29f378443f37802c826dd7b6868721105af56eec; exact-head PR #82 run 40713005198 passed all four named checks; A-03 remains UNVERIFIED overall",
         "basis": "Independent one-step double-precision evaluation of the frozen canopy-to-LAI, total-solar interception, RUE, stress multiplier, and two-pool allocation equations. Bounds cover arithmetic and pool closure only, not biological response or crop/model error.",
-        "scope": "Matched synthetic crop-model-v4/run-inputs-v4/crop-parameters-v6 reducer arms with identical crop/configuration/thermal/environment inputs and DLI decoy; only total solar is 0, 5, 15, or unavailable null. Positive values are synthetic software forcing points, not light thresholds. No candidate execution, measured output, source agreement, crop validity, or fungal lifecycle is established.",
-        "evidence": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json"
+        "scope": "Executed matched synthetic crop-model-v4/run-inputs-v4/crop-parameters-v6 reducer arms with identical crop/configuration/thermal/environment inputs and DLI decoy; only total solar is 0, 5, 15, or unavailable null. Positive values are synthetic software forcing points, not light thresholds. No external/reference agreement, measured output, crop validity, or fungal lifecycle is established.",
+        "evidence": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json",
+        "executionRecord": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic-result.json"
       }
     ]
   },
