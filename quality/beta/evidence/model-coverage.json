@@ -32,6 +32,7 @@
     "v2DuplicateManualHarvestSoftwareFixture": "V2-DUPLICATE-MANUAL-HARVEST-SYNTHETIC-01",
     "v2EarlyManualHarvestRetrySoftwareFixture": "V2-EARLY-MANUAL-HARVEST-RETRY-SYNTHETIC-01",
     "v3ElevatedTargetManualHarvestPreregisteredFixture": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01",
+    "v3MixedTargetAutoHarvestPreregisteredFixture": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01",
     "ohayouV4ReplayIntegrationPreregisteredFixture": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json (OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01)"
   },
   "sources": [
@@ -3359,6 +3360,14 @@
         "basis": "Per-cell arithmetic is 12 g DM/m² × 0.4² m² × synthetic harvest index 0.5 / 1000 = 0.00096 kg; six cells sum to 0.00576 kg before the existing two-decimal summary rounding. The 1e-12 kg bound checks JavaScript arithmetic only; it is not a model or prediction tolerance.",
         "scope": "Synthetic crop-model-v3 frozen-input regression with known zero light: manual established/live/mature payout, unestablished/dead/immature gates, repeated same-date manual request suppression, actual source maturity endpoint auto-payout, next-day no-repeat, aggregate rounding, and deterministic replay. One manually seeded impossible mature-but-unestablished state isolates an eligibility guard; no mortality model behavior is inferred.",
         "evidence": "src/lib/sim/model-inputs.test.ts"
+      },
+      {
+        "id": "v3-frozen-dm-mixed-target-auto-harvest-payout",
+        "tolerance": "each event payout and seven-event sum within 1e-12 kg; stored total and per-crop summaries exactly 0.01 kg after the reducer's two-decimal aggregate rounding; exact target-qualified keys, event date/count, and replayed events/state/summary",
+        "status": "independent GPT-6 Luna max review approved before candidate execution; preregistered synthetic software fixture; candidate not run",
+        "basis": "Per-cell synthetic arithmetic is 12 g DM/m² × 0.4² m² × synthetic harvest index 0.5 / 1000 = 0.00096 kg; seven distinct target-qualified cells sum to 0.00672 kg before the existing two-decimal summary rounding. The 1e-12 kg bound checks JavaScript arithmetic only; it is not a model or prediction tolerance.",
+        "scope": "Synthetic crop-model-v3 frozen-input regression at the source-thermal maturity endpoint, with six cells on an elevated growing level and one floor cell at colliding local coordinate 0,0; exact target-key routing, one auto-payout per key, next-day no-repeat, summary rounding, and deterministic replay. Synthetic soil source tag is unknown. No cultivar, biological maturity timing, crop accuracy, measured agreement, or reference-model agreement is asserted.",
+        "evidence": "quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json"
       },
       {
         "id": "fao56-v2-tomato-root-depth-drydown",
