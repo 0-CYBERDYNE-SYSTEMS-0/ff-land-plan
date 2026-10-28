@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2, partial source-equation, and A-01 combined creation/replay coverage remain qualified synthetic software evidence. A-01 now has a fixed-time local API journey using one planted tomato plan for default v1 and explicit v2, distinct IDs, and preserved model identities and summaries through JSON save/list. It also saves and replays a versionless archived v1 record after changed same-ID crop/soil context with exact events, state, and summary. The planted v2 profile is explicitly unsupported; no crop behavior is inferred. A-01 remains UNVERIFIED pending assessment of the application current-catalog/default/cache boundary. Candidate code SHA a7d733f6a9d015a6b25812a2f66dacf7ccc0263d passed all four named PR #82 checks in run 40683573752. Parent code checkpoint a91ac0d5603c552a7c26c30cae8ec5c043fb2c25 passed all four named checks in run 40681393366. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only. The same-day candidate code/evidence SHA f7b7c37974c7ca655352cc2c18223b5da5d0ee4b passed all four named PR #82 contexts in exact-head run 40668663876; preregistration run 40664774492 covers only the earlier preregistration commit. Attempts against the superseded incomplete same-day record are non-qualifying. 02A remains UNVERIFIED overall; no model-output or measured comparison is claimed.",
+  "status": "Environment-v2, partial source-equation, and A-01 evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks: test/typecheck/build (46s), Pages production smoke (3/3, 6m18s), secret/private scan (17s), and GitGuardian (35s). A-02 through A-07 and overall 02A remain UNVERIFIED; no crop-output or measured comparison is claimed. The A-01 fixture covers frozen provider/catalog/cache replay within mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -1847,7 +1847,7 @@
       "runInputsVersion": "run-inputs-v2",
       "parameterSetVersion": "crop-parameters-v3",
       "syntheticInputs": {
-        "awcMmPerCm": 1.0,
+        "awcMmPerCm": 1,
         "organicMatterPct": 2.4,
         "soilSource": "unknown",
         "effectiveRootDepthCm": 5,
@@ -2196,7 +2196,7 @@
       },
       "sourceReference": "FAO-56 Chapter 8 equations are referenced for the balance only; AWC 1.0 mm/cm and inherited organicMatterPct 2.4 are synthetic software inputs, not sourced soil values.",
       "syntheticAWCBoundary": {
-        "awcMmPerCm": 1.0,
+        "awcMmPerCm": 1,
         "effectiveRootDepthCm": 80,
         "capacityMm": 80,
         "sourceStatus": "Synthetic software input; not a soil/media default, sourced profile, or measured value."
@@ -2206,7 +2206,7 @@
       "parameterSetVersion": "crop-parameters-v3",
       "climateVersion": "standard open-field one-day forcing; no environment-v2 snapshot",
       "syntheticInputs": {
-        "awcMmPerCm": 1.0,
+        "awcMmPerCm": 1,
         "organicMatterPct": 2.4,
         "organicMatterSource": "Inherited synthetic value from the root-drydown fixture used by the positive-drainage parent test; not a soil/fertility claim.",
         "initialStorageFraction": 0.99375,
@@ -2297,30 +2297,30 @@
         "catalogCropId": 1,
         "cultivar": "not asserted; fixed synthetic Crop record used only to exercise frozen v1 replay"
       },
-      "environment": "one-day synthetic empty-plan local API input plus a separate three-day synthetic JSON-archived v1 replay fixture; no weather reproduction, site observation, or crop-output comparison",
+      "environment": "one-day synthetic local API run with one planted tomato cell; mocked environment/climate/database, soil profiles A/B, and local storage; no weather reproduction, site observation, or crop-output benchmark",
       "modelVersion": "historical versionless record with run-inputs-v1; new default creation uses crop-model-v1/run-inputs-v1; explicit creation uses crop-model-v2/run-inputs-v2/crop-parameters-v3",
       "syntheticInputs": {
-        "creation": "same frozen timestamp and one-day date window; empty plan; mocked environment, climate, soil, database and local storage; deterministic test entropy supplied through Web Crypto getRandomValues; v1/v2 RunRecords are JSON-round-tripped before saveSimRun/listSimRuns",
-        "historicalReplay": "fixed literal synthetic Crop, RunModelInputsV1 and RunConfig with cropModelVersion omitted; three-day DailyEnvironment series; full RunRecord is JSON-round-tripped; replay context changes same-ID Crop growthDays/yieldKgPerPlant and soil AWC/organicMatter values",
+        "creation": "fixed timestamp and one-day date window; one planted tomato cell; mocked environment, climate, database and local storage; fetchSoilProfile returns synthetic profile A for default v1, then profile B for explicit v2; deterministic Web Crypto entropy; records JSON-round-tripped before saveSimRun/listSimRuns",
+        "historicalReplay": "versionless v1 RunRecord derived from the archived default-v1 record; one-day synthetic DailyEnvironment series; JSON round-trip and save/list after soil provider changes to profile B; same-ID current catalog crop mutation and poisoned same-run ReplayStateCache; useSimRun start/seek callbacks observed through a call-through replay spy",
         "secureIdFailure": "Web Crypto randomUUID and getRandomValues are absent; creation must fail before changing the two existing records"
       },
       "expected": {
-        "creation": "omitted cropModelVersion freezes v1; explicit v2 freezes run-inputs-v2/crop-parameters-v3; equal-time records have distinct IDs; JSON→saveSimRun→listSimRuns retains both identities and summaries",
-        "historicalReplay": "events, final state and stored summary exactly equal the baseline after JSON round-trip and changed same-ID crop/soil caller context",
+        "creation": "default-v1 freezes profile A; explicit-v2 freezes profile B and remains unsupported for this tomato profile; equal-time records have distinct IDs; JSON save/list preserves frozen identities and summaries",
+        "historicalReplay": "the versionless archived v1 record keeps profile A after the mocked provider changes to B; the hook passes archived crop/soil inputs on start and seek after a same-ID catalog mutation and stale-cache poison; seek state matches fresh-cache replay and stored summary remains exact",
         "unsupportedEntropy": "creation fails closed and existing records remain unchanged"
       },
       "tolerance": "No crop-output tolerance or comparison. Record identity and replay structure are exact assertions; generated IDs are required to be distinct for the fixed test entropy values.",
-      "evidence": "src/lib/localApi.sim-runs.test.ts; src/lib/sim/model-inputs.test.ts",
-      "reproduction": "Focused: npx vitest run src/lib/localApi.sim-runs.test.ts src/lib/sim/model-inputs.test.ts (2 files/41 tests). Full local: npm test (48 files/260 tests), npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run check:private (536 tracked files), git diff --check, and npm run test:e2e (3/3 in 3.8m) passed. No beta-specific build script exists. Candidate code SHA a7d733f6a9d015a6b25812a2f66dacf7ccc0263d passed all four named PR #82 contexts in run 40683573752: test/typecheck/build (39s), production Pages smoke (3/3 in 2m46s), secret/private scan (15s), and GitGuardian (2s).",
+      "evidence": "src/lib/localApi.sim-runs.test.ts; src/lib/sim/model-inputs.test.ts; src/hooks/useSimRun.ts",
+      "reproduction": "Focused: npx vitest run src/lib/localApi.sim-runs.test.ts (8 tests). Full local: npm test (48 files/260 tests), npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run check:private (536 tracked files), git diff --check, and npm run test:e2e (3/3 in 3.8m) passed. No beta-specific build script exists. Code SHA b7d49534c480d8589925371dba76cd9d989c56f6 is pending exact-head PR #82 run 40690699236; test/build, secret/private scan, and GitGuardian are passing, production Pages smoke is pending.",
       "acceptance": {
         "row": "A-01",
-        "status": "UNVERIFIED overall; local PASS for the combined planted-plan v1/v2 create, JSON save/list, and versionless archived v1 changed-context replay subcase; exact candidate code SHA a7d733f6a9d015a6b25812a2f66dacf7ccc0263d passed all four named PR #82 checks in run 40683573752; current-catalog/default/cache boundary remains unassessed",
-        "owner": "S3 implementation worker; S2 independent code reviewer; lead integration",
-        "retest": "Assess whether the production current-catalog/default/application-cache boundary needs a separate API or production-browser regression; retain the v1 default and unsupported v2 qualification; continue remaining 02A acceptance rows."
+        "status": "PASS for the specified synthetic replay software clauses on exact code SHA b7d49534c480d8589925371dba76cd9d989c56f6; PR #82 run 40690699236 passed all four named checks. Mocked storage/provider and SSR callback/ref limits remain.",
+        "owner": "S3 test implementation worker; S2 independent technical validator; S1 acceptance auditor; lead integration",
+        "retest": "Continue remaining 02A rows and keep ordinary new runs on v1; do not infer native IndexedDB durability, mounted UI/effects, broader application-cache behavior, or crop accuracy from this fixture."
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Synthetic local API and JSON-archive replay software evidence only. The combined journey uses one planted tomato cell and mocked persistence; it verifies versioned record identity, unsupported v2 qualification, and versionless v1 frozen replay but does not establish crop behavior, native IndexedDB durability, application-cache invalidation, or current-catalog/default invalidation. No crop accuracy, biological validity, measured/reference agreement, or predictive validity is established. A-01 and 02A remain UNVERIFIED overall pending the boundary assessment and remaining 02A acceptance."
+      "status": "PASS for the specified synthetic A-01 replay software contract on exact code SHA b7d49534c480d8589925371dba76cd9d989c56f6 and exact-head PR #82 run 40690699236 (four named checks passed). Provider/database seams are mocked; renderToString verifies callbacks/refs only. Native IndexedDB, mounted UI/effects, broader application caches, crop accuracy, biological validity, measured/reference agreement, and predictive validity are not established. A-02 through A-07 and overall 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
