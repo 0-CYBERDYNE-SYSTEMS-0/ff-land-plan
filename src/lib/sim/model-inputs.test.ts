@@ -644,6 +644,70 @@ describe('frozen crop model inputs and replay support', () => {
     }]);
   });
 
+  it('fails closed when a v3 transplanted cell lacks frozen establishment state', () => {
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const thermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const cellKey = targetCellKey({ kind: 'floor' }, '0,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      startDate: '2026-10-01',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': tomato.id },
+        plantedAt: { '0,0': '2026-10-01' },
+      },
+      cropStartEvents: { [cellKey]: 'transplanting' },
+    });
+    const modelInputs = freezeRunModelInputsV3(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [tomato],
+      cropParametersV2: [syntheticStartEventParameter(tomato.id, thermal)],
+      cropEstablishmentByCell: {},
+    });
+    const activeRun = { ...run, modelInputs };
+    const missingStateReason = 'Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0.';
+    const unknownSoilReason = 'Frozen v2 soil AWC provenance is unknown.';
+    const support = inspectRunModelSupport(activeRun);
+
+    expect(modelInputs).toMatchObject({
+      model: 'run-inputs-v3',
+      parameterSetVersion: 'crop-parameters-v4',
+      establishmentByCell: {},
+    });
+    expect(modelInputs.crops.map((crop) => crop.id)).toEqual([1]);
+    expect(modelInputs.cropParameters.map((parameter) => parameter.cropId)).toEqual([1]);
+    expect(modelInputs.soil).toEqual({
+      awcMmPerCm: 1.5,
+      organicMatterPct: 2.4,
+      source: 'unknown',
+    });
+    expect(support).toMatchObject({
+      model: 'crop-model-v3',
+      status: 'unsupported',
+      canReplay: false,
+      preserveStoredSummary: true,
+    });
+    expect(support.reasons).toContain(missingStateReason);
+    expect(support.reasons).toContain(unknownSoilReason);
+
+    let replayError: unknown;
+    try {
+      replayRunToDay({
+        id: 'run:a04-v3-transplant-missing-establishment',
+        config: activeRun,
+        envSeries: [],
+        observations: [],
+      }, 0, {}, new ReplayStateCache());
+    } catch (error) {
+      replayError = error;
+    }
+
+    expect(replayError).toBeInstanceOf(UnsupportedRunReplayError);
+    if (!(replayError instanceof UnsupportedRunReplayError)) return;
+    expect(replayError.reasons).toContain(missingStateReason);
+    expect(replayError.reasons).toContain(unknownSoilReason);
+  });
+
   it('validates intervention establishment evidence and v3 qualification status', () => {
     const tomato = cropLibrary.find((crop) => crop.id === 1)!;
     const thermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
