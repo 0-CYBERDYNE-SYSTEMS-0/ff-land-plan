@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed. The A-03 preregistered matched one-step v4 total-solar fixture passed as a bounded synthetic reducer-state software subcase on candidate SHA 29f378443f37802c826dd7b6868721105af56eec; exact-head PR #82 run 40713005198 passed all four named checks. A-03 and overall 02A remain UNVERIFIED; no measured-output or external-reference comparison is claimed. A bounded A-07 synthetic v2 finite-deterministic-replay subcase passed on code SHA eb38f8da346b9d05303d4e62c40a42ded75e9dad; the three GitHub Actions workflow jobs passed on exact head eb38f8da346b9d05303d4e62c40a42ded75e9dad, and the PR status-check rollup also shows the separate GitGuardian Security Checks check passing. A-07 and overall 02A remain UNVERIFIED; no candidate or measured-output comparison is claimed. The preregistered v2 automatic/single-manual payout parity subcase passed as a bounded software invariant on code SHA b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8; exact-head PR #82 run 40733075575 passed all three GitHub Actions jobs and the separate GitGuardian Security Checks. Its 1e-12 kg arithmetic bound was reviewed before implementation; the dayIndex 63 manual intervention reads the post-dayIndex 62 pre-growth pool. See quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic-result.json. A bounded A-07 v2 full-run effective-modeled-count and target-harvest-mass synthetic software subcase passed on code SHA d8effbea3843ffb243c972fee3520670f1d7051b; exact-head PR #82 run 40745546128 passed all four named checks, including the three-test production Pages-path smoke. A-07 and overall 02A remain UNVERIFIED.",
+  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed. The A-03 preregistered matched one-step v4 total-solar fixture passed as a bounded synthetic reducer-state software subcase on candidate SHA 29f378443f37802c826dd7b6868721105af56eec; exact-head PR #82 run 40713005198 passed all four named checks. A-03 and overall 02A remain UNVERIFIED; no measured-output or external-reference comparison is claimed. A bounded A-07 synthetic v2 finite-deterministic-replay subcase passed on code SHA eb38f8da346b9d05303d4e62c40a42ded75e9dad; the three GitHub Actions workflow jobs passed on exact head eb38f8da346b9d05303d4e62c40a42ded75e9dad, and the PR status-check rollup also shows the separate GitGuardian Security Checks check passing. A-07 and overall 02A remain UNVERIFIED; no candidate or measured-output comparison is claimed. The preregistered v2 automatic/single-manual payout parity subcase passed as a bounded software invariant on code SHA b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8; exact-head PR #82 run 40733075575 passed all three GitHub Actions jobs and the separate GitGuardian Security Checks. Its 1e-12 kg arithmetic bound was reviewed before implementation; the dayIndex 63 manual intervention reads the post-dayIndex 62 pre-growth pool. See quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic-result.json. A bounded A-07 v2 full-run effective-modeled-count and target-harvest-mass synthetic software subcase passed on code SHA d8effbea3843ffb243c972fee3520670f1d7051b; exact-head PR #82 run 40745546128 passed all four named checks, including the three-test production Pages-path smoke. A-07 and overall 02A remain UNVERIFIED. The all-catalog v2 missing-profile fail-closed fixture is preregistered after independent review; its candidate test is not run, and A-08/02A remain UNVERIFIED.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -43,7 +43,9 @@
     "ohayouV4ReplayIntegrationPreregisteredFixture": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json (OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01)",
     "a02TomatoThermalLocationWindowPreregisteredFixture": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json (A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01)",
     "a03OhayouV4SameThermalLightResponsePreregisteredFixture": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json (A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01)",
-    "a03OhayouV4SameThermalLightResponseResult": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic-result.json"
+    "a03OhayouV4SameThermalLightResponseResult": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic-result.json",
+    "a08AllCatalogV2MissingProfilePreregisteredFixture": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
+    "a08AllCatalogV2MissingProfilePreregistration": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json"
   },
   "sources": [
     {
@@ -2556,6 +2558,31 @@
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "status": "Synthetic software invariant executed and passed on code SHA b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8; no biological, measured, reference-model, or predictive claim."
+    },
+    {
+      "id": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
+      "classification": "preregistered synthetic all-catalog crop-model-v2 fail-closed software check; not a supported-crop or accuracy benchmark",
+      "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-08",
+      "preregistration": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json",
+      "inputFixtureReferences": [
+        "src/data/crops.ts#cropLibrary, registered against code SHA f943b6921ff2a2acb2fa94f1458dc359b4a920c1",
+        "quality/beta/evidence/model-coverage.json#/cropCoverage"
+      ],
+      "modelVersion": "crop-model-v2/run-inputs-v2/crop-parameters-v3",
+      "syntheticInputs": "One planted floor cell per built-in crop ID, a synthetic transplanting start event, and freezer-generated explicit missing production/root-zone profiles; no crop output is compared.",
+      "expected": "Exact 50-entry ID/slug snapshot; same crop ID across config, frozen crop and parameter; exact lifecycle-specific missing fields; unsupported qualification and support result with exact required reason templates; UnsupportedRunReplayError for every crop; fungal lifecycle remains fungus.",
+      "tolerance": "Exact structural comparisons only; no numerical tolerance is applicable because no numeric model output is compared.",
+      "evidence": "src/lib/sim/model-inputs.test.ts (candidate test not implemented at preregistration)",
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed for every catalog crop without a complete v2 profile\"; not run at preregistration.",
+      "acceptance": {
+        "row": "A-08",
+        "status": "PREREGISTERED; candidate not executed. This is one bounded synthetic fail-closed software subcase; A-08 and 02A remain UNVERIFIED overall.",
+        "owner": "S1 implementation worker; S2 independent validator; S3 claim-boundary reviewer; lead integration",
+        "retest": "Run the focused Vitest command only after the preregistration documentation commit passes exact-head PR CI; repeat if the catalog snapshot or support/replay contract changes."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Independently reviewed preregistration; candidate test not run. No crop support, accuracy, actual stored-summary retention, measured/reference agreement, or predictive claim."
     }
   ],
   "coverageSummary": {
