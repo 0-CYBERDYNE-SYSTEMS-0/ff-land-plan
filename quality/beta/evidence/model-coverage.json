@@ -46,6 +46,7 @@
     "a03OhayouV4SameThermalLightResponseResult": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic-result.json",
     "a04V3TransplantMissingEstablishmentPreregisteredFixture": "A04-V3-TRANSPLANT-MISSING-ESTABLISHMENT-FAIL-CLOSED-SYNTHETIC-01",
     "a04V3TransplantMissingEstablishmentPreregistration": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic.json",
+    "a04V3TransplantMissingEstablishmentResult": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic-result.json",
     "a08AllCatalogV2MissingProfilePreregisteredFixture": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
     "a08AllCatalogV2MissingProfilePreregistration": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json",
     "a08AllCatalogV2MissingProfileResult": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic-result.json"
@@ -2600,20 +2601,28 @@
         "src/data/crops.ts#cropLibrary-id-1-tomato"
       ],
       "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "registeredDocumentationCommitSha": "be0123300ebfedc262645ad429e31f3d5103f4ee",
+      "registeredDocumentationCiRun": 40774282313,
+      "candidateCodeSha": "472c2514a2b3b9ff4dca03a44fa92cccdd5fc28d",
+      "exactHeadPrCiRun": 40776046948,
       "syntheticInputs": "One floor tomato cell (crop id 1, key 0,0) with a transplant event and planted date 2026-10-01; complete synthetic frozen production/root inputs and pinned source thermal row; soil AWC 1.5 mm/cm and organicMatterPct 2.4 are supplied without a source tag because RunModelSource accepts only provider literals. Freezing records source unknown, which also independently contributes an unsupported reason. Establishment map is empty; replay uses the complete frozen config with empty weather and observations.",
       "expected": "inspectRunModelSupport reports crop-model-v3, unsupported, canReplay false, and preserveStoredSummary true as a policy flag only; its reasons contain the exact string 'Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0.' and the additional reason 'Frozen v2 soil AWC provenance is unknown.'. replayRunToDay for the registered run at day 0 throws UnsupportedRunReplayError whose reasons contain both registered strings. Unknown soil provenance also makes the run unsupported; this fixture does not claim the missing establishment is the sole reason replay is rejected. Compare structural fields and exact string membership only; do not compare the full reasons array or numeric output.",
       "tolerance": "Exact structural and string checks only; no numerical tolerance applies because no numeric model output is compared.",
       "evidence": "src/lib/sim/model-inputs.test.ts",
-      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell lacks frozen establishment state\"; prior attempt: 1 passed, 35 skipped, but UNACCEPTED because typecheck rejected source: unknown as an input. Corrected setup omits source on freeze input and records source: unknown in frozen output. S3 correction audit and cross-document review passed 2026-10-28; corrected exact-head PR CI is pending, so do not rerun yet.",
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell lacks frozen establishment state\"; PASS, 1 passed / 35 skipped, on candidate code SHA 472c2514a2b3b9ff4dca03a44fa92cccdd5fc28d. The earlier invalid-source attempt remains UNACCEPTED.",
+      "executionRecord": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic-result.json",
+      "localVerification": "PASS: npm test (48 files / 266 tests), typecheck, standard/demo/Pages builds, check:private (550 tracked files), duplicate-safe JSON parse, git diff --check, and npm run test:e2e (3/3 in 3.4m). Vite config-loader and large-chunk advisories were warnings; builds passed.",
       "acceptance": {
         "row": "A-04",
-        "status": "Prior focused candidate attempt passed at runtime but is UNACCEPTED after typecheck rejected the invalid source input. The corrected registration records source omitted on input and unknown on frozen output; S3 correction audit and cross-document review passed 2026-10-28; corrected exact-head PR CI is pending. S2 audit unavailable because its pane reported a Codex token refresh failure after logout/account switch. Candidate rerun is prohibited; A-04 and overall 02A remain UNVERIFIED.",
-        "owner": "S1 documentation integrator; S2 independent technical reviewer; S3 claim-boundary reviewer; lead integration",
-        "retest": "S3 reviewed the corrected registration; after this corrected documentation head passes exact-head PR CI, run only the focused command above."
+        "status": "PASS only for this bounded synthetic fail-closed software subcase on candidate SHA 472c2514a2b3b9ff4dca03a44fa92cccdd5fc28d; exact-head PR #82 run 40776046948 passed. S3 independent candidate review passed. S2 audit unavailable because its pane reported a Codex token refresh failure after logout/account switch. A-04 and overall 02A remain UNVERIFIED.",
+        "owner": "S1 implementation worker; S3 independent candidate reviewer; lead integration; S2 audit unavailable",
+        "retest": "Rerun the focused command only if the frozen setup or missing-establishment/provenance support behavior changes; do not treat this subcase as A-04 completion."
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Corrected synthetic software fail-closed registration passed S3 correction and cross-document review; exact-head PR CI is pending. The prior focused attempt is UNACCEPTED due to typecheck failure. No measured nursery mass, crop accuracy, actual stored-summary retention, biological validity, or A-04/02A completion claim."
+      "status": "PASS for this preregistered synthetic software subcase on code SHA 472c2514a2b3b9ff4dca03a44fa92cccdd5fc28d; exact-head PR #82 run 40776046948 passed test + typecheck + build, Pages smoke 3/3, and secret/private-file scan. No measured transplant state, crop accuracy, actual stored-summary retention, biological validity, or A-04/02A completion claim.",
+      "independentReferenceModelComparison": false,
+      "measuredHoldoutValidation": false
     }
   ],
   "coverageSummary": {
