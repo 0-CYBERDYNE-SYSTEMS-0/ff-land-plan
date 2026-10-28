@@ -1730,7 +1730,7 @@
       "evidence": "quality/beta/evidence/fao56-v2-awc-variant-positive-drainage-synthetic.json",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "The original local focused attempt reported 1 passed, 26 skipped but is UNACCEPTED because inherited synthetic organicMatterPct=2.4 was unregistered. S2 approved the correction; exact-head docs PR run 40633832876 passed all four contexts on 79eff1f1c221e5c201764c8c9166ca30c2687309. The corrected candidate focused test then passed (1 passed, 26 skipped) and S2 approved its review. Full local gates passed (47 files/251 tests, typecheck, standard/demo/Pages builds, private guard at 526 tracked files, JSON/whitespace); no beta-specific build profile exists. Exact-head code/evidence CI remains pending. A-05 and 02A remain UNVERIFIED."
+      "status": "The original local focused attempt reported 1 passed, 26 skipped but is UNACCEPTED because inherited synthetic organicMatterPct=2.4 was unregistered. S2 approved the correction; exact-head docs PR run 40633832876 passed all four contexts on 79eff1f1c221e5c201764c8c9166ca30c2687309. The corrected candidate focused test then passed (1 passed, 26 skipped) and S2 approved its review. Full local gates passed (47 files/251 tests, typecheck, standard/demo/Pages builds, private guard at 526 tracked files, JSON/whitespace); no beta-specific build profile exists. Exact-head code/evidence CI passed all four named contexts in run 40635095614 on aa849571044cd0dd20b4c2dab5e8ae3efbccbad2. This is accepted as synthetic software regression evidence only; A-05 and 02A remain UNVERIFIED."
     },
     {
       "id": "OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01",
