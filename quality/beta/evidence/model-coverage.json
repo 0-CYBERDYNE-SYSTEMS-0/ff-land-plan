@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2, partial source-equation, and A-01 evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks: test/typecheck/build (46s), Pages production smoke (3/3, 6m18s), secret/private scan (17s), and GitGuardian (35s). A-02 through A-07 and overall 02A remain UNVERIFIED; no crop-output or measured comparison is claimed. The A-01 fixture covers frozen provider/catalog/cache replay within mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed.",
+  "status": "Environment-v2, partial source-equation, A-01, and preregistered A-02 evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 has a preregistered four-case v2 reducer fixture; candidate tests and comparisons have not run, so A-02 through A-07 and overall 02A remain UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -33,7 +33,8 @@
     "v2EarlyManualHarvestRetrySoftwareFixture": "V2-EARLY-MANUAL-HARVEST-RETRY-SYNTHETIC-01",
     "v3ElevatedTargetManualHarvestPreregisteredFixture": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01",
     "v3MixedTargetAutoHarvestPreregisteredFixture": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01",
-    "ohayouV4ReplayIntegrationPreregisteredFixture": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json (OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01)"
+    "ohayouV4ReplayIntegrationPreregisteredFixture": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json (OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01)",
+    "a02TomatoThermalLocationWindowPreregisteredFixture": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json (A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01)"
   },
   "sources": [
     {
@@ -48,6 +49,19 @@
       },
       "licenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction.",
       "sourceVersion": "EM 9305, January 2021 PDF"
+    },
+    {
+      "id": "OSU-EM9305-2021-HTML",
+      "citation": "Andrews et al., Oregon State University Extension EM 9305, Vegetable Degree-Day Models: An Introduction for Farmers and Gardeners, Tomato, Table 6.",
+      "url": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "retrievedDate": "2026-10-28",
+      "artifact": {
+        "type": "HTML response body",
+        "sha256": "6b8b1968750692bafa698f9435ef415cdce4dbaf9512604208a8a9de0522c396",
+        "localPath": null
+      },
+      "licenseOrReuse": "Copyright © Oregon State University. No dataset license is stated. Record only derived parameter facts; do not copy source prose or code.",
+      "sourceVersion": "OSU Extension EM 9305 HTML as accessed 2026-10-28; source scope is mainly irrigated Willamette Valley trials and transfer may reduce accuracy."
     },
     {
       "id": "MICHELON-2020-AGR-10-668",
@@ -2321,6 +2335,124 @@
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "status": "PASS for the specified synthetic A-01 replay software contract on exact code SHA b7d49534c480d8589925371dba76cd9d989c56f6 and exact-head PR #82 run 40690699236 (four named checks passed). Provider/database seams are mocked; renderToString verifies callbacks/refs only. Native IndexedDB, mounted UI/effects, broader application caches, crop accuracy, biological validity, measured/reference agreement, and predictive validity are not established. A-02 through A-07 and overall 02A remain UNVERIFIED."
+    },
+    {
+      "id": "A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v2 reducer-state software fixture; not a crop benchmark",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "cultivar": "Not asserted; OSU Table 6 values are a four-cultivar target range."
+      },
+      "environment": "Four ten-day constant-temperature weather series at two synthetic location tags; weather is injected directly, not retrieved for geographic coordinates.",
+      "modelVersion": "crop-model-v2/run-inputs-v2/crop-parameters-v3",
+      "sourceEvidence": {
+        "id": "OSU-EM9305-2021-HTML",
+        "url": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+        "retrievedDate": "2026-10-28",
+        "artifactSha256": "6b8b1968750692bafa698f9435ef415cdce4dbaf9512604208a8a9de0522c396",
+        "licenseOrReuse": "Copyright © Oregon State University; no dataset license stated; no source prose or code copied.",
+        "domain": "Mostly irrigated Willamette Valley source trials; transfer to other climates may reduce accuracy."
+      },
+      "sourceParameters": {
+        "tBaseC": 7.2,
+        "tUpperC": 33.3,
+        "targetCdaysRange": [1024, 1117],
+        "targetIsRangeOnly": true,
+        "midpointSelected": false,
+        "method": "Single sine with horizontal cutoff; OSU Table 6",
+        "startEvent": "transplanting at 3–5 true leaves",
+        "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
+        "sourceTableValuesFahrenheitDays": [1844, 1970, 1976, 2010],
+        "conversion": "Fahrenheit degree-days divided by 1.8; endpoint range rounded to 1024–1117°C·days"
+      },
+      "syntheticInputs": {
+        "baseCodeSha": "1df6d6c9d015172fabb1dda5003ef4d785f85f8b",
+        "soil": "Unknown-source synthetic soil, AWC 1 mm/cm, organic matter 0%; positive AWC is reducer support scaffolding only.",
+        "productionAndRootZone": "Complete qualified synthetic neutral inputs satisfy the v2 replay gate; RUE, initial dry matter, PAR interception, harvest index, and Kc are zero. They are not tomato production or root-zone parameters.",
+        "otherDailyFields": "Precipitation, ETo, GDD base proxy, and natural DLI are fixed at zero; no interventions. The same five-day prefix is used for both horizon lengths.",
+        "locationTags": "synthetic-location-a and synthetic-location-b; no coordinates or real site observations"
+      },
+      "expected": {
+        "fixedTargetCdays": [1024, 1117],
+        "thermalProgressRange": "[gddAccumC/1117, gddAccumC/1024]",
+        "reducerBiomassFrac": "gddAccumC/1117 (conservative lower progress bound)",
+        "cases": [
+          {
+            "locationTag": "synthetic-location-a",
+            "window": "cold",
+            "dailyTMinTMaxC": [4, 12],
+            "dailyGddCdays": 1.69879025545306,
+            "gddAccumCAfter5Days": 8.4939512772653,
+            "gddAccumCAfter10Days": 16.9879025545306,
+            "biomassFracAfter5Days": 0.007604253605429991,
+            "biomassFracAfter10Days": 0.015208507210859982
+          },
+          {
+            "locationTag": "synthetic-location-a",
+            "window": "warm",
+            "dailyTMinTMaxC": [18, 30],
+            "dailyGddCdays": 16.8,
+            "gddAccumCAfter5Days": 84,
+            "gddAccumCAfter10Days": 168,
+            "biomassFracAfter5Days": 0.07520143240823635,
+            "biomassFracAfter10Days": 0.1504028648164727
+          },
+          {
+            "locationTag": "synthetic-location-b",
+            "window": "cold",
+            "dailyTMinTMaxC": [2, 10],
+            "dailyGddCdays": 0.73097713534195,
+            "gddAccumCAfter5Days": 3.65488567670975,
+            "gddAccumCAfter10Days": 7.3097713534195,
+            "biomassFracAfter5Days": 0.0032720552163918977,
+            "biomassFracAfter10Days": 0.0065441104327837955
+          },
+          {
+            "locationTag": "synthetic-location-b",
+            "window": "warm",
+            "dailyTMinTMaxC": [20, 32],
+            "dailyGddCdays": 18.8,
+            "gddAccumCAfter5Days": 94,
+            "gddAccumCAfter10Days": 188,
+            "biomassFracAfter5Days": 0.08415398388540735,
+            "biomassFracAfter10Days": 0.1683079677708147
+          }
+        ],
+        "samePrefixControl": "For each of the four registered weather cases, with the same frozen model inputs, the five-day reducer state must match the state after the same prefix of the ten-day run; the target remains exactly [1024,1117] in both horizons.",
+        "meanDailyGddCIndependenceControl": {
+          "series": "synthetic-location-a warm, ten days of 18/30°C; same frozen v2 modelInputs and horizon in both runs",
+          "onlyChangedField": "RunConfig.meanDailyGddC",
+          "pairedValues": [0, 14],
+          "expectedBoth": {
+            "targetRangeCdays": [1024, 1117],
+            "gddAccumCAfter5Days": 84,
+            "gddAccumCAfter10Days": 168,
+            "biomassFracAfter5Days": 0.07520143240823635,
+            "biomassFracAfter10Days": 0.1504028648164727
+          },
+          "scope": "The v2 fixed target range and thermal progress fields (gddAccumC and biomassFrac) must be independent of the legacy field; this does not claim independence in unrelated v2 calculations or test/alter v1 compatibility."
+        }
+      },
+      "tolerance": "Absolute gddAccumC deviation ≤1e-10 °C·day and biomassFrac deviation ≤1e-12 dimensionless; target, crop/model identity, day counts, and frozen input equality are exact structural checks.",
+      "missingInputs": [
+        "Cultivar mapping for the four source target values",
+        "Measured daily weather and site coordinates",
+        "Source-backed tomato production and root-zone parameter sets",
+        "Independent measured/reference outcomes and a held-out comparison design"
+      ],
+      "evidence": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json",
+      "reproduction": "Planned, not run: npx vitest run src/lib/sim/crop-model-v2.test.ts -t \"runs frozen tomato thermal state across synthetic locations and horizons\"",
+      "preregistrationCheckpoint": "Base code SHA 1df6d6c9d015172fabb1dda5003ef4d785f85f8b passed exact-head run 40692311970. That run predates this preregistration artifact and does not cover candidate code.",
+      "acceptance": {
+        "row": "A-02",
+        "status": "UNVERIFIED; preregistered, candidate not run",
+        "owner": "Crop-model engineer; independent thermal/source reviewer; lead integration",
+        "retest": "Implement the focused reducer fixture only after preregistration acceptance; run the focused test and exact-head CI. No crop accuracy claim."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Preregistered synthetic reducer-state behavior only. Candidate tests and comparisons have not run. No cultivar accuracy, biological validity, location-weather resolution, measured/reference agreement, or prediction is established; A-02 and overall 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
