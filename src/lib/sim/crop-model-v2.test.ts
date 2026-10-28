@@ -17,7 +17,7 @@ import {
 } from './crop-model-v2';
 import type { DailyEnvironment, FrozenCropModelParametersV2, RunConfig, SimState } from './types';
 import { freezeRunModelInputsV2 } from './model-inputs';
-import { createRun, stepDay } from './engine';
+import { createRun, simulateRun, stepDay } from './engine';
 
 const rootReferenceCoverage = rootReferenceCoverageRecord as {
   catalogCoverage: Array<{
@@ -558,5 +558,49 @@ describe('crop model v2 equation helpers', () => {
     );
     expectA02ThermalStatesEqual(zeroRun.day5, fourteenRun.day5);
     expectA02ThermalStatesEqual(zeroRun.final, fourteenRun.final);
+  });
+
+  it('replays a complete frozen v2 run deterministically with finite output', () => {
+    const baseConfig = a02BaseConfig();
+    const tomato = cropLibrary.find((crop) => crop.id === a02TomatoThermalFixture.crop.catalogCropId)!;
+    const modelInputs = freezeRunModelInputsV2(baseConfig, {
+      soil: {
+        awcMmPerCm: a02TomatoThermalFixture.syntheticReducerInputs.soil.awcMmPerCm,
+        organicMatterPct: a02TomatoThermalFixture.syntheticReducerInputs.soil.organicMatterPct,
+      },
+      crops: [tomato],
+      cropParametersV2: [a02SyntheticCropParameters],
+    });
+    const weatherCase = a02TomatoThermalFixture.weatherCases[0]!;
+    const config: RunConfig = { ...baseConfig, dayCount: weatherCase.days, modelInputs };
+    const weather = a02WeatherDays(
+      config.startDate,
+      weatherCase.days,
+      weatherCase.dailyTMinC,
+      weatherCase.dailyTMaxC,
+    );
+
+    expect(config.cropModelVersion).toBe('crop-model-v2');
+    expect(config.modelInputs?.model).toBe('run-inputs-v2');
+
+    const first = simulateRun(config, weather);
+    const replay = simulateRun(config, weather);
+
+    expect(replay.events).toEqual(first.events);
+    expect(replay.finalState).toEqual(first.finalState);
+    expect(replay.summary).toEqual(first.summary);
+
+    function expectFiniteNumericLeaves(value: unknown, path: string): void {
+      if (typeof value === 'number') {
+        expect(Number.isFinite(value), `${path} must be finite`).toBe(true);
+      } else if (value !== null && typeof value === 'object') {
+        for (const [key, child] of Object.entries(value)) {
+          expectFiniteNumericLeaves(child, `${path}.${key}`);
+        }
+      }
+    }
+
+    expectFiniteNumericLeaves(first, 'first result');
+    expectFiniteNumericLeaves(replay, 'replay result');
   });
 });
