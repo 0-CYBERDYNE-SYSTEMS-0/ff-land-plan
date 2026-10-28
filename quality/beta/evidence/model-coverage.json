@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down, paired tomato root-depth, and A-03 total-solar replay fixtures passed local gates and exact-head implementation CI (A-05 d4e8216/run 40607076825; tomato root-depth 3857470/run 40640752345; A-03 a7c3d0a/run 40614576932); A-07 mixed-target v3 routing/payout passed focused execution and local gates, then exact-head PR #82 CI on 22cd5f5/run 40646657273; all are synthetic software evidence only; candidate comparisons not run",
+  "preparedDate": "2026-10-28",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down, paired tomato root-depth, and A-03 total-solar replay fixtures passed local gates and exact-head implementation CI (A-05 d4e8216/run 40607076825; tomato root-depth 3857470/run 40640752345; A-03 a7c3d0a/run 40614576932); A-07 mixed-target v3 routing/payout passed focused execution and local gates, then exact-head PR #82 CI on 22cd5f5/run 40646657273; A-05 available-water-cap fixture is preregistered and independently reviewed but not executed; all are synthetic software evidence only; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -1685,6 +1685,78 @@
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "status": "PASS for the preregistered synthetic one-day software invariant. Focused test: npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\" (1 passed, 25 skipped). Full npm test: 47 files / 250 tests. npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run check:private (525 tracked files), JSON parsing and git diff --check passed. No build:beta profile exists; the Vite native-config-loader and large-chunk advisories remain. S2 independently approved the completed test; S3 found no observer false-pass or cleanup leak in the current excerpt. The initial no-observer pass, full-observer strict comparison against decimal 0.6, and unregistered 15-decimal-tolerance pass remain not accepted. Exact-head preregistration CI run 40627410935 passed on docs-only SHA 75bf26f35a45d3aa00a9850b4907c5639a654a2f; it predates the candidate test. Exact-head code/evidence commit 2ac708fa58719d69f7d19863bccf97d226c4cba8 passed PR #82 run 40628921459: all four named checks — test + typecheck + build (36s), Playwright production Pages-path smoke (3/3 in 4.7m; job 5m14s), secret + private-file scan (14s), and GitGuardian Security Checks (2s). Pages journeys passed: production build boots under the GitHub Pages project base path; unsupported environment-v2 run opens under Pages and retains its stored summary; unsupported v4 crop lifecycle is explained in World and retains its stored summary. This verifies synthetic equation/software behavior and repository checks only; no crop accuracy, biological validity, measured/reference agreement, or predictive claim. A-05 and 02A remain UNVERIFIED overall."
+    },
+    {
+      "id": "FAO56-V2-AVAILABLE-WATER-CAP-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v2 one-day stressed-uptake cap invariant; not a crop or soil benchmark",
+      "sourceId": "FAO-56-1998",
+      "sourceArtifact": {
+        "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+        "retrievedDate": "2026-10-27",
+        "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+        "bytes": 137909,
+        "licenseOrReuse": "The existing source artifact is retained as provenance only; no source text or code is copied."
+      },
+      "sourceReference": "FAO-56 root-zone equations and tomato Table 22 p=0.40 are method/reference inputs only; no source trajectory or output is reproduced or compared. OSU thermal inputs are frozen for reducer routing only.",
+      "crop": {
+        "slug": "tomato",
+        "catalogCropId": 1,
+        "catalogSnapshot": "Complete crop snapshot is frozen in the linked fixture; catalog identity is not a cultivar-equivalence or accuracy claim.",
+        "startEvent": "transplanting"
+      },
+      "thermalParameters": {
+        "tBaseC": 7.2,
+        "tUpperC": 33.3,
+        "gddToMaturityCdays": [1024, 1117],
+        "startEvents": ["transplanting"],
+        "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6",
+        "usage": "Frozen route input only; no maturity-timing claim."
+      },
+      "environment": "One-day synthetic standard open-field v2 route; ETo=5 mm/day, TMin/TMax=20/30 C, known DLI=18 mol/m2/day, no environment-v2 snapshot.",
+      "modelVersion": "crop-model-v2",
+      "runInputsVersion": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "syntheticInputs": {
+        "awcMmPerCm": 1.0,
+        "organicMatterPct": 2.4,
+        "soilSource": "unknown",
+        "effectiveRootDepthCm": 5,
+        "rootDevelopment": "none",
+        "initialStorageFraction": 0.2,
+        "initialStorageMm": 1,
+        "pTableReference": 0.4,
+        "cropCoefficient": 1.2,
+        "etoMmDay": 5,
+        "etcMmDay": 6,
+        "precipMm": 0,
+        "irrigationMm": 0,
+        "runoffMm": 0,
+        "capillaryRiseMm": "omitted at reducer boundary; defaults to 0",
+        "rootGrowthStorageMm": 0,
+        "production": "Synthetic one-day ancillary inputs; no DM or yield response is accepted by this fixture."
+      },
+      "expected": {
+        "capacityMm": 5,
+        "initialStorageMm": 1,
+        "initialDepletionMm": 4,
+        "adjustedP": 0.36,
+        "readilyAvailableWaterMm": 1.8,
+        "stressCoefficientKs": 0.3125,
+        "ksAdjustedPotentialTranspirationMm": 1.875,
+        "availableWaterMm": 1,
+        "actualTranspirationMm": 1,
+        "finalStorageMm": 0,
+        "deepDrainageMm": 0,
+        "endDepletionMm": 5,
+        "waterBalanceResidualMm": 0,
+        "oneDayWaterUseMm": 1,
+        "replay": "events, final state, and summary match exactly"
+      },
+      "tolerance": "Arithmetic only: absolute deviation <=1e-12 mm for one-step water values and <=1e-12 dimensionless for adjusted p and Ks, derived from one-step double-precision operations. Frozen inputs, route, call count, zero precipitation/irrigation/runoff/root-growth inputs, omitted/default-zero capillary rise, 6 mm/day potential transpiration, nonnegative storage, and replay equality are exact structural checks; no comparison/tuning tolerance.",
+      "evidence": "quality/beta/evidence/fao56-v2-available-water-cap-synthetic.json",
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Preregistration reviewed by S1 (arithmetic) and S2 (novelty, contract, provenance); candidate not executed. A-05 and 02A remain UNVERIFIED overall."
     },
     {
       "id": "FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01",
