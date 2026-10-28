@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down focused test and full local gates passed; exact-head implementation CI passed on d4e8216 (run 40607076825); candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down and A-03 total-solar replay fixtures passed local gates and exact-head implementation CI (A-05 d4e8216/run 40607076825; A-03 a7c3d0a/run 40614576932); candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -1629,10 +1629,10 @@
       "expected": "Five preregistered daily rows for LAI, intercepted total solar radiation, DM gain and two-pool state; known-zero solar holds pools, unavailable solar holds pools and qualifies the run, and persisted RunRecord replay is exact.",
       "tolerance": "LAI, intercepted fraction/radiation, daily DM gain, pool state, and unrounded daily pool closure are within 1e-12 in their stated arithmetic units only. Dispatch, zero/null/omitted handling, serialization, freeze/fork/twin preservation, v5 compatibility, unsupported-summary preservation, and persisted replay equality are exact.",
       "evidence": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json",
-      "reproduction": "Focused: npx vitest run src/lib/sim/ohayou-v4.integration.test.ts src/lib/sim/crop-model-v4.test.ts src/lib/sim/model-inputs.test.ts src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts; 9 files / 70 focused tests passed. Full local gates: npm test (47 files / 250 tests), npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run test:e2e (3/3), npm run check:private (523 tracked files), and git diff --check passed. Exact-head code/evidence PR CI pending.",
+      "reproduction": "Focused: npx vitest run src/lib/sim/ohayou-v4.integration.test.ts src/lib/sim/crop-model-v4.test.ts src/lib/sim/model-inputs.test.ts src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts; 9 files / 70 focused tests passed. Full local gates: npm test (47 files / 250 tests), npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run test:e2e (3/3), npm run check:private (523 tracked files), and git diff --check passed. Exact-head PR #82 CI passed on SHA a7c3d0a (run 40614576932); all four named checks passed, including Pages smoke 3/3.",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Synthetic reducer/replay software checks executed; S2 replay/version review and S3 climate-boundary review approved; exact-head code/evidence PR CI pending. Enclosed v6 environment-v1/v2 coupling is fail-closed and untested. No candidate, calibration/holdout, measured-output, reference-agreement or predictive comparison. A-03 and 02A remain UNVERIFIED."
+      "status": "Synthetic reducer/replay software checks executed; S2 replay/version review and S3 climate-boundary review approved; exact-head PR #82 CI passed on SHA a7c3d0a (run 40614576932), all four named checks green and Pages smoke 3/3. Enclosed v6 environment-v1/v2 coupling is fail-closed and untested. No candidate, calibration/holdout, measured-output, reference-agreement or predictive comparison. A-03 and 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
@@ -3229,7 +3229,7 @@
       {
         "id": "ohayou-v4-total-solar-replay-integration",
         "tolerance": "LAI, intercepted solar fraction/radiation, daily DM gain, pool state, and unrounded daily pool closure ≤1e-12 in their respective arithmetic units; dispatch, zero/null/omitted serialization, v5 compatibility, preservation and replay checks exact",
-        "status": "preregistration independently reviewed; synthetic integration executed and locally verified; S2 replay/version and S3 climate-boundary reviews approved; exact-head code/evidence PR CI pending",
+        "status": "preregistration independently reviewed; synthetic integration executed and locally verified; S2 replay/version and S3 climate-boundary reviews approved; exact-head PR #82 CI passed on SHA a7c3d0a (run 40614576932), all four named checks green and Pages smoke 3/3",
         "basis": "Bounds apply only to independent double-precision equation recurrence, synthetic DM pool additions and arithmetic closure. They are not source-display, crop-error, calibration, or prediction tolerances.",
         "scope": "Executed synthetic crop-model-v4 structural two-pool integration using the opt-in run-inputs-v4 / crop-parameters-v6 Ohayou total-solar equation family. Freezes source K/RUE, synthetic LAI mapping/pools/allocation/thermal/root/stress/forcing, known zero, null and omitted solar with DLI decoys, JSON serialization, freeze/fork/twin preservation, unsupported replay rejection and stored-summary retention, and crop-parameters-v5 LINTUL compatibility. V6 with non-open environment-v1/v2 climate fails closed pending a separate coupling fixture. No candidate comparison, measured evidence, or crop accuracy claim.",
         "evidence": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json"
