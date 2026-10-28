@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "id": "V2-TARGET-CELL-EFFECTIVE-COUNT-HARVEST-MASS-SYNTHETIC-01",
+  "preparedDate": "2026-10-28",
+  "status": "Preregistered after independent S2 tolerance/contract review and S3 claim-boundary review; implementation and execution have not started.",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-07",
+    "requirement": "A bounded synthetic software check that the spacing-derived effective plant count and area-derived harvest mass are calculated for the same selected target cell; A-07 overall remains UNVERIFIED."
+  },
+  "classification": "synthetic crop-model-v2 target-scoped harvest/count software invariant; not a crop or model-accuracy benchmark",
+  "comparisonType": "one frozen software fixture; not a model-candidate, reference-model, measured-output, calibration, or holdout comparison",
+  "registeredAgainstCodeSha": "5ced0629e8f717ec1ba37f736fcf517fa9834dbd",
+  "inputFixtureReferences": [
+    {
+      "id": "V2-AUTO-MANUAL-HARVEST-PAYOUT-PARITY-SYNTHETIC-01",
+      "path": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic.json",
+      "role": "Reuse the existing synthetic v2 frozen-input and area-based harvest arithmetic conventions; this fixture has a separate target/count acceptance boundary."
+    },
+    {
+      "path": "src/lib/sim/model-inputs.test.ts",
+      "test": "existing v2 dry-matter harvest fixture near line 914",
+      "role": "Reuse the one-step synthetic 100 g/m2 state seed, 0.25 m cell, 0.5 harvest index, and target-qualified cell arrangement."
+    }
+  ],
+  "syntheticSetup": {
+    "model": {
+      "cropModelVersion": "crop-model-v2",
+      "modelInputsVersion": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "codePath": "src/lib/sim/engine.ts v2HarvestDryMatterKg and src/lib/plan.ts effectivePlantingArea"
+    },
+    "cropSnapshot": {
+      "slug": "lettuce",
+      "catalogCropId": 2,
+      "cultivar": "not asserted; catalog id is used for routing only",
+      "frozenPath": "RunModelInputsV2.crops[0]",
+      "spacingCm": 25,
+      "rowSpacingCm": 25,
+      "spacingOverride": "explicit synthetic software input chosen so one 0.25 m x 0.25 m cell yields exactly one effective modeled plant; not a sourced or crop-valid density"
+    },
+    "run": {
+      "cellM": 0.25,
+      "cellAreaM2": 0.0625,
+      "floorCell": "0,0",
+      "target": {
+        "kind": "growing-level",
+        "growingSpaceId": "space-a",
+        "levelId": "high"
+      },
+      "targetLocalCell": "0,0",
+      "targetKey": "generated with targetCellKey(target, '0,0')",
+      "cropStartEvent": "transplanting",
+      "date": "2026-10-01",
+      "management": "one manual harvest request for the elevated target cell only; automatic harvest disabled"
+    },
+    "frozenModelParameters": {
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "source": "usda-sda",
+        "scope": "existing synthetic test setup; not used as an accuracy claim"
+      },
+      "cropParameters": "Existing lettuceSourceParameterFixture() in src/lib/sim/model-inputs.test.ts; keep crop-model-v2/run-inputs-v2/crop-parameters-v3 identities frozen. The synthetic seed state supplies dryMatterGPerM2 directly."
+    },
+    "seededState": {
+      "biomassFrac": 1,
+      "gddAccumC": 731,
+      "dryMatterGPerM2": 100,
+      "scope": "manually seeded synthetic mature state used to isolate target harvest accounting"
+    },
+    "dailyEnvironment": {
+      "date": "2026-10-01",
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipMm": 0,
+      "etoMm": 0,
+      "dliNaturalMol": 0,
+      "gddBase10C": 15,
+      "provenance": "existing test-only synthetic one-day environment"
+    }
+  },
+  "registeredMetrics": [
+    {
+      "id": "spacing-derived-effective-plant-count",
+      "expected": "1 effective modeled plant for the one selected target cell",
+      "equation": "floor((1 cell * 0.25 m * 0.25 m) / ((25 cm / 100) * (25 cm / 100))) = 1",
+      "tolerance": "Exact integer equality.",
+      "basis": "The same frozen crop snapshot and RunConfig cell size feed the existing effectivePlantingArea helper. This is a software-derived count, not an observed physical plant count."
+    },
+    {
+      "id": "target-cell-harvest-mass",
+      "expected": "0.003125 kg for the selected target cell",
+      "equation": "100 g/m2 * 0.25 m * 0.25 m * 0.5 / 1000 = 0.003125 kg",
+      "tolerance": "Absolute deviation <= 1e-12 kg.",
+      "basis": "Reuse the existing v2 payout conversion bound for double-precision arithmetic/conversion only; not a crop-error tolerance."
+    },
+    {
+      "id": "target-routing-and-state",
+      "expected": "Exactly one harvested event for the generated elevated target key; the same-coordinate floor sibling remains unharvested.",
+      "tolerance": "Exact event count, key, target reference, and harvested flags.",
+      "basis": "Deterministic software routing/state invariants."
+    },
+    {
+      "id": "same-input-replay",
+      "expected": "A second execution from identical frozen inputs and the same seeded state/environment equals the first in events, final state, and summary.",
+      "tolerance": "Exact structural equality.",
+      "basis": "Deterministic replay is a software invariant."
+    }
+  ],
+  "toleranceReview": {
+    "status": "Approved by independent S2 review before implementation and execution; registered metrics and tolerances are unchanged.",
+    "reviewedBy": "S2 independent preregistration validator",
+    "reviewedDate": "2026-10-28"
+  },
+  "claimBoundaryReview": {
+    "status": "S3 approved the bounded wording; no correction required.",
+    "reviewedBy": "S3 independent claim-boundary adversary",
+    "reviewedDate": "2026-10-28",
+    "finding": "The two calculations are independent and do not establish per-plant allocation; physical plant count and full A-07 reconciliation remain unverified."
+  },
+  "reproduction": {
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 effective plant count with target-scoped area harvest mass\"",
+    "status": "Not run; implementation has not started."
+  },
+  "implementationEstimate": {
+    "engineerHours": "1.0-1.5",
+    "source": "S1 inspect-only estimate",
+    "assumptions": [
+      "Add one test adjacent to the existing v2 area fixture and reuse its synthetic state, one-day step, and parameter helper.",
+      "Import the existing effectivePlantingArea helper; no production code or equation changes are needed.",
+      "Keep the count explicitly labeled spacing-derived and the same-coordinate floor sibling unharvested.",
+      "S2 independent review, full local gates, documentation, and CI are outside the estimate."
+    ]
+  },
+  "sourceBoundary": "No external dataset or independent source-model output is introduced. Cell size, spacing override, seeded dry matter, harvest index, and one-day environment are synthetic software inputs. No external data license applies to this fixture; code remains under the repository license.",
+  "missingInputs": [
+    "No observed plant count or plant survival measurement.",
+    "No crop/cultivar validation of the synthetic spacing override or harvest index.",
+    "No measured harvest mass, independent reference-model output, or held-out outcome."
+  ],
+  "acceptanceBoundary": "If approved and passed, this closes only one bounded synthetic software subcase for target-scoped spacing-derived effective count and area-based payout. It does not establish physical plant counts, crop accuracy, biological validity, measured/reference agreement, predictive validity, or overall A-07/02A acceptance.",
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false
+}
