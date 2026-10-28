@@ -256,7 +256,45 @@
     "S2Novelty": "Approved the stressed-demand-at-storage-cap case as a distinct reducer-route assertion before candidate execution.",
     "S2ContractAndProvenance": "Approved source metadata, synthetic-only boundaries, and fixture/manifest/decision-record consistency before candidate execution."
   },
+  "preregistrationCI": {
+    "pullRequest": 82,
+    "pullRequestState": "draft",
+    "headSha": "6526af7ab27b13b7ba6368c65f7f7c1a07b97591",
+    "runId": "40649451133",
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40649451133",
+    "result": "passed; verifies the preregistration commit only, not candidate execution or acceptance",
+    "contexts": [
+      {
+        "name": "test + typecheck + build",
+        "result": "PASS",
+        "duration": "40s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "result": "PASS",
+        "casesPassed": "3/3",
+        "testDuration": "5.6m",
+        "jobDuration": "6m14s",
+        "journeys": [
+          "production Pages boot",
+          "unsupported environment-v2 stored-summary retention",
+          "unsupported v4 lifecycle explanation and stored-summary retention"
+        ]
+      },
+      {
+        "name": "secret + private-file scan",
+        "result": "PASS",
+        "duration": "18s"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "result": "PASS",
+        "duration": "2s"
+      }
+    ],
+    "nextGate": "Candidate execution remains gated on all exact-head PR CI contexts passing for this documentation-reconciliation commit."
+  },
   "candidateComparison": false,
   "measuredOutputComparison": false,
-  "candidateExecution": "not run; preregistration only; candidate execution remains gated on commit and exact-head preregistration CI"
+  "candidateExecution": "not run; the preregistration SHA passed its exact-head CI, but candidate execution remains gated on exact-head PR CI for this documentation-reconciliation commit"
 }

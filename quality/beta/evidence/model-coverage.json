@@ -1756,7 +1756,7 @@
       "evidence": "quality/beta/evidence/fao56-v2-available-water-cap-synthetic.json",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Preregistration reviewed by S1 (arithmetic) and S2 (novelty, contract, provenance); candidate not executed. A-05 and 02A remain UNVERIFIED overall."
+      "status": "Preregistration reviewed by S1 (arithmetic) and S2 (novelty, contract, provenance). Exact preregistration head 6526af7ab27b13b7ba6368c65f7f7c1a07b97591 passed all four PR #82 contexts in run 40649451133: test + typecheck + build (40s); Playwright production Pages-path smoke (3/3; tests 5.6m, job 6m14s); secret + private-file scan (18s); GitGuardian Security Checks (2s). Pages journeys: production Pages boot; unsupported environment-v2 stored-summary retention; unsupported v4 lifecycle explanation and stored-summary retention. This verifies the preregistration commit only. Candidate not executed; it remains gated on exact-head PR CI for this documentation-reconciliation commit. A-05 and 02A remain UNVERIFIED overall."
     },
     {
       "id": "FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01",
