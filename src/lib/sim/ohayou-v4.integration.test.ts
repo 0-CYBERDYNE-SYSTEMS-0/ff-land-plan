@@ -4,6 +4,7 @@ import { cropThermalParams } from '@/data/cropThermalParams';
 import { targetCellKey } from '@/lib/growingTargets';
 import type { CropStartEvent, Observation } from '@/types';
 import fixture from '../../../quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json';
+import lightFixture from '../../../quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json';
 import { leafAreaIndexFromCanopyDryMatter } from './crop-model-v2';
 import { createRun, simulateRun, stepDay, type SimRunCtx } from './engine';
 import { freezeEnvironmentModelInputsV2, freezeRunModelInputs, freezeRunModelInputsV4, inspectRunModelSupport } from './model-inputs';
@@ -343,6 +344,203 @@ describe('crop-model-v4 Ohayou total-solar frozen integration', () => {
     expect(undefinedSolarReplay.finalState.cells).toEqual(replay.finalState.cells);
     expect(undefinedSolarReplay.finalState.modelQualificationReasons).toEqual(replay.finalState.modelQualificationReasons);
     expectRecordReplay(parsed);
+  });
+
+  it('holds thermal state fixed across matched total-solar inputs', () => {
+    const runConfig = lightFixture.syntheticInputs.runConfig;
+    const run = frozenRun({ dayCount: runConfig.dayCount });
+    expect(crop.slug).toBe(lightFixture.syntheticInputs.cropSnapshot.catalogSlug);
+    expect(run).toMatchObject({
+      cropModelVersion: lightFixture.modelDispatch.cropModelVersion,
+      startDate: runConfig.startDate,
+      dayCount: runConfig.dayCount,
+      scenario: runConfig.scenario,
+      tempDeltaC: runConfig.tempDeltaC,
+      precipMultiplier: runConfig.precipMultiplier,
+      interventions: runConfig.interventions,
+      autoHarvest: runConfig.autoHarvest,
+    });
+    expect(run.basePlan.planting).toEqual(runConfig.plan.planting);
+    expect(run.cropStartEvents).toEqual({ [cellKey]: lightFixture.syntheticInputs.cropSnapshot.startEvent });
+
+    const modelInputs = run.modelInputs;
+    if (modelInputs?.model !== 'run-inputs-v4') throw new Error('Expected frozen run-inputs-v4.');
+    expect(modelInputs.parameterSetVersion).toBe(lightFixture.modelDispatch.parameterSetVersion);
+    expect(modelInputs.soil).toMatchObject({
+      awcMmPerCm: lightFixture.syntheticInputs.soil.awcMmPerCm,
+      organicMatterPct: lightFixture.syntheticInputs.soil.organicMatterPct,
+    });
+    const cropParameters = modelInputs.cropParameters.find((entry) => entry.cropId === CROP_ID);
+    expect(cropParameters?.thermal).toMatchObject({
+      tBaseC: lightFixture.syntheticInputs.cropSnapshot.thermal.tBaseC,
+      tUpperC: lightFixture.syntheticInputs.cropSnapshot.thermal.tUpperC,
+      gddToMaturityCdays: lightFixture.syntheticInputs.cropSnapshot.thermal.gddToMaturityCdays,
+    });
+    expect(cropParameters?.rootZone).toMatchObject({
+      effectiveRootDepthCm: lightFixture.syntheticInputs.rootZone.effectiveRootDepthCm,
+      depletionFraction: lightFixture.syntheticInputs.rootZone.depletionFraction,
+      cropCoefficient: lightFixture.syntheticInputs.rootZone.cropCoefficient,
+      initialStorageFraction: lightFixture.syntheticInputs.rootZone.initialStorageFraction,
+    });
+    expect(cropParameters?.production).toMatchObject({
+      equationFamily: lightFixture.syntheticInputs.frozenProductionInputs.equationFamily,
+      rueGPerMjInterceptedTotalSolar: lightFixture.syntheticInputs.frozenProductionInputs.sourceRUEGPerMjInterceptedTotalSolar,
+      stressFactor: lightFixture.syntheticInputs.frozenProductionInputs.stressFactor,
+      canopy: {
+        kTotalSolar: lightFixture.syntheticInputs.frozenProductionInputs.sourceKTotalSolar,
+        specificLeafAreaM2PerKg: lightFixture.syntheticInputs.frozenProductionInputs.laiMapping.specificLeafAreaM2PerKg,
+        leafStemPartitionParameterM2PerKg: lightFixture.syntheticInputs.frozenProductionInputs.laiMapping.leafStemPartitionParameterM2PerKg,
+      },
+      allocation: {
+        canopyShare: lightFixture.syntheticInputs.frozenProductionInputs.dailyAllocation.canopyShare,
+        harvestableShare: lightFixture.syntheticInputs.frozenProductionInputs.dailyAllocation.harvestableShare,
+      },
+    });
+
+    const environment = lightFixture.syntheticInputs.dailyEnvironment;
+    const solarInputs = environment.scenarioSolarRadiationMJm2Day;
+    const solarScenarios = [
+      { id: 'knownZero', solarRadiationMJm2Day: solarInputs.knownZero },
+      { id: 'positiveSyntheticLevel1', solarRadiationMJm2Day: solarInputs.positiveSyntheticLevel1 },
+      { id: 'positiveSyntheticLevel2', solarRadiationMJm2Day: solarInputs.positiveSyntheticLevel2 },
+      { id: 'unavailableNullWithDliDecoy', solarRadiationMJm2Day: solarInputs.unavailableExplicitNull },
+    ];
+    expect(solarScenarios).toEqual(lightFixture.expected.cases.map(({ id, solarRadiationMJm2Day }) => ({
+      id,
+      solarRadiationMJm2Day,
+    })));
+    const unavailableCase = lightFixture.expected.cases.find((expected) => expected.id === 'unavailableNullWithDliDecoy');
+    if (!unavailableCase || !('qualificationReason' in unavailableCase)) {
+      throw new Error('Unavailable-light case must register a qualification reason.');
+    }
+    const unavailableSolarReason = unavailableCase.qualificationReason;
+    const environments: DailyEnvironment[] = solarScenarios.map(({ solarRadiationMJm2Day }) => ({
+      date: environment.date,
+      ...environment.sharedValues,
+      solarRadiationMJm2Day,
+      provenance: {
+        tMinC: 'default',
+        tMaxC: 'default',
+        precipMm: 'default',
+        etoMm: 'default',
+        solarRadiationMJm2Day: 'synthetic',
+      },
+    }));
+    const withoutSolar = (env: DailyEnvironment) => {
+      const shared = { ...env };
+      delete shared.solarRadiationMJm2Day;
+      return shared;
+    };
+    const sharedEnvironment = withoutSolar(environments[0]!);
+    for (const [index, env] of environments.entries()) {
+      expect(withoutSolar(env)).toEqual(sharedEnvironment);
+      expect(env.solarRadiationMJm2Day).toBe(solarScenarios[index]!.solarRadiationMJm2Day);
+      expect(env.dliNaturalMol).toBe(environment.sharedValues.dliNaturalMol);
+      expect(env.provenance.solarRadiationMJm2Day).toBe('synthetic');
+    }
+
+    const closeToA03 = (actual: number, expected: number, bound: number): void => {
+      expect(Math.abs(actual - expected)).toBeLessThanOrEqual(bound);
+    };
+    const tolerance = lightFixture.tolerances;
+    const arms = lightFixture.expected.cases.map((expected, index) => {
+      const env = environments[index]!;
+      const initial = createRun(run, ctx);
+      const before = initial.cells[cellKey]!;
+      const stepped = stepDay(initial, env, run, ctx);
+      const after = stepped.state.cells[cellKey]!;
+      return {
+        config: run,
+        env,
+        expected,
+        before,
+        after,
+        state: stepped.state,
+        actualGain: after.dryMatterGPerM2! - before.dryMatterGPerM2!,
+      };
+    });
+
+    expect(arms.every((arm) => arm.config === run && arm.config.modelInputs === modelInputs)).toBe(true);
+    const thermalState = (cell: typeof arms[number]['after']) => ({
+      gddAccumC: cell.gddAccumC,
+      biomassFrac: cell.biomassFrac,
+      floweringFrac: cell.floweringFrac,
+      stage: cell.stage,
+    });
+    const firstThermalState = thermalState(arms[0]!.after);
+    for (const arm of arms) expect(thermalState(arm.after)).toEqual(firstThermalState);
+    expect(arms.map((arm) => arm.after.biomassFrac >= 1)).toEqual(
+      arms.map(() => firstThermalState.biomassFrac >= 1),
+    );
+
+    const laiParameters = lightFixture.syntheticInputs.frozenProductionInputs.laiMapping;
+    const sourceK = lightFixture.syntheticInputs.frozenProductionInputs.sourceKTotalSolar;
+    const sourceRUE = lightFixture.syntheticInputs.frozenProductionInputs.sourceRUEGPerMjInterceptedTotalSolar;
+    const expectedBeginning = lightFixture.expected.sharedBeginningState;
+    const positiveGains: number[] = [];
+    for (const arm of arms) {
+      const lai = leafAreaIndexFromCanopyDryMatter(
+        arm.before.canopyDryMatterGPerM2! / 1000,
+        laiParameters.specificLeafAreaM2PerKg,
+        laiParameters.leafStemPartitionParameterM2PerKg,
+      );
+      const interceptedFraction = 1 - Math.exp(-sourceK * lai);
+      closeToA03(lai, expectedBeginning.leafAreaIndexM2PerM2, tolerance.leafAreaIndex.maximumAbsoluteDeviation);
+      closeToA03(interceptedFraction, expectedBeginning.interceptedSolarFraction, tolerance.interceptedSolarFraction.maximumAbsoluteDeviation);
+      closeToA03(arm.before.canopyDryMatterGPerM2!, expectedBeginning.canopyDryMatterGPerM2, tolerance.poolState.maximumAbsoluteDeviation);
+      closeToA03(arm.before.harvestableDryMatterGPerM2!, expectedBeginning.harvestableDryMatterGPerM2, tolerance.poolState.maximumAbsoluteDeviation);
+
+      expect(arm.before.dryMatterGPerM2).toBe(
+        arm.before.canopyDryMatterGPerM2! + arm.before.harvestableDryMatterGPerM2!,
+      );
+      const solar = arm.env.solarRadiationMJm2Day;
+      if (solar === null || solar === undefined) {
+        expect(arm.expected.id).toBe('unavailableNullWithDliDecoy');
+        expect(solar).toBeNull();
+        expect(arm.expected.productionStatus).toBe('unavailable');
+        expect(arm.expected.interceptedSolarRadiationMJm2Day).toBeNull();
+        expect(arm.expected.dailyDryMatterGainGPerM2Day).toBeNull();
+        expect(arm.env.dliNaturalMol).toBe(18);
+        expect(arm.actualGain).toBe(0);
+        expect(arm.after.canopyDryMatterGPerM2).toBe(arm.before.canopyDryMatterGPerM2);
+        expect(arm.after.harvestableDryMatterGPerM2).toBe(arm.before.harvestableDryMatterGPerM2);
+        expect(arm.after.dryMatterGPerM2).toBe(arm.before.dryMatterGPerM2);
+        expect(arm.state.modelQualificationReasons).toContain(unavailableSolarReason);
+      } else {
+        const expectedIntercepted = arm.expected.interceptedSolarRadiationMJm2Day;
+        const expectedGain = arm.expected.dailyDryMatterGainGPerM2Day;
+        if (expectedIntercepted === null || expectedGain === null) {
+          throw new Error('Known solar cases must have numeric equation expectations.');
+        }
+        const interceptedSolar = solar * interceptedFraction;
+        closeToA03(interceptedSolar, expectedIntercepted, tolerance.interceptedSolarRadiation.maximumAbsoluteDeviation);
+        closeToA03(arm.actualGain, expectedGain, tolerance.dailyDryMatterGain.maximumAbsoluteDeviation);
+        closeToA03(arm.after.canopyDryMatterGPerM2!, arm.expected.endingCanopyDryMatterGPerM2, tolerance.poolState.maximumAbsoluteDeviation);
+        closeToA03(arm.after.harvestableDryMatterGPerM2!, arm.expected.endingHarvestableDryMatterGPerM2, tolerance.poolState.maximumAbsoluteDeviation);
+        closeToA03(arm.after.dryMatterGPerM2!, arm.expected.endingTotalAboveGroundDryMatterGPerM2, tolerance.poolState.maximumAbsoluteDeviation);
+        if (solar === 0) {
+          expect(arm.expected.id).toBe('knownZero');
+          expect(arm.actualGain).toBe(0);
+          expect(arm.after.canopyDryMatterGPerM2).toBe(arm.before.canopyDryMatterGPerM2);
+          expect(arm.after.harvestableDryMatterGPerM2).toBe(arm.before.harvestableDryMatterGPerM2);
+          expect(arm.state.modelQualificationReasons ?? []).not.toContain(unavailableSolarReason);
+        } else {
+          const reducerImpliedIntercepted = arm.actualGain / sourceRUE;
+          closeToA03(reducerImpliedIntercepted, expectedIntercepted, tolerance.interceptedSolarRadiation.maximumAbsoluteDeviation);
+          positiveGains.push(arm.actualGain);
+        }
+      }
+
+      expect(arm.after.dryMatterGPerM2).toBe(
+        arm.after.canopyDryMatterGPerM2! + arm.after.harvestableDryMatterGPerM2!,
+      );
+      const poolIncrement = (arm.after.canopyDryMatterGPerM2! - arm.before.canopyDryMatterGPerM2!)
+        + (arm.after.harvestableDryMatterGPerM2! - arm.before.harvestableDryMatterGPerM2!);
+      closeToA03(poolIncrement - arm.actualGain, 0, tolerance.dailyPoolClosure.maximumAbsoluteResidual);
+    }
+    expect(positiveGains).toHaveLength(2);
+    expect(positiveGains[1]).toBeGreaterThan(positiveGains[0]!);
+    expect(positiveGains[0]).toBeGreaterThan(0);
   });
 
   it('preserves v6 parameters and the complete solar series through freeze, fork and twin', () => {
