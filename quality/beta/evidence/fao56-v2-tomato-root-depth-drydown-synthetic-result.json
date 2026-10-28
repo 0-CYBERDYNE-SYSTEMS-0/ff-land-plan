@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01-CANDIDATE-RESULT",
+  "status": "focused candidate test passed and S2 independently approved; full local gates passed; exact-head code/evidence CI pending",
+  "classification": "synthetic crop-model-v2 reducer/software result only; not tomato validation or prediction",
+  "preregistration": {
+    "fixture": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json",
+    "commit": "de3aee478ed26ade1f123a3df075815f6d1d72a7",
+    "frozenInputsAndTolerancesChanged": false
+  },
+  "implementation": {
+    "testFile": "src/lib/sim/model-inputs.test.ts",
+    "testName": "replays preregistered paired tomato root-depth dry-down scenarios",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"replays preregistered paired tomato root-depth dry-down scenarios\"",
+    "result": "1 passed; 27 skipped; 1 test file passed",
+    "durationMs": 182,
+    "localDate": "2026-10-27",
+    "exactHeadCodeEvidenceCI": "pending after candidate code/evidence commit"
+  },
+  "verification": {
+    "independentReview": {
+      "status": "APPROVED",
+      "reviewer": "GPT-6 Luna max S2",
+      "scope": "Candidate implementation, frozen inputs, 20 daily assertions, deterministic replay, and corrected status record; no remaining findings."
+    },
+    "localGates": {
+      "npmTest": "PASS; 47 test files and 252 tests",
+      "typecheck": "PASS",
+      "builds": {
+        "standard": "PASS",
+        "demo": "PASS",
+        "pages": "PASS",
+        "beta": "NOT CONFIGURED; package.json has no build:beta script"
+      },
+      "privateFileGuard": "PASS; 527 tracked files",
+      "jsonAndWhitespace": "PASS; jq empty and git diff --check",
+      "productionPagesBrowser": {
+        "status": "PASS",
+        "command": "npm run test:e2e",
+        "result": "3 passed in 3.7m",
+        "journeys": [
+          "Production build boots under the GitHub Pages project base path",
+          "Unsupported environment-v2 run opens under Pages and retains its stored summary",
+          "Unsupported v4 crop lifecycle is explained in World and retains its stored summary"
+        ]
+      }
+    },
+    "buildWarnings": [
+      "Vite native-config-loader compatibility warning; build succeeded.",
+      "Vite chunk-size advisory above 500 kB; build succeeded."
+    ],
+    "exactHeadCodeEvidenceCI": "pending after candidate code/evidence commit"
+  },
+  "observedDispatch": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsVersion": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "climateRoute": "standard open-field; no environment snapshot",
+    "ordinaryNewRunDefaultChanged": false,
+    "pairedRunInputsDifferOnlyBy": "frozen effectiveRootDepthCm: 70 versus 150"
+  },
+  "observed": {
+    "shallow70cm": {
+      "tawMm": 105,
+      "rawMm": 37.8,
+      "initialStorageMm": 105,
+      "firstStressDay": 8,
+      "dailyRows": [
+        {"day":1,"startDepletionMm":0,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":99,"endDepletionMm":6,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":4},
+        {"day":2,"startDepletionMm":6,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":93,"endDepletionMm":12,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":8},
+        {"day":3,"startDepletionMm":12,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":87,"endDepletionMm":18,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":12},
+        {"day":4,"startDepletionMm":18,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":81,"endDepletionMm":24,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":16},
+        {"day":5,"startDepletionMm":24,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":75,"endDepletionMm":30,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":20},
+        {"day":6,"startDepletionMm":30,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":69,"endDepletionMm":36,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":24},
+        {"day":7,"startDepletionMm":36,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":63,"endDepletionMm":42,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":28},
+        {"day":8,"startDepletionMm":42,"stressCoefficient":0.9375000000000001,"actualTranspirationMm":5.625000000000001,"endStorageMm":57.375,"endDepletionMm":47.625,"dryMatterIncrementGPerM2":3.75,"cumulativeDryMatterGPerM2":31.75},
+        {"day":9,"startDepletionMm":47.625,"stressCoefficient":0.853794642857143,"actualTranspirationMm":5.122767857142858,"endStorageMm":52.25223214285714,"endDepletionMm":52.74776785714286,"dryMatterIncrementGPerM2":3.4151785714285694,"cumulativeDryMatterGPerM2":35.16517857142857},
+        {"day":10,"startDepletionMm":52.74776785714286,"stressCoefficient":0.7775629783163266,"actualTranspirationMm":4.665377869897959,"endStorageMm":47.58685427295918,"endDepletionMm":57.41314572704082,"dryMatterIncrementGPerM2":3.1102519132653086,"cumulativeDryMatterGPerM2":38.27543048469388}
+      ],
+      "day10CumulativeDryMatterGPerM2": 38.27543048469388,
+      "observedSummary": {"daysSimulated":10,"totalYieldKg":0,"yieldBasis":"dry-matter","modelQualificationStatus":"qualified"}
+    },
+    "deep150cm": {
+      "tawMm": 225,
+      "rawMm": 81,
+      "initialStorageMm": 225,
+      "firstStressDay": null,
+      "dailyRows": [
+        {"day":1,"startDepletionMm":0,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":219,"endDepletionMm":6,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":4},
+        {"day":2,"startDepletionMm":6,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":213,"endDepletionMm":12,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":8},
+        {"day":3,"startDepletionMm":12,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":207,"endDepletionMm":18,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":12},
+        {"day":4,"startDepletionMm":18,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":201,"endDepletionMm":24,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":16},
+        {"day":5,"startDepletionMm":24,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":195,"endDepletionMm":30,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":20},
+        {"day":6,"startDepletionMm":30,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":189,"endDepletionMm":36,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":24},
+        {"day":7,"startDepletionMm":36,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":183,"endDepletionMm":42,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":28},
+        {"day":8,"startDepletionMm":42,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":177,"endDepletionMm":48,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":32},
+        {"day":9,"startDepletionMm":48,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":171,"endDepletionMm":54,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":36},
+        {"day":10,"startDepletionMm":54,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":165,"endDepletionMm":60,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":40}
+      ],
+      "day10CumulativeDryMatterGPerM2": 40,
+      "observedSummary": {"daysSimulated":10,"totalYieldKg":0,"yieldBasis":"dry-matter","modelQualificationStatus":"qualified"}
+    }
+  },
+  "replay": {
+    "shallow70cm": "A second simulateRun with identical frozen inputs and environment series exactly matched events, final state, and summary; the simulateRun final state matched the stepDay trace.",
+    "deep150cm": "A second simulateRun with identical frozen inputs and environment series exactly matched events, final state, and summary; the simulateRun final state matched the stepDay trace."
+  },
+  "toleranceAndBoundary": {
+    "used": "The preregistered tolerances for p/RAW/Ks, daily water quantities/residuals, daily DM gain, and cumulative DM were unchanged.",
+    "result": "Actual daily values matched the preregistered rows within those arithmetic-only bounds; version, frozen inputs, day-8 stress onset, no-stress deep control, outcome direction, no-maturity/no-harvest, and replay assertions were exact.",
+    "scope": "Synthetic software behavior only. The FAO-56 Table 22 depth endpoints are fixed scenario bounds; no tomato root-growth trajectory, soil profile, cultivar equivalence, biological accuracy, measured comparison, reference-model agreement, or prediction is established. A-05 and 02A remain UNVERIFIED overall."
+  }
+}

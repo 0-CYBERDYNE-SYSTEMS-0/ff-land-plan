@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down and A-03 total-solar replay fixtures passed local gates and exact-head implementation CI (A-05 d4e8216/run 40607076825; A-03 a7c3d0a/run 40614576932); candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down and A-03 total-solar replay fixtures passed local gates and exact-head implementation CI (A-05 d4e8216/run 40607076825; A-03 a7c3d0a/run 40614576932); the paired tomato root-depth candidate passed its focused local test and exact-head code/evidence CI is pending; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -1704,9 +1704,10 @@
       "expected": "Preregistered daily FAO-56/v2 recurrence: shallow TAW/RAW=105/37.8 mm, stress begins day 8 and day-10 synthetic DM=38.27543048469388 g/m²; deep TAW/RAW=225/81 mm, no stress within ten days and day-10 synthetic DM=40 g/m². Every daily storage, depletion, transpiration, Ks and DM output is frozen in the linked fixture.",
       "tolerance": "p/RAW/Ks ≤1e-12 absolute; per-day water flux, storage, depletion and residual ≤1e-9 mm; daily DM gain ≤1e-9 g/m² and cumulative DM ≤1e-8 g/m². Scenario inputs, depth/capacity dispatch, day-8 onset, nonnegative storage, outcome direction and deterministic replay are exact.",
       "evidence": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json",
+      "candidateResult": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic-result.json",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "S2 independently approved preregistration before candidate execution on 2026-10-27. No candidate, measured-output or reference-model comparison authorized."
+      "status": "Focused candidate test passed locally against the frozen preregistration; S2 independently approved after the type-only correction. Full local verification passed (47 test files/252 tests, typecheck, standard/demo/Pages builds, private-file guard 527 tracked, JSON/whitespace, production Pages Playwright 3/3). Exact-head code/evidence CI remains pending. Synthetic software fixture slice only; A-05 and 02A remain UNVERIFIED overall. No measured-output or external-reference comparison was performed."
     },
     {
       "id": "FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01",
@@ -3362,7 +3363,7 @@
       {
         "id": "fao56-v2-tomato-root-depth-drydown",
         "tolerance": "p/RAW/Ks ≤1e-12 absolute; per-day water flux/storage/depletion/residual ≤1e-9 mm; daily DM gain ≤1e-9 g/m²; cumulative DM ≤1e-8 g/m²",
-        "status": "independently reviewed and approved before candidate execution by GPT-6 Luna max S2; candidate execution not authorized",
+        "status": "Tolerance approved before candidate execution by GPT-6 Luna max S2 on 2026-10-27; candidate independently approved by S2 after review and type-only fixes. Focused test and full local gates passed; exact-head code/evidence CI is pending. No measured-output or external-reference comparison was performed.",
         "basis": "Independent double-precision recurrence from the frozen FAO-56 p adjustment/root-zone method and synthetic v2 RUE path over at most ten updates. Numerical bounds cover arithmetic only, not crop error.",
         "scope": "Paired synthetic fixed-depth tomato scenarios at the FAO-56 Table 22 maximum-root-depth range endpoints. Exact inputs, depth/capacity dispatch, day-8 stress onset, direction, no-maturity/no-harvest conditions and replay are structural checks. Not a root-growth profile, candidate comparison, measured trial, or crop prediction.",
         "evidence": "quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json"
