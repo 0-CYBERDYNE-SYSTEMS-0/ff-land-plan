@@ -224,18 +224,22 @@ export function stepFao56RootZone(
   const inflowMm = fluxes.precipMm + fluxes.irrigationMm + (fluxes.capillaryRiseMm ?? 0) + rootGrowthStorageMm;
   const runoffMm = fluxes.runoffMm ?? 0;
   if (runoffMm > inflowMm) throw new RangeError('Runoff cannot exceed daily water inflow.');
-  const beforeDrainage = state.waterMm + inflowMm - runoffMm;
-  const deepDrainageMm = Math.max(0, beforeDrainage - capacityMm);
-  const afterDrainage = Math.min(capacityMm, beforeDrainage);
+  const beforeTranspirationMm = state.waterMm + inflowMm - runoffMm;
+  const waterForStressMm = Math.min(capacityMm, beforeTranspirationMm);
   const totalAvailableWaterMm = capacityMm;
   const readilyAvailableWaterMm = params.depletionFraction * totalAvailableWaterMm;
-  const depletionBeforeTranspirationMm = capacityMm - afterDrainage;
+  const depletionBeforeTranspirationMm = capacityMm - waterForStressMm;
   const stressCoefficient = depletionBeforeTranspirationMm <= readilyAvailableWaterMm
     ? 1
     : Math.max(0, Math.min(1, (totalAvailableWaterMm - depletionBeforeTranspirationMm)
       / Math.max(1e-12, totalAvailableWaterMm - readilyAvailableWaterMm)));
-  const actualTranspirationMm = Math.min(afterDrainage, fluxes.potentialTranspirationMm * stressCoefficient);
-  const waterMm = afterDrainage - actualTranspirationMm;
+  const actualTranspirationMm = Math.min(
+    beforeTranspirationMm,
+    fluxes.potentialTranspirationMm * stressCoefficient,
+  );
+  const afterTranspirationMm = beforeTranspirationMm - actualTranspirationMm;
+  const deepDrainageMm = Math.max(0, afterTranspirationMm - capacityMm);
+  const waterMm = Math.min(capacityMm, afterTranspirationMm);
   const depletionMm = capacityMm - waterMm;
   const residualMm = state.waterMm + inflowMm - runoffMm - deepDrainageMm - actualTranspirationMm - waterMm;
   return {

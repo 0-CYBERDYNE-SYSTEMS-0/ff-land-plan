@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2 and partial source-equation coverage remain qualified synthetic software evidence. A-05 available-water-cap is accepted as a synthetic software regression only. The complete same-day drainage-after-ET rerun preregistration is independently approved; focused attempts against the superseded incomplete record are non-qualifying. Candidate execution is gated on exact-head CI for the preregistration/documentation commit. A-05/02A remain UNVERIFIED overall; no model-output or measured comparison is claimed.",
+  "status": "Environment-v2 and partial source-equation coverage remain qualified synthetic software evidence. A-05 available-water-cap and same-day drainage-after-ET cases have local synthetic software results only. The same-day candidate code/evidence remains uncommitted with candidate exact-head CI pending; preregistration run 40664774492 covers only the preregistration commit. Attempts against the superseded incomplete same-day record are non-qualifying. A-05/02A remain UNVERIFIED overall; no model-output or measured comparison is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -2042,10 +2042,27 @@
         "endDepletionBoundsMm": "0 <= 2 <= TAW (160)"
       },
       "tolerance": "Arithmetic only: absolute deviation <=1e-12 mm for the frozen one-step water arithmetic and <=1e-6 mm per cell-day for the existing engine diagnostic residual; no model-error or tuning tolerance.",
-      "evidence": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json",
+      "evidence": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json; quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01-result.json",
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"applies v2 transpiration before same-day drainage and replays exactly\"",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "S2 independently approved the complete superseding preregistration before qualified candidate execution. Earlier attempts against the superseded incomplete record are excluded. candidateResult remains null; the preregistration/documentation commit must pass exact-head PR #82 CI before candidate execution. Synthetic software behavior only; A-05/02A remain UNVERIFIED.",
+      "status": "Local synthetic software candidate PASS: focused test 1 passed/30 skipped, grouped water tests 3 passed/28 skipped, full suite 48 files/257 tests, typecheck, standard/demo/Pages builds, and production Pages E2E 3/3 in 3.8m. Candidate code/evidence remains local and uncommitted; no candidate SHA or candidate-code CI exists. The private-file guard and final staged JSON/whitespace checks remain pending. Preregistration run 40664774492 is separate and does not cover the candidate. A-05/02A remain UNVERIFIED; no accuracy or comparison claim is made.",
+      "candidateCodeSha": null,
+      "candidateCodeCi": "PENDING; no exact-head candidate-code run exists",
+      "preregistrationCi": {
+        "commit": "78b82ef850ca5ae9c6051c07753cab225591a98b",
+        "runId": "40664774492",
+        "result": "PASS on exact preregistration SHA; all four named contexts; Pages 3/3 (suite 4.5m, job 5m11s). This run predates the candidate and is not candidate-code CI."
+      },
+      "localVerification": {
+        "focusedCandidate": "1 passed / 30 skipped",
+        "focusedWaterGroup": "3 passed / 28 skipped",
+        "fullTestSuite": "48 files / 257 tests",
+        "typecheck": "PASS",
+        "builds": "standard, demo, and Pages passed",
+        "productionPagesE2E": "3/3 in 3.8m",
+        "privateGuardAndFinalStagedChecks": "pending after staging"
+      },
       "sourceContext": {
         "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Eqs. 85 and 88.",
         "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
@@ -2090,7 +2107,7 @@
       },
       "priorAttemptDisposition": "Focused attempts using the superseded record are non-qualifying because inherited non-water routing inputs were not frozen. Their outputs must not be copied into this record or counted as candidate evidence.",
       "supersedes": "FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-01",
-      "candidateResult": null,
+      "candidateResult": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01-result.json",
       "tolerances": {
         "oneStepWaterArithmetic": "absolute deviation <=1e-12 mm for the preregistered one-step water arithmetic only, including drainage, transpiration, storage, depletion, and the directly calculated residual.",
         "cellDayWaterBalanceResidual": "absolute engine diagnostic residual <=1e-6 mm per cell-day, the existing water-residual limit.",
