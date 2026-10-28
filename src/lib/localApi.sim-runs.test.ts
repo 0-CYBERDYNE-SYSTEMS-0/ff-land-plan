@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cropLibrary } from '@/data/crops';
 import type { DailyEnvironment, EnvironmentModelInputsV2, RunRecord } from '@/lib/sim/types';
 import type { SoilProfile } from '@/lib/soil';
 import type { PlanState } from '@/types';
+import { simulateRun } from '@/lib/sim/engine';
 import { freezeEnvironmentModelInputsV2 } from '@/lib/sim/model-inputs';
 
 const dbState = vi.hoisted(() => ({ records: new Map<string, Map<string, unknown>>() }));
@@ -235,7 +237,7 @@ afterEach(() => {
 });
 
 describe('localApi.createSimRun', () => {
-  it('keeps v1 as the default and persists an explicit supported v2 version separately at a fixed time', async () => {
+  it('archives distinct v1 and unsupported v2 crop records at a fixed time', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-24T00:00:00.000Z'));
     let entropy = 0;
@@ -245,7 +247,9 @@ describe('localApi.createSimRun', () => {
     });
     vi.stubGlobal('crypto', { getRandomValues });
     const { localApi, state } = await loadApi(true);
-    state.plans[1] = structuredClone(basePlan);
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const plantedPlan = { ...structuredClone(basePlan), planting: { '0,0': tomato.id } };
+    state.plans[1] = plantedPlan;
 
     const v1 = await localApi.createSimRun({ farmId: 1, startDate: '2026-10-24', dayCount: 1 });
     const v2 = await localApi.createSimRun({
@@ -267,7 +271,7 @@ describe('localApi.createSimRun', () => {
     expect(v2.config.modelInputs).toMatchObject({
       model: 'run-inputs-v2',
       parameterSetVersion: 'crop-parameters-v3',
-      qualification: { status: 'supported' },
+      qualification: { status: 'unsupported' },
     });
     expect(records.find((record) => record.id === v1.id)).toEqual(v1);
     expect(records.find((record) => record.id === v2.id)).toEqual(v2);
@@ -287,14 +291,76 @@ describe('localApi.createSimRun', () => {
     expect(archivedV2.config.modelInputs).toMatchObject({
       model: 'run-inputs-v2',
       parameterSetVersion: 'crop-parameters-v3',
+      qualification: { status: 'unsupported' },
     });
     expect(archivedRecords.find((record) => record.id === archivedV1.id)?.summary).toEqual(v1.summary);
     expect(archivedRecords.find((record) => record.id === archivedV2.id)?.summary).toEqual(v2.summary);
 
+    const historicalConfig = structuredClone(archivedV1.config);
+    delete historicalConfig.cropModelVersion;
+    const archivedHistoricalV1: RunRecord = JSON.parse(JSON.stringify({
+      ...archivedV1,
+      id: 'run:1:historical-v1-archive',
+      config: historicalConfig,
+    }));
+    await expect(localApi.saveSimRun(archivedHistoricalV1)).resolves.toEqual(archivedHistoricalV1);
+    const storedHistoricalV1 = (await localApi.listSimRuns(1))
+      .find((record) => record.id === archivedHistoricalV1.id);
+    expect(storedHistoricalV1).toEqual(archivedHistoricalV1);
+    expect(storedHistoricalV1?.config.cropModelVersion).toBeUndefined();
+    if (!storedHistoricalV1 || storedHistoricalV1.config.modelInputs?.model !== 'run-inputs-v1') {
+      throw new Error('Expected the listed historical record to retain frozen v1 crop inputs.');
+    }
+    expect(archivedHistoricalV1.config.basePlan.planting).toEqual({ '0,0': tomato.id });
+    const frozenV1Inputs = archivedHistoricalV1.config.modelInputs;
+    if (!frozenV1Inputs || frozenV1Inputs.model !== 'run-inputs-v1') {
+      throw new Error('Expected the archived record to contain frozen v1 model inputs.');
+    }
+    expect(frozenV1Inputs.crops).toContainEqual(expect.objectContaining({
+      id: tomato.id,
+      name: tomato.name,
+      growthDays: tomato.growthDays,
+    }));
+    expect(frozenV1Inputs.soil).toEqual({ awcMmPerCm: 1.7, organicMatterPct: 2.4 });
+
+    const originalContext = {
+      soil: { awcMmPerCm: 1.7, organicMatterPct: 2.4 },
+      crops: [tomato],
+    };
+    const originalReplay = simulateRun(
+      archivedHistoricalV1.config,
+      archivedHistoricalV1.envSeries,
+      originalContext,
+    );
+    const changedTomato = {
+      ...tomato,
+      name: 'Changed live tomato',
+      growthDays: 1,
+      waterNeedMmDay: 100,
+      yieldKgPerPlant: 999,
+    };
+    const changedContext = {
+      soil: { awcMmPerCm: 0.1, organicMatterPct: 99 },
+      crops: [changedTomato],
+    };
+    const replayAfterContextChange = simulateRun(
+      storedHistoricalV1!.config,
+      storedHistoricalV1.envSeries,
+      changedContext,
+    );
+
+    expect(changedTomato.id).toBe(tomato.id);
+    expect(changedTomato).not.toEqual(storedHistoricalV1.config.modelInputs.crops[0]);
+    expect(changedContext.soil).not.toEqual(storedHistoricalV1.config.modelInputs.soil);
+    expect(originalReplay.summary).toEqual(storedHistoricalV1.summary);
+    expect(replayAfterContextChange.events).toEqual(originalReplay.events);
+    expect(replayAfterContextChange.finalState).toEqual(originalReplay.finalState);
+    expect(replayAfterContextChange.summary).toEqual(storedHistoricalV1.summary);
+
     vi.stubGlobal('crypto', {});
     await expect(localApi.createSimRun({ farmId: 1, startDate: '2026-10-24', dayCount: 1 }))
       .rejects.toThrow('Secure randomness is unavailable');
-    expect(await localApi.listSimRuns(1)).toHaveLength(2);
+    expect(await localApi.listSimRuns(1)).toHaveLength(3);
   });
 });
 
