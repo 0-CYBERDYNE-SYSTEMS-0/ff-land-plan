@@ -47,6 +47,8 @@
     "a04V3TransplantMissingEstablishmentPreregisteredFixture": "A04-V3-TRANSPLANT-MISSING-ESTABLISHMENT-FAIL-CLOSED-SYNTHETIC-01",
     "a04V3TransplantMissingEstablishmentPreregistration": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic.json",
     "a04V3TransplantMissingEstablishmentResult": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic-result.json",
+    "a04V3TransplantSourceClockMaturityEndpointPreregisteredFixture": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-01",
+    "a04V3TransplantSourceClockMaturityEndpointPreregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic.json",
     "a08AllCatalogV2MissingProfilePreregisteredFixture": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
     "a08AllCatalogV2MissingProfilePreregistration": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json",
     "a08AllCatalogV2MissingProfileResult": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic-result.json"
@@ -2623,6 +2625,35 @@
       "status": "PASS for this preregistered synthetic software subcase on code SHA 472c2514a2b3b9ff4dca03a44fa92cccdd5fc28d; exact-head PR #82 run 40776046948 passed test + typecheck + build, Pages smoke 3/3, and secret/private-file scan. No measured transplant state, crop accuracy, actual stored-summary retention, biological validity, or A-04/02A completion claim.",
       "independentReferenceModelComparison": false,
       "measuredHoldoutValidation": false
+    },
+    {
+      "id": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-01",
+      "classification": "preregistered synthetic v3 transplant source-clock and maturity-endpoint software invariant; no measured crop claim",
+      "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
+      "preregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic.json",
+      "setupDigest": "cf4e4c737c8b5bedb3ff26f5feaa3d0664e98b9bcc52c26aa9670134a8f54838",
+      "baselineCodeHead": "9010ca002378e48731d7d788ca1fb7cfc9ab3a18",
+      "inputFixtureReferences": [
+        "src/lib/sim/model-inputs.test.ts#syntheticStartEventParameter, frozen at baseline branch head",
+        "src/data/cropThermalParams.ts#cropId-1-tomato, file SHA-256 e54c574c928b4577ab14a0f7a429ab7a357d751f29a9f358d59f3b306a47d76c",
+        "Oregon State University Extension EM 9305, Jan. 2021, Table 6; PDF SHA-256 469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d"
+      ],
+      "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "syntheticInputs": "One floor tomato cell id 1 at local 0,0; run starts 2026-10-01; transplant and frozen establishment date 2026-10-03; synthetic initial above-ground dry matter 7 g/m2; exact syntheticStartEventParameter output and tomato thermal row are pinned in the preregistration. Soil sentinels are synthetic; source is omitted and frozen as unknown. Weather is 58 fixed daily records from 2026-10-01 through 2026-11-27.",
+      "expected": "Exact software assertions: source thermal time is 0 on Oct 1-2; 20 C-days on transplant day Oct 3; 1100 C-days with biomassFrac below 1 on Nov 26; and raw 1120 capped at the upper target 1117 C-days with biomassFrac 1 on Nov 27.",
+      "tolerance": "No tolerance; exact deterministic state and date assertions only.",
+      "reproduction": "S3 preregistration review passed; exact-head PR CI pending. After that gate passes, execute: npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint\".",
+      "acceptance": {
+        "row": "A-04",
+        "status": "PREREGISTERED; S3 independent review PASS; exact-head PR CI pending; candidate execution prohibited until CI passes. This is a synthetic software case only. A-04 and overall 02A remain UNVERIFIED.",
+        "owner": "S1 implementation worker; S3 independent preregistration reviewer; lead integration",
+        "retest": "Do not execute until exact-head PR CI passes. Any setup, source-row, helper, or expected-value change requires a new reviewed registration."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "independentReferenceModelComparison": false,
+      "measuredHoldoutValidation": false,
+      "status": "PREREGISTERED; pending independent review and exact-head PR CI. No source-observed comparison, default-versus-cultivar test, direct-sowing comparison, biological maturity, crop accuracy, A-04 acceptance, or 02A completion claim."
     }
   ],
   "coverageSummary": {
