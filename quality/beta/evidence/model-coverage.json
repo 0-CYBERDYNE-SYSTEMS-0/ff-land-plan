@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed.",
+  "status": "Environment-v2 and partial source-equation evidence remain qualified synthetic software evidence. A-01 PASS for the specified synthetic replay software contract on code SHA b7d49534c480d8589925371dba76cd9d989c56f6; exact-head PR #82 run 40690699236 passed all four named checks. A-02 PASS is limited to the preregistered synthetic reducer-state software contract: test-only SHA c3412132bf4aee7cb54ff9d856edf43e6736ec82 passed exact-head PR #82 run 40699895074. A-02 crop/domain/empirical acceptance and all other 02A acceptance rows remain UNVERIFIED; overall 02A remains UNVERIFIED. No crop-output or measured comparison is claimed. The A-01 fixture uses mocked provider/database seams and a ReactDOM server callback/ref harness; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy are outside its evidence. Ordinary new-run creation remains v1. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only; no candidate comparison or measured validation is claimed. A-03 now has a preregistered matched one-step v4 total-solar fixture; its candidate is not run and A-03 and overall 02A remain UNVERIFIED.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -34,7 +34,8 @@
     "v3ElevatedTargetManualHarvestPreregisteredFixture": "V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01",
     "v3MixedTargetAutoHarvestPreregisteredFixture": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01",
     "ohayouV4ReplayIntegrationPreregisteredFixture": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json (OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01)",
-    "a02TomatoThermalLocationWindowPreregisteredFixture": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json (A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01)"
+    "a02TomatoThermalLocationWindowPreregisteredFixture": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json (A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01)",
+    "a03OhayouV4SameThermalLightResponsePreregisteredFixture": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json (A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01)"
   },
   "sources": [
     {
@@ -2471,6 +2472,20 @@
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "status": "PASS only for the bounded preregistered synthetic reducer-state software contract; S2 independently reviewed and approved this execution record. Candidate and measured-output comparisons remain false. No cultivar accuracy, biological validity, location-weather resolution, measured/reference agreement, or prediction is established; A-02 domain/empirical acceptance and overall 02A remain UNVERIFIED."
+    },
+    {
+      "id": "A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v4 one-step total-solar response reducer fixture; not a crop benchmark",
+      "sourceId": "OHISHI-2023-HORTJ-OHAYOU",
+      "modelVersion": "crop-model-v4 + run-inputs-v4 + crop-parameters-v6 equation family OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1",
+      "syntheticInputs": "Four matched one-day arms share exact RunConfig, frozen crop/model inputs, thermal forcing, other daily environment fields, and dliNaturalMol=18; only solarRadiationMJm2Day varies (0, 5, 15, null). Positive values are relative synthetic software forcing points, not biological thresholds; DLI is a decoy for unavailable solar.",
+      "expected": "Independent one-step equation values for LAI, interception, DM gain, and two-pool state are frozen in the artifact. Known zero has exactly zero gain and unchanged pools; positive level 2 gain exceeds level 1; null solar is unavailable despite the DLI decoy and holds pools. Thermal outputs are exactly equal across arms.",
+      "tolerance": "LAI, intercepted fraction/radiation, daily DM gain, pool state, and daily pool closure ≤1e-12 in stated arithmetic units; all shared-input equality, thermal-state equality, dispatch, zero/null semantics, unavailable status, and DLI non-fallback are exact. One-step double-precision arithmetic only; no crop-error tolerance.",
+      "evidence": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json",
+      "reproduction": "Candidate test planned in src/lib/sim/ohayou-v4.integration.test.ts; candidate execution and focused command are pending.",
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "Preregistered only; candidate not run. A-03 remains UNVERIFIED overall because biological light limits, documented reserves, fungus/lifecycle, and independent measured/reference evidence remain incomplete."
     }
   ],
   "coverageSummary": {
@@ -2485,7 +2500,7 @@
     "sourceBackedCropProductionReferenceStudies": 2,
     "cropSpecificProductionReferenceCrops": 5,
     "reviewedSourceParameterTranscriptionSets": 2,
-    "preregisteredSyntheticCanopyEquationFixtures": 2,
+    "preregisteredSyntheticCanopyEquationFixtures": 3,
     "executedSyntheticCanopyEquationFixtures": 2,
     "preregisteredDynamicCanopyEngineFixtures": 2,
     "executedDynamicCanopyEngineFixtures": 2,
@@ -4095,6 +4110,14 @@
         "basis": "Bounds apply only to independent double-precision equation recurrence, synthetic DM pool additions and arithmetic closure. They are not source-display, crop-error, calibration, or prediction tolerances.",
         "scope": "Executed synthetic crop-model-v4 structural two-pool integration using the opt-in run-inputs-v4 / crop-parameters-v6 Ohayou total-solar equation family. Freezes source K/RUE, synthetic LAI mapping/pools/allocation/thermal/root/stress/forcing, known zero, null and omitted solar with DLI decoys, JSON serialization, freeze/fork/twin preservation, unsupported replay rejection and stored-summary retention, and crop-parameters-v5 LINTUL compatibility. V6 with non-open environment-v1/v2 climate fails closed pending a separate coupling fixture. No candidate comparison, measured evidence, or crop accuracy claim.",
         "evidence": "quality/beta/evidence/ohayou-v4-replay-integration-synthetic.json"
+      },
+      {
+        "id": "a03-ohayou-v4-same-thermal-light-response",
+        "tolerance": "LAI, intercepted fraction/radiation, daily DM gain, pool state, and daily pool closure ≤1e-12 in stated arithmetic units; shared inputs, thermal equality, zero/null semantics, and DLI non-fallback exact",
+        "status": "Preregistered only; candidate not run; A-03 remains UNVERIFIED overall",
+        "basis": "Independent one-step double-precision evaluation of the frozen canopy-to-LAI, total-solar interception, RUE, stress multiplier, and two-pool allocation equations. Bounds cover arithmetic and pool closure only, not biological response or crop/model error.",
+        "scope": "Matched synthetic crop-model-v4/run-inputs-v4/crop-parameters-v6 reducer arms with identical crop/configuration/thermal/environment inputs and DLI decoy; only total solar is 0, 5, 15, or unavailable null. Positive values are synthetic software forcing points, not light thresholds. No candidate execution, measured output, source agreement, crop validity, or fungal lifecycle is established.",
+        "evidence": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json"
       }
     ]
   },
