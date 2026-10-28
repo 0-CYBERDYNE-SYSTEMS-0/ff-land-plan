@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01-RESULT",
   "preregistrationId": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01",
-  "status": "focused synthetic software candidate passed locally",
+  "status": "focused synthetic software candidate and local gates passed; exact-head PR CI passed",
   "classification": "This result records only deterministic v3 target-routing and payout behavior for the frozen synthetic fixture. It is not crop-accuracy, natural harvest-date, measured-trial, reference-model, or predictive evidence.",
   "candidateExecution": {
     "date": "2026-10-27",
@@ -10,6 +10,36 @@
     "result": "1 passed; 28 skipped by the focused name filter",
     "durationMs": 171,
     "fullSuiteOrBuildRun": false
+  },
+  "verification": {
+    "localGates": {
+      "unitSuite": "PASS: npm test, 47 test files / 253 tests",
+      "typecheck": "PASS",
+      "builds": "PASS: standard, demo, and Pages profiles",
+      "privateFileGuard": "PASS: 529 tracked files",
+      "jsonParsingAndWhitespace": "PASS",
+      "productionPagesJourneys": {
+        "status": "PASS: 3/3",
+        "journeys": [
+          "production build boots under the GitHub Pages project base path",
+          "unsupported environment-v2 run opens under Pages and retains its stored summary",
+          "unsupported v4 crop lifecycle is explained in World and retains its stored summary"
+        ]
+      }
+    },
+    "exactHeadCI": {
+      "status": "PASS",
+      "pullRequest": 82,
+      "sha": "22cd5f586a762a3e2560c3504b8e043ab01ef9ad",
+      "runId": "40646657273",
+      "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40646657273",
+      "contexts": [
+        { "name": "test + typecheck + build", "status": "PASS", "duration": "31s" },
+        { "name": "Playwright production Pages-path smoke", "status": "PASS", "journeys": "3/3", "duration": "3m48s" },
+        { "name": "secret + private-file scan", "status": "PASS", "duration": "15s" },
+        { "name": "GitGuardian Security Checks", "status": "PASS", "duration": "2s" }
+      ]
+    }
   },
   "modelIdentities": {
     "climate": "standard open-field crop-model-v3",
@@ -173,6 +203,7 @@
   "evidenceLimits": [
     "Synthetic software behavior only; no crop accuracy, natural maturity-date, measured, reference-agreement, or prediction claim.",
     "The registered 1e-12 kg bound applies only to the frozen payout arithmetic.",
-    "No full suite, typecheck, build, production browser, or CI gate was run in this implementation step."
+    "The focused candidate command runs one case only; full local gates and exact-head CI are recorded separately under verification.",
+    "Passing synthetic software checks does not establish biological validity, model accuracy, measured/reference agreement, or predictive validity."
   ]
 }

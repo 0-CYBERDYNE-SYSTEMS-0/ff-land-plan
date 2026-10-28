@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down and A-03 total-solar replay fixtures passed local gates and exact-head implementation CI (A-05 d4e8216/run 40607076825; A-03 a7c3d0a/run 40614576932); the paired tomato root-depth candidate passed its focused local test and exact-head code/evidence CI is pending; candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down, paired tomato root-depth, and A-03 total-solar replay fixtures passed local gates and exact-head implementation CI (A-05 d4e8216/run 40607076825; tomato root-depth 3857470/run 40640752345; A-03 a7c3d0a/run 40614576932); A-07 mixed-target v3 routing/payout passed focused execution and local gates, then exact-head PR #82 CI on 22cd5f5/run 40646657273; all are synthetic software evidence only; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -3364,10 +3364,10 @@
       {
         "id": "v3-frozen-dm-mixed-target-auto-harvest-payout",
         "tolerance": "each event payout and seven-event sum within 1e-12 kg; stored total and per-crop summaries exactly 0.01 kg after the reducer's two-decimal aggregate rounding; exact target-qualified keys, event date/count, and replayed events/state/summary",
-        "status": "independent GPT-6 Luna max review approved before candidate execution; preregistered synthetic software fixture; candidate not run",
+        "status": "PASS for the preregistered synthetic software routing/payout case: focused test 1 passed/28 skipped; S2 independently approved the corrected candidate; full local suite/build/browser gates passed; exact-head PR #82 CI passed all four named contexts on 22cd5f5/run 40646657273. A-07 and 02A remain UNVERIFIED overall.",
         "basis": "Per-cell synthetic arithmetic is 12 g DM/m² × 0.4² m² × synthetic harvest index 0.5 / 1000 = 0.00096 kg; seven distinct target-qualified cells sum to 0.00672 kg before the existing two-decimal summary rounding. The 1e-12 kg bound checks JavaScript arithmetic only; it is not a model or prediction tolerance.",
         "scope": "Synthetic crop-model-v3 frozen-input regression at the source-thermal maturity endpoint, with six cells on an elevated growing level and one floor cell at colliding local coordinate 0,0; exact target-key routing, one auto-payout per key, next-day no-repeat, summary rounding, and deterministic replay. Synthetic soil source tag is unknown. No cultivar, biological maturity timing, crop accuracy, measured agreement, or reference-model agreement is asserted.",
-        "evidence": "quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json"
+        "evidence": "quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json; quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic-result.json"
       },
       {
         "id": "fao56-v2-tomato-root-depth-drydown",
