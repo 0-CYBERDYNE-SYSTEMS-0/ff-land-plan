@@ -1,7 +1,7 @@
 {
   "id": "A04-V3-TRANSPLANT-MISSING-ESTABLISHMENT-FAIL-CLOSED-SYNTHETIC-01",
   "schemaVersion": 1,
-  "registrationStatus": "S3 independent preregistration audit and cross-document consistency review passed on 2026-10-28; exact-head PR CI remains pending; S2 audit was not executed because its pane reported a Codex token refresh failure after logout/account switch; candidate execution remains prohibited.",
+  "registrationStatus": "Corrected input representation preregistration after TypeScript validation; S3 correction audit and cross-document consistency review passed on 2026-10-28; exact-head PR CI for the corrected documentation commit is pending; the prior focused attempt passed at runtime but is UNACCEPTED because its invalid source tag failed typecheck; candidate rerun remains prohibited. S2 audit remains unavailable after the pane reported a token refresh failure following logout/account switch.",
   "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
   "classification": "Synthetic software fail-closed invariant only; not measured transplant state, crop support, accuracy, or biological validation.",
   "baseline": {
@@ -131,8 +131,7 @@
     "freezeRunModelInputsV3Source": {
       "soil": {
         "awcMmPerCm": 1.5,
-        "organicMatterPct": 2.4,
-        "source": "unknown"
+        "organicMatterPct": 2.4
       },
       "crops": [
         {
@@ -250,7 +249,12 @@
       "parameterCropIds": [
         1
       ],
-      "establishmentByCell": {}
+      "establishmentByCell": {},
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "source": "unknown"
+      }
     },
     "replayRequest": {
       "run": {
@@ -417,7 +421,7 @@
     "algorithm": "SHA-256",
     "canonicalization": "UTF-8 JSON from syntheticSetup with object keys sorted recursively in lexicographic order, array order preserved, compact separators, non-ASCII characters unescaped, and non-finite numbers rejected.",
     "scope": "The syntheticSetup object only; registration metadata and assertions are excluded.",
-    "sha256": "f4f9a279e8c671122ca60d656b1d053016b2dd68f9e51cf29d3864fb6e7a78cd"
+    "sha256": "4b3633f17c758b5fa6f3bb9b3b5cd2c01c30488e8b77f1fc5058973d4ffcdf5a"
   },
   "expectedAssertions": {
     "frozenModelInputIdentity": {
@@ -429,7 +433,12 @@
       "parameterCropIds": [
         1
       ],
-      "establishmentByCell": {}
+      "establishmentByCell": {},
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "source": "unknown"
+      }
     },
     "inspectRunModelSupport": {
       "model": "crop-model-v3",
@@ -440,16 +449,23 @@
       "reasonTemplate": "Crop {cropId}: frozen per-cell emergence/transplant initial state is missing for {cellKey}.",
       "exactReasonMembership": [
         "Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0."
-      ]
+      ],
+      "otherReasonMembership": [
+        "Frozen v2 soil AWC provenance is unknown."
+      ],
+      "reasonScope": "Unknown soil AWC provenance is an additional registered unsupported reason. This fixture pins the missing-establishment reason but does not claim it is the sole reason replay is unsupported."
     },
     "replayRunToDay": {
       "throws": "UnsupportedRunReplayError",
       "reasonTemplate": "Crop {cropId}: frozen per-cell emergence/transplant initial state is missing for {cellKey}.",
       "exactReasonMembership": [
         "Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0."
+      ],
+      "otherReasonMembership": [
+        "Frozen v2 soil AWC provenance is unknown."
       ]
     },
-    "reasonComparison": "Require the exact reason string to be present; do not compare the complete reasons array or its order.",
+    "reasonComparison": "Require the target missing-establishment reason and the additional unknown-soil-provenance reason to be present; do not compare the complete reasons array or its order. Missing establishment is not claimed as the sole cause of replay rejection.",
     "numericOutput": "No numeric model output is compared."
   },
   "tolerance": "Exact structural and string assertions only; no numerical tolerance applies because no numerical output is compared.",
@@ -458,15 +474,24 @@
     "No measured transplant mass, nursery growth, or actual pre-transplant development is represented.",
     "No crop accuracy, cultivar-specific parameter support, biological validity, or measured/reference agreement is established.",
     "preserveStoredSummary is asserted as a policy flag only; actual stored-summary retention is not tested.",
-    "This subcase does not establish A-04 or 02A completion; both remain UNVERIFIED overall."
+    "This subcase does not establish A-04 or 02A completion; both remain UNVERIFIED overall.",
+    "Unknown soil AWC provenance also makes the synthetic record unsupported; this subcase does not attribute replay rejection solely to missing transplant establishment state."
   ],
   "estimateEngineerHours": "0.5–0.75",
   "estimateAssumptions": "One test in the existing model-inputs.test.ts using current config, syntheticStartEventParameter, freezeRunModelInputsV3, inspectRunModelSupport, ReplayStateCache, UnsupportedRunReplayError, and replayRunToDay helpers. No production or data changes. Independent review, documentation, and full repository gates are excluded.",
   "reviewGates": {
     "S2IndependentPreregistrationAudit": "not executed; S2 pane reported Codex token refresh failure after logout/account switch",
-    "S3IndependentPreregistrationAudit": "passed 2026-10-28",
-    "S3CrossDocumentConsistencyReview": "passed 2026-10-28",
-    "exactHeadPrCi": "pending",
-    "candidateExecution": "prohibited until exact-head PR CI passes; S2 audit remains unavailable because of the token-refresh failure"
+    "S3IndependentPreregistrationAudit": "passed corrected soil-source input representation review 2026-10-28",
+    "S3CrossDocumentConsistencyReview": "passed corrected preregistration, manifest, and status review 2026-10-28",
+    "exactHeadPrCi": "pending corrected documentation commit",
+    "candidateExecution": "corrected candidate rerun prohibited until the corrected documentation head passes exact-head PR CI; the prior attempt remains UNACCEPTED"
+  },
+  "syntheticInputs": "One floor tomato cell (crop id 1, key 0,0) with a transplant event and planted date 2026-10-01; complete synthetic frozen production/root inputs and pinned source thermal row; soil AWC 1.5 mm/cm and organicMatterPct 2.4 are supplied without a source tag because RunModelSource accepts only provider literals. Freezing records source unknown, which also independently contributes an unsupported reason. Establishment map is empty; replay uses the complete frozen config with empty weather and observations.",
+  "priorCandidateAttempt": {
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell lacks frozen establishment state\"",
+    "focusedResult": "1 passed, 35 skipped on the prior preregistered setup",
+    "typecheck": "FAIL at src/lib/sim/model-inputs.test.ts:662:55 because RunModelSource.soil.source accepts only soilgrids or usda-sda, not unknown",
+    "acceptance": "UNACCEPTED; this attempt is not evidence for the corrected input setup",
+    "correction": "Omit source from the freeze input; freezeRunModelInputsV3 then records source unknown in the frozen model input. The frozen values remain AWC 1.5 mm/cm and organicMatterPct 2.4."
   }
 }

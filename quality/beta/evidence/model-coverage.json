@@ -2592,7 +2592,7 @@
       "classification": "preregistered synthetic crop-model-v3 missing-transplant-establishment fail-closed software check; not measured transplant state or crop accuracy",
       "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
       "preregistration": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic.json",
-      "setupDigest": "f4f9a279e8c671122ca60d656b1d053016b2dd68f9e51cf29d3864fb6e7a78cd",
+      "setupDigest": "4b3633f17c758b5fa6f3bb9b3b5cd2c01c30488e8b77f1fc5058973d4ffcdf5a",
       "inputFixtureReferences": [
         "src/lib/sim/model-inputs.test.ts#syntheticStartEventParameter, registered against code SHA 4a2ba4382587272ba27f8e43c9a4934d6a8bea6e",
         "src/lib/sim/model-inputs.ts#freezeRunModelInputsV3",
@@ -2600,20 +2600,20 @@
         "src/data/crops.ts#cropLibrary-id-1-tomato"
       ],
       "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
-      "syntheticInputs": "One floor tomato cell (crop id 1, key 0,0) with a transplant event and planted date 2026-10-01; complete synthetic frozen production/root inputs, source thermal row pinned, soil AWC 1.5 mm/cm and organicMatterPct 2.4 tagged unknown, and an empty establishmentByCell map. Replay uses the complete frozen config with empty weather and observations.",
-      "expected": "inspectRunModelSupport reports crop-model-v3, unsupported, canReplay false, and preserveStoredSummary true as a policy flag only; its reasons contain the exact string 'Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0.'. replayRunToDay for the registered run at day 0 throws UnsupportedRunReplayError whose reasons contain that same exact string. Compare structural fields and exact string membership only; do not compare the full reasons array or numeric output.",
+      "syntheticInputs": "One floor tomato cell (crop id 1, key 0,0) with a transplant event and planted date 2026-10-01; complete synthetic frozen production/root inputs and pinned source thermal row; soil AWC 1.5 mm/cm and organicMatterPct 2.4 are supplied without a source tag because RunModelSource accepts only provider literals. Freezing records source unknown, which also independently contributes an unsupported reason. Establishment map is empty; replay uses the complete frozen config with empty weather and observations.",
+      "expected": "inspectRunModelSupport reports crop-model-v3, unsupported, canReplay false, and preserveStoredSummary true as a policy flag only; its reasons contain the exact string 'Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0.' and the additional reason 'Frozen v2 soil AWC provenance is unknown.'. replayRunToDay for the registered run at day 0 throws UnsupportedRunReplayError whose reasons contain both registered strings. Unknown soil provenance also makes the run unsupported; this fixture does not claim the missing establishment is the sole reason replay is rejected. Compare structural fields and exact string membership only; do not compare the full reasons array or numeric output.",
       "tolerance": "Exact structural and string checks only; no numerical tolerance applies because no numeric model output is compared.",
       "evidence": "src/lib/sim/model-inputs.test.ts",
-      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell lacks frozen establishment state\"; not run. Candidate execution is prohibited pending exact-head PR CI.",
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell lacks frozen establishment state\"; prior attempt: 1 passed, 35 skipped, but UNACCEPTED because typecheck rejected source: unknown as an input. Corrected setup omits source on freeze input and records source: unknown in frozen output. S3 correction audit and cross-document review passed 2026-10-28; corrected exact-head PR CI is pending, so do not rerun yet.",
       "acceptance": {
         "row": "A-04",
-        "status": "S3 preregistration JSON audit and cross-document consistency review PASS on 2026-10-28. S2 audit unavailable because its pane reported a Codex token refresh failure after logout/account switch; exact-head PR CI pending; candidate execution prohibited. A-04 and overall 02A remain UNVERIFIED.",
+        "status": "Prior focused candidate attempt passed at runtime but is UNACCEPTED after typecheck rejected the invalid source input. The corrected registration records source omitted on input and unknown on frozen output; S3 correction audit and cross-document review passed 2026-10-28; corrected exact-head PR CI is pending. S2 audit unavailable because its pane reported a Codex token refresh failure after logout/account switch. Candidate rerun is prohibited; A-04 and overall 02A remain UNVERIFIED.",
         "owner": "S1 documentation integrator; S2 independent technical reviewer; S3 claim-boundary reviewer; lead integration",
-        "retest": "Do not run the registered candidate until this documentation head passes exact-head PR CI; then run only the focused command above."
+        "retest": "S3 reviewed the corrected registration; after this corrected documentation head passes exact-head PR CI, run only the focused command above."
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Preregistered synthetic software fail-closed behavior only; candidate not executed. No measured nursery mass, crop accuracy, actual stored-summary retention, biological validity, or A-04/02A completion claim."
+      "status": "Corrected synthetic software fail-closed registration passed S3 correction and cross-document review; exact-head PR CI is pending. The prior focused attempt is UNACCEPTED due to typecheck failure. No measured nursery mass, crop accuracy, actual stored-summary retention, biological validity, or A-04/02A completion claim."
     }
   ],
   "coverageSummary": {
