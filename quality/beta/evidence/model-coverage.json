@@ -1680,6 +1680,56 @@
       "status": "PASS for the preregistered synthetic one-day software invariant. Focused test: npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\" (1 passed, 25 skipped). Full npm test: 47 files / 250 tests. npm run typecheck, npm run build, npm run build:demo, npm run build:pages, npm run check:private (525 tracked files), JSON parsing and git diff --check passed. No build:beta profile exists; the Vite native-config-loader and large-chunk advisories remain. S2 independently approved the completed test; S3 found no observer false-pass or cleanup leak in the current excerpt. The initial no-observer pass, full-observer strict comparison against decimal 0.6, and unregistered 15-decimal-tolerance pass remain not accepted. Exact-head preregistration CI run 40627410935 passed on docs-only SHA 75bf26f35a45d3aa00a9850b4907c5639a654a2f; it predates the candidate test. Exact-head code/evidence commit 2ac708fa58719d69f7d19863bccf97d226c4cba8 passed PR #82 run 40628921459: all four named checks — test + typecheck + build (36s), Playwright production Pages-path smoke (3/3 in 4.7m; job 5m14s), secret + private-file scan (14s), and GitGuardian Security Checks (2s). Pages journeys passed: production build boots under the GitHub Pages project base path; unsupported environment-v2 run opens under Pages and retains its stored summary; unsupported v4 crop lifecycle is explained in World and retains its stored summary. This verifies synthetic equation/software behavior and repository checks only; no crop accuracy, biological validity, measured/reference agreement, or predictive claim. A-05 and 02A remain UNVERIFIED overall."
     },
     {
+      "id": "FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v2 one-day frozen soil-capacity variant; not a soil or crop benchmark",
+      "sourceId": "FAO-56-1998",
+      "sourceArtifact": {
+        "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+        "retrievedDate": "2026-10-27",
+        "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+        "bytes": 137909,
+        "licenseOrReuse": "No reuse license found on the source page; no source artifact copied or committed. Only FAO-56 equations are referenced; synthetic AWC 1.0 mm/cm is not sourced."
+      },
+      "sourceReference": "FAO-56 Chapter 8 equations are referenced for the balance only; AWC 1.0 mm/cm is synthetic and not a sourced soil value.",
+      "syntheticAWCBoundary": {
+        "awcMmPerCm": 1.0,
+        "effectiveRootDepthCm": 80,
+        "capacityMm": 80,
+        "sourceStatus": "Synthetic software input; not a soil/media default, sourced profile, or measured value."
+      },
+      "modelVersion": "crop-model-v2",
+      "runInputsVersion": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "climateVersion": "standard open-field one-day forcing; no environment-v2 snapshot",
+      "syntheticInputs": {
+        "initialStorageFraction": 0.99375,
+        "initialStorageMm": 79.5,
+        "precipMm": 5,
+        "irrigationMm": 0,
+        "runoffMm": 0,
+        "capillaryRiseMm": 0,
+        "rootGrowthStorageMm": 0,
+        "etoMm": 0,
+        "potentialTranspirationMm": 0,
+        "actualTranspirationMm": 0
+      },
+      "expected": {
+        "capacityMm": 80,
+        "initialStorageMm": 79.5,
+        "preDrainageStorageMm": 84.5,
+        "deepDrainageMm": 4.5,
+        "finalStorageMm": 80,
+        "endDepletionMm": 0,
+        "waterBalanceResidualMm": 0,
+        "massBalance": "79.5 + 5 - 4.5 - 80 = 0 mm"
+      },
+      "tolerance": "Absolute deviation <=1e-12 mm for double-precision drainage/storage/depletion/residual arithmetic only; exact frozen inputs, route/state/call arguments, and zero-ET behavior.",
+      "evidence": "quality/beta/evidence/fao56-v2-awc-variant-positive-drainage-synthetic.json",
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "status": "S2 approved arithmetic/assertions/tolerance and S3 found no findings. Preregistered; not executed. Exact-head CI is required before candidate execution. A-05 and 02A remain UNVERIFIED."
+    },
+    {
       "id": "OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01",
       "classification": "executed synthetic crop-model-v4 production/replay software fixture; not a crop benchmark",
       "sourceId": "OHISHI-2023-HORTJ-OHAYOU",

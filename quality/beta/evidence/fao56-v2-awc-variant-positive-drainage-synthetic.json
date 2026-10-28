@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01",
+  "classification": "preregistered synthetic crop-model-v2 one-day root-zone capacity variant; not a crop or soil benchmark",
+  "status": "Independently reviewed preregistration; candidate not executed. Exact-head CI is still required before candidate test execution. A-05 and 02A remain UNVERIFIED.",
+  "preparedDate": "2026-10-27",
+  "review": {
+    "S2": "APPROVE: arithmetic, assertions, and the <=1e-12 mm arithmetic-only tolerance. Notes that zero ET does not test ordering when transpiration and drainage are both positive; preregistration review only, candidate not executed.",
+    "S3": "No findings; no scope overclaim identified. Preregistration review only, candidate not executed."
+  },
+  "sourceContext": {
+    "evidenceId": "FAO-56-1998",
+    "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Eqs. 82, 85, 86, and 88.",
+    "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+    "sourceVersion": "FAO-56 (1998), Chapter 8; official HTML chapter page",
+    "retrievedDate": "2026-10-27",
+    "sourceArtifactSha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+    "artifactBytes": 137909,
+    "artifactStatus": "Official chapter HTML retrieved 2026-10-27; 137909 bytes. No source artifact copied or committed.",
+    "licenseOrReuse": "No reuse license found on the source page; no source artifact copied or committed. Only FAO-56 equations are referenced; AWC 1.0 mm/cm remains a synthetic software input, not a source-derived soil value, default, or soil/media profile.",
+    "reuseLimit": "The FAO-56 equation references are reused from the parent positive-drainage fixture. AWC 1.0 mm/cm is an explicit synthetic software input, not a source-derived soil value, default, or soil/media profile."
+  },
+  "parentFixture": {
+    "id": "FAO56-V2-POSITIVE-ROOT-DRAINAGE-SYNTHETIC-01",
+    "path": "quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json",
+    "reuseLimit": "Keep the parent crop, thermal, production, root-depth, route, and one-day weather forcing. Change only frozen soil AWC from 2 to 1.0 mm/cm; derive capacity and starting storage from the same 80 cm fixed depth and 0.99375 initial storage fraction."
+  },
+  "frozenModelInputs": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsModel": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "soilSourceTag": "unknown; AWC is a synthetic software input and not a sourced or observed soil profile",
+    "cropLifecycle": "plant",
+    "cell": "0,0",
+    "cellCount": 1,
+    "climateRoute": "Standard open-field crop-model-v2 root-step path; no environment snapshot and no environment-v2 climate model."
+  },
+  "syntheticInputs": {
+    "soil": {
+      "awcMmPerCm": 1.0,
+      "effectiveRootDepthCm": 80,
+      "totalAvailableWaterMm": 80,
+      "sourceStatus": "Synthetic software input only; not a soil/media default, source value, or observed profile."
+    },
+    "rootZone": {
+      "method": "FAO-56 root-zone balance as integrated by crop-model-v2",
+      "tableDepletionFractionP": 0.4,
+      "cropCoefficient": 1.2,
+      "effectiveRootDepthCm": 80,
+      "rootDevelopment": "none; no runtime rootDevelopment parameter is supplied, so effective root depth is fixed at 80 cm",
+      "initialStorageFraction": 0.99375,
+      "initialStorageMm": 79.5,
+      "initialDepletionMm": 0.5,
+      "precipitationMm": 5,
+      "runoffMm": 0,
+      "irrigationMm": 0,
+      "capillaryRiseMm": 0,
+      "rootGrowthStorageMm": 0,
+      "referenceEvapotranspirationMmDay": 0,
+      "potentialTranspirationMmDay": 0,
+      "actualTranspirationMmDay": 0,
+      "runoffAndInfiltrationBoundary": "All 5 mm precipitation is treated as root-zone inflow and runoff is fixed at 0 for this synthetic software boundary."
+    },
+    "dailyEnvironment": {
+      "startDate": "2026-10-01",
+      "dayCount": 1,
+      "intervalDays": 1,
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipMm": 5,
+      "etoMm": 0,
+      "dliNaturalMol": 18,
+      "gddBase10C": 15,
+      "weatherStatus": "One-day synthetic forcing retained from the parent fixture; light and temperature are ancillary to this water-balance check."
+    }
+  },
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "expected": {
+    "equations": "Capacity = AWC × fixed effective root depth. Initial storage = capacity × initialStorageFraction. With ETc, runoff, irrigation, capillary rise, and root-growth storage all zero, drainage = max(0, initial storage + precipitation - capacity); final storage = min(capacity, initial storage + precipitation); residual = initial storage + inflows - runoff - drainage - actual ETc - final storage.",
+    "calculation": {
+      "capacityMm": 80,
+      "initialStorageMm": 79.5,
+      "initialDepletionMm": 0.5,
+      "precipitationMm": 5,
+      "beforeDrainageStorageMm": 84.5,
+      "deepDrainageMm": 4.5,
+      "finalStorageMm": 80,
+      "endDepletionMm": 0,
+      "actualTranspirationMm": 0,
+      "waterBalanceResidualMm": 0
+    },
+    "directRootZoneStep": {
+      "stateWaterMm": 79.5,
+      "awcMmPerCm": 1.0,
+      "effectiveRootDepthCm": 80,
+      "depletionFractionAssertion": "Strict equality with fao56AdjustedDepletionFraction(0.4, 0); mathematical expected p=0.6; no tolerance and no frozen runtime binary representation.",
+      "fluxes": {
+        "precipMm": 5,
+        "irrigationMm": 0,
+        "runoffMm": 0,
+        "capillaryRiseMm": 0,
+        "rootGrowthStorageMm": 0,
+        "potentialTranspirationMm": 0
+      },
+      "deepDrainageMm": 4.5,
+      "finalWaterMm": 80,
+      "residualMm": 0
+    },
+    "integratedRoute": {
+      "route": "One-cell standard open-field crop-model-v2 createRun/stepDay/simulateRun path; no environment-v2.",
+      "createRunState": "Assert exact cell rootZoneWaterMm=79.5 and capacity=80 mm before stepDay; no root-depth state or root-growth inflow.",
+      "stepDayCallObservation": "Observe exactly one actual stepFao56RootZone call through a call-through observer that invokes the original reducer. Assert state.waterMm=79.5; params.awcMmPerCm=1.0; effectiveRootDepthCm=80; depletionFraction strictly equals fao56AdjustedDepletionFraction(0.4, 0); fluxes.precipMm=5; irrigationMm=0; runoffMm=0; capillaryRiseMm omitted/undefined and defaulted to zero; rootGrowthStorageMm=0; potentialTranspirationMm=0. Install after the direct-helper assertion and restore in finally before simulateRun.",
+      "stepDayOutputs": "Assert exact effective precipitation=5 mm and unrounded waterUseMm=0; assert final rootZoneWaterMm=80 mm and defined accumulated/max residuals=0. Integrated drainage is inferred by mass balance and is not a persisted daily output.",
+      "simulateRunOutputs": "Assert one simulated day, summary rainMm=5 and waterUseMm=0, final rootZoneWaterMm=80, and defined zero root-zone residual summaries. Mass balance implies integrated drainage=4.5 mm."
+    }
+  },
+  "tolerances": {
+    "waterArithmetic": "Absolute deviation <=1e-12 mm for direct root-step drainage/storage/depletion/residual arithmetic and integrated mass-balance drainage inference; double-precision arithmetic only.",
+    "exactChecks": "Frozen input values, one-cell/one-day count, fixed 80 cm depth, no environment-v2 route, exact createRun pre-step state and capacity, exactly one observed call with all frozen state/parameter/flux values, strict depletionFraction equality with the frozen helper expression and no tolerance, and exact final reducer state/summary fields.",
+    "scope": "Arithmetic-only bound; not a soil-parameter uncertainty, source-display, model-error, biological-validation, measured-agreement, or prediction tolerance."
+  },
+  "limitations": [
+    "AWC 1.0 mm/cm is not a soil/media default, a sourced soil value, or an observed profile.",
+    "This fixture does not validate soil hydraulics, infiltration, crop biology, or soilless/media behavior.",
+    "Zero ET means ordering when transpiration and drainage are simultaneously positive is untested.",
+    "The fixture is synthetic software evidence only; no crop, measured, source-trajectory, or prediction claim is made.",
+    "A-05 and 02A remain UNVERIFIED."
+  ],
+  "acceptanceOwner": "A-05 simulator acceptance owner; independent S2 and S3 review required.",
+  "acceptanceStatus": "S2 approved arithmetic/assertions/tolerance and S3 found no findings; candidate not executed; exact-head CI is still required before candidate test execution.",
+  "reproductionOwner": "Assigned simulator test implementer.",
+  "retest": {
+    "testTitle": "reconciles v2 frozen AWC variant with positive root drainage",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 frozen AWC variant with positive root drainage\"",
+    "gate": "Run only after S2/S3 preregistration review, documentation commit, and exact-head CI pass.",
+    "candidateExecuted": false
+  }
+}
