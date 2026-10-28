@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
+  "classification": "synthetic all-catalog fail-closed software regression; not a crop benchmark",
+  "preregistration": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json",
+  "registeredCodeSha": "f943b6921ff2a2acb2fa94f1458dc359b4a920c1",
+  "registeredDocumentationCommit": {
+    "sha": "1082ef3d6ff881129d0a430cb55f37440b5349ea",
+    "exactHeadCiRun": 40750831499,
+    "status": "PASS; all four named PR checks passed before candidate test implementation."
+  },
+  "syntheticSetupSha256": "6eddd53cb1c1f474833ce0c0ee4844edd7651ca059a5fe9e75e724fc5c7f0351",
+  "candidateCode": {
+    "commit": "a8b5505db8c110840c3f45dc4dcc5626ce30c34e",
+    "changedFiles": ["src/lib/sim/model-inputs.test.ts"],
+    "productionCodeChanged": false
+  },
+  "execution": {
+    "status": "PASS for the preregistered bounded software subcase.",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed for every catalog crop without a complete v2 profile\"",
+    "worker": {
+      "role": "Herdr S1 implementation worker",
+      "result": "1 passed, 34 skipped; 35 tests total."
+    },
+    "independentValidator": {
+      "role": "Herdr S2 independent validator",
+      "result": "1 passed, 34 skipped; 35 tests total. No findings."
+    },
+    "registeredAssertions": {
+      "catalogSnapshotEntries": 50,
+      "identityMatchedForEveryCrop": true,
+      "exactLifecycleSpecificProductionAndRootZoneMissingFields": true,
+      "supportFailsClosedWithExactRequiredProfileReason": true,
+      "replayRejectedWithUnsupportedRunReplayErrorAndExactReason": true,
+      "fungalLifecycleAndReasonRetainedForIds": [48, 49, 50],
+      "fullReasonsArrayCompared": false
+    },
+    "authoringCorrection": "The first focused invocation found an incorrect test lookup path for the preregistered reason templates. The test was corrected to use caseTemplate.requiredReasonTemplates and the same registered command then passed; no setup, metric, or tolerance changed."
+  },
+  "localVerification": {
+    "npmTest": "PASS; 48 test files, 265 tests.",
+    "typecheck": "PASS; npm run typecheck.",
+    "standardBuild": "PASS; npm run build.",
+    "demoBuild": "PASS; npm run build:demo.",
+    "pagesBuild": "PASS; npm run build:pages.",
+    "privateFileGuard": "PASS; 548 tracked files, no private-data patterns.",
+    "whitespace": "PASS; git diff --check.",
+    "betaBuildProfile": "None is defined in package.json.",
+    "localBrowserSmoke": "Not run separately; production Pages-path journeys ran in exact-head PR CI below.",
+    "beta01DurabilityRetest": "Not separately repeated; this test-only change does not modify persistence or schema code."
+  },
+  "exactHeadPrCi": {
+    "pr": 82,
+    "runId": 40752622374,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40752622374",
+    "headSha": "a8b5505db8c110840c3f45dc4dcc5626ce30c34e",
+    "status": "PASS",
+    "checks": [
+      { "name": "test + typecheck + build", "status": "PASS", "duration": "39s" },
+      { "name": "Playwright production Pages-path smoke", "status": "PASS", "tests": "3 passed", "suiteDuration": "4.3m" },
+      { "name": "secret + private-file scan", "status": "PASS", "duration": "15s" },
+      { "name": "GitGuardian Security Checks", "status": "PASS", "duration": "42s" }
+    ]
+  },
+  "claimBoundaryReview": {
+    "status": "PASS; result claims remain limited to the preregistered synthetic fail-closed software assertions. preserveStoredSummary is a policy flag only; no crop support or accuracy, actual summary retention, or broader A08/02A completion is claimed. The post-registration wording update preserves the registered setup, metrics, tolerances, and digest.",
+    "reviewedBy": "Herdr S3 (a07-fullrun-claim-adversary)",
+    "reviewedDate": "2026-10-28"
+  },
+  "limits": [
+    "preserveStoredSummary is asserted only as a policy flag; this test does not execute actual stored-summary retention for every crop.",
+    "No v2 profile becomes supported for any crop, and no crop output, biological validity, measured/reference agreement, or predictive accuracy is established.",
+    "A-08 remains limited to tested synthetic fail-closed behavior; broader A-08 acceptance and overall 02A remain UNVERIFIED."
+  ],
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false
+}

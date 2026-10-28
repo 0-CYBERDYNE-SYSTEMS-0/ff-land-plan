@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
   "preparedDate": "2026-10-28",
-  "status": "Independent S1 catalog, S2 API/structural-tolerance, and S3 claim-boundary reviews passed; ready for the preregistration commit and its exact-head CI. No candidate test has run.",
+  "status": "Preregistered in commit 1082ef3d6ff881129d0a430cb55f37440b5349ea; exact-head documentation CI run 40750831499 passed all four checks before implementation. The candidate test subsequently passed on code SHA a8b5505db8c110840c3f45dc4dcc5626ce30c34e; see the result record. The registered setup, metrics, tolerances, and synthetic setup digest are unchanged.",
   "acceptanceContract": {
     "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
     "row": "A-08",
@@ -166,13 +166,13 @@
     "reviewedDate": "2026-10-28"
   },
   "claimBoundaryReview": {
-    "status": "PASS; the preserved-summary field is a policy flag only, and the prospective all-catalog synthetic case does not claim crop support, accuracy, actual summary retention, or A-08/02A completion.",
+    "status": "PASS; at preregistration, S3 reviewed the then-proposed all-catalog synthetic case and limited it to fail-closed software behavior, without claiming crop support, accuracy, actual summary retention, or A-08/02A completion.",
     "reviewedBy": "Herdr S3 (a07-fullrun-claim-adversary)",
     "reviewedDate": "2026-10-28"
   },
   "reproduction": {
     "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed for every catalog crop without a complete v2 profile\"",
-    "status": "Not run; this all-catalog test has not been implemented."
+    "status": "Implemented and run after the preregistration CI gate: 1 passed / 34 skipped on candidate SHA a8b5505db8c110840c3f45dc4dcc5626ce30c34e; the independent S2 rerun also passed. See quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic-result.json. The test was not run at the preregistration checkpoint."
   },
   "implementationEstimate": {
     "engineerHours": "0.5-1.0",
@@ -191,7 +191,7 @@
     "Forty-one catalog crops have no thermal table entry; nine have thermal-reference-only entries that do not create complete v2 profiles.",
     "No actual stored-summary mutation/retention path is exercised by this all-catalog support/replay test; existing A-08 browser evidence remains limited to its named scenarios."
   ],
-  "acceptanceBoundary": "If approved and passed, this closes only a bounded synthetic software fail-closed subcase for the pinned 50-crop catalog snapshot: profile identity, explicit production/root-zone missing fields, support qualification, preserved-summary policy flag, and replay rejection. It does not establish a supported v2 profile for any crop, all-catalog simulator support, actual summary retention for every crop, crop accuracy, biological validity, measured/reference agreement, or overall A-08/02A acceptance.",
+  "acceptanceBoundary": "Registered acceptance criterion (worded before execution): If approved and passed, this closes only a bounded synthetic software fail-closed subcase for the pinned 50-crop catalog snapshot: profile identity, explicit production/root-zone missing fields, support qualification, preserved-summary policy flag, and replay rejection. It does not establish a supported v2 profile for any crop, all-catalog simulator support, actual summary retention for every crop, crop accuracy, biological validity, measured/reference agreement, or overall A-08/02A acceptance.",
   "candidateComparison": false,
   "measuredOutputComparison": false,
   "independentReferenceModelComparison": false,
