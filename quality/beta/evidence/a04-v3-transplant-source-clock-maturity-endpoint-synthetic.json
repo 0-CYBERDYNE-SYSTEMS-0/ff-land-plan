@@ -195,9 +195,9 @@
   },
   "status": {
     "registration": "PREREGISTERED",
-    "S3IndependentReview": "PASS",
-    "exactHeadPrCi": "PENDING",
-    "candidateExecution": "PROHIBITED until exact-head PR CI passes."
+    "S3IndependentReview": "PASS on preregistration; candidate code review later returned FAIL, see result record.",
+    "exactHeadPrCi": "PASS on PR #82 exact preregistration head 65f6daa45532ec19d918ada1424ddec6abba9288, run 40781317269.",
+    "candidateExecution": "EXECUTED; focused output is UNACCEPTED because the candidate setup did not match this registered setup. See quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json."
   },
   "independentReviewRecord": {
     "reviewer": "S3 independent preregistration reviewer",
@@ -227,5 +227,6 @@
     "engineerHours": "0.75-1.25",
     "assumptions": "One focused test reuses the frozen helper and existing v3 setup; no production or parameter-data changes.",
     "excludes": "Independent preregistration review, documentation integration, candidate execution, and full CI gates."
-  }
+  },
+  "resultRecord": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json"
 }

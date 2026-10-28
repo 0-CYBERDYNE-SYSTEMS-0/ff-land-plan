@@ -51,7 +51,10 @@
     "a04V3TransplantSourceClockMaturityEndpointPreregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic.json",
     "a08AllCatalogV2MissingProfilePreregisteredFixture": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
     "a08AllCatalogV2MissingProfilePreregistration": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json",
-    "a08AllCatalogV2MissingProfileResult": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic-result.json"
+    "a08AllCatalogV2MissingProfileResult": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic-result.json",
+    "a04V3TransplantSourceClockMaturityEndpointAttemptResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json",
+    "a04V3TransplantSourceClockMaturityEndpointCorrectedPreregisteredFixture": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02",
+    "a04V3TransplantSourceClockMaturityEndpointCorrectedPreregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02.json"
   },
   "sources": [
     {
@@ -2374,13 +2377,21 @@
       "sourceParameters": {
         "tBaseC": 7.2,
         "tUpperC": 33.3,
-        "targetCdaysRange": [1024, 1117],
+        "targetCdaysRange": [
+          1024,
+          1117
+        ],
         "targetIsRangeOnly": true,
         "midpointSelected": false,
         "method": "Single sine with horizontal cutoff; OSU Table 6",
         "startEvent": "transplanting at 3–5 true leaves",
         "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
-        "sourceTableValuesFahrenheitDays": [1844, 1970, 1976, 2010],
+        "sourceTableValuesFahrenheitDays": [
+          1844,
+          1970,
+          1976,
+          2010
+        ],
         "conversion": "Fahrenheit degree-days divided by 1.8; endpoint range rounded to 1024–1117°C·days"
       },
       "syntheticInputs": {
@@ -2391,14 +2402,20 @@
         "locationTags": "synthetic-location-a and synthetic-location-b; no coordinates or real site observations"
       },
       "expected": {
-        "fixedTargetCdays": [1024, 1117],
+        "fixedTargetCdays": [
+          1024,
+          1117
+        ],
         "thermalProgressRange": "[gddAccumC/1117, gddAccumC/1024]",
         "reducerBiomassFrac": "gddAccumC/1117 (conservative lower progress bound)",
         "cases": [
           {
             "locationTag": "synthetic-location-a",
             "window": "cold",
-            "dailyTMinTMaxC": [4, 12],
+            "dailyTMinTMaxC": [
+              4,
+              12
+            ],
             "dailyGddCdays": 1.69879025545306,
             "gddAccumCAfter5Days": 8.4939512772653,
             "gddAccumCAfter10Days": 16.9879025545306,
@@ -2408,7 +2425,10 @@
           {
             "locationTag": "synthetic-location-a",
             "window": "warm",
-            "dailyTMinTMaxC": [18, 30],
+            "dailyTMinTMaxC": [
+              18,
+              30
+            ],
             "dailyGddCdays": 16.8,
             "gddAccumCAfter5Days": 84,
             "gddAccumCAfter10Days": 168,
@@ -2418,7 +2438,10 @@
           {
             "locationTag": "synthetic-location-b",
             "window": "cold",
-            "dailyTMinTMaxC": [2, 10],
+            "dailyTMinTMaxC": [
+              2,
+              10
+            ],
             "dailyGddCdays": 0.73097713534195,
             "gddAccumCAfter5Days": 3.65488567670975,
             "gddAccumCAfter10Days": 7.3097713534195,
@@ -2428,7 +2451,10 @@
           {
             "locationTag": "synthetic-location-b",
             "window": "warm",
-            "dailyTMinTMaxC": [20, 32],
+            "dailyTMinTMaxC": [
+              20,
+              32
+            ],
             "dailyGddCdays": 18.8,
             "gddAccumCAfter5Days": 94,
             "gddAccumCAfter10Days": 188,
@@ -2440,9 +2466,15 @@
         "meanDailyGddCIndependenceControl": {
           "series": "synthetic-location-a warm, ten days of 18/30°C; same frozen v2 modelInputs and horizon in both runs",
           "onlyChangedField": "RunConfig.meanDailyGddC",
-          "pairedValues": [0, 14],
+          "pairedValues": [
+            0,
+            14
+          ],
           "expectedBoth": {
-            "targetRangeCdays": [1024, 1117],
+            "targetRangeCdays": [
+              1024,
+              1117
+            ],
             "gddAccumCAfter5Days": 84,
             "gddAccumCAfter10Days": 168,
             "biomassFracAfter5Days": 0.07520143240823635,
@@ -2470,10 +2502,26 @@
           "headSha": "c3412132bf4aee7cb54ff9d856edf43e6736ec82",
           "result": "success",
           "checks": [
-            { "name": "test + typecheck + build", "result": "passed", "duration": "39s" },
-            { "name": "Playwright production Pages-path smoke", "result": "passed", "reportedDuration": "6m37s" },
-            { "name": "secret + private-file scan", "result": "passed", "duration": "20s" },
-            { "name": "GitGuardian Security Checks", "result": "passed", "duration": "13s" }
+            {
+              "name": "test + typecheck + build",
+              "result": "passed",
+              "duration": "39s"
+            },
+            {
+              "name": "Playwright production Pages-path smoke",
+              "result": "passed",
+              "reportedDuration": "6m37s"
+            },
+            {
+              "name": "secret + private-file scan",
+              "result": "passed",
+              "duration": "20s"
+            },
+            {
+              "name": "GitGuardian Security Checks",
+              "result": "passed",
+              "duration": "13s"
+            }
           ]
         },
         "review": "S2 independently approved the preregistration, post-fix test, and execution record."
@@ -2642,18 +2690,51 @@
       "syntheticInputs": "One floor tomato cell id 1 at local 0,0; run starts 2026-10-01; transplant and frozen establishment date 2026-10-03; synthetic initial above-ground dry matter 7 g/m2; exact syntheticStartEventParameter output and tomato thermal row are pinned in the preregistration. Soil sentinels are synthetic; source is omitted and frozen as unknown. Weather is 58 fixed daily records from 2026-10-01 through 2026-11-27.",
       "expected": "Exact software assertions: source thermal time is 0 on Oct 1-2; 20 C-days on transplant day Oct 3; 1100 C-days with biomassFrac below 1 on Nov 26; and raw 1120 capped at the upper target 1117 C-days with biomassFrac 1 on Nov 27.",
       "tolerance": "No tolerance; exact deterministic state and date assertions only.",
-      "reproduction": "S3 preregistration review passed; exact-head PR CI pending. After that gate passes, execute: npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint\".",
+      "reproduction": "The fixture 01 focused command returned 1 passed / 36 skipped, but the candidate attempt is UNACCEPTED because the test used the source-row accumulationMethod string while the preregistration recorded a different string, and RunConfig.dayCount=58 was not frozen. See quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json. Do not reuse this result as A-04 acceptance.",
       "acceptance": {
         "row": "A-04",
-        "status": "PREREGISTERED; S3 independent review PASS; exact-head PR CI pending; candidate execution prohibited until CI passes. This is a synthetic software case only. A-04 and overall 02A remain UNVERIFIED.",
+        "status": "UNACCEPTED candidate attempt due preregistration/setup mismatch; the observed focused result does not count. This synthetic software attempt establishes no crop claim. A-04 and overall 02A remain UNVERIFIED.",
         "owner": "S1 implementation worker; S3 independent preregistration reviewer; lead integration",
-        "retest": "Do not execute until exact-head PR CI passes. Any setup, source-row, helper, or expected-value change requires a new reviewed registration."
+        "retest": "Keep fixture 01 and its setup digest unchanged. Use corrected fixture 02 only after S3 preregistration review and exact-head PR CI pass; do not reuse fixture 01 output as acceptance."
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "independentReferenceModelComparison": false,
       "measuredHoldoutValidation": false,
-      "status": "PREREGISTERED; pending independent review and exact-head PR CI. No source-observed comparison, default-versus-cultivar test, direct-sowing comparison, biological maturity, crop accuracy, A-04 acceptance, or 02A completion claim."
+      "status": "UNACCEPTED candidate attempt. The fixture 01 preregistration and exact-head docs CI passed, but its candidate inputs did not match the registered setup. See the result record; A-04 and overall 02A remain UNVERIFIED.",
+      "candidateAttemptResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json"
+    },
+    {
+      "id": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02",
+      "classification": "corrective preregistered synthetic v3 software regression after an unaccepted fixture 01 attempt; not prospective, measured, or predictive crop evidence",
+      "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
+      "preregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02.json",
+      "setupDigest": "7cdf717aab20211fc02346f310b7b6f1b5723bc5f685f891b700ae73d528c3b8",
+      "baselineCodeHead": "65f6daa45532ec19d918ada1424ddec6abba9288",
+      "inputFixtureReferences": [
+        "src/lib/sim/model-inputs.test.ts#syntheticStartEventParameter, baseline file SHA-256 fa1e0c15a9093f0cce6990c79ab9b99db685f0e7f52cf9b462b9130b7fa5383c",
+        "src/lib/sim/engine.ts, baseline file SHA-256 3a8388eef614b43a4bb355b0a5986d68ef9ade71bba87c5fad7a71b3af131e15",
+        "src/lib/sim/model-inputs.ts, baseline file SHA-256 eaa2f801eb2b654d83e42cace6b2b1d0b6c5fbf4c9297e457ebf958b6f2bb643",
+        "src/data/cropThermalParams.ts#cropId-1-tomato, file SHA-256 e54c574c928b4577ab14a0f7a429ab7a357d751f29a9f358d59f3b306a47d76c",
+        "Oregon State University Extension EM 9305, Jan. 2021, Table 6; PDF SHA-256 469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d"
+      ],
+      "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "syntheticInputs": "One floor tomato cell id 1 at local 0,0; full RunConfig values, base plan, event map, model inputs, helper output, source thermal row, and all 58 fixed daily records are frozen in the preregistration. Soil sentinels are synthetic; soil source is omitted and freezes as unknown.",
+      "expected": "Exact software assertions unchanged from fixture 01: source thermal time 0 on Oct 1-2; 20 C-days on transplant day Oct 3; 1100 C-days with biomassFrac below 1 on Nov 26; raw 1120 capped at 1117 C-days with biomassFrac 1 on Nov 27.",
+      "tolerance": "No tolerance; exact deterministic state and date assertions only.",
+      "correctionHistory": "Fixture 01 is preserved with an UNACCEPTED result because its candidate inputs did not match the setup text. Fixture 02 corrects the frozen thermal-method string and adds dayCount plus explicit run settings; no numerical expected value or tolerance changed. Since fixture 01 outputs were observed, fixture 02 is disclosed as a corrective software regression rerun, not blind or prospective validation.",
+      "reproduction": "S3 independent preregistration review passed; exact-head PR CI pending. Candidate execution remains prohibited until that gate passes. Then run the exact command in the preregistration.",
+      "acceptance": {
+        "row": "A-04",
+        "status": "Corrective registration reviewed by S3 PASS; exact-head PR CI pending; candidate rerun prohibited until CI passes. Synthetic software only; fixture 01 attempt remains UNACCEPTED; A-04 and overall 02A remain UNVERIFIED.",
+        "owner": "S1 candidate implementation worker; S3 independent preregistration reviewer; lead integration",
+        "retest": "Do not execute until exact-head PR CI passes. Any change to setup, source row, helper, run configuration, or expected values requires a new reviewed registration."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "independentReferenceModelComparison": false,
+      "measuredHoldoutValidation": false,
+      "status": "Corrective fixture 02 preregistration review PASS; exact-head PR CI pending. Candidate rerun prohibited until CI passes. Prior fixture 01 output remains UNACCEPTED. No crop, biological, accuracy, reference agreement, or prediction claim."
     }
   ],
   "coverageSummary": {
