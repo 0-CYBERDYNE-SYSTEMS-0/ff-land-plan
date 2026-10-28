@@ -54,7 +54,8 @@
     "a08AllCatalogV2MissingProfileResult": "quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic-result.json",
     "a04V3TransplantSourceClockMaturityEndpointAttemptResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json",
     "a04V3TransplantSourceClockMaturityEndpointCorrectedPreregisteredFixture": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02",
-    "a04V3TransplantSourceClockMaturityEndpointCorrectedPreregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02.json"
+    "a04V3TransplantSourceClockMaturityEndpointCorrectedPreregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02.json",
+    "a04V3TransplantSourceClockMaturityEndpointCorrectedResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json"
   },
   "sources": [
     {
@@ -2723,18 +2724,19 @@
       "expected": "Exact software assertions unchanged from fixture 01: source thermal time 0 on Oct 1-2; 20 C-days on transplant day Oct 3; 1100 C-days with biomassFrac below 1 on Nov 26; raw 1120 capped at 1117 C-days with biomassFrac 1 on Nov 27.",
       "tolerance": "No tolerance; exact deterministic state and date assertions only.",
       "correctionHistory": "Fixture 01 is preserved with an UNACCEPTED result because its candidate inputs did not match the setup text. Fixture 02 corrects the frozen thermal-method string and adds dayCount plus explicit run settings; no numerical expected value or tolerance changed. Since fixture 01 outputs were observed, fixture 02 is disclosed as a corrective software regression rerun, not blind or prospective validation.",
-      "reproduction": "S3 independent preregistration review passed; exact-head PR CI pending. Candidate execution remains prohibited until that gate passes. Then run the exact command in the preregistration.",
+      "reproduction": "PASS: npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint\"; 1 passed / 36 skipped on candidate code SHA bce83aa7b0340ea6f3206d977038cf2efc352071. S3 independent candidate review passed. Exact-head PR #82 run 40788255990 passed all four checks on this SHA. Local full gates are recorded in quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json.",
       "acceptance": {
         "row": "A-04",
-        "status": "Corrective registration reviewed by S3 PASS; exact-head PR CI pending; candidate rerun prohibited until CI passes. Synthetic software only; fixture 01 attempt remains UNACCEPTED; A-04 and overall 02A remain UNVERIFIED.",
-        "owner": "S1 candidate implementation worker; S3 independent preregistration reviewer; lead integration",
-        "retest": "Do not execute until exact-head PR CI passes. Any change to setup, source row, helper, run configuration, or expected values requires a new reviewed registration."
+        "status": "PASS only for this corrective synthetic software regression. S3 candidate review, full local gates, and exact-head PR CI passed; fixture 01 remains UNACCEPTED. No biological, accuracy, or predictive evidence; A-04 and overall 02A remain UNVERIFIED.",
+        "owner": "S1 implementation worker; S3 independent preregistration and candidate reviewer; lead integration",
+        "retest": "Repeat the registered focused test, S3 review, full local gates, and exact-head PR CI if any frozen input, source row, helper/reducer behavior, or assertion changes. Fixture 01 remains unaccepted."
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "independentReferenceModelComparison": false,
       "measuredHoldoutValidation": false,
-      "status": "Corrective fixture 02 preregistration review PASS; exact-head PR CI pending. Candidate rerun prohibited until CI passes. Prior fixture 01 output remains UNACCEPTED. No crop, biological, accuracy, reference agreement, or prediction claim."
+      "status": "PASS only as a corrective synthetic software regression after fixture 01 was UNACCEPTED. Registration/docs CI run 40786569153 passed; candidate code SHA bce83aa7b0340ea6f3206d977038cf2efc352071 passed exact run 40788255990. Not prospective crop validation; A-04 and overall 02A remain UNVERIFIED.",
+      "resultRecord": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json"
     }
   ],
   "coverageSummary": {

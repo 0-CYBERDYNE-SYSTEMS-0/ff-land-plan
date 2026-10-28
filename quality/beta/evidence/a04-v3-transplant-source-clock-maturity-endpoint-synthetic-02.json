@@ -228,9 +228,11 @@
   },
   "status": {
     "registration": "PREREGISTERED-CORRECTIVE-SOFTWARE-REGRESSION",
-    "S3IndependentReview": "PASS",
-    "exactHeadPrCi": "PENDING",
-    "candidateExecution": "PROHIBITED until exact-head PR CI passes."
+    "S3IndependentReview": "PASS on 2026-10-28.",
+    "exactHeadPrCi": "PASS on exact registration docs head e35392779298c28287565c03f65c42a80b4ae5d1, PR #82 run 40786569153; all four named checks passed.",
+    "candidateExecution": "PASS only as a corrective synthetic software regression on code SHA bce83aa7b0340ea6f3206d977038cf2efc352071; see quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json. Fixture 01 remains UNACCEPTED; fixture 02 is not prospective crop validation.",
+    "candidateExactHeadPrCi": "PASS on exact candidate code SHA bce83aa7b0340ea6f3206d977038cf2efc352071, PR #82 run 40788255990; all four named checks passed.",
+    "candidateReview": "S3 independent candidate review PASS after removal of the redundant self-referential RunConfig assertion."
   },
   "independentReviewRecord": {
     "reviewer": "S3 independent preregistration reviewer",
@@ -254,7 +256,7 @@
     ],
     "findings": "No remaining preregistration mismatch. Fixture 02 uses the matching -02 establishment evidence ID, exact source-row accumulation method, dayCount 58, full baseline RunConfig/base plan/event map, matching hashes and setup digest. Fixture 01 is unchanged and its candidate result is UNACCEPTED.",
     "claimBoundary": "Expected clock values remain unchanged. Fixture 02 follows observed fixture 01 outputs and is a software regression rerun, not prospective or independent crop validation. A-04 and overall 02A remain UNVERIFIED.",
-    "execution": "No tests were run by S3; exact-head PR CI is still pending and candidate execution remains prohibited."
+    "execution": "As of the preregistration review, exact-head PR CI was pending and candidate execution was prohibited; S3 did not run tests."
   },
   "claimBoundary": [
     "This is a synthetic software timing and endpoint invariant only; no comparison to source-observed outcomes is made.",
@@ -276,5 +278,6 @@
     "reason": "S3 candidate review found that fixture 01 copied the helper thermal accumulationMethod incorrectly and omitted the test RunConfig dayCount. This registration freezes the exact source-row string and full run configuration before the corrected regression rerun.",
     "numericExpectedValuesChanged": false,
     "claimBoundary": "Because the fixture 01 clock outputs were observed before this correction, fixture 02 is a transparent corrective software regression record, not blind, prospective, measured, or predictive validation."
-  }
+  },
+  "resultRecord": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json"
 }
