@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import { lettuceRosalbaRUEReference, lettuceYumaRootProfileReference } from '@/data/cropModelV2LettuceReferences';
 import { cropThermalParams } from '@/data/cropThermalParams';
+import fao56V2PositiveDrainageFixture from '../../../quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json';
 import fao56V2RootDrydownFixture from '../../../quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
 import type { CropStartEvent, Observation } from '@/types';
@@ -22,6 +23,8 @@ import {
   inspectRunModelSupport,
 } from './model-inputs';
 import { NO_CLIMATE_EQUIPMENT } from './environment-climate';
+import * as cropModelV2 from './crop-model-v2';
+import { stepFao56RootZone } from './crop-model-v2';
 import { createRun, simulateRun, stepDay } from './engine';
 import { collectRunPredictionPairs } from './scorecard';
 
@@ -1218,6 +1221,136 @@ describe('frozen crop model inputs and replay support', () => {
     expect(Math.abs((wetCumulativeDryMatter - dryCumulativeDryMatter) - expected.wetMinusDryDryMatterGainGPerM2))
       .toBeLessThanOrEqual(1e-8);
     expect(wetCumulativeDryMatter).toBeGreaterThan(dryCumulativeDryMatter);
+
+    const drainageFixture = fao56V2PositiveDrainageFixture;
+    const drainageInput = drainageFixture.syntheticInputs;
+    const drainageRoot = drainageInput.rootZone;
+    const drainageExpected = drainageFixture.expected.calculation;
+    const drainageRun = {
+      ...makeRun(drainageRoot.initialStorageFraction),
+      dayCount: drainageInput.dailyEnvironment.dayCount,
+    };
+    const drainageParameters = drainageRun.modelInputs.cropParameters[0]!;
+    const drainageRunSoil = drainageRun.modelInputs.soil;
+    if (!drainageRunSoil || typeof drainageRunSoil.awcMmPerCm !== 'number') {
+      throw new Error('Expected frozen drainage soil inputs with a numeric AWC.');
+    }
+    const drainageEffectiveRootDepthCm = drainageRoot.effectiveRootDepthCm;
+    const drainageCapacityMm = drainageRunSoil.awcMmPerCm * drainageEffectiveRootDepthCm;
+
+    expect(drainageInput.soil.awcMmPerCm).toBe(2);
+    expect(drainageRunSoil.awcMmPerCm).toBe(drainageInput.soil.awcMmPerCm);
+    expect(drainageEffectiveRootDepthCm).toBe(80);
+    expect(drainageInput.soil.effectiveRootDepthCm).toBe(drainageEffectiveRootDepthCm);
+    expect(drainageCapacityMm).toBe(drainageExpected.totalAvailableWaterMm);
+    expect(drainageCapacityMm).toBe(160);
+    expect(drainageParameters.rootZone.effectiveRootDepthCm).toBe(drainageEffectiveRootDepthCm);
+    expect(drainageParameters.rootZone.initialStorageFraction).toBe(drainageRoot.initialStorageFraction);
+    expect(drainageInput.rootZone.rootDevelopment).toContain('none');
+    expect(drainageParameters.rootZone.rootDevelopment).toBeUndefined();
+
+    const drainageInitialState = createRun(drainageRun);
+    const drainageInitialCell = drainageInitialState.cells[cellKey]!;
+    expect(drainageInitialCell.rootZoneWaterMm).toBeDefined();
+    expect(drainageInitialCell.rootZoneWaterMm).toBe(drainageFixture.expected.integratedPreStepState.cellRootZoneWaterMm);
+    expect(drainageInitialCell.rootZoneWaterMm).toBe(159);
+    expect(drainageInitialCell.rootZoneDepthCm).toBeUndefined();
+    expect(drainageInitialCell.rootThermalCdays).toBeUndefined();
+
+    const directDrainageStep = stepFao56RootZone(
+      { waterMm: drainageRoot.initialStorageMm },
+      {
+        awcMmPerCm: drainageInput.soil.awcMmPerCm,
+        effectiveRootDepthCm: drainageEffectiveRootDepthCm,
+        depletionFraction: drainageRoot.expectedAdjustedDepletionFractionP,
+      },
+      {
+        precipMm: drainageRoot.precipitationMm,
+        runoffMm: drainageRoot.runoffMm,
+        irrigationMm: drainageRoot.irrigationMm,
+        capillaryRiseMm: drainageRoot.capillaryRiseMm,
+        rootGrowthStorageMm: drainageRoot.rootGrowthStorageMm,
+        potentialTranspirationMm: drainageRoot.potentialTranspirationMmDay,
+      },
+    );
+    expect(Math.abs(directDrainageStep.deepDrainageMm - drainageExpected.deepPercolationMm)).toBeLessThanOrEqual(1e-12);
+    expect(directDrainageStep.state.waterMm).toBe(drainageExpected.endStorageMm);
+    expect(directDrainageStep.depletionMm).toBe(drainageExpected.endDepletionMm);
+    expect(directDrainageStep.rootGrowthStorageMm).toBe(0);
+    expect(directDrainageStep.actualTranspirationMm).toBe(drainageExpected.actualTranspirationMm);
+    expect(directDrainageStep.residualMm).toBe(drainageExpected.waterBalanceResidualMm);
+    expect(directDrainageStep.state.residualAccumulatedMm).toBeDefined();
+    expect(directDrainageStep.state.residualAccumulatedMm).toBe(drainageExpected.waterBalanceResidualMm);
+
+    const drainageEnvironment = drainageInput.dailyEnvironment;
+    const drainageDay = {
+      ...days[0]!,
+      date: drainageEnvironment.startDate,
+      tMinC: drainageEnvironment.tMinC,
+      tMaxC: drainageEnvironment.tMaxC,
+      precipMm: drainageEnvironment.precipMm,
+      etoMm: drainageEnvironment.etoMm,
+      dliNaturalMol: drainageEnvironment.dliNaturalMol,
+      gddBase10C: drainageEnvironment.gddBase10C,
+    };
+    const drainageStep = (() => {
+      const rootStepSpy = vi.spyOn(cropModelV2, 'stepFao56RootZone');
+      try {
+        const result = stepDay(drainageInitialState, drainageDay, drainageRun);
+        expect(rootStepSpy).toHaveBeenCalledTimes(1);
+        const observedCall = rootStepSpy.mock.calls[0];
+        if (!observedCall) throw new Error('Expected the stepDay root-zone call to be observed.');
+        const [observedState, observedParameters, observedFluxes] = observedCall;
+        expect(observedState.waterMm).toBe(159);
+        expect(observedParameters.awcMmPerCm).toBe(2);
+        expect(observedParameters.effectiveRootDepthCm).toBe(80);
+        expect(observedParameters.depletionFraction).toBe(cropModelV2.fao56AdjustedDepletionFraction(0.4, 0));
+        expect(observedFluxes.precipMm).toBe(5);
+        expect(observedFluxes.irrigationMm).toBe(0);
+        expect(observedFluxes.runoffMm).toBe(0);
+        expect(observedFluxes.capillaryRiseMm).toBeUndefined();
+        expect(Object.prototype.hasOwnProperty.call(observedFluxes, 'capillaryRiseMm')).toBe(false);
+        expect(observedFluxes.rootGrowthStorageMm).toBe(0);
+        expect(observedFluxes.potentialTranspirationMm).toBe(0);
+        return result;
+      } finally {
+        rootStepSpy.mockRestore();
+      }
+    })();
+    const drainageFinalCell = drainageStep.state.cells[cellKey]!;
+    expect(drainageStep.effectiveEnv.precipMm).toBe(drainageEnvironment.precipMm);
+    expect(drainageStep.effectiveEnv.precipMm).toBe(5);
+    expect(drainageStep.dayStats.waterUseMm).toBe(drainageRoot.actualTranspirationMmDay);
+    expect(drainageStep.dayStats.waterUseMm).toBe(0);
+    expect(drainageFinalCell.rootZoneWaterMm).toBe(drainageExpected.endStorageMm);
+    expect(drainageFinalCell.rootZoneExpansionInflowMm).toBeUndefined();
+    expect(drainageFinalCell.rootZoneResidualAccumulatedMm).toBeDefined();
+    expect(drainageFinalCell.rootZoneResidualAccumulatedMm).toBe(0);
+    expect(drainageFinalCell.rootZoneResidualMaxAbsMm).toBeDefined();
+    expect(drainageFinalCell.rootZoneResidualMaxAbsMm).toBe(0);
+    // Daily deep drainage is not persisted; infer it from the integrated mass balance.
+    const inferredDrainageMm = drainageInitialCell.rootZoneWaterMm!
+      + drainageStep.effectiveEnv.precipMm
+      - drainageStep.dayStats.waterUseMm
+      - drainageFinalCell.rootZoneWaterMm!
+      - drainageFinalCell.rootZoneResidualAccumulatedMm!;
+    expect(Math.abs(inferredDrainageMm - drainageExpected.deepPercolationMm)).toBeLessThanOrEqual(1e-12);
+
+    const drainageRunResult = simulateRun(drainageRun, [drainageDay]);
+    const drainageRunCell = drainageRunResult.finalState.cells[cellKey]!;
+    expect(drainageRunResult.summary.daysSimulated).toBe(drainageInput.dailyEnvironment.dayCount);
+    expect(drainageRunResult.summary.rainMm).toBe(5);
+    expect(drainageRunResult.summary.waterUseMm).toBe(0);
+    expect(drainageRunCell.rootZoneWaterMm).toBe(drainageExpected.endStorageMm);
+    expect(drainageRunCell.rootZoneResidualAccumulatedMm).toBeDefined();
+    expect(drainageRunCell.rootZoneResidualAccumulatedMm).toBe(0);
+    expect(drainageRunCell.rootZoneResidualMaxAbsMm).toBeDefined();
+    expect(drainageRunCell.rootZoneResidualMaxAbsMm).toBe(0);
+    expect(drainageRunResult.summary.rootZoneBalanceResidualAccumulatedMm).toBeDefined();
+    expect(drainageRunResult.summary.rootZoneBalanceResidualAccumulatedMm).toBe(0);
+    expect(drainageRunResult.summary.rootZoneBalanceResidualMaxAbsMm).toBeDefined();
+    expect(drainageRunResult.summary.rootZoneBalanceResidualMaxAbsMm).toBe(0);
+    expect(drainageRunCell).toEqual(drainageFinalCell);
   });
 
   it('runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified', () => {
