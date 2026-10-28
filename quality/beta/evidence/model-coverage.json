@@ -1645,14 +1645,31 @@
         "rootDevelopment": "none; runtime parameter omitted; fixed effective depth",
         "rootGrowthStorageMmAdded": 0
       },
+      "integratedRootStepArgumentObservation": {
+        "observer": "Observe exactly one actual stepFao56RootZone invocation during stepDay with a call-through observer that invokes the original reducer unchanged.",
+        "exactCallArguments": {
+          "state.waterMm": 159,
+          "params.awcMmPerCm": 2,
+          "effectiveRootDepthCm": 80,
+          "depletionFraction": 0.6,
+          "fluxes.precipMm": 5,
+          "fluxes.irrigationMm": 0,
+          "fluxes.runoffMm": 0,
+          "fluxes.capillaryRiseMm": "omitted/undefined at the call boundary; defaults to 0",
+          "fluxes.rootGrowthStorageMm": 0,
+          "fluxes.potentialTranspirationMm": 0
+        },
+        "lifecycle": "Install after the direct-helper assertion; restore in finally before simulateRun.",
+        "effectiveEnvAloneIsSufficient": false
+      },
       "syntheticInputs": "AWC 2 mm/cm × 80 cm effective root depth = TAW 160 mm; initial storage is 159 mm of plant-available water above wilting point (depletion = TAW − storage = 1 mm); precipitation 5 mm; runoff, irrigation, capillary rise, root-growth storage, ETo, ETc, and actual transpiration are 0. All precipitation is treated as root-zone inflow and runoff is fixed at 0 as an explicit synthetic boundary.",
-      "expected": "FAO-56 Eq. 88 with zero capillary rise gives same-day deep percolation 4 mm; Eq. 85 gives end depletion 0 mm and Eq. 86 bounds it to 0..160 mm; final storage is 160 mm and water-balance residual is 0 mm. A direct stepFao56RootZone assertion observes deepDrainageMm=4. The standard open-field stepDay/simulateRun path asserts exact effective precipitation 5 mm, unrounded water use 0, final storage 160 mm and stored zero residual; mass balance implies 4 mm drainage with engine runoff fixed at 0. Summary rain/water-use are rounded and are not the sole proof. The v2 reducer computes pre-ET overflow, which coincides here because ETc=0; nonzero same-day ET/overflow ordering and environment-v2 precipitation are not covered.",
-      "tolerance": "Absolute deviation ≤1e-12 mm for direct helper drainage/storage/residual arithmetic and one-step engine mass-balance inference; exact frozen input values, one-day count, stepDay effective precipitation (5 mm), and unrounded water use (0 mm). Arithmetic only; no source-display, soil-parameter, or model-error tolerance.",
+      "expected": "FAO-56 Eq. 88 with zero capillary rise gives same-day deep percolation 4 mm; Eq. 85 gives end depletion 0 mm and Eq. 86 bounds it to 0..160 mm; final storage is 160 mm and water-balance residual is 0 mm. A direct stepFao56RootZone assertion observes deepDrainageMm=4. During standard open-field stepDay, a call-through observer must capture exactly one actual stepFao56RootZone invocation and assert state.waterMm=159, params.awcMmPerCm=2, effectiveRootDepthCm=80, depletionFraction=0.6, fluxes.precipMm=5, fluxes.irrigationMm=0, fluxes.runoffMm=0, fluxes.capillaryRiseMm omitted/undefined and defaulted to 0, fluxes.rootGrowthStorageMm=0, and fluxes.potentialTranspirationMm=0 while invoking the original reducer unchanged. Install after the direct-helper assertion and restore in finally before simulateRun; returned effectiveEnv alone is insufficient. Also assert exact effective precipitation 5 mm, unrounded water use 0, final storage 160 mm and stored zero residual; mass balance then implies 4 mm drainage. Summary rain/water-use are rounded and are not the sole proof. The v2 reducer computes pre-ET overflow, which coincides here because ETc=0; nonzero same-day ET/overflow ordering and environment-v2 precipitation are not covered.",
+      "tolerance": "Absolute deviation ≤1e-12 mm for direct helper drainage/storage/residual arithmetic and one-step engine mass-balance inference; exact frozen input values, one-day count, exactly one observed root-step invocation with the frozen state/parameter/flux arguments, stepDay effective precipitation (5 mm), and unrounded water use (0 mm). Arithmetic only; no source-display, soil-parameter, or model-error tolerance.",
       "evidence": "quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json",
-      "reproduction": "Not executed; S2/S3 approved preregistration. Proposed focused regression extends the adjusted-p test: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\". Include direct stepFao56RootZone output, exact createRun pre-step storage/capacity/no-root-growth assertions, and one-cell stepDay/simulateRun assertions. Candidate execution is gated on exact-head preregistration CI.",
+      "reproduction": "The initial focused attempt passed 1/25 but is not accepted because it did not observe the actual stepFao56RootZone call; returned effectiveEnv alone is insufficient. S2/S3 approved the revised complete-call observer contract; exact-head preregistration CI is pending before rerun.",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Preregistered after independent S2/S3 review of integrated pre-step storage/capacity/no-root-growth assertions; not executed. Nonzero same-day ET/overflow order and environment-v2 precipitation remain uncovered. Synthetic equation software behavior only; no crop, biological, measurement, or prediction claim. A-05 and 02A remain UNVERIFIED."
+      "status": "Revised after S3 identified that effectiveEnv did not prove the actual root-step precipitation argument; the initial focused attempt passed 1/25 but is not accepted. Awaiting S2/S3 re-review and exact-head CI before rerun. Nonzero same-day ET/overflow order and environment-v2 precipitation remain uncovered. Synthetic equation software behavior only; no crop, biological, measurement, or prediction claim. A-05 and 02A remain UNVERIFIED."
     },
     {
       "id": "OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01",
@@ -3263,9 +3280,9 @@
       {
         "id": "fao56-v2-positive-root-drainage-synthetic",
         "tolerance": "absolute deviation <=1e-12 mm for the direct helper drainage/storage/residual arithmetic and one-step mass-balance inference; one-step double-precision arithmetic only",
-        "status": "S2 and S3 approved the revised preregistration including integrated pre-step state/capacity/no-root-growth assertions; not executed; tolerance unchanged and arithmetic-only",
+      "status": "S2/S3 approved the revised complete-call observer preregistration; exact-head CI is pending before rerun; initial focused attempt passed 1/25 but is not accepted; tolerance unchanged and arithmetic-only",
         "basis": "Copied from the frozen fixture: the ≤1e-12 mm bound covers direct helper drainage/storage/residual arithmetic and one-step mass-balance inference using double-precision arithmetic only. It is not a source-display, soil-parameter, or model-error tolerance.",
-        "scope": "Synthetic one-day crop-model-v2 positive-drainage fixture. It preregisters direct stepFao56RootZone output plus standard open-field stepDay/simulateRun effective-precipitation, unrounded-water-use, final-storage, and residual assertions. No crop, biological, measured, or predictive claim.",
+        "scope": "Synthetic one-day crop-model-v2 positive-drainage fixture. It preregisters direct stepFao56RootZone output plus standard open-field stepDay/simulateRun assertions, including exactly one full call-through observation of the actual stepFao56RootZone state, parameters, and fluxes while invoking the original implementation; the observer is installed after the direct-helper assertion and restored in finally before simulateRun. Returned effectiveEnv or selected fluxes alone are insufficient. No crop, biological, measured, or predictive claim.",
         "evidence": "quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json"
       },
       {

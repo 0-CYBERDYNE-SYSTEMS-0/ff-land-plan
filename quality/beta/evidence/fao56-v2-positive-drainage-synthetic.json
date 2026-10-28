@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "FAO56-V2-POSITIVE-ROOT-DRAINAGE-SYNTHETIC-01",
   "classification": "preregistered synthetic crop-model-v2 one-day root-zone balance invariant; not a crop benchmark",
-  "status": "Preregistered after independent S2/S3 review of direct-helper, integrated-route, and pre-step storage/capacity assertions; not executed. A-05 and 02A remain UNVERIFIED.",
+  "status": "The complete-call observer preregistration is approved by independent S2/S3 review. The initial focused attempt passed 1/25 but is not accepted; exact-head preregistration CI is required before rerun. A-05 and 02A remain UNVERIFIED.",
   "preparedDate": "2026-10-27",
   "review": {
-    "S2": "Approved revised arithmetic, tolerance, and integrated initial-state/capacity assertions for preregistration only; no test or candidate execution.",
-    "S3": "Approved revised pre-step storage/capacity and no-root-growth guard; prior false-positive closed; no test or candidate execution."
+    "S2": "Approved the complete-call preregistration for consistent state, parameter, flux, and observer-lifecycle requirements; preregistration only, no candidate implementation review.",
+    "S3": "Approved the full-call observer contract as feasible in Vitest 5.0.5 against the standard route; omitted capillaryRiseMm defaults to zero. Preregistration only, no candidate implementation review."
   },
   "sourceContext": {
     "evidenceId": "FAO-56-1998",
@@ -145,15 +145,16 @@
     },
     "stepDayAndRunAssertions": {
       "configRoute": "One planted cell; crop-model-v2 frozen inputs; standard open-field path without environment-v2; no environment climate snapshot.",
-      "stepDay": "Before the tick, createRun's cell rootZoneWaterMm is exactly 159 and root-zone capacity is exactly 160 mm from frozen AWC 2 mm/cm × fixed effective depth 80 cm. The frozen rootDevelopment is none and no root-growth storage is added. effectiveEnv.precipMm is exactly 5; dayStats.waterUseMm is exactly 0 (unrounded); final cell rootZoneWaterMm is 160; cell accumulated and max absolute residuals are 0.",
+      "stepDay": "Before the tick, createRun's cell rootZoneWaterMm is exactly 159 and root-zone capacity is exactly 160 mm from frozen AWC 2 mm/cm × fixed effective depth 80 cm. During stepDay, install one call-through observer at the actual stepFao56RootZone invocation after the direct-helper assertion; preserve and invoke the original reducer. Assert exactly one invocation and capture the complete call: state.waterMm=159; params.awcMmPerCm=2; effectiveRootDepthCm=80; depletionFraction=0.6; fluxes.precipMm=5; fluxes.irrigationMm=0; fluxes.runoffMm=0; fluxes.capillaryRiseMm is omitted/undefined at the call boundary and defaults to 0; fluxes.rootGrowthStorageMm=0; fluxes.potentialTranspirationMm=0. Restore the observer in finally before simulateRun. effectiveEnv alone is insufficient. The frozen rootDevelopment is none and no root-growth storage is added. Also require effectiveEnv.precipMm=5, dayStats.waterUseMm=0 (unrounded), final cell rootZoneWaterMm=160, and cell accumulated and max absolute residuals=0.",
+      "rootStepCallObservation": "During stepDay, observe exactly one actual stepFao56RootZone invocation with a call-through observer that invokes the original reducer unchanged. Assert state.waterMm=159; params.awcMmPerCm=2; effectiveRootDepthCm=80; depletionFraction=0.6; fluxes.precipMm=5; fluxes.irrigationMm=0; fluxes.runoffMm=0; fluxes.capillaryRiseMm omitted/undefined so the root-step default is zero; fluxes.rootGrowthStorageMm=0; and fluxes.potentialTranspirationMm=0. Install only after the direct-helper assertion and restore in finally before simulateRun. Returned effectiveEnv alone is insufficient.",
       "simulateRun": "One-day summary rainMm is 5 and waterUseMm is 0; the same frozen pre-step state is rootZoneWaterMm=159 with capacity 160 mm; rootDevelopment is none and root-growth storage is 0; final cell root-zone water is 160; aggregate accumulated and maximum absolute residuals are 0.",
       "inferredDeepPercolationMm": 4,
-      "inference": "With a one-cell normal v2 root step, precipitation 5 mm, engine runoff fixed at 0, other inflows 0, unrounded actual water use 0, initial storage 159 mm, final storage 160 mm, and stored residual 0, the mass balance implies exactly 4 mm deep drainage. Summary rain/water-use fields are rounded to 0.1 mm and are not the sole proof; assert stepDay effectiveEnv and dayStats values."
+      "inference": "With a one-cell normal v2 root step, observed state storage 159 mm and capacity inputs AWC 2 mm/cm × depth 80 cm, call fluxes precipMm=5 and runoffMm=0, all other inflows 0, unrounded actual water use 0, final storage 160 mm, and stored residual 0, the mass balance implies exactly 4 mm deep drainage. Summary rain/water-use fields are rounded to 0.1 mm and are not the sole proof; effectiveEnv alone does not establish the root-step call inputs."
     }
   },
   "tolerances": {
     "rootZoneFluxesStorageDepletionAndResidual": "absolute deviation <=1e-12 mm for the direct helper drainage/storage/residual arithmetic and one-step mass-balance inference; one-step double-precision arithmetic only",
-    "exactChecks": "Frozen input values, one-day count, no environment-v2 route, zero non-precipitation fluxes, exact stepDay effective precipitation (5 mm), and exact unrounded stepDay water use (0 mm).",
+    "exactChecks": "Frozen input values, one-day count, no environment-v2 route, exactly one observed stepFao56RootZone call during stepDay with state.waterMm=159, params.awcMmPerCm=2, effectiveRootDepthCm=80, depletionFraction=0.6, fluxes.precipMm=5, fluxes.irrigationMm=0, fluxes.runoffMm=0, capillaryRiseMm omitted/undefined and defaulted to 0, rootGrowthStorageMm=0, and potentialTranspirationMm=0; call-through preserves the original reducer, observer is installed after the direct-helper assertion and restored in finally before simulateRun; exact stepDay effective precipitation (5 mm) and unrounded water use (0 mm).",
     "scope": "The tolerance is for arithmetic only; it is not a source-display bound, soil-parameter uncertainty, crop-model error tolerance, biological validation threshold, or prediction threshold."
   },
   "notCovered": [
@@ -166,5 +167,5 @@
     "Nonzero same-day ET with excess water and the ordering of ET versus drainage; ETc is zero here so this fixture cannot distinguish the implementation order.",
     "Environment-v2 precipitation coupling; the fixture deliberately uses the standard open-field v2 crop root-step path."
   ],
-  "reproduction": "Not executed; S2/S3 approved preregistration. Proposed focused regression: extend the one-day assertions in the existing adjusted-p test and run npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\". Include direct stepFao56RootZone output, exact createRun pre-step storage/capacity/no-root-growth assertions, and one-cell stepDay/simulateRun assertions. Candidate execution is gated on exact-head preregistration CI."
+  "reproduction": "The initial focused attempt passed 1/25 but is not accepted because partial observation did not prove the complete actual stepFao56RootZone call and allowed saturation/hidden-inflow false positives. The revised complete-call observer has not been executed. Proposed focused regression: extend the one-day assertions in the existing adjusted-p test and run npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\". After the direct-helper assertion, install a call-through observer during stepDay, assert exactly one call and all frozen state/parameter/flux arguments, invoke the original reducer, and restore the observer in finally before simulateRun. S2/S3 approved the preregistration contract; exact-head preregistration CI is pending before rerun."
 }
