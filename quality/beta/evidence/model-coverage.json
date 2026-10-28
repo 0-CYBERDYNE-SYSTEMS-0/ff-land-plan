@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-28",
-  "status": "Environment-v2 and partial source-equation coverage remain qualified synthetic software evidence. A-05 available-water-cap and same-day drainage-after-ET cases have local synthetic software results only. The same-day candidate code/evidence remains uncommitted with candidate exact-head CI pending; preregistration run 40664774492 covers only the preregistration commit. Attempts against the superseded incomplete same-day record are non-qualifying. A-05/02A remain UNVERIFIED overall; no model-output or measured comparison is claimed.",
+  "status": "Environment-v2 and partial source-equation coverage remain qualified synthetic software evidence. A-05 available-water-cap and same-day drainage-after-ET cases have synthetic software results only. The same-day candidate code/evidence SHA f7b7c37974c7ca655352cc2c18223b5da5d0ee4b passed all four named PR #82 contexts in exact-head run 40668663876; preregistration run 40664774492 covers only the earlier preregistration commit. Attempts against the superseded incomplete same-day record are non-qualifying. A-05/02A remain UNVERIFIED overall; no model-output or measured comparison is claimed.",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -2046,9 +2046,22 @@
       "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"applies v2 transpiration before same-day drainage and replays exactly\"",
       "candidateComparison": false,
       "measuredOutputComparison": false,
-      "status": "Local synthetic software candidate PASS: focused test 1 passed/30 skipped, grouped water tests 3 passed/28 skipped, full suite 48 files/257 tests, typecheck, standard/demo/Pages builds, and production Pages E2E 3/3 in 3.8m. Candidate code/evidence remains local and uncommitted; no candidate SHA or candidate-code CI exists. The private-file guard and final staged JSON/whitespace checks remain pending. Preregistration run 40664774492 is separate and does not cover the candidate. A-05/02A remain UNVERIFIED; no accuracy or comparison claim is made.",
-      "candidateCodeSha": null,
-      "candidateCodeCi": "PENDING; no exact-head candidate-code run exists",
+      "status": "Synthetic software candidate PASS locally and on exact-head PR #82 run 40668663876 for SHA f7b7c37974c7ca655352cc2c18223b5da5d0ee4b. All four named contexts passed. Local verification includes focused test 1 passed/30 skipped, grouped water tests 3 passed/28 skipped, full suite 48 files/257 tests, typecheck, standard/demo/Pages builds, production Pages E2E 3/3 in 3.8m, private guard 536 tracked files, cached diff check, and duplicate-key-safe JSON parse. The earlier preregistration run 40664774492 does not cover the candidate. A-05/02A remain UNVERIFIED; no accuracy or comparison claim is made.",
+      "candidateCodeSha": "f7b7c37974c7ca655352cc2c18223b5da5d0ee4b",
+      "candidateCodeCi": {
+        "pullRequest": 82,
+        "baseRef": "main",
+        "baseSha": "59a93ee6ee26e98b728f84420bba7750f04ab5fe",
+        "headSha": "f7b7c37974c7ca655352cc2c18223b5da5d0ee4b",
+        "runId": "40668663876",
+        "result": "PASS",
+        "contexts": {
+          "test + typecheck + build": "PASS; 38s",
+          "Playwright production Pages-path smoke": "PASS; 3/3; suite 5.2m, job 5m58s",
+          "secret + private-file scan": "PASS; 22s",
+          "GitGuardian Security Checks": "PASS; 21s"
+        }
+      },
       "preregistrationCi": {
         "commit": "78b82ef850ca5ae9c6051c07753cab225591a98b",
         "runId": "40664774492",
@@ -2061,7 +2074,7 @@
         "typecheck": "PASS",
         "builds": "standard, demo, and Pages passed",
         "productionPagesE2E": "3/3 in 3.8m",
-        "privateGuardAndFinalStagedChecks": "pending after staging"
+        "privateGuardAndFinalStagedChecks": "PASS after staging; private guard 536 tracked files, cached diff check, and duplicate-key-safe JSON parse"
       },
       "sourceContext": {
         "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Eqs. 85 and 88.",

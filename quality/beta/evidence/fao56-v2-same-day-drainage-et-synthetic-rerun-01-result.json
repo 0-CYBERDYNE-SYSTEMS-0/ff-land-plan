@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-RERUN-01-CANDIDATE-RESULT",
-  "status": "Local synthetic software candidate PASS; candidate-code CI pending; A-05 and overall 02A remain UNVERIFIED",
+  "status": "Synthetic software candidate PASS locally and on exact-head candidate CI; A-05 and overall 02A remain UNVERIFIED",
   "classification": "Synthetic crop-model-v2 reducer/software result only; not crop, soil, or predictive validation",
   "preregistration": {
     "fixture": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json",
@@ -20,9 +20,22 @@
     "testFile": "src/lib/sim/model-inputs.test.ts",
     "reducerFile": "src/lib/sim/crop-model-v2.ts",
     "testName": "applies v2 transpiration before same-day drainage and replays exactly",
-    "candidateCodeState": "Local and uncommitted on top of the preregistration commit",
-    "candidateCodeCommit": null,
-    "candidateCodeCi": "PENDING; no candidate-code CI run exists",
+    "candidateCodeState": "Committed and verified on the exact current PR #82 head",
+    "candidateCodeCommit": "f7b7c37974c7ca655352cc2c18223b5da5d0ee4b",
+    "candidateCodeCi": {
+      "pullRequest": 82,
+      "headSha": "f7b7c37974c7ca655352cc2c18223b5da5d0ee4b",
+      "baseRef": "main",
+      "baseSha": "59a93ee6ee26e98b728f84420bba7750f04ab5fe",
+      "runId": "40668663876",
+      "result": "PASS on the exact candidate code/evidence SHA",
+      "contexts": {
+        "test + typecheck + build": "PASS; 38s",
+        "Playwright production Pages-path smoke": "PASS; 3/3; suite 5.2m, job 5m58s",
+        "secret + private-file scan": "PASS; 22s",
+        "GitGuardian Security Checks": "PASS; 21s"
+      }
+    },
     "localDate": "2026-10-28"
   },
   "observedDispatch": {
@@ -113,7 +126,7 @@
       "pages": "PASS"
     },
     "productionPagesE2E": "PASS; 3/3 journeys in 3.8m",
-    "privateGuardAndFinalDiffJsonChecks": "Must be rerun after staging; not recorded as final post-stage checks"
+    "privateGuardAndFinalDiffJsonChecks": "PASS after staging; private guard 536 tracked files, cached diff check, and duplicate-key-safe JSON parse"
   },
   "constructionCorrections": [
     {
@@ -130,14 +143,13 @@
     }
   ],
   "evidenceBoundary": {
-    "claim": "The local software test observed the preregistered one-day v2 water-balance ordering and exact same-input replay for the frozen synthetic route.",
+    "claim": "The synthetic software test observed the preregistered one-day v2 water-balance ordering and exact same-input replay for the frozen route; its candidate code/evidence passed exact-head PR #82 CI.",
     "notEstablished": [
       "Crop or soil accuracy, biological validity, or crop prediction",
       "Measured or independent reference-model agreement",
       "FAO-56 example output or trajectory reproduction",
       "Persistence or storage round-trip durability",
-      "Completion of A-05 or overall 02A acceptance",
-      "Candidate-code CI success"
+      "Completion of A-05 or overall 02A acceptance"
     ],
     "acceptanceStatus": "A-05 and overall 02A remain UNVERIFIED"
   }
