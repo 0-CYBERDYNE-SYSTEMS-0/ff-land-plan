@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "preparedDate": "2026-10-27",
-  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down preregistered and exact-head CI passed on ec0876a, but not executed; candidate comparisons not run",
+  "status": "environment-v2, partial source-equation, and synthetic v2/v3 crop software checkpoints; A-05 adjusted-p root dry-down focused test and full local gates passed; exact-head implementation CI pending; candidate comparisons not run",
   "evidencePolicy": {
     "primarySourcesPreferred": true,
     "measuredAccuracyClaimRequires": [
@@ -1606,9 +1606,9 @@
       "expected": "The dry branch follows the preregistered 10-day Ks/transpiration/storage/DM trajectory; the wet branch has Ks=1 and 40 g/m² cumulative DM gain. Both branches remain active and unharvested and replay exactly.",
       "tolerance": "p and RAW: ≤1e-12 absolute; Ks: ≤1e-12; water flux/storage/depletion/residual: ≤1e-9 mm per day and ≤1e-8 mm signed cumulative residual; daily DM increment: ≤1e-9 g/m²; cumulative DM gain: ≤1e-8 g/m². Arithmetic only, not biological or predictive error.",
       "evidence": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json",
-      "reproduction": "Planned: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\"",
+      "reproduction": "Verified locally: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\" (1 passed, 25 skipped); full test suite 46 files / 245 tests; typecheck and standard/demo/Pages builds passed; private-file guard passed on 522 tracked files; git diff --check passed. Exact-head PR CI for the implementation commit is pending.",
       "candidateComparison": false,
-      "status": "Preregistered after independent tolerance and evidence-boundary review; exact-head PR #82 CI passed on ec0876a (run 40604271469); no reducer candidate executed; A-05 and 02A remain UNVERIFIED."
+      "status": "Focused synthetic reducer integration test and full local gates passed; independent code/acceptance reviews approved; exact-head PR #82 CI pending; no calibration/holdout comparison; A-05 and 02A remain UNVERIFIED. Preregistration exact-head CI passed on ec0876a (run 40604271469)."
     }
   ],
   "coverageSummary": {
@@ -3197,7 +3197,7 @@
       {
         "id": "fao56-v2-adjusted-p-root-drydown-integration",
         "tolerance": "p and RAW ≤1e-12 absolute; Ks ≤1e-12; daily ET/storage/depletion/residual ≤1e-9 mm and signed cumulative residual ≤1e-8 mm; daily DM gain ≤1e-9 g/m² and cumulative gain ≤1e-8 g/m²",
-        "status": "approved by independent GPT-6 Luna max review for synthetic software arithmetic only; preregistration exact-head CI passed on ec0876a (run 40604271469); reducer fixture not executed; candidate comparison not authorized",
+        "status": "independent GPT-6 Luna max arithmetic review approved for synthetic software only; preregistration exact-head CI passed on ec0876a (run 40604271469); focused reducer test and full local gates passed; implementation exact-head PR CI pending; candidate comparison not authorized",
         "basis": "Independent recurrence from the frozen FAO-56 p-adjustment and root-zone equations plus the v2 RUE equation; bounds account for double-precision operation order and ten daily state updates only, not model error.",
         "scope": "Synthetic v2 reducer integration with source-derived reference inputs adapted to v2 p adjustment (p 0.40→0.36), zero inflows, fixed depth, a paired wet control, and synthetic known-light production response. No Example 37 reproduction, drainage/root-depth/media/nutrient coverage, measured validation, or reference agreement.",
         "evidence": "quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json"

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01",
   "classification": "synthetic v2 reducer integration; not a crop benchmark",
-  "status": "preregistered after independent tolerance and evidence-boundary review; not executed",
+  "status": "focused synthetic reducer test and full local gates passed; exact-head implementation PR CI pending; A-05 and 02A remain UNVERIFIED",
   "preparedDate": "2026-10-27",
   "sourceContext": {
     "evidenceId": "FAO-56-1998",
@@ -198,7 +198,21 @@
     "Measured trials or independent reference-model comparison",
     "Crop accuracy, prediction validity, or full A-05 acceptance"
   ],
-  "reproduction": "Planned: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\"",
+  "reproduction": "Verified locally: npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates adjusted-p root dry-down with water-stressed production\" (1 passed, 25 skipped). The full local suite passed 46 files / 245 tests, typecheck, standard/demo/Pages builds, private-file guard, and whitespace checks; exact-head PR CI for the implementation commit is pending.",
+  "localVerification": {
+    "focusedTest": "1 passed, 25 skipped",
+    "fullTestSuite": "46 files / 245 tests passed",
+    "typecheck": "passed",
+    "buildProfiles": {
+      "standard": "passed",
+      "demo": "passed",
+      "pages": "passed",
+      "beta": "no build:beta profile exists"
+    },
+    "privateFileGuard": "passed; 522 tracked files",
+    "whitespaceCheck": "passed",
+    "exactHeadPrCi": "pending for the implementation commit"
+  },
   "review": {
     "independentToleranceReviewer": "GPT-6 Luna max; approved arithmetic-only tolerances on 2026-10-27",
     "redTeamReviewer": "GPT-6 Luna max; approved evidence-boundary wording on 2026-10-27"

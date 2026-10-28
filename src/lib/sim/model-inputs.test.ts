@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { cropLibrary } from '@/data/crops';
 import { lettuceRosalbaRUEReference, lettuceYumaRootProfileReference } from '@/data/cropModelV2LettuceReferences';
 import { cropThermalParams } from '@/data/cropThermalParams';
+import fao56V2RootDrydownFixture from '../../../quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
-import type { Observation } from '@/types';
+import type { CropStartEvent, Observation } from '@/types';
 import type {
   CropEstablishmentInput,
   FrozenCropModelParametersV2,
@@ -961,6 +962,262 @@ describe('frozen crop model inputs and replay support', () => {
     if (changed.model !== 'run-inputs-v2') throw new Error('Expected frozen v2 inputs');
     expect(changed.crops[0]?.name).toBe(cropLibrary[0]?.name);
     expect(changed.cropParameters[0]?.production.status).toBe('unsupported');
+  });
+
+  it('integrates adjusted-p root dry-down with water-stressed production', () => {
+    const fixture = fao56V2RootDrydownFixture;
+    const input = fixture.syntheticInputs;
+    const expected = fixture.expected;
+    const startDate = input.dailyEnvironment.startDate;
+    const cellKey = input.crop.cell;
+    const cellM = 0.25;
+    const tomato = cropLibrary.find((entry) => entry.id === input.crop.catalogCropId)!;
+    const cropTraits = input.crop.stressTraits;
+    expect(tomato.slug).toBe(input.crop.slug);
+    expect(tomato.category).toBe(cropTraits.category);
+    expect(tomato.family).toBe(cropTraits.family);
+    expect(tomato.minTempC).toBe(cropTraits.minimumTemperatureC);
+    expect(tomato.maxTempC).toBe(cropTraits.maximumTemperatureC);
+    expect(tomato.nitrogenNeed).toBe(cropTraits.nitrogenNeedClass);
+    const thermal = input.crop.thermalParameters;
+    const soil = input.soil;
+    const root = input.rootZone;
+    const production = input.production;
+    const requireCropStartEvent = (event: string): CropStartEvent => {
+      if (event === 'direct-sowing' || event === 'transplanting') return event;
+      throw new Error(`Unsupported crop start event in fixture: ${event}`);
+    };
+    const frozenStartEvents = thermal.startEvents.map(requireCropStartEvent);
+    const cropStartEvent = requireCropStartEvent(input.crop.startEvent);
+
+    const frozenParameter = (initialStorageFraction: number): FrozenCropModelParametersV2 => ({
+      cropId: input.crop.catalogCropId,
+      thermal: {
+        tBaseC: thermal.tBaseC,
+        tUpperC: thermal.tUpperC,
+        gddToMaturityCdays: [
+          thermal.gddToMaturityCdays[0]!,
+          thermal.gddToMaturityCdays[1]!,
+        ],
+        startEvents: frozenStartEvents,
+        accumulationStart: thermal.accumulationStart,
+        maturityEndpoint: thermal.maturityEndpoint,
+        accumulationMethod: thermal.accumulationMethod,
+        sourceCitation: thermal.sourceCitation,
+        sourceUrl: thermal.sourceUrl,
+      },
+      production: {
+        equationFamily: 'LINTUL-net-RUE',
+        rueGPerMjInterceptedPar: production.rueGPerMjInterceptedPar,
+        initialDryMatterGPerM2: production.initialDryMatterGPerM2,
+        interceptedParFraction: production.interceptedParFraction,
+        harvestIndex: production.harvestIndex,
+        status: 'qualified',
+        missing: [...production.missing],
+        limitations: [...production.limitations],
+        evidence: { ...production.evidence },
+      },
+      rootZone: {
+        method: 'FAO-56',
+        effectiveRootDepthCm: soil.effectiveRootDepthCm,
+        depletionFraction: root.tableDepletionFractionP,
+        cropCoefficient: root.cropCoefficient,
+        initialStorageFraction,
+        status: 'qualified',
+        missing: [...root.missing],
+        limitations: [...root.limitations],
+        evidence: { ...root.evidence },
+      },
+      lifecycle: 'plant',
+    });
+
+    const makeRun = (initialStorageFraction: number) => {
+      const run = config({
+        cropModelVersion: 'crop-model-v2',
+        startDate,
+        dayCount: input.dailyEnvironment.dayCount,
+        autoHarvest: input.crop.autoHarvest,
+        basePlan: {
+          ...config().basePlan,
+          widthM: cellM,
+          heightM: cellM,
+          cellM,
+          planting: { [cellKey]: input.crop.catalogCropId },
+          plantedAt: { [cellKey]: startDate },
+        },
+        cropStartEvents: { [cellKey]: cropStartEvent },
+      });
+      const modelInputs = freezeRunModelInputsV2(run, {
+        soil: { awcMmPerCm: soil.awcMmPerCm, organicMatterPct: soil.organicMatterPct },
+        crops: [tomato],
+        cropParametersV2: [frozenParameter(initialStorageFraction)],
+      });
+      return { ...run, modelInputs };
+    };
+
+    const dryRun = makeRun(root.dryControlInitialStorageFraction);
+    const wetRun = makeRun(root.wetControlInitialStorageFraction);
+    const dryParameters = structuredClone(dryRun.modelInputs.cropParameters[0]!);
+    dryParameters.rootZone.initialStorageFraction = root.wetControlInitialStorageFraction;
+    expect(dryParameters).toEqual(wetRun.modelInputs.cropParameters[0]);
+    expect({ ...dryRun, modelInputs: undefined }).toEqual({ ...wetRun, modelInputs: undefined });
+    for (const run of [dryRun, wetRun]) {
+      expect(run.cropModelVersion).toBe(fixture.frozenModelInputs.cropModelVersion);
+      expect(run.modelInputs.model).toBe(fixture.frozenModelInputs.runInputsModel);
+      expect(run.modelInputs.parameterSetVersion).toBe(fixture.frozenModelInputs.parameterSetVersion);
+      expect(run.modelInputs.qualification.status).toBe('qualified');
+      expect(inspectRunModelSupport(run)).toMatchObject({ status: 'qualified', canReplay: true });
+      expect(inspectRunModelSupport(run).reasons).toContain(
+        'Empirical v2 crop-model accuracy remains UNVERIFIED for this parameter set.',
+      );
+    }
+
+    const days = Array.from({ length: input.dailyEnvironment.dayCount }, (_, offset) => ({
+      date: new Date(Date.parse(`${startDate}T00:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10),
+      tMinC: input.dailyEnvironment.tMinC,
+      tMaxC: input.dailyEnvironment.tMaxC,
+      precipMm: input.dailyEnvironment.precipMm,
+      etoMm: input.dailyEnvironment.etoMm,
+      dliNaturalMol: input.dailyEnvironment.dliNaturalMol,
+      gddBase10C: input.dailyEnvironment.gddBase10C,
+      provenance: {
+        tMinC: 'default' as const,
+        tMaxC: 'default' as const,
+        precipMm: 'default' as const,
+        etoMm: 'default' as const,
+        dliNaturalMol: 'default' as const,
+      },
+    }));
+    const totalAvailableWaterMm = soil.awcMmPerCm * soil.effectiveRootDepthCm;
+    const potentialEtcMmDay = input.dailyEnvironment.etoMm * root.cropCoefficient;
+    const adjustedP = Math.max(0.1, Math.min(
+      0.8,
+      root.tableDepletionFractionP + 0.04 * (5 - potentialEtcMmDay),
+    ));
+    expect(root.tableDepletionFractionP).toBe(0.4);
+    expect(Math.abs(adjustedP - root.expectedAdjustedDepletionFractionP)).toBeLessThanOrEqual(1e-12);
+    expect(Math.abs(adjustedP * totalAvailableWaterMm - root.readilyAvailableWaterMm)).toBeLessThanOrEqual(1e-12);
+
+    const stepAllDays = (run: ReturnType<typeof makeRun>) => {
+      const initialState = createRun(run);
+      let state = initialState;
+      const steps = days.map((environment) => {
+        const previousState = state;
+        const result = stepDay(previousState, environment, run);
+        state = result.state;
+        return {
+          previousCell: previousState.cells[cellKey]!,
+          cell: state.cells[cellKey]!,
+          result,
+        };
+      });
+      return { initialState, finalState: state, steps };
+    };
+    const dryTrace = stepAllDays(dryRun);
+    const wetTrace = stepAllDays(wetRun);
+    const dryInitialCell = dryTrace.initialState.cells[cellKey]!;
+    const wetInitialCell = wetTrace.initialState.cells[cellKey]!;
+    const initialNitrogenPoolKgHa = soil.nitrogenPoolInitialization.initialPoolKgHa;
+    const finalNitrogenPoolLowerBoundKgHa = soil.nitrogenPoolInitialization.conservativePoolLowerBoundAfterTenDaysKgHa;
+    expect(initialNitrogenPoolKgHa).toBe(600);
+    expect(dryInitialCell.nitrogenKgHa).toBe(initialNitrogenPoolKgHa);
+    expect(wetInitialCell.nitrogenKgHa).toBe(initialNitrogenPoolKgHa);
+    expect(dryInitialCell.rootZoneWaterMm).toBe(root.dryControlInitialStorageMm);
+    expect(totalAvailableWaterMm - dryInitialCell.rootZoneWaterMm!).toBe(root.dryControlInitialDepletionMm);
+    expect(wetInitialCell.rootZoneWaterMm).toBe(root.wetControlInitialStorageMm);
+    expect(totalAvailableWaterMm - wetInitialCell.rootZoneWaterMm!).toBe(root.wetControlInitialDepletionMm);
+
+    const checkCellState = (step: typeof dryTrace.steps[number]) => {
+      const { cell, result, previousCell } = step;
+      expect(result.dayStats.liveCells).toBe(1);
+      expect(cell.biomassFrac).toBeLessThan(1);
+      expect(cell.dead).not.toBe(true);
+      expect(cell.harvested).not.toBe(true);
+      expect(cell.stress.heat).toBe(0);
+      expect(cell.stress.cold).toBe(0);
+      expect(cell.stress.nitrogen).toBe(0);
+      expect(result.events.filter((event) => event.kind === 'harvested')).toHaveLength(0);
+      const residual = previousCell.rootZoneWaterMm!
+        - result.dayStats.waterUseMm
+        - cell.rootZoneWaterMm!;
+      expect(Math.abs(residual)).toBeLessThanOrEqual(1e-9);
+      expect(cell.rootZoneResidualMaxAbsMm).toBeDefined();
+      expect(cell.rootZoneResidualMaxAbsMm!).toBeLessThanOrEqual(1e-9);
+      return residual;
+    };
+
+    const dryWaterResiduals: number[] = [];
+    for (const [index, row] of expected.dryDailyRows.entries()) {
+      const step = dryTrace.steps[index]!;
+      const { previousCell, cell, result } = step;
+      dryWaterResiduals.push(checkCellState(step));
+      const startDepletionMm = totalAvailableWaterMm - previousCell.rootZoneWaterMm!;
+      const endDepletionMm = totalAvailableWaterMm - cell.rootZoneWaterMm!;
+      const dryMatterIncrementGPerM2 = cell.dryMatterGPerM2! - previousCell.dryMatterGPerM2!;
+      expect(Math.abs(startDepletionMm - row.startDepletionMm)).toBeLessThanOrEqual(1e-9);
+      expect(Math.abs((1 - cell.stress.water) - row.stressCoefficient)).toBeLessThanOrEqual(1e-12);
+      expect(Math.abs(result.dayStats.waterUseMm - row.actualTranspirationMm)).toBeLessThanOrEqual(1e-9);
+      expect(Math.abs(endDepletionMm - row.endDepletionMm)).toBeLessThanOrEqual(1e-9);
+      expect(Math.abs(cell.rootZoneWaterMm! - row.endStorageMm)).toBeLessThanOrEqual(1e-9);
+      expect(Math.abs(dryMatterIncrementGPerM2 - row.dryMatterIncrementGPerM2)).toBeLessThanOrEqual(1e-9);
+      expect(Math.abs(cell.dryMatterGPerM2! - row.cumulativeDryMatterGPerM2)).toBeLessThanOrEqual(1e-8);
+    }
+    const wetWaterResiduals: number[] = [];
+    for (const [index, step] of wetTrace.steps.entries()) {
+      wetWaterResiduals.push(checkCellState(step));
+      expect(1 - step.cell.stress.water).toBe(expected.wetControl.stressCoefficientEachDay);
+      expect(step.result.dayStats.waterUseMm).toBe(expected.wetControl.actualTranspirationMmEachDay);
+      expect(step.cell.rootZoneWaterMm).toBe(root.wetControlInitialStorageMm - (index + 1) * expected.wetControl.actualTranspirationMmEachDay);
+      expect(step.cell.dryMatterGPerM2).toBe((index + 1) * production.expectedUnstressedGainGPerM2Day);
+    }
+    expect(Math.abs(dryWaterResiduals.reduce((sum, residual) => sum + residual, 0))).toBeLessThanOrEqual(1e-8);
+    expect(Math.abs(wetWaterResiduals.reduce((sum, residual) => sum + residual, 0))).toBeLessThanOrEqual(1e-8);
+    const dryTraceFinalCell = dryTrace.finalState.cells[cellKey]!;
+    const wetTraceFinalCell = wetTrace.finalState.cells[cellKey]!;
+    expect(dryTraceFinalCell.rootZoneResidualAccumulatedMm).toBeDefined();
+    expect(wetTraceFinalCell.rootZoneResidualAccumulatedMm).toBeDefined();
+    expect(dryTraceFinalCell.rootZoneResidualMaxAbsMm).toBeDefined();
+    expect(wetTraceFinalCell.rootZoneResidualMaxAbsMm).toBeDefined();
+    expect(Math.abs(dryTraceFinalCell.rootZoneResidualAccumulatedMm!)).toBeLessThanOrEqual(1e-8);
+    expect(Math.abs(wetTraceFinalCell.rootZoneResidualAccumulatedMm!)).toBeLessThanOrEqual(1e-8);
+    expect(dryTraceFinalCell.rootZoneResidualMaxAbsMm!).toBeLessThanOrEqual(1e-9);
+    expect(wetTraceFinalCell.rootZoneResidualMaxAbsMm!).toBeLessThanOrEqual(1e-9);
+    expect(dryTrace.finalState.cells[cellKey]!.nitrogenKgHa).toBeGreaterThanOrEqual(finalNitrogenPoolLowerBoundKgHa);
+    expect(wetTrace.finalState.cells[cellKey]!.nitrogenKgHa).toBeGreaterThanOrEqual(finalNitrogenPoolLowerBoundKgHa);
+
+    const dryRunResult = simulateRun(dryRun, days);
+    const dryReplay = simulateRun(dryRun, days);
+    const wetRunResult = simulateRun(wetRun, days);
+    const wetReplay = simulateRun(wetRun, days);
+    expect(dryRunResult.finalState).toEqual(dryTrace.finalState);
+    expect(wetRunResult.finalState).toEqual(wetTrace.finalState);
+    expect(dryRunResult.events.filter((event) => event.kind === 'harvested')).toHaveLength(0);
+    expect(wetRunResult.events.filter((event) => event.kind === 'harvested')).toHaveLength(0);
+    expect(dryReplay.events).toEqual(dryRunResult.events);
+    expect(dryReplay.finalState).toEqual(dryRunResult.finalState);
+    expect(dryReplay.summary).toEqual(dryRunResult.summary);
+    expect(wetReplay.events).toEqual(wetRunResult.events);
+    expect(wetReplay.finalState).toEqual(wetRunResult.finalState);
+    expect(wetReplay.summary).toEqual(wetRunResult.summary);
+    expect(dryRunResult.summary).toMatchObject({
+      daysSimulated: input.dailyEnvironment.dayCount,
+      totalYieldKg: 0,
+      yieldBasis: 'dry-matter',
+      modelQualification: { status: 'qualified' },
+    });
+    expect(wetRunResult.summary).toMatchObject({
+      daysSimulated: input.dailyEnvironment.dayCount,
+      totalYieldKg: 0,
+      yieldBasis: 'dry-matter',
+      modelQualification: { status: 'qualified' },
+    });
+    const dryCumulativeDryMatter = dryRunResult.finalState.cells[cellKey]!.dryMatterGPerM2!;
+    const wetCumulativeDryMatter = wetRunResult.finalState.cells[cellKey]!.dryMatterGPerM2!;
+    expect(Math.abs(dryCumulativeDryMatter - expected.dryCumulativeDryMatterGainGPerM2)).toBeLessThanOrEqual(1e-8);
+    expect(Math.abs(wetCumulativeDryMatter - expected.wetControl.cumulativeDryMatterGainGPerM2)).toBeLessThanOrEqual(1e-8);
+    expect(Math.abs((wetCumulativeDryMatter - dryCumulativeDryMatter) - expected.wetMinusDryDryMatterGainGPerM2))
+      .toBeLessThanOrEqual(1e-8);
+    expect(wetCumulativeDryMatter).toBeGreaterThan(dryCumulativeDryMatter);
   });
 
   it('runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified', () => {
