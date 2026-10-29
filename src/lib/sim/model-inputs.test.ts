@@ -708,6 +708,83 @@ describe('frozen crop model inputs and replay support', () => {
     expect(replayError.reasons).toContain(unknownSoilReason);
   });
 
+  it('fails closed when a v3 transplanted cell has a mismatched establishment date', () => {
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const thermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const cellKey = targetCellKey({ kind: 'floor' }, '0,0');
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      startDate: '2026-10-01',
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': tomato.id },
+        plantedAt: { '0,0': '2026-10-03' },
+      },
+      cropStartEvents: { [cellKey]: 'transplanting' },
+    });
+    const establishment: CropEstablishmentInput = {
+      startEvent: 'transplanting',
+      establishedAtDate: '2026-10-04',
+      initialAboveGroundDryMatterGPerM2: 7,
+      evidence: {
+        classification: 'synthetic',
+        evidenceId: 'A04-V3-TRANSPLANT-ESTABLISHMENT-DATE-MISMATCH-FAIL-CLOSED-SYNTHETIC-01',
+        validDomain: 'synthetic frozen-establishment date validation only',
+      },
+    };
+    const modelInputs = freezeRunModelInputsV3(run, {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [tomato],
+      cropParametersV2: [syntheticStartEventParameter(tomato.id, thermal)],
+      cropEstablishmentByCell: { [cellKey]: establishment },
+    });
+    const support = inspectRunModelSupport({ ...run, modelInputs });
+
+    expect(run).toMatchObject({
+      cropModelVersion: 'crop-model-v3',
+      startDate: '2026-10-01',
+      basePlan: {
+        planting: { '0,0': 1 },
+        plantedAt: { '0,0': '2026-10-03' },
+      },
+      cropStartEvents: { [cellKey]: 'transplanting' },
+    });
+    expect(modelInputs).toMatchObject({
+      model: 'run-inputs-v3',
+      parameterSetVersion: 'crop-parameters-v4',
+      establishmentByCell: { [cellKey]: establishment },
+    });
+    expect(modelInputs.crops.map((crop) => crop.id)).toEqual([1]);
+    expect(modelInputs.cropParameters.map((parameter) => parameter.cropId)).toEqual([1]);
+    expect(modelInputs.cropParameters[0]?.thermal).toMatchObject({
+      cropId: 1,
+      cropSlug: 'tomato',
+      tBaseC: 7.2,
+      tUpperC: 33.3,
+      gddToMaturityCdays: [1024, 1117],
+      startEvents: ['transplanting'],
+      accumulationStart: 'Transplanting at 3–5 true leaves',
+      maturityEndpoint: 'First ripe harvest (four or more fruits show ripe color)',
+      accumulationMethod: 'Single sine with horizontal cutoff; OSU Table 6',
+      sourceCitation: 'Andrews et al., OSU Extension EM 9305, Tomato degree-days, Table 6 (four cultivars; 1844–2010 °F·days).',
+      sourceUrl: 'https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners',
+    });
+    expect(modelInputs.soil).toEqual({
+      awcMmPerCm: 1.5,
+      organicMatterPct: 2.4,
+      source: 'unknown',
+    });
+    expect(support).toMatchObject({
+      model: 'crop-model-v3',
+      status: 'unsupported',
+      canReplay: false,
+      preserveStoredSummary: true,
+    });
+    expect(support.reasons).toContain(
+      'Crop 1: transplant initial state date must match the transplant event date.',
+    );
+  });
+
   it('starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint', () => {
     const tomato = cropLibrary.find((crop) => crop.id === 1)!;
     const tomatoThermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
