@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-CEA-TRANSPIRATION-WET-DRY-SYNTHETIC-01",
+  "status": "implemented synthetic software-integration fixture; focused software and client-persistence checks pass locally; candidate and measured-output comparisons not run",
+  "sources": [
+    {
+      "evidenceId": "FAO-56-1998-CHAPTER-8",
+      "citation": "Allen, R.G., Pereira, L.S., Raes, D. and Smith, M. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Equations 80, 81 and 84.",
+      "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+      "use": "Equation 81 supports the single-crop-coefficient approximation ETc_adj = Ks × Kc × ETo when soil evaporation is not a large ET component. Equation 84 defines Ks from root-zone depletion, TAW and RAW."
+    },
+    {
+      "evidenceId": "VANTHOOR-2011-GREENHOUSE-CLIMATE-PART-1",
+      "citation": "Vanthoor, B.H.E., Stanghellini, C., van Henten, E.J. and de Visser, P.H.B. (2011), A methodology for model-based greenhouse design: Part 1, a greenhouse climate model for a broad range of designs and climates, Biosystems Engineering 110(4), 363–377.",
+      "url": "https://doi.org/10.1016/j.biosystemseng.2011.06.001",
+      "use": "Primary reference for representing crop transpiration as an input to greenhouse air temperature and vapour-pressure dynamics. FarmFriend's existing environment solver remains a daily steady-state approximation and is not validated by this fixture."
+    }
+  ],
+  "fixtureClassification": "synthetic software invariant only; not greenhouse calibration, measured comparison, reference-model agreement, or crop prediction",
+  "modelDispatch": {
+    "cropModelVersion": "crop-model-v4",
+    "climateModelVersion": "environment-v2",
+    "environmentModelInputsVersion": "environment-inputs-v2",
+    "historicalRule": "crop-model-v4 with environment-v1 retains its committed lagged-potential climate behavior; environment-v2 is a separately versioned, frozen-input path",
+    "newRunRule": "ordinary new-run creation remains crop-model-v1/environment-v1 until the applicable acceptance gates pass"
+  },
+  "frozenSyntheticInputs": {
+    "environmentArchetype": "greenhouse-glass",
+    "environmentWidthM": 10,
+    "environmentDepthM": 10,
+    "environmentLayout": "open greenhouse layout with no placed equipment or crop-plane overlap",
+    "frozenEnvironmentArchetypeInputs": {
+      "kind": "protected",
+      "defaultFootprintM": [8, 6],
+      "defaultUsableHeightM": 2.9,
+      "coverTransmission": 0.7,
+      "uValueWm2K": 4,
+      "achInfiltration": 1,
+      "achVented": 20,
+      "volumePerM2": 2.9,
+      "maxDliMol": 45,
+      "dliMode": "natural+supplement",
+      "rainEnters": false,
+      "etFactor": 0.85,
+      "setpoints": { "heatC": 12, "coolC": 28, "rhMaxPct": 85, "photoperiodH": 0 }
+    },
+    "frozenClimateDefaults": { "outdoorRhPct": 60, "outdoorCo2Ppm": 420 },
+    "climateEquipment": "all capacities zero; no equipment is installed",
+    "basePlanCellM": 0.5,
+    "plantedCells": ["0,0", "1,0"],
+    "plantedCellAreaM2": 0.25,
+    "totalPlantedAreaM2": 0.5,
+    "cropModelVersion": "crop-model-v4",
+    "runModelInputs": "run-inputs-v4",
+    "parameterSetVersion": "crop-parameters-v5",
+    "crop": {
+      "cropId": 19,
+      "catalogSlug": "broccoli",
+      "catalogVariety": "Brassica oleracea var. italica",
+      "startEvent": "transplanting",
+      "establishedAtDay": 0,
+      "initialCanopyDryMatterGPerM2": 10,
+      "initialHarvestableDryMatterGPerM2": 5,
+      "initialTotalAboveGroundDryMatterGPerM2": 15,
+      "syntheticRootInputs": "AWC 1.5 mm/cm, effective depth 20 cm, TAW 30 mm, p at ETc 5 mm/day = 0.5, Kc 1; no dynamic root-development profile"
+    },
+    "dailyOutdoorEtoMm": 5,
+    "priorRoomClimateState": { "tMinC": 15, "tMaxC": 20, "rhPct": 60, "co2Ppm": 420, "etFactor": 1 },
+    "dailyOutdoorTemperatureC": [15, 20],
+    "dailyDliMolParM2": 0,
+    "precipitationMm": 0,
+    "irrigationMmPerCell": 0,
+    "runoffMm": 0,
+    "rootGrowthStorageMm": 0,
+    "rootZone": {
+      "awcMmPerCm": 1.5,
+      "effectiveRootDepthCm": 20,
+      "totalAvailableWaterMm": 30,
+      "depletionFraction": 0.5,
+      "readilyAvailableWaterMm": 15,
+      "cropCoefficient": 1,
+      "wetInitialStorageMmPerCell": 30,
+      "dryInitialStorageMmPerCell": 7.5,
+      "wetInitialDepletionMmPerCell": 0,
+      "dryInitialDepletionMmPerCell": 22.5,
+      "wetExpectedKs": 1,
+      "dryExpectedKs": 0.5,
+      "wetExpectedTranspirationMmPerCellDay": 5,
+      "dryExpectedTranspirationMmPerCellDay": 2.5,
+      "wetExpectedEnvironmentTranspirationKgDay": 2.5,
+      "dryExpectedEnvironmentTranspirationKgDay": 1.25
+    },
+    "establishment": "both cells already established before the tick; no germination, emergence or establishment flux is under test",
+    "humidityDomain": "synthetic non-saturating greenhouse day; both expected RH outputs must remain below 100%"
+  },
+  "equations": {
+    "dailyPotentialTranspirationPerCellMm": "outdoor ETo (5 mm/day) × previous-day environment ET factor (1) × frozen Kc (1) = ETc 5 mm/day; FAO-56 p adjustment therefore leaves the frozen p=0.5 unchanged",
+    "dailyActualTranspirationPerCellMm": "min(available root-zone water after declared boundary inputs, daily potential transpiration × current FAO-56 Ks)",
+    "rootZoneStorageChangePerCellMm": "inflows - runoff - deep drainage - actual transpiration; use unrounded internal values",
+    "wholeEnvironmentTranspirationKgDay": "sum over crop cells(actual transpiration mm/cell/day × cell area m² × 1 kg water/(mm·m²))",
+    "singleUseConstraint": "The same per-cell actual-transpiration value is debited once from root-zone storage and converted once into the whole-environment water-vapour source. Do not multiply by Ks or Kc again in either path.",
+    "lagAndTemperatureOrdering": "Use the previous day's frozen room ET factor for today's potential ET to avoid a same-day atmosphere-water algebraic loop. Use the previous day's room temperatures for today's dynamic root-development increment; when no prior room state exists, use the frozen outdoor temperatures. The resulting current room state affects tomorrow's potential ET and root-development temperature driver.",
+    "environmentV1Preservation": "This lagged, water-limited flux rule applies only to environment-v2. Existing environment-v1 replay equations are unchanged."
+  },
+  "acceptanceChecks": {
+    "fao56KsArithmetic": "At the reference ETc of 5 mm/day, adjusted p remains 0.5. Wet Ks equals 1; dry Ks equals 0.5 for the frozen TAW and initial storage values. Expected actual transpiration is 5 mm/cell-day wet and 2.5 mm/cell-day dry.",
+    "rootZoneToAirFlux": "For each treatment, summed root-zone water loss in mm×m² equals environment transpiration input in kg/day within the preregistered 1e-12 numerical conversion tolerance: wet 5×0.25×2=2.5 kg/day and dry 2.5×0.25×2=1.25 kg/day.",
+    "noDoubleStressOrCoefficient": "Actual transpiration is ETo×previousEtFactor×Kc×Ks once; no second Ks/Kc multiplier is applied to its air input or root-zone debit.",
+    "wetDryDirection": "Wet treatment actual transpiration exceeds dry treatment actual transpiration, wet room RH exceeds dry room RH, and both room RH values remain below saturation.",
+    "zeroLightAndCanopy": "Known zero DLI yields exactly zero production; canopy and harvestable DM pools remain unchanged in both treatments.",
+    "waterBalance": "Each per-cell daily FAO-56 residual remains within the previously reviewed ≤1e-6 mm/cell-day closure tolerance; no storage reaches the 0 mm floor in this fixture.",
+    "candidateComparison": false,
+    "measuredOutputComparison": false
+  },
+  "toleranceReview": {
+    "status": "approved by independent GPT-6 Luna max validator for synthetic software invariants only; focused implementation checks pass locally; candidate comparison not run",
+    "requestedScope": "FAO-56 Ks arithmetic, one-use per-cell transpiration, mm×m² to kg/day conversion, fixed-point avoidance through explicit one-day lag, root-zone residual, and wet/dry directional climate response only",
+    "proposedTolerances": {
+      "KsArithmetic": "≤1e-12 dimensionless absolute deviation",
+      "waterToAirFlux": "≤1e-12 kg/day absolute deviation after summing unrounded per-cell mm×m²",
+      "rootZoneResidual": "≤1e-6 mm/cell-day, existing reviewed allowance",
+      "climateDirection": "strict inequalities only; not an RH accuracy band"
+    },
+    "reviewedBy": "GPT-6 Luna max independent validator (Herdr beta_validator)",
+    "reviewedDate": "2026-10-27"
+  },
+  "implementationStatus": "implemented; focused wet/dry, flux, zero-light, root-temperature-ordering, prior-day ET-factor lag, replay, unsupported-input, and client persistence checks passed locally; no candidate or measured-output comparison run",
+  "implementationVerification": {
+    "status": "focused and full software checks passed locally",
+    "testCommand": "npx vitest run src/lib/sim/environment-v2-coupling.test.ts src/lib/sim/environment-climate.test.ts src/lib/sim/model-inputs.test.ts src/lib/sim/crop-model-v2.test.ts src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts",
+    "testFiles": 6,
+    "testsPassed": 62,
+    "fullSuiteCommand": "npm test",
+    "fullSuiteFiles": 45,
+    "fullSuiteTests": 233,
+    "verifiedDate": "2026-10-27",
+    "typecheck": "npm run typecheck passed",
+    "beta01DurabilityRetest": {
+      "command": "npx vitest run src/lib/planSaveLedger.test.ts src/lib/planSaveQueue.test.ts src/lib/planTransfer.test.ts src/lib/store.persistence.test.ts src/lib/store.test.ts src/lib/localApi.sim-runs.test.ts",
+      "testFiles": 6,
+      "testsPassed": 40,
+      "result": "PASS; plan-save ledger/queue/transfer and store persistence regressions rechecked after RunRecord schema changes"
+    },
+    "builds": ["npm run build", "npm run build:demo", "npm run build:pages"],
+    "privateFileGuard": "npm run check:private passed; 517 tracked files",
+    "whitespaceCheck": "git diff --check passed",
+    "persistenceScope": "local save/list used mocked IndexedDB operations; REST PUT/save/list used a mocked server. This establishes client serialization only, not native browser transaction or live server persistence.",
+    "scope": "software invariants only; no climate calibration, measured-output comparison, candidate comparison, or biological validation"
+  },
+  "implementationReview": {
+    "status": "independent code review passed after adding the two-tick prior-day ET-factor assertion",
+    "reviewedBy": "GPT-6 Luna max independent validator (Herdr beta_validator)",
+    "reviewedDate": "2026-10-27",
+    "retestCommand": "npx vitest run src/lib/sim/environment-v2-coupling.test.ts",
+    "testFiles": 1,
+    "testsPassed": 5,
+    "scope": "replay determinism, causal coupling and synthetic assertion adequacy; no biological or predictive review"
+  },
+  "persistenceReview": {
+    "status": "independent local and mocked REST client round-trip review passed",
+    "reviewedBy": "GPT-6 Luna max independent validator (Herdr beta_redteam)",
+    "reviewedDate": "2026-10-27",
+    "testCommand": "npx vitest run src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts",
+    "testFiles": 2,
+    "testsPassed": 8,
+    "limits": "The local API test mocks IndexedDB operations and the REST test mocks server responses. No native browser transaction or live-server persistence was tested; unsupported-record browser-load summary retention remains UNVERIFIED."
+  },
+  "pullRequestCI": {
+    "pullRequest": 82,
+    "url": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/pull/82",
+    "state": "open-draft",
+    "baseBranch": "main",
+    "baseSha": "59a93ee6ee26e98b728f84420bba7750f04ab5fe",
+    "headSha": "f7396b2f5ca18fa3a4d7dea02054d8af019d4532",
+    "workflow": "CI",
+    "runId": 40539695978,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40539695978",
+    "status": "success",
+    "namedChecks": [
+      { "name": "test + typecheck + build", "status": "success" },
+      { "name": "Playwright production Pages-path smoke", "status": "success" },
+      { "name": "secret + private-file scan", "status": "success" },
+      { "name": "GitGuardian Security Checks", "status": "success" }
+    ]
+  }
+}

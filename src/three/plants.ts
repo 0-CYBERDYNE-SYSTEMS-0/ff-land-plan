@@ -141,6 +141,12 @@ export interface PlantBatch {
 }
 
 export interface PlantUpdateOptions {
+  /** Archetype-specific ceiling scale; omitted keeps the legacy surface map. */
+  plantScale?: number;
+  /** Saved growing-level elevation; floor remains at zero. */
+  elevationM?: number;
+  /** Elevated batches share floor pad rendering, so they do not reconcile it. */
+  skipPadReconcile?: boolean;
   /**
    * Per-cell growth-progress override ("x,y" → 0..1). When present for a cell
    * it is clamped against the computed progress (max of both) — World3D uses
@@ -811,7 +817,7 @@ function reconcileFallbackBatch(
     inst.scale.setScalar(jitter.scaleY);
     inst.position.set(
       cellX * plan.cellM + plan.cellM / 2 + offsetX + jitter.offsetX,
-      0.01 + lift,
+      0.01 + (opts?.elevationM ?? 0) + lift,
       cellY * plan.cellM + plan.cellM / 2 + offsetZ + jitter.offsetZ,
     );
     batch.group.add(inst);
@@ -888,7 +894,7 @@ function reconcileVoxelBatch(
       state,
       progress: shownProgress,
       x: cellX * plan.cellM + plan.cellM / 2 + offsetX + jitter.offsetX,
-      y: 0.01 + lift,
+      y: 0.01 + (opts?.elevationM ?? 0) + lift,
       z: cellY * plan.cellM + plan.cellM / 2 + offsetZ + jitter.offsetZ,
       rotY: jitter.rotY,
       baseScale: jitter.scaleY,
@@ -1238,7 +1244,7 @@ export function buildPlants(
   for (const [cropId, keys] of cellsByCropId) {
     const crop = cropById.get(cropId);
     if (!crop) continue;
-    const fullHeight = getPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
+    const fullHeight = getPlantHeight(crop) * (opts?.plantScale ?? SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor']);
     const batch = createBatch(cropId, crop, plan, fullHeight, scene);
     if (batch.fallback) {
       reconcileFallbackBatch(batch, crop, plan, keys, currentDate, scenario, growthCtx, opts);
@@ -1290,7 +1296,7 @@ export function updatePlants(
     const crop = cropById.get(cropId);
     if (!crop) continue;
 
-    const fullHeight = getPlantHeight(crop) * SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor'];
+    const fullHeight = getPlantHeight(crop) * (opts?.plantScale ?? SURFACE_PLANT_SCALE[plan.surface ?? 'outdoor']);
     let batch = reusable.get(cropId);
     reusable.delete(cropId);
 
@@ -1324,7 +1330,7 @@ export function updatePlants(
 
   batches.length = 0;
   batches.push(...next);
-  reconcilePads(next, plan, cropById, scene, opts?.viewByCell);
+  if (!opts?.skipPadReconcile) reconcilePads(next, plan, cropById, scene, opts?.viewByCell);
   return batches;
 }
 

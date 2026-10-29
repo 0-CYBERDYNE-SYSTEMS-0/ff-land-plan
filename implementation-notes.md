@@ -1754,3 +1754,724 @@ specialists; patches landed as one PR. Notable decisions:
   are stored inputs). P2 model credibility (#52–#54) precedes P3 assimilation.
 - The roadmap's garlic example was wrong: the catalog spacing is 10×25 cm
   (~2.5× undercount), not 5×18 cm (~7×).
+
+
+## 2026-10-24 — Core-loop spec: selectable growing worlds
+
+Expanded `quality/SPEC-CORE-LOOP.md` to make choosing a growing world and planning for its
+specific physical space a binding product contract. Added nine-world planning behavior,
+selection/setup/navigation, access and service reservations, additive spatial layout and
+mounted-equipment identity, independently editable rack tiers, historical-layout replay,
+exports and end-to-end acceptance journeys. Clarified empty sites, migration compatibility,
+Phase 0 run targeting and Phase 2 vertical/container release gates; actual planted tier area
+supersedes a blind rack yield multiplier. Documentation only: no engine terms or golden
+snapshots changed, and no application implementation is claimed by this revision.
+
+## 2026-10-24 — Phase 0 foundation implementation
+
+- Added typed archetypes, planning profiles, environment/site persistence and explicit API
+  targets. The v1 migration preserves valid v2 sites and their separate plans; feature-off
+  reads retain the legacy surface adapter without rewriting stored worlds.
+- New runs freeze selected-world metadata separately from the one base-plan snapshot; legacy
+  runs replay from `basePlan.surface`. Environment resize/save keeps extents aligned to the
+  floor grid, and history restoration preserves the saved plan timestamp.
+- World render adapters now use archetype floor tiles and plant-height limits, with distinct
+  cold-frame and container shells. Verification: `npm test` passes (6 files / 23 tests),
+  `npm run typecheck` passes, `npm run build` passes with the existing >500 kB chunk warning,
+  and `npm run check:private` passes. Flag-on browser acceptance is still in independent review.
+
+## 2026-10-24 — Phase 0 critic follow-up
+
+- Default shell meshes now contain the enclosure only; unpersisted lights, filters, shelving,
+  racks, HVAC units and greenhouse screens are left out until placed equipment is rendered from
+  saved instances.
+- World load and Reset calculate a perspective frame from the actual floor and shell bounds at
+  the current viewport aspect. `cameraFrame.test.ts` checks projected corners for greenhouse,
+  cold-frame, warehouse, container and a large open plan.
+- Latest local gates: `npm test` passes (9 files / 34 tests), `npm run typecheck`, `npm run build`
+  (existing large-chunk warning), and `npm run check:private` pass. The independent critic reports
+  the Phase 0 create/switch/reload, run-target, history, resize, delete, duplicate and move journeys
+  pass; the camera screenshot/scroll confirmation after the framing change is pending.
+
+## 2026-10-24 — Workstream C equipment terms
+
+- Added catalog physics for installed lights, fans, HVAC, dehumidifiers, CO₂, racks, soilless
+  assets, nursery trays and explicit water stores. The aggregator counts mounted instance IDs
+  once, adapts legacy floor placements deterministically, computes PPFD from the geometric union
+  per target while summing installed light watts, and returns room-wide or target-scoped terms.
+- `co2KgDay` is an additive EquipmentTerms field summed from placed CO₂ assets for the climate
+  model's daily dose capacity. Hydro channel and raft reservoir capacity is explicitly 0 L until
+  specified; no volume is inferred from dimensions, so stored-water capacity requires a separate
+  water-store asset and the inspector should explain that constraint.
+- Verification checkpoint: `npx vitest run src/lib/sim/equipment.test.ts` passes (8 tests) and
+  `npm run typecheck` passes. Full repository tests are being run against the integrated branch.
+
+## 2026-10-25 — Workstreams B/C climate and placed-equipment integration
+
+- Enclosed runs now freeze environment, room/target equipment terms, and optional daily light
+  inputs. The climate solver models interior temperature, continuous air exchange, absolute
+  humidity/condensation, ventilation, installed dehumidification, CO₂ dose limits and target
+  photoperiod. Environment setpoints remain explicit inputs; missing setpoints retain archetype
+  and asset defaults. The model is a documented v1 estimate, not a full greenhouse energy model
+  (see `references/CLIMATE-MODEL.md`).
+- Installed equipment affects the run only when both environment records and asset physics are
+  enabled. Snapshot tests cover the flag combinations and frozen equipment inputs. Rack-tier
+  planting contributes actual occupied growing area; hydro cells distinguish designed coverage
+  from installed soilless assets, and shared reservoir limits produce water-short outcomes.
+- Verification: the integrated 69-test suite, TypeScript check, production build and private-file
+  scan pass. Independent browser review completed a 90-day run after the expected archive/weather
+  load, persisted it, and opened replay at Day 0; the reviewer verified the environment/equipment
+  snapshot with two growing targets. Runs default to a 15-second archive/weather load on that
+  network (about 15 seconds in that review); this was a measured wait, not a failure. All new
+  workstream flags remain off by default.
+
+## 2026-10-24 — Core loop D/E/F integration
+
+- Added deterministic timeline seek/fork/compare and worker-backed ensemble bands; campaign
+  storage and run selection retain their frozen season inputs. Campaign previews are invalidated
+  when inputs change, overlapping run windows are rejected, and a successful save clears the
+  stale preview so next-season actions remain available.
+- Added optional Twin observation CRUD, generic wide-CSV mapping, sensor-world association,
+  observation-frozen twin copies, replay scorecards, and approval/versioning for per-world
+  calibration. `VITE_FF_TWIN` defaults off. Assimilation writes only soil moisture and biomass
+  stage; driver and yield observations remain scoring/calibration inputs. Calibration fits only
+  cover transmission from paired natural-DLI days and U value from paired air-temperature days
+  after cover transmission is known. Other climate parameters are not fitted.
+- Scorecards show only predictions the current replay model can produce; soil temperature has no
+  model prediction, and RH/VPD/CO₂/DLI predictions can be unavailable depending on run inputs.
+  CSV mapping is header/unit-guided and generic, not a vendor-certified Ecowitt or AC Infinity
+  adapter. Sensor observations are created from readings entered in the app; no vendor polling or
+  cloud API is used. The REST methods are covered by mocked fetch tests; a remote backend must
+  implement the documented routes.
+- No sim golden snapshot files changed in this integration. Verification: `npm test` passes
+  (30 files / 120 tests), `npm run typecheck` passes, and `npm run build` passes with the existing
+  Vite large-chunk advisory. `npm run check:private` passed for 443 tracked files before the
+  final exact staging pass; rerun it after staging to include newly added files.
+
+## 2026-10-25 — Demo worlds and starter templates
+
+- Fresh environment-record stores now seed the existing tent, mushroom, greenhouse, hoophouse
+  and warehouse demos with canonical growing spaces, target crops and mounted equipment. The
+  warehouse keeps its full crop inventory across four-level rack targets and a lit hydro raft.
+- Added stable, additive updated-demo worlds for old saved demo sites. Loading them preserves
+  existing layouts and selected worlds; repeated loads add nothing. Fresh garden, greenhouse and
+  cold-frame demos join the Backyard Homestead site.
+- Starter templates declare archetype compatibility and materialize floor plans, growing levels,
+  crops and equipment through the environment snapshot/undo seam. Setup preview includes elevated
+  crop counts and installed equipment. Standard scripts remain flag-off; `dev:demo` and
+  `build:demo` turn on all six core-loop flags.
+- Verification: `npm run typecheck`, `npm test` (31 files / 128 tests), `npm run build:demo`, and
+  `git diff --check` passed. Independent browser review passed template apply/undo/reload,
+  container setup, and additive migration/update/reload.
+
+## 2026-10-26 — Assignable beta-readiness development contracts
+
+- Added `quality/beta/README.md` and five proposed specs for durable persistence,
+  explicit planner-beta scope, complete workspace backup/restore, onboarding/support,
+  and qualification of an immutable production artifact. Each names ownership,
+  dependencies, exclusions, effort, acceptance cases and required evidence.
+- The launch-scope decision is explicitly proposed: eight outdoor-planner participants;
+  indoor simulation/campaign/twin remain internal until separate correctness/domain
+  gates pass. Backup must preserve advanced hidden data across both storage systems.
+- Documentation only. No application behavior, feature flags, simulation terms or
+  golden snapshots changed; no merge, deploy or publication performed. Spec verification
+  checks relative links, work-package coverage and whitespace, not runtime acceptance.
+
+## 2026-10-26 — BETA-01 durable saves and recovery
+
+- Saved local data now wins over sample content, with one-time legacy sample initialization,
+  persistent sample-deletion markers, canonical v2 preservation, and non-destructive corrupt-
+  store recovery. Local API writes acknowledge only after durable completion; plan revisions
+  remain pending through errors, can be retried, and block ambiguous writes after a tab conflict.
+- Added transaction-completion checks for IndexedDB, pagehide flushing, pending-work snapshots
+  for the BETA-03 backup handoff, and world re-entry overlays that preserve queued plans over
+  stale site data. Matching IndexedDB success acknowledgements clear failures only after commit.
+  Failed environment, sensor and simulation deletions roll back when persistence fails; sensor
+  rollback preserves concurrent readings. Regression coverage includes migration, empty plans,
+  deletion, stale acknowledgements, failed writes, transaction aborts, world switches and conflicts.
+- Production preview checks passed P-01, P-03, P-05, P-07 pagehide, P-09 and P-10. The
+  quota-fault capture showed failure → retry failure → durable retry success; recovery download
+  preserved malformed raw bytes when quarantine was denied. P-10 used two same-origin tabs:
+  a pending Salsa Bed stayed visible in tab 1 while tab 2 durably saved Pollinator Strip;
+  tab 1 showed the conflict warning and blocked further writes.
+- Verification: `npm test` (35 files / 156 tests), `npm run typecheck`, `npm run build`,
+  `npm run check:private` (477 tracked files), and `git diff --check` passed. No simulation
+  equations or golden snapshots changed.
+
+## 2026-10-26 — Full simulator beta specification handoff
+
+- Recorded the user's simulator-first decisions: all nine worlds, species/selected cultivars,
+  confidence tied to evidence, independent/site runs, dated design/management changes,
+  Blueprint setup plus 3D playback, multiseason/rotations/perennials and published benchmarks.
+- Replaced the earlier planner-only BETA-02 proposal with a full simulator integration contract
+  and five assignable model/environment/experiment/lifecycle/observation subcontracts.
+- Initial twin work uses manual/CSV imports and reproducible synthetic fixtures. Synthetic
+  provenance remains visible and cannot establish measured crop accuracy or live telemetry.
+- Revised incomplete backup, onboarding/support and release contracts; prepared the next-team
+  prompt. Existing BETA-01 runtime implementation remains at 8962bef pending integration/CI.
+- Documentation preparation only: no application changes, model retuning, fixture generation,
+  commit, merge, deployment, publication or participant contact in this revision.
+- Verification: 12 beta-package documents / 88 acceptance cases checked for local links,
+  heading references, whitespace and contract coverage; `git diff --check` passed. Independent
+  documentation review found no remaining actionable issue. Runtime tests were not repeated
+  for this documentation-only handoff; implementation and release approval remain pending.
+
+## 2026-10-27 — BETA-02A establishment and partial management acceptance
+
+- `crop-parameters-v3` freezes supported direct-sowing/transplant events and initial above-ground
+  dry matter. V2 replay requires an explicit per-target event; a plantedAt date before run start
+  is unsupported and preserves the saved summary because as-of-start crop state and prior weather
+  are unavailable. V1 dispatch remains unchanged.
+- Synthetic tests cover direct-sown bean and transplanted tomato event timing, pre-transplant zero
+  growth, same-day direct-sowing PAR production and root-zone water use, out-of-domain event
+  rejection, target-scoped irrigation, water-stress reduction of dry matter, floor/elevated harvest
+  area, spacing-independent kg DM/m² payout, and replant storage drainage. The sow-day response is
+  explicitly qualified: emergence, seed reserves and an emergence-dependent canopy are not modeled.
+- The evidence manifest records source-backed event domains separately from synthetic behavior.
+  No candidate comparison was run; measured production/root coverage, biological establishment,
+  full v2 spacing/mortality/management parity and holdout acceptance remain incomplete.
+- Verification: `npm test` (41 files / 207 tests), `npm run build`, `npm run check:private`
+  (499 tracked files), `git diff --check`, and evidence-manifest JSON parsing passed. The build
+  retained the existing Vite config-loader and large-chunk advisories.
+
+## 2026-10-27 — BETA-02A v3 source and establishment clocks
+
+- The v3 reducer keeps the frozen source-event thermal clock from sowing/transplant through
+  observed emergence and uses it only for the source maturity endpoint. A separate physiology
+  clock starts at emergence/transplant; it is not converted into an intermediate crop stage.
+  No source-supported stage map exists, so stage stays unavailable throughout the run. The 3D
+  mesh holds its smallest juvenile authored pose throughout, including after the endpoint; this
+  is an illustrative placeholder, not a simulated growth trajectory. Diagnostics show the source
+  thermal clock explicitly.
+- V3 plant interventions validate evidence classification and expose synthetic/assumed initial
+  mass. Invalid qualification states and evidence classifications are unsupported. V1/v2 replay
+  semantics and new-run v1 dispatch remain unchanged.
+- Dry-matter summaries now label v3 output as harvestable dry matter; mixed fresh/dry comparisons
+  suppress yield deltas, and unknown or unsupported qualification status hides numeric output.
+  These paths remain qualified synthetic software behavior, not measured crop validation. The
+  full 02A production, stress, target, spacing and management acceptance matrix remains open.
+- V3 diagnostics show frozen root-zone storage using each cell's current root depth; if frozen
+  soil capacity is absent, the UI marks it unavailable instead of substituting the legacy 30 cm
+  bucket. The source thermal “today” value uses the same effective or interior temperatures shown
+  in diagnostics; inactive pre-plant/dead/mature cells report zero, while an active source method
+  that cannot be evaluated is shown as unavailable. Before the first stepped day, diagnostics do
+  not borrow the first future environment-series temperatures, ET0 or provenance tags; those
+  values are shown as unavailable until a day has completed.
+- No candidate comparison was run. Verification: `npm test` (42 files / 216 tests),
+  `npm run typecheck`, `npm run build`, `npm run check:private` (499 tracked files), and
+  `git diff --check` passed. The build retained existing Vite config-loader and large-chunk
+  advisories.
+
+## 2026-10-27 — BETA-02A water-coupling preregistration review
+
+- An independent GPT-6 Luna max validator reviewed the FAO-56 Ks arithmetic, one-use transpiration
+  flux, mm·m²-to-kg/day conversion, one-day lag, residual bound and wet/dry direction checks for
+  the preregistered `environment-v2` fixture. All stated tolerances were approved for synthetic
+  software invariants only; this does not validate climate accuracy or crop predictions.
+- The validator did not run the fixture. Implementation and candidate comparison remain pending;
+  no engine tests or comparison results are claimed in this review entry.
+
+## 2026-10-27 — BETA-02A environment-v2 water-coupling implementation
+
+- Added explicit `environment-v2` replay for complete frozen crop-model-v4/run-inputs-v4 and
+  environment-inputs-v2 records. The environment snapshot freezes its archetype, room/target
+  equipment, no-equipment defaults, calibration overrides, outdoor RH/CO₂ defaults and initial
+  room state. Missing or unknown v2 inputs are unsupported and preserve stored summaries; normal
+  run creation remains v1.
+- The v2 day uses outdoor ETo × previous room ET factor × frozen Kc, prepares each FAO-56 root
+  balance once, and reuses its unrounded actual-transpiration result for both root storage loss
+  and the room vapour/latent-heat input. Root growth uses outdoor temperatures on tick one, then
+  prior-room temperatures. A two-tick regression proves tick two uses tick one's computed room ET
+  factor. The environment-v1 path retains its existing potential-ET equations.
+- Focused synthetic checks passed: `npx vitest run
+  src/lib/sim/environment-v2-coupling.test.ts src/lib/sim/environment-climate.test.ts
+  src/lib/sim/model-inputs.test.ts src/lib/sim/crop-model-v2.test.ts` (4 files / 54 tests), and
+  `npx vitest run src/lib/localApi.sim-runs.test.ts src/lib/restApi.sim-runs.test.ts` (2 files / 8
+  tests). Independent reviews found and closed the ET-factor-lag and direct client round-trip test
+  gaps. The local API test uses mocked IndexedDB operations; REST tests use a mocked server and
+  establish client serialization only. BETA-01 durability regressions also pass:
+  `npx vitest run src/lib/planSaveLedger.test.ts src/lib/planSaveQueue.test.ts
+  src/lib/planTransfer.test.ts src/lib/store.persistence.test.ts src/lib/store.test.ts
+  src/lib/localApi.sim-runs.test.ts` (6 files / 40 tests). Full gates pass:
+  `npm test` (45 files / 233 tests),
+  `npm run typecheck`, `npm run build`, `npm run build:demo`, `npm run build:pages`,
+  `npm run check:private` (517 tracked files), and `git diff --check`. No live-server persistence,
+  candidate comparison, or measured-output comparison was run. Build output retains the existing
+  Vite config-loader and large-chunk advisories. No browser load journey for an unsupported
+  environment-v2 record was run, so end-to-end historical-summary retention remains UNVERIFIED.
+  These are software checks only; A-05 remains UNVERIFIED and no biological or predictive
+  validity is claimed.
+- Stage commit `f7396b2f5ca18fa3a4d7dea02054d8af019d4532` is pushed to draft PR #82. Actual CI
+  run [40539695978](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40539695978)
+  completed successfully on that exact SHA: `test + typecheck + build`,
+  `Playwright production Pages-path smoke`, `secret + private-file scan`, and
+  `GitGuardian Security Checks` all passed. PR #82 remains open and unmerged.
+- Documentation checkpoint `dd0019e1a388c9ddbb539ef730ae549254c08b45` is also pushed to PR #82.
+  Actual CI run [40540748769](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40540748769)
+  passed all four named checks on that exact SHA, including the production Pages-path smoke.
+- The next 02A A-07 increment adds v4 software regressions for manual and automatic dry-matter
+  harvest across one floor cell and two elevated cells. With `cellM = 0.4 m`, each event and
+  combined payout must equal frozen `g DM/m² × cellM² ÷ 1000`; identical frozen pools also
+  preserve payout across spacing variants. An independent area-semantics review confirmed
+  `CellState.harvestableDryMatterGPerM2` and both v4 payout paths use this area conversion;
+  invalid/nonpositive cell sizes fall back to 0.25 m and are excluded from the fixture. The
+  worker estimated 0.5–1 engineer-day if the current formula passed; it did, so `engine.ts` is
+  unchanged. An independent validator found no gaps and passed the focused test (1 file / 8 tests).
+  Lead verification: `npm test` (45 files / 235 tests), `npm run typecheck`, standard/demo/Pages
+  builds, private-file guard, and `git diff --check` passed. This is A-07 software evidence only;
+  the row remains UNVERIFIED until the broader spacing, mortality, management, target and golden
+  matrix is covered across v2/v3/v4.
+- A-07 checkpoint `84d2eecf11b0f8763cc16e30e7c42b93994660fb` is pushed to PR #82. Actual CI run
+  [40542256309](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40542256309)
+  passed `test + typecheck + build`, `Playwright production Pages-path smoke`,
+  `secret + private-file scan`, and `GitGuardian Security Checks` on that exact SHA. The broader
+  A-07 matrix and 02A remain incomplete.
+
+## 2026-10-27 — BETA-02A unsupported environment-v2 browser journey
+
+- `Simulations` now builds the “Open in world” URL from Vite `BASE_URL`, puts `ffrun` and
+  `ffview=world` before the hash, and preserves the farm map hash. This fixes the Pages project-base
+  route and opens the run in World mode.
+- S1 estimated about 0.5 engineer-day for the route, unsupported dock action, and browser assertions,
+  followed by 20–30 minutes for the focused timeout/locator optimization. Assumptions: only an active
+  explicitly non-replayable run disables the dock; supported-run transport is unchanged; the
+  continuous World renderer needs a scoped browser-test budget.
+- The synthetic browser record is a typed `RunRecord` with complete v4 crop inputs and a frozen
+  greenhouse snapshot; it omits only `environmentModelInputs`. The Pages journey confirms the exact
+  unsupported explanation/reason, no drawer Play/Seek transport, a disabled World dock action labelled
+  “Replay unavailable,” and the distinctive 42.42 kg DM / 73-day summary before and after World
+  navigation, return to the run list, and reload. The seed is guarded against reseeding after the
+  first document load.
+- Independent review approved the fixture isolation and route/readiness/transport assertions. The
+  lead-shell production browser run passed `tests/pages-smoke.spec.ts` (2 tests) in about 1.5 minutes.
+  Lead local gates passed: `npm test` (45 files / 235 tests), `npm run typecheck`, `npm run build`,
+  `npm run build:demo`, `npm run build:pages`, `npm run check:private` (519 tracked files),
+  evidence-manifest JSON parsing, and `git diff --check`. Existing Vite config-loader and chunk-size
+  advisories remain. No persistence schema or persistence implementation changed, so BETA-01 durability
+  suites were not repeated for this route/UI change.
+- Evidence boundary: this browser fixture covers the missing frozen environment-input case through the
+  normal local-storage list path. It does not establish IndexedDB migration, server persistence, crop
+  trait handling, crop accuracy, biology, or predictive validity. At this checkpoint, A-08 was
+  UNVERIFIED because unsupported crop-trait handling and PR CI were still outstanding; 02A remained
+  incomplete.
+
+## 2026-10-27 — BETA-02A A-08 Pages smoke CI wait fix
+
+- Test-only commit `9c78595a1ad6105bd3828cb2be4fb4ac4c0a5c38` follows A-08 implementation commit
+  `427715f85859b56d324d0dc1899a30cf34df5f9e`. The implementation commit's PR CI run
+  [40548071145](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40548071145)
+  failed only on the Pages Playwright journey. Trace diagnosis showed the pathname-only wait was a
+  false positive because both URLs use `/ff-land-plan/`; the exact World button was not accessible
+  within the default 5 seconds, although it appeared in the later snapshot. The regression now waits
+  for the full target URL, then exact World button visibility up to 30 seconds, then
+  `aria-pressed=true`.
+- The corrected local Pages smoke passed 2/2. Local `npm test` (45 files / 235 tests), typecheck,
+  standard/demo/Pages builds, private-file scan, evidence-manifest JSON parse, and `git diff --check`
+  passed. PR CI run
+  [40550351216](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40550351216)
+  passed `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file
+  scan`, and `GitGuardian Security Checks` on exact fix commit `9c78595a1ad6105bd3828cb2be4fb4ac4c0a5c38`.
+- Evidence remains limited to the synthetic missing-frozen-environment-inputs case through the normal
+  local-storage list path. It does not cover IndexedDB migration, server persistence, unsupported
+  crop-trait handling, crop accuracy, human validation, or predictive validity. A-08 remains
+  UNVERIFIED overall, 02A remains incomplete, and ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-08 Pages smoke timeout CI retry
+
+- Evidence-doc commit `fef336166c7576a50d79e8c0e308b0e7e98f838f` had PR CI run
+  [40551200448](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40551200448)
+  fail only on Pages Playwright: the scoped 120-second test-wide deadline expired during the
+  Seek-slider count=0 assertion. The trace recorded no count mismatch, and the final list
+  return/reload and summary assertions were not reached. S2 approved a scoped timeout increase;
+  S3 independently diagnosed the cumulative test deadline.
+- Timeout-only test commit `3ee5a684bb0f8e7dd0f8761cebf717f90ce4c9fc` raises only this test's budget
+  from 120 to 180 seconds; its assertions and other timeouts are unchanged. Local Pages smoke passed
+  2/2; `npm test` (45 files / 235 tests), typecheck, standard/demo/Pages builds, private-file scan,
+  evidence-manifest JSON parse, and `git diff --check` passed. PR CI run
+  [40552573422](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40552573422)
+  passed `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file
+  scan`, and `GitGuardian Security Checks` on that exact SHA.
+- This remains synthetic evidence for the missing frozen environment-input case through normal
+  local-storage listing. It does not establish IndexedDB migration, server persistence, unsupported
+  crop-trait handling, crop accuracy, human validation, or predictive validity. A-08 remains
+  UNVERIFIED, 02A remains incomplete, and ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-08 unsupported lifecycle handling
+
+- The A-08 contract requires a useful explanation for an unsupported crop trait without fabricating
+  a pass or an observed claim. S1 initially estimated 90–150 minutes assuming a missing K_PAR field;
+  the lead selected the explicit `lifecycle: 'unsupported'` sentinel instead because it represents
+  unsupported lifecycle support rather than another missing-parameter case. The correction estimate
+  was 35–50 minutes. The synthetic case uses one planted broccoli cell, matching frozen v4 crop,
+  parameter, and establishment records, and a valid frozen environment-v2 snapshot.
+- The v4 classifier now explains the crop-specific lifecycle (`fungus` or `unsupported`) and the
+  plant canopy-interception, dry-matter-production, and pool-allocation calculations that cannot be
+  replayed. It still rejects replay and preserves the saved summary; the generic parameter reason
+  remains when another crop parameter is invalid. Unit coverage includes a complete plant control and
+  each non-plant lifecycle. Independent reviews found and drove fixes for the fungus explanation and
+  the browser summary assertions.
+- The Pages journey checks the trait-specific World reason, disabled Replay, absent Play/Seek
+  controls, and hidden unsupported yield/duration values. It reads and compares the complete summary
+  in the active durable store before World navigation and after list return/reload; the synthetic
+  stored summary is explicitly marked unsupported and not a model result.
+- Local non-browser gates passed `npm test` (45 files / 236 tests), `npm run typecheck`, `npm run build`,
+  `npm run build:demo`, `npm run build:pages`, `npm run check:private` (519 tracked files),
+  evidence-manifest JSON parsing, Playwright test discovery (3 Pages tests listed), and
+  `git diff --check`. Local Pages runtime could not start because the preview server returned
+  `listen EPERM` on `127.0.0.1:4173`; the browser assertions therefore remain UNVERIFIED locally.
+- Prior PR-head check snapshot `gh pr checks 82` showed all four named check contexts green on exact
+  head `de04d4e444e0c2fe8a3702776a16b2e165df4507`: the three Actions jobs in run
+  [40553243061](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40553243061)
+  and the separate `GitGuardian Security Checks` context. That head predates this change. The stage
+  commit still awaited its actual PR CI run at this checkpoint. A-08 was then UNVERIFIED; 02A remained
+  incomplete and ordinary new runs remained v1. This synthetic fixture does not establish trait
+  validity, crop accuracy, measured-trial agreement, site observations, or predictive validity.
+
+## 2026-10-27 — BETA-02A A-08 exact-head CI reconciliation
+
+- PR CI run [40558437392](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40558437392)
+  completed successfully for exact head `119130a93bbc3f3963a62781265f4ada108c3c71`. The
+  `Playwright production Pages-path smoke` check passed all 3 tests (3 passed, 4.1m):
+  `production build boots under the GitHub Pages project base path` (478ms),
+  `unsupported environment-v2 run opens under Pages and retains its stored summary` (1.9m), and
+  `unsupported v4 crop lifecycle is explained in World and retains its stored summary` (2.1m).
+  All four exact contexts passed on that SHA: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`.
+- The A-08 contract row is now PASS for synthetic fail-closed software handling only. Its two
+  synthetic browser cases provide useful missing-input/lifecycle explanations, block unsupported
+  replay or estimates, and preserve the saved summary. The lifecycle fixture keeps frozen crop and
+  environment-v2 inputs complete apart from the explicit unsupported lifecycle. This is not a
+  qualified crop-yield result and establishes no biology, measured accuracy, predictive validity,
+  site observation or human validation. A-05 remains UNVERIFIED overall; 02A remains incomplete and
+  ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A bounded v4 terminal-frost regression
+
+- S1 estimated 1–2 hours, assuming the existing frozen v4 fixture could drive terminal frost without helper changes. The test-only addition uses that frozen synthetic fixture and covers a death tick followed by a positive-ETo warm tick. It checks dead-state persistence, unchanged source/legacy thermal progress and biomass fraction after death, unchanged canopy and harvestable DM pools, unchanged fixed-depth root-zone water and zero daily water use, plus a seeded mature-dead manual-harvest attempt. Two fresh replay paths compare full states and events. No engine/equation change was made.
+- Independent red-team review corrected the assertion boundaries: mortality occurs after the death tick's root-zone step; aggregate zero water use alone can be vacuous with no live cells; and a no-harvest result must start from a mature dead cell. The independent validator approved the final version, including direct thermal and maturity state checks. This is synthetic v4 software behavior, not frost calibration or biological validation.
+- Local verification: focused mortality test passed (1 passed, 8 skipped); `npm test` passed 45 files / 237 tests; `npm run typecheck`, `npm run build`, `npm run build:demo`, `npm run build:pages`, `npm run check:private` (519 tracked files), and `git diff --check` passed. Builds retain the existing Vite config-loader and large-chunk advisories.
+- Before this increment, A-08 documentation/evidence commit `9b760c5d53b68fe604f41b392e2a12fc3db22702` passed PR CI run [40561816390](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40561816390) on that exact SHA: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`. The Pages job passed its 3 production browser cases in 3.5m. That run covers the A-08 docs checkpoint and is not CI evidence for this A-07 test.
+- The v4 terminal-frost fixture establishes one narrow mortality software regression only. A-07 remains UNVERIFIED overall; 02A remains incomplete, ordinary new runs remain v1, and no crop accuracy, measured-trial agreement, site observation, or predictive validity is claimed. At the time of this note, PR CI for the A-07 stage commit was pending; the result is recorded below.
+
+
+## 2026-10-27 — BETA-02A A-07 terminal-frost CI reconciliation
+
+- PR CI run [40564338117](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40564338117) completed successfully on exact SHA `2c592236767526ddd244bd26d657e8f0407a64c7`. All four named contexts passed: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`.
+- `Playwright production Pages-path smoke` passed 3/3 tests (3.8m): `production build boots under the GitHub Pages project base path`, `unsupported environment-v2 run opens under Pages and retains its stored summary`, and `unsupported v4 crop lifecycle is explained in World and retains its stored summary`.
+- This is one synthetic v4 terminal-frost software case only; it does not establish frost calibration or biology. A-07 remains UNVERIFIED overall and 02A remains incomplete.
+
+## 2026-10-27 — BETA-02A Ohayou source-basis light-equation kernel
+
+- A source scout found that the 2023 Ohishi et al. Ohayou broccoli model cannot be copied into v4: its RUE uses intercepted total solar radiation, its canopy/allocation terms are dynamic, and complete initial-state, thermal and root-zone inputs are not available. A separate frozen replay model was estimated at 5–7 engineer-days before those missing inputs, with unbounded acquisition risk. The selected increment is only a pure source-basis equation kernel; it does not add a new run version or change v4 replay.
+- The kernel uses the spring-control study values K=1.09 and RUE=1.16 g above-ground DM per MJ intercepted total solar radiation: `gain = RUE × daily total solar radiation × (1 − exp(−K × LAI))`. The source reports RUE R²=0.98 and 95% CI 1.04–1.27 for that treatment. The J-STAGE PDF retrieved 2026-10-27 has SHA-256 `0a35ee61c09774e9ef1523909030f03f6fad25a9ae1134cb69f46c32032c745b`; no open reuse license was identified. See `quality/beta/evidence/model-coverage.json` for source version, domain, method, license limit, missing data and fixture identity.
+- The focused fixture uses synthetic LAI 1.2 and total-solar inputs 0, 2 and 18 MJ/m²/day. The 18 MJ value is labeled only as a higher synthetic fixture input; neither the paper nor this fixture defines a sufficient-light threshold. Unknown, non-finite, negative and overflowing inputs produce no numeric result. The fixture is equation arithmetic only: no candidate comparison, measured output, field weather, or source zero-light experiment was used.
+- S1 estimated 1–2 hours for the two-file kernel and tests, assuming the spring-control coefficients and fixed synthetic LAI. Independent review first approved the equation/units and found corrections for the “supported” result label, synthetic-input labels, and overflow handling. The worker applied those findings; repeat validator and red-team reviews approved the corrected patch.
+- Local verification: focused test passed (1 file / 4 tests); `npm test` passed 46 files / 241 tests; `npm run typecheck`; `npm run build`, `npm run build:demo`, and `npm run build:pages`; `npm run check:private` (519 tracked files); `jq empty quality/beta/evidence/model-coverage.json`; `git diff --check`; and no trailing whitespace in the changed source/decision/manifest files. `npm run test:e2e -- tests/pages-smoke.spec.ts` passed 3/3 production Pages cases in 3.8m. Existing Vite config-loader and large-chunk advisories remain.
+- This equation helper is not connected to frozen run inputs, the engine, canopy/allocation state, replay, or the World UI. A-03 remains UNVERIFIED; the full v2 production and root-zone parameter-set counts remain zero. No crop accuracy, biological validity, measured-trial agreement, or predictive claim is made.
+
+## 2026-10-27 — BETA-02A Ohayou kernel exact-head PR CI
+
+- PR CI run [40570579469](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40570579469) passed on exact SHA `9d19123aaf62bfbce4817683cd07545228060ce4`. All four named contexts passed: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`.
+- The Pages smoke passed 3/3 cases (3 passed, 5.2m): production build under the GitHub Pages base path; unsupported environment-v2 summary retention; unsupported v4 crop lifecycle explanation and summary retention. This CI result verifies the branch's software gates only and does not change A-03's UNVERIFIED status or the source/kernel claim boundary above.
+
+## 2026-10-27 — BETA-02A Ohayou documentation-checkpoint CI
+
+- The docs-only follow-up commit `4f88e140df3c19cb060a0b4cb55c41145e7820e9` passed PR CI run [40573237431](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40573237431) on that exact SHA. All four named contexts passed: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`.
+- The Pages smoke passed 3/3 tests (3 passed, 5.2m): `production build boots under the GitHub Pages project base path`; `unsupported environment-v2 run opens under Pages and retains its stored summary`; and `unsupported v4 crop lifecycle is explained in World and retains its stored summary`. This run validates the docs checkpoint and predates the v3 payout test below.
+
+## 2026-10-27 — BETA-02A A-07 v3 frozen dry-matter payout regression
+
+- S1 estimated 0.5–1 engineer-day, assuming the existing v3 frozen-input helpers could be reused. The v2 manual floor/elevated/spacing payout fixture was already present in `model-inputs.test.ts`; independent scope review narrowed this increment to the missing v3 establishment/maturity-gated path rather than duplicating v2 coverage.
+- The synthetic v3 fixture freezes the crop, soil, production, per-cell transplant establishment, and environment inputs. Six eligible cells use initial above-ground dry matter 12 g/m² per cell, harvest index 0.5, `cellM=0.4`, and known zero DLI. Expected event payout is `12 × 0.4² × 0.5 / 1000 = 0.00096 kg` per cell; six events sum to 0.00576 kg and the existing two-decimal total and per-crop summaries are each 0.01 kg. Event values/sum use a 1e-12 kg arithmetic bound; the stored summaries are compared exactly to the reducer's two-decimal result.
+- The manual path checks mature-but-unestablished, mature-dead, and live-immature gates, six valid payouts, and a duplicate same-date request for one valid cell without an extra payout. Its unestablished-mature cell is deliberately seeded as an impossible state to isolate the guard; it is not a lifecycle simulation. The automatic path advances six cells with `stepDay` to the frozen v3 maturity endpoint, pays on that day, and does not pay again the next day. Both saved config/environment replays compare events, final state, and summary exactly.
+- Independent validator review first required per-crop summary assertions; red-team review required the duplicate same-day manual request. The worker added both plus the automatic aggregate assertion; repeat validator and red-team reviews approved the corrected fixture. This is synthetic software evidence only, not crop accuracy, biology, measured-trial agreement, reference-model agreement, or site evidence. A-07 and 02A remain UNVERIFIED overall.
+- Verification: focused v3 payout test passed (2 passed, 22 skipped); `npm test` passed 46 files / 243 tests; `npm run typecheck`; `npm run build`, `npm run build:demo`, and `npm run build:pages`; `npm run check:private` (521 tracked files); `jq empty quality/beta/evidence/model-coverage.json`; `git diff --check`; and no trailing whitespace in the changed files. Vite native-config-loader and large-chunk advisories remain. PR #82 CI run [40574945033](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40574945033) passed on exact SHA `9a90c411431d5102df110032aafbb23c0f041ea5`: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`. Pages passed 3/3 in 4.0m: `production build boots under the GitHub Pages project base path`; `unsupported environment-v2 run opens under Pages and retains its stored summary`; `unsupported v4 crop lifecycle is explained in World and retains its stored summary`.
+
+## 2026-10-27 — BETA-02A A-07 v2 automatic harvest payout regression
+
+- S1 estimated 2–4 hours, assuming the existing 80-day frozen-input v2 reducer fixture retained its single floor cell, zero initial DM, 0.25 m cell size, and 0.5 frozen harvest index, and produced a 252 g/m² pool at its zero-based dayIndex 62 automatic maturity crossing. The existing productive run now explicitly enables `autoHarvest`; no second maturity fixture or engine change was added.
+- The regression asserts exactly one harvested event on dayIndex 62 (the 63rd tick), with `252 g DM/m² × 0.25 m × 0.25 m × 0.5 / 1000 = 0.007875 kg`. The event payout is bounded within 1e-12 kg for arithmetic/conversion only; aggregate and per-crop summaries must each equal 0.01 kg under the reducer's two-decimal rounding. A repeated run from the same frozen config and environment series must match events, final state and summary exactly. Stable fixture ID: `V2-AUTO-DM-HARVEST-PAYOUT-SYNTHETIC-01` in `quality/beta/evidence/model-coverage.json`.
+- Local verification: the focused test passed (1 passed, 23 skipped); `npm test` passed 46 files / 243 tests; `npm run typecheck`; `npm run build`, `npm run build:demo`, and `npm run build:pages`; `npm run check:private` (521 tracked files); manifest JSON parsing; `git diff --check`; and no trailing whitespace in the five changed files. The independent validator and red-team approved the test and corrected manifest after moving the simulated 252 g/m² maturity-day pool out of the input record. Existing Vite config-loader and large-chunk advisories remain. Local browser smoke was not run for this test/evidence-only change; at this local pre-push verification checkpoint, exact-head PR CI had not yet run (see the exact-head reconciliation below).
+- This is one synthetic v2 payout/replay software regression, not crop accuracy, biology, measured validity or predictive evidence. A-07 remains UNVERIFIED overall; 02A remains incomplete and ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-07 v2 payout exact-head CI reconciliation
+
+- PR #82 run [40578821054](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40578821054) passed on exact SHA `9006e281a900472f5b435d81bb184ef15ddd13af`. All four named contexts passed: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`.
+- The production Pages smoke passed 3/3 in 5.7m: `production build boots under the GitHub Pages project base path`; `unsupported environment-v2 run opens under Pages and retains its stored summary`; and `unsupported v4 crop lifecycle is explained in World and retains its stored summary`. The Pages job lasted 9m47 (20:31:44–20:41:31 UTC), including Chromium installation and browser smoke. The full workflow ran 9m57 (20:31:35–20:41:32 UTC).
+- This exact-head CI result covers the synthetic v2 automatic payout software regression and repository checks only. It does not establish crop accuracy, biology, measured or reference agreement, site observation, or predictive validity. A-07 remains UNVERIFIED overall and 02A remains incomplete.
+
+## 2026-10-27 — BETA-02A A-07 v3 post-terminal-frost thermal freeze
+
+- S1 estimated 30–60 minutes, assuming the established v3 transplant fixture could take a warm live tick before terminal frost. The first equality-only proposal was rejected by S2 because both thermal counters could remain zero; the worker revised the same fixture to warm live → terminal frost → warm post-death and proved both counters positive at death. S2 approved the resulting diff and focused test. S3 re-read the saved diff and confirmed the sequence and positive post-death GDD.
+- The synthetic v3 tomato floor-cell fixture uses transplant start on 2026-10-01, initial above-ground dry matter 10 g/m², warm 20–25°C, terminal frost -2–3°C, then warm 20–25°C. `gddAccumC` and `sourceThermalCdays` are positive while alive and at the death state; both must remain exactly equal after the following positive-GDD tick. Dry matter is exactly unchanged and post-death water use is zero. Fixture ID `V3-POST-TERMINAL-FROST-THERMAL-FREEZE-SYNTHETIC-01` is in `quality/beta/evidence/model-coverage.json`.
+- Local verification: focused test passed (1 passed, 23 skipped); `npm test` passed 46 files / 243 tests; `npm run typecheck`; `npm run build`, `npm run build:demo`, and `npm run build:pages`; `npm run check:private` (521 tracked files); `jq empty quality/beta/evidence/model-coverage.json`; and `git diff --check`. No `build:beta` script exists. Vite native-config-loader and large-chunk advisories remain. Local production-browser smoke was not run for this test/evidence-only change.
+- This is one synthetic v3 terminal-frost software regression, not frost calibration, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observation, or predictive validity. A-07 remains UNVERIFIED overall, 02A remains incomplete, and ordinary new runs remain v1.
+- Code-and-evidence commit `972a08da52ab0ced064bb752585e9c19d865b165` passed PR #82 CI run [40583367898](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40583367898) on that exact SHA: `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks` all passed. The Pages smoke passed 3/3 in 5.4m: `production build boots under the GitHub Pages project base path`; `unsupported environment-v2 run opens under Pages and retains its stored summary`; `unsupported v4 crop lifecycle is explained in World and retains its stored summary`. The Pages job lasted 6m05 (21:02:45–21:08:50 UTC), including Chromium installation and browser smoke. This verifies the software change and repository checks only; it does not change A-07 or 02A status.
+
+## 2026-10-27 — BETA-02A A-07 v2 mature-without-auto-harvest regression
+
+- S1 estimated 30–60 minutes, assuming the existing frozen v2 tomato run reaches its day-62 maturity crossing with only `autoHarvest` changed. The existing 80-day test already uses synthetic production/root inputs and a sunny frozen series; no engine or helper change was needed.
+- The added run reuses that exact frozen config and weather series with `autoHarvest=false` and no manual interventions. It still reaches `harvestReadyDay=62` and `biomassFrac=1`, has no harvested events, yields exactly zero total kg, and matches a repeat run in events, final state and summary. The optional `harvested` cell flag is absent in this state, so the assertion treats an absent value as false; an explicit true fails. Fixture ID `V2-MATURE-WITHOUT-AUTO-HARVEST-SYNTHETIC-01` is recorded in `quality/beta/evidence/model-coverage.json`.
+- S2 approved the diff and independently passed the focused test; S3 found no false-positive path. S3 confirmed that `yieldKgByCrop` is derived only from harvested events, so this test deliberately does not expect a per-crop zero key. Local verification: the focused case passed (1 passed, 23 skipped); `npm test` passed 46 files / 243 tests; `npm run typecheck`; `npm run build`, `npm run build:demo`, and `npm run build:pages`; `npm run check:private` (521 tracked files); `jq empty quality/beta/evidence/model-coverage.json`; and `git diff --check`. No `build:beta` script exists. Vite native-config-loader and large-chunk advisories remain. Local browser smoke was not run for this test/evidence-only increment. Code-and-evidence commit `a52949f5eaa818a8bc84a7d21a861f90d2ffe061` passed all four named PR #82 contexts in run [40586736378](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40586736378): `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`. Pages passed 3/3 in 4.0m: `production build boots under the GitHub Pages project base path`; `unsupported environment-v2 run opens under Pages and retains its stored summary`; and `unsupported v4 crop lifecycle is explained in World and retains its stored summary`. The Pages job lasted 4m50 including Chromium installation and artifact upload.
+- This is one synthetic v2 harvest-management software regression. It does not establish natural harvest timing, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observation or predictive validity. A-07 remains UNVERIFIED overall, 02A remains incomplete, and ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-07 v2 duplicate manual-harvest request
+
+- S2 estimated about 1 hour for the test-only regression (1–1.5 hours if evidence documentation is included), assuming the existing frozen 80-day v2 run retains its day-62 maturity crossing and the first eligible manual intervention is the next day. S3 independently confirmed the day-63 date and payout design, and required explicit assertions for both identical requests and the sole event.
+- The test reuses the v2 `autoHarvest=false` frozen run, derives dayIndex 63 / `2026-12-03` from its `harvestReadyDay=62`, and supplies two identical harvest interventions for floor cell `0,0`. It asserts one harvested event for that cell/date, a `0.007875 kg` payout within `1e-12 kg`, harvested final state, and `0.01 kg` total/per-crop summaries. A second `simulateRun` from the same frozen config and environment series matches events, final state, and summary exactly. Fixture `V2-DUPLICATE-MANUAL-HARVEST-SYNTHETIC-01` is recorded in `quality/beta/evidence/model-coverage.json`.
+- S1 independently approved the diff and passed `npx vitest run src/lib/sim/model-inputs.test.ts` (1 file / 24 tests); S3 confirmed that removing one duplicate request or allowing a second payout fails the assertions. Lead verification passed `npm test` (46 files / 243 tests), `npm run typecheck`, `npm run build`, `npm run build:demo`, `npm run build:pages`, `npm run check:private` (521 tracked files), manifest JSON parsing, and `git diff --check`. No `build:beta` script exists. Local production-browser smoke was not run because this is a test/evidence-only change. Vite native-config-loader and large-chunk advisories remain. At this local pre-push checkpoint, exact-head PR CI had not yet run; the completed result is recorded below.
+- This is deterministic software behavior from frozen run inputs; the second `simulateRun` is not a test of durable storage serialization. The synthetic fixture does not establish natural harvest timing, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observation, or predictive validity. A-07 and 02A remain UNVERIFIED overall, and ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-07 v2 duplicate manual-harvest exact-head CI reconciliation
+
+- Code-and-evidence commit `7511e6a1b6e71198b7c589a5a784fe27291e0266` on `integration/beta-readiness-main-20261027` in draft PR #82, based on `main` at `59a93ee6ee26e98b728f84420bba7750f04ab5fe`, passed exact-head run [40589945656](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40589945656). All four named contexts passed: `test + typecheck + build` (33s), `Playwright production Pages-path smoke` (3 passed / 3 in 3.2m; job 3m43s), `secret + private-file scan` (18s), and `GitGuardian Security Checks`.
+- The Pages cases were `production build boots under the GitHub Pages project base path`; `unsupported environment-v2 run opens under Pages and retains its stored summary`; and `unsupported v4 crop lifecycle is explained in World and retains its stored summary`.
+- This run verifies the synthetic run-level duplicate-harvest software regression and repository checks only; it does not test durable storage serialization or establish biology, crop accuracy, or predictive validity. Run 40586736378 on `a52949f` covers the preceding no-auto-harvest checkpoint only. A-07 remains UNVERIFIED overall, 02A remains incomplete, and ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-07 v2 early-harvest rejection and eligible retry
+
+- The synthetic frozen 80-day v2 run keeps `autoHarvest=false` and the existing weather/model inputs. A day-0 manual request on 2026-10-01 sees `biomass=0` and `minimum=0.8`, emits one `harvest-too-early` event, pays nothing, and leaves the cell unharvested. The retry on the first eligible day (dayIndex 63 / 2026-12-03) emits one `0.007875 kg` event within `1e-12 kg` arithmetic tolerance. After both requests, `summary.harvestReadyDay` remains 62; final state is harvested, total/per-crop summaries are `0.01 kg`, and the second `simulateRun` from identical frozen inputs matches events, final state, and summary exactly. Fixture `V2-EARLY-MANUAL-HARVEST-RETRY-SYNTHETIC-01` is recorded in `quality/beta/evidence/model-coverage.json`.
+- S1 independently approved and passed the focused title-filtered test (1 passed, 23 skipped); S3 approved with no actionable false-positive. Full local gates passed: `npm test` (46 files / 243 tests), `npm run typecheck`, `npm run build`, `npm run build:demo`, `npm run build:pages`, `npm run check:private` (521 tracked files), `jq empty quality/beta/evidence/model-coverage.json`, and `git diff --check`. No `build:beta` profile exists. Vite native-config-loader and large-chunk advisories remain. Local browser smoke was not run.
+- Docs-only PR head `918fe92e89687a1c207dc81a3f67e705038306ab` passed all four contexts in run [40591216805](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40591216805); that SHA does not include the uncommitted test/manifest patch. Exact-head PR CI for the forthcoming code-and-evidence commit is pending. This fixture is synthetic software evidence only: it does not test durable storage or establish crop accuracy, biology, or predictive validity. A-07 and 02A remain UNVERIFIED; ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-07 exact-head CI and v3 target fixture preregistration
+
+- Code-and-evidence commit `485de71ec6a1f1c80e8af0c5ac2a855b5f7b6b73` on `integration/beta-readiness-main-20261027`, in draft PR #82 based on `main` SHA `59a93ee6ee26e98b728f84420bba7750f04ab5fe`, passed exact-head run [40593131592](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40593131592). All four contexts passed: `test + typecheck + build` (31s); `Playwright production Pages-path smoke` (3/3 in 4.1m; job 4m48s); `secret + private-file scan` (17s); and `GitGuardian Security Checks` (3s). Pages cases: production Pages-path boot; unsupported environment-v2 summary retention; unsupported v4 lifecycle explanation plus summary retention.
+- At this preregistration checkpoint, the next A-07 candidate was registered as `V3-ELEVATED-TARGET-MANUAL-HARVEST-SYNTHETIC-01`. S2 independently approved the target-scoping case, floor-sibling eligibility control, and tolerance before implementation. Synthetic inputs reuse the v3 fixture with 12 g/m² initial dry matter, 0.4 m cells and harvest index 0.5; six elevated events should pay 0.00096 kg each and 0.00576 kg total. Each payout and the sum allow at most 1e-12 kg arithmetic/conversion error only; target, count, floor state, rounded total/per-crop summaries (0.01 kg), and frozen-input run replay are exact. The mature floor sibling at (0,0) is included in readiness but receives no harvest request. This is a synthetic software regression, not measured validation or a biological claim.
+- At this preregistration checkpoint, the candidate had not yet been implemented or run. A-07 remains UNVERIFIED for v2/v3/v4; 02A remains incomplete and ordinary new runs remain v1. Do not advance to 02B. The docs-only preregistration checkpoint must be committed, pushed and pass exact-head PR CI before starting the next implementation.
+
+## 2026-10-27 — BETA-02A A-07 v3 elevated-target manual-harvest regression
+
+- Worker estimate was 2–3 engineer-hours, assuming the existing frozen v3 fixture remained valid for a growing-level target. The test-only implementation is confined to src/lib/sim/model-inputs.test.ts; no production code changed.
+- The new fixture reuses the synthetic v3 inputs: six elevated cells at local 0,0–5,0, an equally eligible floor sibling at 0,0, 12 g/m² initial dry matter, 0.4 m cells, and harvest index 0.5. The test expects 0.00096 kg per elevated event, 0.00576 kg unrounded total, 0.01 kg rounded total/per-crop summaries, no floor harvest, and exact run-level replay. Tolerance remains 1e-12 kg for arithmetic/conversion only; all state/key/count/replay assertions are exact.
+- The independent correctness validator approved. The manifest conformance review confirmed the frozen test inputs and expected assertions; this checkpoint updates the stale preregistration status. The focused regression passed (1 test). Full local gates passed: npm test (46 files / 244 tests), typecheck, standard/demo/Pages builds, private-file guard (521 tracked files), git diff --check, and production Playwright (3/3 Pages journeys in 3.8m). No build:beta profile exists.
+- The local builds retain the existing Vite native-config-loader and large-chunk advisories. At this local pre-push checkpoint, exact-head PR CI was pending.
+- Evidence remains synthetic software behavior. Replay uses a second simulateRun(record.config, record.envSeries) and does not exercise durable storage. No crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observation, or predictive validity is established. A-07 and 02A remain UNVERIFIED; ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-07 v3 elevated-target exact-head CI
+
+- Code-and-evidence commit 627550fb7289d04136a8824c0ad43e7e1d7e91e6 on integration/beta-readiness-main-20261027, in open draft PR #82 based on main at 59a93ee6ee26e98b728f84420bba7750f04ab5fe, passed exact-head run [40598278532](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40598278532).
+- Exact-head PR #82 run [40598278532](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40598278532) on SHA 627550fb7289d04136a8824c0ad43e7e1d7e91e6 passed all four named contexts: test + typecheck + build (32s), Playwright production Pages-path smoke (3/3 in 2.9m; job 3m23s), secret + private-file scan (18s), and GitGuardian Security Checks (2s).
+- Pages cases were production build boots under the GitHub Pages project base path; unsupported environment-v2 run opens under Pages and retains its stored summary; unsupported v4 crop lifecycle is explained in World and retains its stored summary.
+- This confirms exact-head synthetic software behavior and repository checks only. It does not establish durable-storage serialization, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, site observation, or predictive validity. A-07 and 02A remain UNVERIFIED; ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A v4 dynamic-canopy fixture acceptance completion
+
+- Worker estimate was 30–45 minutes for the focused test assertions plus manifest reconciliation. The test-only patch took about five minutes and changed only `src/lib/sim/crop-model-v4.test.ts`; production reducer equations and frozen tolerances are unchanged.
+- The known-zero test now asserts canopy, harvestable and total dry matter remain unchanged and total equals the two pools. The unknown-light test asserts all pools remain unchanged, retains exact pool closure, and checks the step qualification reason identifies unknown daily DLI. Independent validator approved the diff; the scope reviewer approved setting `executedDynamicCanopyEngineFixtures` to 1 after local verification.
+- Focused test passed (1 passed); all 9 `crop-model-v4.test.ts` tests passed; `npm test` passed 46 files / 244 tests. `npm run typecheck`, `npm run build`, `npm run build:demo`, `npm run build:pages`, `npm run check:private` (521 tracked files), fixture/manifest JSON parsing, and `git diff --check` passed. No production-browser test was run locally because this is a test/evidence-only change; exact-head PR CI remains required.
+- Evidence boundary: the completed fixture is synthetic v4 engine integration only. It does not establish source reproduction, crop accuracy, biology, candidate/reference agreement, measured trials, or durable persistence. A-03, A-05, A-06, A-07 and 02A remain UNVERIFIED; ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A v4 dynamic-canopy exact-head PR CI
+
+- Code/evidence commit `eb940aa319fc3e05aee766df90b5db6ef05697b2` on open draft PR #82 passed exact-head run [40601160981](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40601160981). All four named contexts passed: `test + typecheck + build` (30s), `Playwright production Pages-path smoke` (3/3 in 5.6m; job 6m15s), `secret + private-file scan` (17s), and `GitGuardian Security Checks` (9s).
+- The Pages journeys passed: `production build boots under the GitHub Pages project base path`; `unsupported environment-v2 run opens under Pages and retains its stored summary`; and `unsupported v4 crop lifecycle is explained in World and retains its stored summary`.
+- CI verifies the synthetic test/evidence commit and repository checks only. It does not establish source reproduction, crop accuracy, biological validity, measured-trial agreement, reference-model agreement, durable-storage serialization, or predictive validity. A-03, A-05, A-06 and 02A remain UNVERIFIED.
+
+## 2026-10-27 — BETA-02A A-05 adjusted-p reducer fixture preregistration draft
+
+- The preceding docs commit `befce473a37f230690d57ea127201a1207471afa` passed exact-head PR #82 run [40602196417](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40602196417): `test + typecheck + build`, `Playwright production Pages-path smoke`, `secret + private-file scan`, and `GitGuardian Security Checks`. Pages passed 3/3 in 5.5 minutes: Pages base-path boot; unsupported environment-v2 summary retention; and unsupported v4 lifecycle explanation plus summary retention. This documentation-only CI result verifies that commit and does not replace CI for the next head.
+- The next A-05 candidate is drafted as `FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01` in `quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json`. It reuses selected FAO-56 Example 37 input values but preserves the v2 reducer's general adjustment from table p=0.40 to p=0.36 at ETc=6 mm/day. Example 37's fixed-p source arithmetic record remains unchanged; this synthetic reducer trajectory is not source reproduction, reference agreement, or prediction validation.
+- The frozen design is ten days of a single tomato-routed cell with 160 mm TAW, dry initial depletion 55 mm and a wet-control depletion of zero. Both use zero external water fluxes, 20–30°C, DLI 18, synthetic RUE 2 g/MJ and interception 0.5. Independent arithmetic predicts cumulative DM gains of 31.670104880940166 g/m² (dry) and 40 g/m² (wet), with the full daily trajectory and tolerances in the fixture. S2's initial independent review proposed p/RAW/Ks ≤1e-12, daily water values/residual ≤1e-9 mm, cumulative residual ≤1e-8 mm, daily DM ≤1e-9 g/m² and cumulative DM ≤1e-8 g/m². Final review of the exact artifact and these tolerances remains pending; the reducer test has not been run.
+- S1 estimated 4–6 hours for preregistration and the focused test assuming no production change. S3's design review requires exact checks for pTable=0.40, initial storage, active/unharvested crop, per-day water balance, paired production response, and exact run-level replay. Positive drainage, root-depth/media variants, full nutrient behavior, measured data, and independent reference agreement are outside this fixture. A-05 and 02A remain UNVERIFIED.
+- The first artifact review found a required v2 `harvestIndex` field missing and requested the exact thermal/maturity and nitrogen inputs behind the active/no-other-stress controls. It also corrected “zero water fluxes” to mean zero external inflows, since transpiration is nonzero. The draft now freezes synthetic harvest index 0.5, the OSU tomato thermal profile, tomato temperature/N-need traits, OM-derived N pool with a conservative lower bound, complete v2 parameter metadata/evidence, and explicit inflow/outflow terms. S1, S2 and S3 are re-reviewing the corrected artifact; no reducer test has run.
+
+## 2026-10-27 — BETA-02A A-05 preregistration approved
+
+- S1 confirmed the corrected schema and existing v2 reducer path support the synthetic fixture without production changes; estimate remains 4–6 engineer-hours for preregistration and one focused test. S2 independently approved the arithmetic-only tolerances after recalculating the dry/wet trajectories, stress isolation and nitrogen bound. S3 approved the corrected distinction between zero external water inputs and nonzero transpiration. No reducer candidate or focused test has run.
+- The fixture and model-coverage manifest now mark the A-05 synthetic integration as preregistered after independent review, not executed, and candidate comparison unauthorized. A-05 and 02A remain UNVERIFIED; ordinary new runs remain v1. The focused reducer test may run only after this record is committed and exact-head PR #82 CI passes.
+
+## 2026-10-27 — BETA-02A A-05 preregistration exact-head CI
+
+- Preregistration commit `ec0876a314b81494e26be323bfdc638ab030bbf8` on open draft PR #82 passed exact-head run [40604271469](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40604271469). All four named contexts passed: `test + typecheck + build` (34s), `Playwright production Pages-path smoke` (3/3 in 2.7m; job 3m17s), `secret + private-file scan` (16s), and `GitGuardian Security Checks` (9s).
+- The Pages journeys passed: production build boots under the GitHub Pages project base path; unsupported environment-v2 run opens under Pages and retains its stored summary; unsupported v4 crop lifecycle is explained in World and retains its stored summary. The run verified the preregistration and existing app behavior only; the candidate reducer fixture was not run. A-05 and 02A remain UNVERIFIED.
+
+## 2026-10-27 — BETA-02A A-05 test-only reducer integration
+
+- S1 estimated 1–2 engineer-hours for the test-only implementation, excluding the already-completed preregistration; the earlier 4–6 hour estimate included both. No production change was needed. The only code file changed is `src/lib/sim/model-inputs.test.ts`.
+- The new test loads `FAO56-V2-ADJUSTED-P-ROOT-DRYDOWN-SYNTHETIC-01`, runs paired ten-day dry/wet controls through `stepDay` and `simulateRun`, checks every frozen daily water/DM row and residual tolerance, stresses, active/unharvested state, dry/wet direction, fixture-linked crop traits and event values, the initial/final N pool bounds, and exact deterministic replay.
+- S2 found and the worker corrected a missing link between catalog temperature/N traits and the fixture, hard-coded start-event values, and optional residual diagnostics that used `?? 0`. S2 and S3 then approved the corrected test. A JSON-import event typing error was caught by typecheck; a narrow runtime union guard was added, and S2/S3 approved that final change. No model equation, expected metric, tolerance, or evidence classification changed.
+- The focused command `npx vitest run src/lib/sim/model-inputs.test.ts -t "integrates adjusted-p root dry-down with water-stressed production"` passed (1 passed, 25 skipped). `npm test` passed 46 files / 245 tests; `npm run typecheck`, `npm run build`, `npm run build:demo`, `npm run build:pages`, `npm run check:private` (522 tracked files), and `git diff --check` passed. The repository has no `build:beta` profile. Standard/demo/Pages builds emitted the existing Vite native-config-loader and large-chunk advisories.
+- Exact-head PR #82 run [40607076825](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40607076825) passed on implementation SHA `d4e82168685e19d258f54f18d6a864661ba7a235`: `test + typecheck + build` (28s), `Playwright production Pages-path smoke` (3/3 in 5.5m; job 6m03s), `secret + private-file scan` (15s), and `GitGuardian Security Checks`. Pages cases: production build boots under the GitHub Pages project base path; unsupported environment-v2 run opens under Pages and retains its stored summary; unsupported v4 crop lifecycle is explained in World and retains its stored summary. The fixture and manifest record this exact result. The evidence is synthetic software behavior only, with no crop-accuracy, measured-trial, external reference-model, predictive, or site-validation claim. The broader A-05 row and 02A remain UNVERIFIED; ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-03 total-solar replay preregistration
+
+- S1 estimated about 1.5 hours for the preregistration fixture; the earlier implementation estimate for a real reducer/replay integration was 6–10 hours, excluding preregistration. The bounded fixture keeps `crop-model-v4` as the canopy/two-pool structure and names `crop-parameters-v6` as a distinct opt-in equation family. Ordinary new-run creation remains v1, and v5 LINTUL/DLI replay must retain its existing semantics.
+- `OHAYOU-V4-TOTAL-SOLAR-REPLAY-INTEGRATION-SYNTHETIC-01` freezes a five-day synthetic solar series, a synthetic canopy-to-LAI mapping, initial canopy/harvestable pools, allocation, and stress isolation. Its independent recurrence rows use source-derived Ohayou Spring Control K=1.09 and RUE=1.16 g DM/MJ intercepted total solar radiation, but do not reproduce the study or establish an Ohayou crop profile. Explicit zero, null, and omitted solar inputs are distinguished; the latter two include DLI decoys and must not fall back to DLI.
+- S2 independently checked the source values and all five recurrence rows; the largest arithmetic difference was about 2.8×10⁻¹⁷, within each preregistered 1e-12 arithmetic bound. S3 approved the explicit equation discriminator, v5 boundary, and required freeze/fork/twin, serialization, replay, and unsupported-summary checks. These are internal independent review roles, not external expert or human sign-offs.
+- The J-STAGE publisher HTML digest is `12ec8066769951c8ac0ccf044dd5106a24245f8c0572ba0fe2f3afd63003eda4`; the lead rehashed the locally retrieved HTML. The publisher states all rights reserved and no reuse license was identified; the source artifact is not stored in the repository.
+- This is a preregistration only: no engine, focused fixture test, candidate, calibration, measured output, or reference-model comparison has run. The exact-head preregistration commit and PR CI are pending. A-03 and 02A remain UNVERIFIED; empirical accuracy is not established.
+
+## 2026-10-27 — BETA-02A A-03 total-solar reducer/replay integration
+
+- S1 estimated 1–2 hours for the reviewed patch corrections, assuming the committed preregistration and existing v5 path remained unchanged. The original v6 implementation estimate was 6–10 hours excluding preregistration.
+- The opt-in `crop-model-v4` / `run-inputs-v4` / `crop-parameters-v6` path now runs the five preregistered synthetic rows. It keeps total-solar forcing separate from DLI, preserves known zero versus null/omitted semantics, supports exact JSON replay and freeze/fork/twin input preservation, and rejects unsupported replay before a stored record can be rewritten. Unknown future v4 parameter versions remain intact and unsupported instead of downgrading to v5. A v5 fixture control confirms the LINTUL/DLI/PAR path ignores total-solar forcing. V6 with non-open environment-v1/v2 climate is fail-closed until its coupling has its own reviewed fixture.
+- S2 independently approved replay/version/fork/twin/v5 behavior; S3 independently approved the climate boundary. The focused suite passed (9 files / 70 tests). Full local gates passed: `npm test` (47 files / 250 tests), typecheck, standard/demo/Pages builds, private-file guard (523 tracked files), JSON parsing, `git diff --check`, and production Pages Playwright (3/3 in 3.8m). Existing Vite native-config-loader and large-chunk advisories remain.
+- Exact-head PR #82 run [40614576932](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40614576932) passed all four named checks on implementation SHA `a7c3d0af5bc2d162c8307c88825d1f03d7dc9d20`: test + typecheck + build (28s), production Pages-path Playwright (3/3 in 3.3m; job 3m50s), secret/private-file scan (16s), and GitGuardian (2s). Pages cases: production base-path boot; unsupported environment-v2 summary retention; unsupported v4 lifecycle explanation and summary retention. This is synthetic software evidence only; no candidate comparison, calibration/holdout, measured output, external reference agreement, or predictive validity was evaluated. A-03 and 02A remain UNVERIFIED; ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-03 frozen-crop replay-isolation regression
+
+- S1 estimated 30–60 minutes for the focused test-only change, assuming the v6 frozen-input resolver is the intended contract; no production code, source fixture, expected model output, or tolerance changed.
+- The JSON-loaded `RunRecord` is replayed with a same-ID live catalog crop changed to 40/41°C, and the test confirms those values differ from the persisted frozen crop. Events, final cells, model-qualification reasons, and summary exactly match replay under the normal catalog context. Consuming the conflicting live values would activate terminal cold stress in this synthetic fixture.
+- S2 independently approved the frozen-snapshot resolution path and assertion set; S3 confirmed the test is sensitive to accidental live-crop fallback. The focused test passed (1 file / 4 tests). Full local gates passed: `npm test` (47 files / 250 tests), typecheck, standard/demo/Pages builds, private-file guard (524 tracked files), JSON parsing, whitespace check, and production Pages Playwright (3/3). Vite emitted its existing native-config-loader and large-chunk advisories. Exact-head PR #82 run [40616564088](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40616564088) passed all four named checks on exact SHA `fc900dca01d3492a8f40710cf6df03c215f0c90b`: test + typecheck + build (33s), production Pages-path smoke (3/3 in 4m55s), secret + private-file scan (15s), and GitGuardian Security Checks (2s).
+- This is a synthetic v4 replay-isolation software regression only. It does not establish replay behavior for every model version, crop accuracy, source reproduction, measured/reference agreement, site observation, or predictive validity. A-03 and 02A remain UNVERIFIED; ordinary new runs remain v1.
+
+## 2026-10-27 — BETA-02A A-05 positive root-drainage preregistration
+
+- `FAO56-V2-POSITIVE-ROOT-DRAINAGE-SYNTHETIC-01` freezes a one-day synthetic v2 balance with TAW 160 mm, initial storage 159 mm, 5 mm precipitation, and zero runoff, irrigation, capillary rise, root-growth inflow, ETo and ETc. It also pins the integrated pre-step cell `rootZoneWaterMm` at 159 mm and capacity at frozen AWC 2 mm/cm × fixed effective depth 80 cm = 160 mm. `rootDevelopment` is none, effective depth is fixed, and no root-growth storage is added. Expected deep percolation is 4 mm, final storage 160 mm, end depletion 0 mm and residual 0 mm. During `stepDay`, exactly one call-through observer must capture the actual `stepFao56RootZone` call and assert state.waterMm=159, params.awcMmPerCm=2, effectiveRootDepthCm=80, strict depletionFraction equality with `fao56AdjustedDepletionFraction(0.4, 0)` (frozen table p=0.4, potential transpiration=0, mathematical expected p=0.6, no tolerance; do not freeze runtime binary representation), fluxes.precipMm=5, fluxes.irrigationMm=0, fluxes.runoffMm=0, capillaryRiseMm omitted/undefined and defaulted to zero, rootGrowthStorageMm=0, and potentialTranspirationMm=0 while invoking the original reducer unchanged. Install after the direct-helper assertion and restore in `finally` before `simulateRun`; returned `effectiveEnv` or selected fluxes alone are insufficient. This is a synthetic runoff/infiltration boundary, not an Example 37/source trajectory or a crop, biology, measurement, or prediction claim.
+- Attempts are recorded explicitly: the initial no-observer 1/25 pass was not accepted; the first full-observer strict comparison against 0.6 failed at the runtime helper result; and the subsequent 1/25 pass used an unregistered 15-decimal tolerance and is also not accepted. S2 and S3 approved the exact expression; commit this preregistration and wait for exact-head CI before any candidate rerun. The ≤1e-12 mm bound is unchanged and arithmetic-only; A-05 and 02A remain UNVERIFIED.
+- The focused-test estimate remains 1–2 hours after preregistration and 3–4 hours total including preregistration. Exact-head preregistration CI remains the implementation gate.
+
+
+## 2026-10-27 — BETA-02A A-05 positive root-drainage fixture local execution
+
+- The preregistered exact assertion was implemented only in `src/lib/sim/model-inputs.test.ts`: the observed depletion fraction strictly equals `cropModelV2.fao56AdjustedDepletionFraction(0.4, 0)`; no tolerance was added. The call-through observer preserves the reducer and is restored in `finally` before `simulateRun`. S1 estimated 15–30 minutes before implementation and completed the single-line correction plus focused checks in about two minutes.
+- S2 independently approved the candidate test against the frozen invariant. S3 found no false-pass or spy cleanup issue in the supplied current observer excerpt. Both reviewers made no edits and ran no tests. The initial no-observer pass, the strict decimal-0.6 attempt, and the unregistered 15-decimal-tolerance pass remain unaccepted.
+- The focused test `npx vitest run src/lib/sim/model-inputs.test.ts -t "runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified"` passed (1 passed, 25 skipped). Full local verification passed: `npm test` (47 files / 250 tests), `npm run typecheck`, `npm run build`, `npm run build:demo`, `npm run build:pages`, `npm run check:private` (525 tracked files), JSON parsing and `git diff --check`. No `build:beta` profile exists. Vite native-config-loader and large-chunk advisories remain.
+- Exact-head preregistration CI run [40627410935](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40627410935) passed all four named checks on docs-only SHA `75bf26f35a45d3aa00a9850b4907c5639a654a2f`; Pages passed 3/3 in 5.1m (5m39s job). This does not validate the candidate code. The test/evidence change has not yet been committed or pushed, and its exact-head PR CI is pending.
+- This remains synthetic one-day equation/software evidence only. It establishes no crop, biological, measured/reference, or prediction accuracy; A-05 and 02A remain UNVERIFIED. No production or schema code changed.
+
+
+## 2026-10-27 — BETA-02A A-05 positive root-drainage exact-head PR CI
+
+- Candidate code/evidence commit `2ac708fa58719d69f7d19863bccf97d226c4cba8` on draft PR #82 passed exact-head run [40628921459](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40628921459): all four named checks passed — test + typecheck + build (36s), production Pages-path smoke (3/3 in 4.7m; job 5m14s), secret + private-file scan (14s), and GitGuardian Security Checks (2s).
+- The Pages journeys passed: production base-path boot; unsupported environment-v2 summary retention; unsupported v4 lifecycle explanation and summary retention. This is exact CI evidence for the candidate test/evidence SHA; the earlier preregistration-only run 40627410935 is separate.
+- The synthetic positive-drainage invariant is accepted locally and on this exact code/evidence SHA. It does not establish crop accuracy, biological validity, measured/reference agreement, or prediction accuracy. A-05 and 02A remain UNVERIFIED overall.
+
+## 2026-10-27 — BETA-02A A-05 frozen AWC-variant preregistration
+
+- FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01 preregisters a one-day v2 open-field variant with synthetic AWC 1.0 mm/cm, fixed root depth 80 cm, storage fraction 0.99375, 5 mm precipitation, and zero ET and other water fluxes. Expected capacity/starting storage/drainage/final storage are 80/79.5/4.5/80 mm, with zero depletion and residual; the <=1e-12 mm bound is arithmetic-only.
+- AWC 1.0 is a synthetic software input, not a soil/media default or sourced profile. FAO-56 (1998) official HTML is referenced for equations only (retrieved 2026-10-27; https://www.fao.org/4/X0490E/x0490e0e.htm; SHA-256 f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98; 137909 bytes); no reuse license was found and no source artifact was copied. S2 approved arithmetic/assertions/tolerance; S3 found no overclaim. Zero ET leaves simultaneous positive transpiration/drainage ordering untested.
+- An initial candidate test was run locally after exact-head docs run 40631813027 passed on e51a8f3. Two preliminary focused attempts failed on misplaced JSON paths (frozenModelInputs and climateRoute were read from syntheticInputs); those paths were corrected before the final attempt. Test-file blob 76504c076765f633ecd7805e5aad3c6103e5e29d reported 1 passed / 26 skipped, but the result is UNACCEPTED: S2 found the run froze organicMatterPct=2.4 from the reused root-drydown soil input without preregistering it. Corrected docs commit 79eff1f1c221e5c201764c8c9166ca30c2687309 passed all four named PR checks in run 40633832876. The corrected test now consumes the child fixture’s registered synthetic organicMatterPct=2.4 and asserts it in both the fixture and frozen run inputs. Its first focused rerun failed on the old exact sourceStatus phrase; removing that obsolete wording assertion produced 1 passed / 26 skipped. S2 approved the candidate review and then approved the reconciled status record. Worker estimate was 10–20 minutes, assuming the existing fixture and test needed only the input/assertion correction. Full local gates passed: 47 test files/251 tests, typecheck, standard/demo/Pages builds, private-file guard at 526 tracked files, JSON parsing and whitespace checks. No beta-specific build script exists in package.json. Exact-head code/evidence commit aa849571044cd0dd20b4c2dab5e8ae3efbccbad2 passed all four named contexts in PR run 40635095614, including Playwright production Pages-path smoke in 4m01s. This AWC fixture is accepted as synthetic software regression evidence only; A-05/02A remain UNVERIFIED. Do not widen or change the arithmetic tolerance.
+- Worker estimate is 2–4 hours including the focused test, assuming the frozen AWC can vary without production changes and fixed effective root depth stays 80 cm. S3 performed the candidate test implementation under confirmed GPT-6 Luna/max; the initial documentation note update used the default-model S1 pane and is not counted as Luna-worker work. S1 was restarted with Luna/max arguments but remains blocked at the Codex CLI update prompt. A-05 and 02A remain UNVERIFIED.
+
+## 2026-10-27 — BETA-02A A-05 synthetic tomato root-depth candidate
+
+- Added the separate v2 integration test `replays preregistered paired tomato root-depth dry-down scenarios` in `src/lib/sim/model-inputs.test.ts`; the frozen preregistration JSON and all tolerances were left unchanged. The candidate uses crop-model-v2/run-inputs-v2/crop-parameters-v3 in the standard open-field path; the paired frozen inputs differ only by effective depth. Ordinary new runs remain v1.
+- Focused command `npx vitest run src/lib/sim/model-inputs.test.ts -t "replays preregistered paired tomato root-depth dry-down scenarios"` passed (1 passed, 27 skipped). All 20 observed water/Ks/DM rows matched the registered arithmetic bounds. The 70 cm case first stresses on day 8 and ends at 38.27543048469388 g/m²; the 150 cm case remains unstressed through day 10 and ends at 40 g/m². Both repeated `simulateRun` outputs exactly matched events, final cells, and summaries. Observed rows and replay outcomes are recorded in `quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic-result.json` and registered in `model-coverage.json`.
+- This is a local synthetic software-fixture result only. The FAO-56 depth endpoints are reference bounds used as fixed synthetic scenarios, not a root-growth trajectory; soil, weather, and production values remain synthetic. No accuracy, biological, measured/reference agreement, or predictive claim follows. S2 independently approved the candidate after the test-only type corrections. Full local gates passed: 47 test files / 252 tests, typecheck, standard/demo/Pages builds, private-file guard (527 tracked files), JSON/whitespace checks, and production Pages Playwright (3/3 journeys in 3.7m). No `build:beta` script exists. Vite native-config-loader and chunk-size advisories appeared; builds passed. Candidate code/evidence commit `38574708bacacd58bbdf9c1f1326372312f31230` passed all four named PR checks in run [40640752345](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40640752345). A-05 and 02A remain UNVERIFIED.
+
+## 2026-10-28 — BETA-02A A-08 unsupported run transport
+
+- `SimDrawer` now gates timeline Play/Pause, Seek, and run-speed controls only when `runModelSupport.canReplay === false`. Exit, run label, and day status remain visible when a timeline is supplied; supported and legacy runs retain all transport controls.
+- A focused server-render regression covers unsupported timelines in playing and paused states plus supported and legacy cases. The unsupported environment-v2 and v4 Pages fixtures have no run timeline, so their browser journeys continue to assert the unsupported explanation, unavailable replay, and stored-summary retention without claiming timeline-control coverage.
+- Focused test passed (2/2); `npm test` passed 48 files / 256 tests; typecheck, standard/demo/Pages builds, private-file guard, JSON parsing, and whitespace checks passed. Full production Pages Playwright passed 3/3. This verifies synthetic unsupported-run UI handling only; 02A remains incomplete and model accuracy remains UNVERIFIED.
+- Exact code SHA `d15dbab9f1d002524731970d14ce652270b83986` passed all four named PR #82 contexts in run [40656476463](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40656476463): `test + typecheck + build`, `Playwright production Pages-path smoke` (3/3; suite 3.8m, job 4m24s), `secret + private-file scan`, and `GitGuardian Security Checks`. This exact-head run verifies the unsupported timeline-control increment; it does not qualify the whole A-08 row or 02A.
+
+## 2026-10-28 — BETA-02A A-05 available-water-cap candidate result
+
+- The frozen test `caps v2 actual uptake at frozen available root-zone water` passed (1 passed, 29 skipped). Its synthetic 5 mm capacity, 1 mm initial storage, and 1.875 mm Ks-adjusted potential uptake produced 1 mm actual transpiration, 0 mm remaining storage, 0 mm drainage, 5 mm depletion, and zero residual. Same-input step and full-run replay outputs matched exactly; preregistered inputs/tolerances were unchanged. S1 independently approved arithmetic/result pins; S2 approved reducer-route observation, replay, provenance and synthetic-only scope.
+- Full local gates passed: 48 test files / 256 tests, typecheck, standard/demo/Pages builds, private-file guard (533 staged tracked files), JSON/whitespace and production Pages Playwright (3/3 in 2.3m). No beta build profile exists. Exact code/evidence SHA `5cded74b7da23b1506ad06668c10f3c8afa2721c` passed all four named PR #82 contexts in run [40657181987](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40657181987): `test + typecheck + build` (29s), `Playwright production Pages-path smoke` (3/3; suite 5.5m, job 6m2s), `secret + private-file scan` (11s), and `GitGuardian Security Checks` (2s). Result record: `quality/beta/evidence/fao56-v2-available-water-cap-synthetic-result.json`.
+- This is a synthetic v2 reducer/software result only, not a soil/media or crop-accuracy validation, measured/reference agreement, biological result or prediction. A-05 and 02A remain UNVERIFIED overall.
+
+## 2026-10-28 — BETA-02A A-05 same-day drainage-after-ET preregistration
+
+- `FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-01` freezes one standard open-field v2 cell-day: synthetic AWC 2 mm/cm, fixed 80 cm effective root depth, TAW 160 mm, starting storage 159 mm/depletion 1 mm, 5 mm precipitation, ETo 5 mm/day, Kc 1.2, potential transpiration 6 mm, and zero runoff/irrigation/capillary-rise/root-growth input. FAO-56 Chapter 8 Eq. 85 and Eq. 88 specify the daily balance and same-day drainage after ET. Expected adjusted p/RAW/Ks are 0.36/57.6 mm/1; expected drainage/transpiration/end depletion/storage/residual are 0/6/2/158/0.
+- Arithmetic-only bounds are <=1e-12 mm for the explicit one-step values and <=1e-6 mm per cell-day for the existing engine diagnostic residual; structural route/input/call-through/replay assertions are exact. S2 independently approved the source ordering, arithmetic, frozen inputs, observability, tolerances and synthetic-only boundary before execution. The reused official FAO-56 HTML snapshot digest is `f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98` (137909 bytes); no reuse license was identified and no code or substantial source text is copied.
+- At the preregistration checkpoint, review found the then-current `stepFao56RootZone` drained before ET and returned 4 mm drainage/154 mm storage for these inputs, so a code-order correction was required. No candidate test or reducer change had run at that checkpoint; execution was gated on exact-head PR CI for the preregistration/documentation commit. That gate later passed on SHA `78b82ef850ca5ae9c6051c07753cab225591a98b` in run 40664774492. The subsequent local candidate execution is recorded below. The fixture remains synthetic software evidence only; A-05 and 02A remain UNVERIFIED.
+
+## 2026-10-28 — BETA-02A A-05 same-day drainage-after-ET candidate result and exact-head CI
+
+- Against the S2-approved complete rerun record, the focused test passed (1 passed, 30 skipped) and the grouped same-day/positive-drainage/uptake-cap tests passed (3 passed, 28 skipped). Local test/build/browser checks passed: `npm test` (48 files / 257 tests), typecheck, standard/demo/Pages builds, and production Pages E2E (3/3 in 3.8m). The result JSON was independently reviewed by S2 with no findings: `quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01-result.json`.
+- Observed adjusted p=0.36, RAW=57.6 mm, Ks=1, 0 mm drainage, 6 mm transpiration, 158 mm ending storage, 2 mm depletion, and zero residual. The test observes exactly one call-through root-zone invocation in `stepDay`, restores the observer before `simulateRun`, and confirms exact same-input replay. The focused result is local software arithmetic only.
+- The first complete-record attempt stopped before reducer execution because the expected RunConfig omitted frozen `autoHarvest=false`; a later typecheck found JSON-imported crop-model/scenario strings widened to `string`. Both were test-construction corrections; neither produced a candidate result or changed registered inputs/oracle/tolerances. Attempts against the superseded incomplete record remain non-qualifying.
+- Candidate code/evidence SHA `f7b7c37974c7ca655352cc2c18223b5da5d0ee4b` passed exact-head PR #82 run [40668663876](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40668663876). PR #82 has this head with base `main` at `59a93ee6ee26e98b728f84420bba7750f04ab5fe`. All four contexts passed: `test + typecheck + build` (38s), `Playwright production Pages-path smoke` (3/3; suite 5.2m, job 5m58s), `secret + private-file scan` (22s), and `GitGuardian Security Checks` (21s). The post-stage private-file guard passed (536 tracked files), as did cached diff check and duplicate-key-safe JSON parse. Preregistration run 40664774492 covers only its earlier preregistration SHA and is not candidate CI. No crop/soil accuracy, FAO-56 source-output reproduction, measured/reference agreement, or prediction is established. A-05 and 02A remain UNVERIFIED.
+
+## 2026-10-28 — BETA-02A A-07 v3 no-auto-harvest maturity replay
+
+- Worker estimate was 45–75 minutes for a test-only slice, assuming the existing synthetic v3 fixture was suitable; actual worker effort was about 10 minutes including focused verification. The new case in `src/lib/sim/model-inputs.test.ts` uses one floor cell, frozen crop-model-v3/run-inputs-v3/crop-parameters-v4 inputs, `autoHarvest=false`, and no interventions. It reaches the synthetic maturity endpoint and following day, requires the crop to remain alive/unharvested with no harvested event or yield, and checks exact in-memory replay of events, final state, and summary.
+- The independent S2 reviewer approved with no findings. Focused Vitest passed (1 passed / 31 skipped); `npm run typecheck` passed. Full local gates passed: `npm test` (48 files / 258 tests), typecheck, standard/demo/Pages builds, private-file guard (536 tracked files), `git diff --check`, and production Pages E2E (3/3 in 3.8m). No beta-specific build profile exists.
+- This is one synthetic reducer/replay software invariant only; no durable-storage serialization, candidate comparison, retuning, measured/reference agreement, biology, or crop accuracy is established. A-07 and 02A remain UNVERIFIED overall; ordinary new runs remain v1. Exact-head code/evidence SHA bbf0235fff81badc36a39776d5d006197432a230 passed PR #82 run 40675181594 with all four named contexts, including production Pages smoke 3/3 in 3.4m. No production/schema code changed.
+
+## 2026-10-28 — BETA-02A A-01 next implementation estimate
+
+- At this estimate checkpoint, implementation had not started. S3 estimated 1–2 engineer-days for distinct versioned run creation plus replay/save-list regressions, assuming an already-supported non-v1 configuration freezes through the current dispatcher and the local API test harness controls environment inputs. S1 independently found an optional explicit CreateSimRunInput version compatible with the product boundary only if omission stays v1, UI selection/defaults are unchanged, model and input identities round-trip, historical replay and summary remain unchanged, IDs are collision-safe, and the REST request contract is updated. See the later A-01 creation/replay checkpoint; A-01 remains UNVERIFIED.
+
+## 2026-10-28 — BETA-02A A-01 local create/replay subcases
+
+- The partial candidate adds an optional `CreateSimRunInput.cropModelVersion`; omitted requests still create v1 records, while an explicit v2 request freezes the selected crop model and parameter identities. Local API coverage creates v1 and v2 at one fixed timestamp, lists both distinct IDs, and requires failure without mutation when secure randomness is unavailable. A separate versionless historical v1 test changes live crop name, maturity and yield values and requires exact in-memory replay events, state and summary.
+- Worker estimate for the full slice was 1–2 engineer-days under the assumption that the current dispatcher supports a complete non-v1 frozen configuration and local API tests can control environment inputs. At this first checkpoint, the candidate implemented only the creation/list identity and in-memory historical-catalog replay subcases. S1 red-team required v1 omission semantics, no UI/default change, frozen identity, replay/summary preservation and collision-safe IDs. S2 caught the initial realm-local ID fallback; the worker replaced it with Web Crypto UUID/128-bit random bytes and fail-closed behavior, then S2 approved. S1's checkpoint review identified changed defaults/cache, archived serialization, and a combined distinct-version/changed-context journey as untested at that point.
+- At the first checkpoint, `npm test` passed (48 files / 260 tests); typecheck, standard/demo/Pages builds, private-file guard (536 tracked files), and `git diff --check` passed. No beta build profile exists. The S3 pane's `npm run test:e2e` attempt stopped before journeys because Node could not bind the configured preview server at 127.0.0.1:4173 (`listen EPERM`); the lead-side rerun on the later test-only worktree passed 3/3, as recorded below. Exact-head PR CI remains the required gate for the commit containing each candidate. No candidate comparison, retuning, measured validation, reference agreement or crop-accuracy claim was made. A-01 and 02A remain UNVERIFIED.
+
+## 2026-10-28 — BETA-02A A-01 archived replay and save/list follow-up
+
+- S3 estimated 4–6 engineer-hours assuming JSON serialization is the archive boundary and the local API test harness is sufficient; native browser storage or application-cache invalidation would take roughly 1–2 days. The worker used a fixed synthetic `RunModelInputsV1`/`RunConfig` and a versionless record, JSON-round-tripped the complete `RunRecord`, then replayed it with changed same-ID crop and soil caller context. Exact events, final state and stored summary are required. The local API regression now JSON-round-trips default-v1 and explicit-v2 records through `saveSimRun`/`listSimRuns`, checking distinct IDs, frozen model/input identities and unchanged summaries. S2 independently approved; no implementation files changed.
+- Full local gates passed: `npm test` (48 files / 260 tests), typecheck, standard/demo/Pages builds, private-file guard (536 tracked files), diff check, and production Pages smoke (3/3 in 3.8m). The previous checkpoint `8d17d1399202d101d7ae79daa58b94eb093b920d` passed exact-head PR #82 run 40679240025 with all four named checks; Pages smoke passed 3/3 in 5.5m. This follow-up awaits exact-head CI. The remaining A-01 retest is a combined distinct-version create plus JSON-archive/replay under changed context with summary preservation, along with any separate application-default/cache boundary. A-01 remains UNVERIFIED because the tests use mocked storage and changed reducer context, not native IndexedDB or application-cache invalidation. No crop comparison, retuning, measured validation, reference agreement or accuracy claim was made.
+
+## 2026-10-28 — BETA-02A A-01 combined planted-crop replay checkpoint
+
+- S3 revised the worker estimate to 3–4 engineer-hours for one test-only local API journey. The same one-cell tomato plan creates default v1 and explicit v2 records at a fixed timestamp; the test checks distinct IDs, frozen model/input identities, JSON save/list preservation, and the tomato v2 profile's actual unsupported status. A versionless historical-shaped v1 record is JSON-archived, persisted, and replayed after changing same-ID crop and soil context; exact events, final state, and stored summary are preserved. No production code changed.
+- S2 first found a P2 because changed-context replay could pass without proving that crop and soil snapshots were frozen. S3 added explicit planted-basePlan, tomato snapshot, and exact soil assertions; S2 independently re-reviewed and approved. Evidence remains synthetic software coverage and makes no crop-accuracy claim.
+- Local verification passed: focused A01 command (2 files/41 tests), full suite (48 files/260 tests), typecheck, standard/demo/Pages builds, private-file guard (536 tracked files), diff check, and production Pages journeys (3/3 in 3.8m). No beta-specific build script is defined.
+- Candidate code SHA a7d733f6a9d015a6b25812a2f66dacf7ccc0263d passed all four named PR #82 checks in run 40683573752: test/typecheck/build (39s), Pages smoke (3/3 in 2m46s), secret/private scan (15s), and GitGuardian (2s). A-01 remains UNVERIFIED pending assessment of the production current-catalog/default/cache boundary; mocked persistence does not establish native IndexedDB durability. 02A remains incomplete, ordinary new-run creation remains v1, and no candidate comparison, retuning, measured validation, reference agreement, or accuracy claim was made.
+
+## 2026-10-28 — BETA-02A A-01 soil-provider and hook replay boundary
+
+- The worker estimated 2–3 engineer-hours for this provider-change slice and completed the test-only implementation in about 10 minutes. The existing local API fixture now creates a planted v1 run with synthetic soil profile A, changes the mocked fetchSoilProfile provider to profile B before creating the explicit-v2 control, and verifies the records retain their respective frozen soil inputs.
+- After JSON save/list, the versionless v1 archive is replayed through useSimRun after the provider change, a same-ID current catalog crop mutation, and a poisoned same-run ReplayStateCache entry. A call-through spy checks the archived soil/crop context on both start and seek; a fresh-cache replay matches the resulting state and the stored summary remains unchanged. The v2 crop profile is unsupported, so its result proves record identity only.
+- S2 approved technical correctness; after exact-head CI passed, S1 accepted every A-01 software clause within the synthetic boundary. A-01 is PASS for this contract; native IndexedDB, mounted UI/effects, broader app caches, and crop accuracy remain outside its evidence.
+- Local gates passed: 48 files / 260 tests, typecheck, standard/demo/Pages builds, private-file guard (536 tracked files), whitespace, and Pages Playwright 3/3 in 3.8m. Code commit b7d49534c480d8589925371dba76cd9d989c56f6 is pushed to draft PR #82; exact-head run 40690699236 passed all four named checks: test/typecheck/build (46s), Pages smoke 3/3 (6m18s), secret/private scan (17s), and GitGuardian (35s). Continue remaining 02A rows and keep ordinary new runs on v1.
+
+## 2026-10-28 — BETA-02A A-08 all-catalog v2 fail-closed software subcase
+
+- Preregistered `A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01` against code SHA `f943b6921ff2a2acb2fa94f1458dc359b4a920c1`, pinning the 50-crop ID/slug roster, explicit missing production/root-zone fields, support reasons, replay rejection, and fungal lifecycle. S1 checked roster/count coverage, S2 checked API semantics and exact structural criteria, and S3 reviewed the claim boundary. Worker estimate was 0.5–1.0 engineer-hours for one test-only file with no production changes or new data.
+- The one-file test passed with S1 and independent S2 (1 passed / 34 skipped). The initial test-authoring invocation exposed a wrong JSON lookup path, corrected before the passing run; no preregistered inputs or metrics changed. Full local verification passed: `npm test` (48 files / 265 tests), typecheck, standard/demo/Pages builds, private-file guard (548 tracked files), and `git diff --check`. No beta build profile exists.
+- Preregistration docs commit `1082ef3d6ff881129d0a430cb55f37440b5349ea` passed all four exact-head PR #82 checks in run [40750831499](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40750831499) before implementation. Test-only code commit `a8b5505db8c110840c3f45dc4dcc5626ce30c34e` passed all four named checks in exact-head run [40752622374](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40752622374), including production Pages smoke 3/3 in 4.3m.
+- This PASS is limited to a synthetic software fail-closed subcase. `preserveStoredSummary` is tested only as a policy flag; actual summary retention for every crop, supported v2 profiles, crop accuracy, measured/reference agreement, and broader A-08/02A acceptance remain UNVERIFIED. Ordinary new-run creation remains v1.
+
+## 2026-10-28 — BETA-02A A-04 missing-transplant-establishment preregistration
+
+- Integrated the corrected registration for `A04-V3-TRANSPLANT-MISSING-ESTABLISHMENT-FAIL-CLOSED-SYNTHETIC-01` across the model-coverage manifest, decision record, README, and next-team prompt. `RunModelSource` accepts only provider literals, so the soil source is omitted from the freeze input and the frozen result records unknown. Unknown soil provenance is an additional unsupported reason; the test pins the exact missing-establishment reason but does not claim that it is the sole reason replay is rejected.
+- The first focused attempt passed at runtime (1 passed, 35 skipped) but is UNACCEPTED because typecheck rejected explicit `source: unknown` as a freeze input. The corrected setup digest remains `4b3633f17c758b5fa6f3bb9b3b5cd2c01c30488e8b77f1fc5058973d4ffcdf5a`. S3 passed the corrected registration and cross-document review on 2026-10-28; the candidate gate later opened when corrected docs head `be0123300ebfedc262645ad429e31f3d5103f4ee` passed run 40774282313. The S2 audit was unavailable because Codex reported a token refresh failure after logout/account switch.
+- The A-08 docs-only exact head `4a2ba4382587272ba27f8e43c9a4934d6a8bea6e` passed all four checks in run 40754557241, including production Pages-path smoke (3/3). This remains separate from the A-08 test-only code SHA `a8b5505db8c110840c3f45dc4dcc5626ce30c34e` and its exact-head run 40752622374.
+
+## 2026-10-28 — BETA-02A A-04 missing-transplant-establishment candidate result
+
+- Candidate test SHA `472c2514a2b3b9ff4dca03a44fa92cccdd5fc28d` changes only `src/lib/sim/model-inputs.test.ts`; focused command passed (1 passed / 35 skipped). S3 independent candidate review passed. The registered empty establishment map yields the exact missing-state reason and an additional unknown soil provenance reason; `preserveStoredSummary` is a policy flag only.
+- Local verification passed: `npm test` (48 files / 266 tests), `npm run typecheck`, standard/demo/Pages builds, `npm run check:private` (550 tracked files), duplicate-safe JSON parse, `git diff --check`, and `npm run test:e2e` (3/3 in 3.4m). Vite config-loader and large-chunk advisories were warnings; builds passed.
+- Exact-head PR #82 run [40776046948](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40776046948) passed on the same candidate SHA: test + typecheck + build (41s), production Pages-path smoke (3/3; job 5m53s), and secret + private-file scan (17s). S2 audit remained unavailable because of the reported Codex token refresh failure. The prior invalid-source focused attempt remains UNACCEPTED.
+- This is PASS only for the preregistered synthetic fail-closed software subcase. No measured transplant state, nursery growth, actual stored-summary retention, crop accuracy, biological validity, independent reference agreement, or prediction is established. Source-backed transplant establishment and intermediate-stage mapping remain open; A-04 and overall 02A remain UNVERIFIED.
+## 2026-10-28 — BETA-02A A-04 transplant source-clock endpoint preregistration
+
+- Added `A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-01` with canonical setup digest `cf4e4c737c8b5bedb3ff26f5feaa3d0664e98b9bcc52c26aa9670134a8f54838`. It freezes one synthetic tomato transplant case, exact helper output, source thermal row and 58-day weather sequence. Expected source thermal states are 0 before transplant, 20 C-days on 2026-10-03, 1100 below endpoint on 2026-11-26, and the exact 1117 cap with `biomassFrac=1` on 2026-11-27.
+- OSU Extension EM 9305 Table 6 is attributed with its PDF digest, Western Oregon 2013–2015 domain and no-open-license note; no source prose/table is reproduced and no source-observed outcomes are compared. Synthetic production/root parameters exercise event timing only.
+- Fixture 01 preregistration review passed and exact-head docs SHA `65f6daa45532ec19d918ada1424ddec6abba9288` passed all four PR checks in run [40781317269](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40781317269). The candidate focused attempt returned 1 passed / 36 skipped but is UNACCEPTED: S3 candidate review found the preregistered helper thermal `accumulationMethod` string differed from the actual source row and the test set an unregistered `dayCount: 58`. The initial worker iteration also failed because the freezer omits the helper’s zero-valued initial dry matter; the worker corrected the assertion to pin helper input separately without changing thermal/date expectations. This attempt remains at `quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json`; fixture 01 and its setup digest remain unchanged. Corrective fixture 02 freezes the exact source-row string and full RunConfig (digest `7cdf717aab20211fc02346f310b7b6f1b5723bc5f685f891b700ae73d528c3b8`). S3 preregistration review passed and its docs head `e35392779298c28287565c03f65c42a80b4ae5d1` passed all four checks in run 40786569153. The corrected focused test passed (1 passed / 36 skipped); S3 candidate review passed after removing one redundant assertion. Local gates passed: 48 files / 267 tests, typecheck, standard/demo/Pages builds, private guard 554, duplicate-safe JSON/diff checks, and production Pages Playwright 3/3 in 4.1m. Candidate code commit `bce83aa7b0340ea6f3206d977038cf2efc352071` passed all four exact-head PR #82 checks in run [40788255990](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40788255990). S2 audit remained unavailable because its pane reported: “Your access token could not be refreshed because you have since logged out or signed in to another account.” S3 provided the independent preregistration and candidate reviews. Fixture 02 PASS is a corrective synthetic software regression after fixture 01 outputs were observed, not prospective or crop validation. No measured transplant state, biology, crop accuracy, reference agreement, holdout, or prediction is established; A-04 and overall 02A remain UNVERIFIED.
+## 2026-10-28 — BETA-02A A-04 transplant establishment-date mismatch preregistration
+
+- Registered `A04-V3-TRANSPLANT-ESTABLISHMENT-DATE-MISMATCH-FAIL-CLOSED-SYNTHETIC-01` with canonical setup digest `c2baf0b855b9b639959932ca89696af97054de92b0f4007793781763ed4788d7`. It freezes a one-cell v3 tomato transplant on 2026-10-03 with otherwise complete synthetic establishment state dated 2026-10-04, the full RunConfig/crop snapshot/helper output, and synthetic soil sentinels with omitted provenance. The fixture registration is dated 2026-10-28; its PDF retrieval date is 2026-10-27, matching the shared source and tomato evidence records.
+- Expected support is unsupported / `canReplay: false`; `preserveStoredSummary` is only a policy flag. Assert membership of the exact transplant-date mismatch reason; do not compare the whole reasons array. No replay, numeric output, tolerance, or source-observed comparison is in scope.
+- Independent preregistration review passed. At preregistration review time, exact-head PR CI was pending and candidate execution was prohibited until it passed. Prior A-04 registrations/results are preserved; this does not establish measured transplant state, biology, accuracy, A-04 acceptance, or 02A completion.
+
+
+## 2026-10-28 — BETA-02A A-04 transplant establishment-date mismatch candidate result
+
+- Candidate test-only commit f262c9c0d0abb7e332730783e1dbd874b57b7a8d changes only src/lib/sim/model-inputs.test.ts. The registered focused command passed (1 passed / 37 skipped); the test pins crop and parameter IDs, exact tomato transplant thermal source identity, synthetic soil sentinels/provenance, the 2026-10-03 transplant, and the 2026-10-04 synthetic establishment state.
+- Independent S3 review first found the test omitted crop/parameter IDs, thermal identity and soil provenance. The worker added those assertions, and re-review passed. The preregistration docs commit 9c81b89f1b3a5fb8c278fdf4303ba0992a4cb785 passed all four named checks in run 40792260017 before the test; candidate SHA f262c9c0d0abb7e332730783e1dbd874b57b7a8d passed all four named PR #82 checks in run 40793492236.
+- Local verification passed: npm test (48 files / 268 tests), typecheck, standard/demo/Pages builds, private-file guard (556 tracked files), duplicate-safe JSON parsing and git diff --check. Production Pages-path Playwright passed 3/3 in the exact-head candidate CI (5m51s). No build:beta profile exists; builds emitted only Vite config-loader and large-chunk warnings.
+- Result: quality/beta/evidence/a04-v3-transplant-establishment-date-mismatch-fail-closed-synthetic-result.json. This PASS is only for the bounded synthetic software invariant; preserveStoredSummary is policy-only. No actual summary retention, biological validity, transplant measurement, crop accuracy, independent reference agreement or prediction is claimed. A-04 and overall 02A remain UNVERIFIED; source-backed transplant establishment and intermediate-stage mapping remain open.
+
+## 2026-10-28 — BETA-02A A-04 cucumber event-clock preregistration
+
+- Preregistered `A04-V3-CUCUMBER-DIRECT-SOW-TRANSPLANT-EVENT-CLOCK-SYNTHETIC-01` with final canonical setup SHA-256 `1bc480f9147d2498b37888c1a6ffd43f5132113a9bd3e208e4dd8c31ab0aa687`. The frozen four-day run compares only per-cell event routing in synthetic software: direct sowing on 2026-10-01 with establishment on 2026-10-03, and transplanting plus establishment on 2026-10-03. Each cucumber cell is 0.25 m²; both use the same frozen crop, thermal, production, and root parameters. No maturity or harvest endpoint is asserted.
+- S3 first found a preregistration mismatch: the fixture labeled soil provenance as omitted while the freezer input literally supplied the value `omitted`, and descriptive units/classification were embedded in the runtime input object. S1 corrected the frozen input to contain only AWC and organic matter, moved annotations outside the runtime input object, and recomputed the digest before candidate execution. S3 re-review and S2 source/provenance review passed. The source input omits soil provenance, and the frozen identity records `unknown`.
+- OSU EM 9305 Table 2 supports event labels only. The source range 447–673 C-days is frozen as source metadata, not used as a common endpoint or asserted result. Candidate execution remained prohibited until exact-head PR CI passed on the registration documentation commit. Test estimate: 0.5–0.75 engineer-hours, assuming the current per-cell v3 event/establishment API and helper suffice; preregistration review and full CI are excluded. This is synthetic software evidence only; A-04 and overall 02A remain UNVERIFIED.
+
+## 2026-10-28 — BETA-02A A-04 cucumber event-clock bounded synthetic result
+
+- Registration documentation commit `6a2a3e65837ef4e882b48fd00e0ad9f08ce6e51f` passed all four named PR #82 checks in run [40798956405](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40798956405) before candidate execution. The immutable preregistration retains its registration-time pending-CI wording.
+- Test-only candidate commit `c7b34a6aa994021feb4608c386b0ef6d8ef63be5` changed only `src/lib/sim/model-inputs.test.ts`; its registered focused test passed (1/38 skipped). S2 input-binding and S3 event-clock correctness reviews passed. Exact-head PR #82 run [40800383350](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40800383350) passed all four checks, including test/typecheck/build (48 files / 269 tests) and production Pages-path smoke (3/3).
+- Local gates passed: focused test, full suite (48 files / 269 tests), typecheck, standard/demo/Pages builds, private-file guard (558 tracked), duplicate-safe JSON/setup digest/manifest cross-links, whitespace check, and production Pages journeys (3/3). There is no `build:beta` profile. Existing Vite config-loader and large-chunk advisories and Playwright color-environment warnings were non-blocking.
+- Result record: `quality/beta/evidence/a04-v3-cucumber-direct-sow-transplant-event-clock-synthetic-result.json`. PASS is limited to the registered deterministic synthetic event-clock software invariant; no maturity, harvest, source agreement, biology, crop accuracy, measured holdout, or prediction claim is made. A-04 and overall 02A remain UNVERIFIED.
+
+
+## 2026-10-28 — BETA-02A A-04 establishment-event-label mismatch preregistration
+
+- Registered `A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01` with canonical setup SHA-256 `ce0ce4a4918c345b6773fdce384c57ae991183bd312eadb58289cf53b0b11b4d`. The matching-label control and mismatch arm share the full frozen v3 tomato run, crop/thermal/helper records, synthetic soil inputs, transplant event, planted date, establishment date, and initial dry matter. Only the per-cell establishment startEvent changes from transplanting to direct-sowing.
+- The control is expected to remain replayable. The candidate is expected to be unsupported with canReplay false and exact membership of the mismatch reason; the entire reasons array and sole unsupported cause are not asserted. `preserveStoredSummary` is a policy flag only. The OSU Table 6 record is used for transplant-event identity and parameter provenance only; no cultivar-specific endpoint, nursery growth, transplant mass, biological state, maturity, or harvest comparison is asserted.
+- Independent S2 source/input-provenance and S3 A-04 contract reviews passed. Registration documentation SHA `1df249f4f3e12265f5e9a21288a431e6ff8d518b` passed all four named PR #82 checks in run [40803354612](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40803354612) before candidate execution. Worker estimate: 0.25–0.5 engineer-hours for one focused test with existing helpers; preregistration, reviews, and CI are excluded. This is a synthetic software guard only; A-04 and overall 02A remain UNVERIFIED.
+
+## 2026-10-28 — BETA-02A A-04 establishment-event-label mismatch candidate result
+
+- The registered focused test passed (1 passed / 39 skipped). The matching-label control is replayable; changing only the per-cell establishment label from transplanting to direct-sowing yields unsupported / `canReplay: false` and exact membership of the registered mismatch reason. The test does not compare the full reasons array or assert that this is the sole unsupported cause. `preserveStoredSummary` is a policy flag only.
+- S2 input-binding and S3 reducer reviews passed. Local gates passed: full suite (48 files / 270 tests), typecheck, standard/demo/Pages builds, private-file guard (560 tracked files), duplicate-safe JSON validation, `git diff --check`, and production Pages Playwright (3/3 in 3.8m). No `build:beta` script exists.
+- Test-only candidate commit `ff57192a93038384ce693d2320a1ad496879a96a` changed only `src/lib/sim/model-inputs.test.ts`, whose SHA-256 is `e999fe84c38144b5672fbd940bf028bf8390b3bce621f32ae318da9a6a01b596`. Exact-head PR #82 run [40804981716](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40804981716) passed all four checks: test + typecheck + build (34s; 48 files / 270 tests), Playwright production Pages-path smoke (3/3; 6m23s), secret + private-file scan (17s), and GitGuardian Security Checks (2s). Pages journeys were production boot under the GitHub Pages base path, unsupported environment-v2 stored-summary retention, and unsupported v4 lifecycle explanation with stored-summary retention; these do not test retention for this A-04 fixture.
+- S2 input-binding and S3 reducer reviews passed. Local gates passed: focused test, full suite (48 files / 270 tests), typecheck, standard/demo/Pages builds, private-file guard (560 tracked files), duplicate-safe JSON checks, `git diff --check`, and production Pages Playwright (3/3 in 3.8m). No `build:beta` script exists. Result: `quality/beta/evidence/a04-v3-establishment-event-label-mismatch-fail-closed-synthetic-result.json`. This is a PASS only for the bounded synthetic software invariant; no transplant biology, cultivar behavior, maturity, accuracy, source agreement, or prediction is established. A-04 and overall 02A remain UNVERIFIED.

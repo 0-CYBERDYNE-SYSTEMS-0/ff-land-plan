@@ -10,6 +10,7 @@
 
 import type { Crop } from '@/types';
 import { uniform01 } from './rng';
+import { parseTargetCellKey, targetCellKey } from '@/lib/growingTargets';
 import type { CellState, NeighborContext } from './types';
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -27,11 +28,34 @@ export const DEFAULT_N_POOL_KG_HA = 500;
 
 /** Documented default when soil is unknown; clamps the OM heuristic. Same
  * numbers the engine shipped in Phase 1 — dynamics now act on top. */
-export function initialNitrogenKgHa(organicMatterPct: number | null | undefined): number {
+export function initialNitrogenKgHa(
+  organicMatterPct: number | null | undefined,
+  explicitPoolKgHa?: number,
+): number {
+  if (typeof explicitPoolKgHa === 'number' && Number.isFinite(explicitPoolKgHa)) {
+    return Math.max(0, explicitPoolKgHa);
+  }
   if (typeof organicMatterPct !== 'number' || !Number.isFinite(organicMatterPct)) {
     return DEFAULT_N_POOL_KG_HA;
   }
   return Math.min(N_POOL_MAX_KG_HA, Math.max(N_POOL_MIN_KG_HA, organicMatterPct * N_PER_OM_PCT));
+}
+
+/** Repeat-host pressure reduces early growth; it fades after 21 days and as the canopy closes. */
+export function soilbornePressure(family: string | undefined, inoculum: Record<string, number> | undefined): number {
+  const value = family ? inoculum?.[family] : undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? clamp01(value) : 0;
+}
+
+export function soilborneGrowthFactor(
+  family: string | undefined,
+  inoculum: Record<string, number> | undefined,
+  daysSincePlant: number,
+  biomassFrac: number,
+): number {
+  const daysFactor = clamp01((21 - Math.max(0, daysSincePlant)) / 21);
+  const canopyFactor = clamp01(1 - biomassFrac);
+  return 1 - 0.25 * soilbornePressure(family, inoculum) * daysFactor * canopyFactor;
 }
 
 /** Seasonal crop N demand from the catalog band (standard extension-table
@@ -113,7 +137,7 @@ function parseCellKey(key: string): { x: number; y: number } | null {
   if (i < 0) return null;
   const x = Number(key.slice(0, i));
   const y = Number(key.slice(i + 1));
-  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  return Number.isSafeInteger(x) && Number.isSafeInteger(y) ? { x, y } : null;
 }
 
 const cellKey = (x: number, y: number) => `${x},${y}`;
@@ -135,10 +159,11 @@ export function buildNeighborCache(
   cropOf: (id: number) => Crop | undefined,
 ): Record<string, NeighborContext> {
   const out: Record<string, NeighborContext> = {};
-  const positions = new Map<string, { x: number; y: number; cropId: number }>();
+  const positions = new Map<string, { x: number; y: number; cropId: number; target: ReturnType<typeof parseTargetCellKey>['target'] }>();
   for (const key of Object.keys(cells)) {
-    const p = parseCellKey(key);
-    if (p) positions.set(key, { ...p, cropId: cells[key]!.cropId });
+    const parsed = parseTargetCellKey(key);
+    const p = parseCellKey(parsed.localCellKey);
+    if (p) positions.set(key, { ...p, cropId: cells[key]!.cropId, target: parsed.target });
   }
   for (const [key, pos] of positions) {
     const crop = cropOf(pos.cropId);
@@ -146,7 +171,7 @@ export function buildNeighborCache(
     for (let dx = -NEIGHBOR_RADIUS; dx <= NEIGHBOR_RADIUS; dx++) {
       for (let dy = -NEIGHBOR_RADIUS; dy <= NEIGHBOR_RADIUS; dy++) {
         if (dx === 0 && dy === 0) continue;
-        const other = positions.get(cellKey(pos.x + dx, pos.y + dy));
+        const other = positions.get(targetCellKey(pos.target, cellKey(pos.x + dx, pos.y + dy)));
         if (!other) continue;
         if (other.cropId === pos.cropId) ctx.sameCrop++;
         const otherCrop = cropOf(other.cropId);

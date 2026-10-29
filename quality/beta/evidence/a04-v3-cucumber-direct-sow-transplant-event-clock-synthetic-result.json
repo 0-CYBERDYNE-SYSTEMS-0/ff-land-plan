@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "A04-V3-CUCUMBER-DIRECT-SOW-TRANSPLANT-EVENT-CLOCK-SYNTHETIC-01",
+  "classification": "bounded synthetic v3 per-cell event-clock software regression; not measured crop evidence",
+  "preregistration": "quality/beta/evidence/a04-v3-cucumber-direct-sow-transplant-event-clock-synthetic.json",
+  "registeredCodeBaseline": "f262c9c0d0abb7e332730783e1dbd874b57b7a8d",
+  "registeredDocumentationBaseline": "17677a3bb28867426a93a4ad1b878c2cc4108f77",
+  "syntheticSetupSha256": "1bc480f9147d2498b37888c1a6ffd43f5132113a9bd3e208e4dd8c31ab0aa687",
+  "registrationExactHeadPrCi": {
+    "pullRequest": 82,
+    "headSha": "6a2a3e65837ef4e882b48fd00e0ad9f08ce6e51f",
+    "runId": 40798956405,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40798956405",
+    "status": "PASS before candidate execution. The immutable preregistration retains its registration-time pending-CI wording.",
+    "checks": [
+      {
+        "name": "test + typecheck + build",
+        "status": "PASS",
+        "duration": "33s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "status": "PASS",
+        "tests": "3 passed / 3 total",
+        "jobDuration": "4m52s"
+      },
+      {
+        "name": "secret + private-file scan",
+        "status": "PASS",
+        "duration": "12s"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "status": "PASS",
+        "duration": "2s"
+      }
+    ]
+  },
+  "candidateCode": {
+    "commit": "c7b34a6aa994021feb4608c386b0ef6d8ef63be5",
+    "changedFiles": [
+      "src/lib/sim/model-inputs.test.ts"
+    ],
+    "testFileSha256": "caa6dd81d1610bcdd1d7f3eae25fd4db3e5bf568f050b14125ced7108cc9e35f",
+    "productionCodeChanged": false
+  },
+  "execution": {
+    "status": "PASS for the preregistered synthetic event-clock software invariant only.",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 cucumber source clocks at each cell's frozen sowing or transplant event\"",
+    "focusedResult": "PASS; 1 passed, 38 skipped; 39 tests total.",
+    "registeredAssertions": {
+      "testFile": "src/lib/sim/model-inputs.test.ts",
+      "testTitle": "starts v3 cucumber source clocks at each cell's frozen sowing or transplant event",
+      "importsFrozenFixture": true,
+      "sharedRunModelIdentity": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "cropIds": [
+        22
+      ],
+      "parameterCropIds": [
+        22
+      ],
+      "sameCucumberThermalRecordForBothCells": true,
+      "cellAreaM2": 0.25,
+      "source": "direct-sowing planted 2026-10-01 and synthetic establishment 2026-10-03",
+      "transplant": "transplanting and synthetic establishment 2026-10-03",
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "frozenSource": "unknown"
+      },
+      "weather": "2026-10-01 through 2026-10-04; Tmin 20 C, Tmax 30 C, precipitation 0 mm, ETo 4 mm, natural DLI 18 mol/m2/day, GDD base-10 field 15 C-days.",
+      "expectedPerDay": [
+        {
+          "date": "2026-10-01",
+          "directSowing": [
+            15,
+            0,
+            false
+          ],
+          "transplanting": [
+            0,
+            0,
+            false
+          ]
+        },
+        {
+          "date": "2026-10-02",
+          "directSowing": [
+            30,
+            0,
+            false
+          ],
+          "transplanting": [
+            0,
+            0,
+            false
+          ]
+        },
+        {
+          "date": "2026-10-03",
+          "directSowing": [
+            45,
+            15,
+            true
+          ],
+          "transplanting": [
+            15,
+            15,
+            true
+          ]
+        },
+        {
+          "date": "2026-10-04",
+          "directSowing": [
+            60,
+            30,
+            true
+          ],
+          "transplanting": [
+            30,
+            30,
+            true
+          ]
+        }
+      ],
+      "tupleFieldOrder": [
+        "sourceThermalCdays",
+        "gddAccumC",
+        "establishmentApplied"
+      ],
+      "tolerance": "0 C-days; exact deterministic software clock assertions only.",
+      "maturityOrHarvestAsserted": false,
+      "sourceRangeUsedAsEndpoint": false
+    },
+    "worker": {
+      "role": "S1 candidate implementation worker",
+      "estimateEngineerHours": "0.5-0.75",
+      "assumptions": "Existing per-cell v3 establishment inputs and syntheticStartEventParameter helper express the frozen case without production changes."
+    },
+    "independentCandidateReviews": [
+      {
+        "reviewer": "S2 source/input-binding auditor",
+        "result": "PASS",
+        "reviewed": "Absolute integration-worktree test and fixture paths; test title/import, run/crop/event/soil/weather/helper identity, daily states, setup digest, manifest result link, and no maturity assertion."
+      },
+      {
+        "reviewer": "S3 event-clock test correctness validator",
+        "result": "PASS",
+        "reviewed": "One shared v3 run; actual post-step states for both cells on all four days; source versus physiology clocks; persisted establishmentApplied; no maturity or harvest endpoint."
+      }
+    ],
+    "sourceUseBoundary": "OSU Extension EM 9305 Table 2 supports direct-seeded and transplanted event labels only. The 447-673 C-day range is source metadata only and is not an asserted common cultivar endpoint."
+  },
+  "localVerification": {
+    "npmTest": "PASS; 48 test files / 269 tests.",
+    "typecheck": "PASS; npm run typecheck.",
+    "standardBuild": "PASS; npm run build.",
+    "demoBuild": "PASS; npm run build:demo.",
+    "pagesBuild": "PASS; npm run build:pages.",
+    "privateFileGuard": "PASS; 558 tracked files, no private-data patterns.",
+    "duplicateSafeJsonAndDiffCheck": "PASS; preregistration and manifest parse without duplicate keys, digest and links match, git diff --check clean.",
+    "productionBrowserSmoke": "PASS; 3/3 production Pages journeys in 3.8m.",
+    "buildProfiles": "No build:beta script exists in package.json.",
+    "warnings": "Non-blocking Vite config-loader and large-chunk advisories; Playwright printed NO_COLOR/FORCE_COLOR warnings."
+  },
+  "candidateExactHeadPrCi": {
+    "pullRequest": 82,
+    "headSha": "c7b34a6aa994021feb4608c386b0ef6d8ef63be5",
+    "runId": 40800383350,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40800383350",
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "test + typecheck + build",
+        "status": "PASS",
+        "duration": "32s",
+        "suite": "48 files / 269 tests"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "status": "PASS",
+        "tests": "3 passed / 3 total",
+        "jobDuration": "5m32s"
+      },
+      {
+        "name": "secret + private-file scan",
+        "status": "PASS",
+        "duration": "18s"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "status": "PASS",
+        "duration": "2s"
+      }
+    ],
+    "browserJourneys": [
+      "Production build boots under the GitHub Pages project base path.",
+      "Unsupported environment-v2 run opens under Pages and retains its stored summary.",
+      "Unsupported v4 crop lifecycle is explained in World and retains its stored summary."
+    ]
+  },
+  "status": "PASS only for the bounded synthetic per-cell event-clock software invariant. A-04 and overall 02A remain UNVERIFIED.",
+  "claimBoundary": [
+    "This is synthetic software behavior, not a crop benchmark or prediction.",
+    "OSU EM 9305 is cited for event labels only; no shared cultivar endpoint or maturity comparison is asserted.",
+    "No measured crop output, measured holdout, independent reference-model agreement, actual site observation, biological validity, or crop accuracy is established.",
+    "No maturity or harvest output is asserted.",
+    "A-04 and overall 02A remain UNVERIFIED."
+  ],
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false,
+  "owner": "S1 candidate implementation; S2 and S3 independent reviewers; lead integration.",
+  "retest": "Repeat the focused test, independent candidate review, local gates, and exact-head PR CI if any registered input, helper/source row, reducer behavior, or assertion changes."
+}

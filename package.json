@@ -18,7 +18,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:demo": "VITE_FF_ENV_RECORDS=true VITE_FF_ENV_CLIMATE=true VITE_FF_ASSET_PHYSICS=true VITE_FF_TIMELINE=true VITE_FF_CAMPAIGN=true VITE_FF_TWIN=true vite",
     "build": "tsc -b && vite build",
+    "build:demo": "VITE_FF_ENV_RECORDS=true VITE_FF_ENV_CLIMATE=true VITE_FF_ASSET_PHYSICS=true VITE_FF_TIMELINE=true VITE_FF_CAMPAIGN=true VITE_FF_TWIN=true tsc -b && VITE_FF_ENV_RECORDS=true VITE_FF_ENV_CLIMATE=true VITE_FF_ASSET_PHYSICS=true VITE_FF_TIMELINE=true VITE_FF_CAMPAIGN=true VITE_FF_TWIN=true vite build",
     "build:pages": "tsc -b && vite build --base=/ff-land-plan/",
     "preview": "vite preview",
     "preview:pages": "node tools/preview-pages.mjs",
@@ -59,6 +61,7 @@
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.2",
     "autoprefixer": "^10.6.1",
+    "fake-indexeddb": "^6.2.6",
     "postcss": "^8.5.31",
     "tailwindcss": "^3.4.13",
     "typescript": "^7.0.2",

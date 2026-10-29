@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-AWC-VARIANT-POSITIVE-DRAINAGE-SYNTHETIC-01",
+  "classification": "preregistered synthetic crop-model-v2 one-day root-zone capacity variant; not a crop or soil benchmark",
+  "status": "The original candidate attempt (1 passed, 26 skipped) is UNACCEPTED because organicMatterPct=2.4 was frozen without registration. S2 approved the corrected preregistration; docs commit 79eff1f1c221e5c201764c8c9166ca30c2687309 passed all four named PR checks in run 40633832876. The corrected candidate focused test and S2 review passed, full local gates passed, and exact-head code/evidence PR CI passed in run 40635095614 on aa849571044cd0dd20b4c2dab5e8ae3efbccbad2. This is accepted as a synthetic software regression only; A-05 and 02A remain UNVERIFIED.",
+  "preparedDate": "2026-10-27",
+  "review": {
+    "S2": "Independently approved the corrected preregistration and candidate test, then approved the final local-gate record. It confirmed the test consumes/asserts inherited synthetic organicMatterPct=2.4, preserves the arithmetic and <=1e-12 mm arithmetic-only tolerance, and passes the registered focused command. CI results are recorded separately below; S2 review is not a crop or soil validation claim.",
+    "S3": "Initial preregistration boundary review found no source or accuracy overclaim. S3 implemented the candidate test and is not its independent validator."
+  },
+  "sourceContext": {
+    "evidenceId": "FAO-56-1998",
+    "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Eqs. 82, 85, 86, and 88.",
+    "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+    "sourceVersion": "FAO-56 (1998), Chapter 8; official HTML chapter page",
+    "retrievedDate": "2026-10-27",
+    "sourceArtifactSha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+    "artifactBytes": 137909,
+    "artifactStatus": "Official chapter HTML retrieved 2026-10-27; 137909 bytes. No source artifact copied or committed.",
+    "licenseOrReuse": "No reuse license found on the source page; no source artifact copied or committed. Only FAO-56 equations are referenced; AWC 1.0 mm/cm and inherited organicMatterPct 2.4 are synthetic software inputs, not source-derived soil values, defaults, or a soil/media profile.",
+    "reuseLimit": "The FAO-56 equation references are reused from the parent positive-drainage fixture. AWC 1.0 mm/cm is an explicit synthetic software input; organicMatterPct 2.4 is inherited from the root-drydown fixture used by the parent test construction. Neither value is a sourced soil value, default, or soil/media profile."
+  },
+  "parentFixture": {
+    "id": "FAO56-V2-POSITIVE-ROOT-DRAINAGE-SYNTHETIC-01",
+    "path": "quality/beta/evidence/fao56-v2-positive-drainage-synthetic.json",
+    "reuseLimit": "Keep the parent crop, thermal, production, root-depth, route, one-day weather forcing, and organicMatterPct=2.4 inherited from the referenced root-drydown fixture in the parent test construction. This organic-matter value is synthetic, not a sourced or observed soil property. Change only frozen soil AWC from 2 to 1.0 mm/cm; derive capacity and starting storage from the same 80 cm fixed depth and 0.99375 initial storage fraction."
+  },
+  "frozenModelInputs": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsModel": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "soilSourceTag": "unknown; AWC is a synthetic software input and not a sourced or observed soil profile",
+    "cropLifecycle": "plant",
+    "cell": "0,0",
+    "cellCount": 1,
+    "climateRoute": "Standard open-field crop-model-v2 root-step path; no environment snapshot and no environment-v2 climate model."
+  },
+  "syntheticInputs": {
+    "soil": {
+      "awcMmPerCm": 1.0,
+      "organicMatterPct": 2.4,
+      "effectiveRootDepthCm": 80,
+      "totalAvailableWaterMm": 80,
+      "sourceStatus": "AWC=1.0 mm/cm and organicMatterPct=2.4 are inherited synthetic software inputs; neither is a sourced soil/media value, default, or observed profile. organicMatterPct is carried from the referenced root-drydown fixture used by the parent test."
+    },
+    "rootZone": {
+      "method": "FAO-56 root-zone balance as integrated by crop-model-v2",
+      "tableDepletionFractionP": 0.4,
+      "cropCoefficient": 1.2,
+      "effectiveRootDepthCm": 80,
+      "rootDevelopment": "none; no runtime rootDevelopment parameter is supplied, so effective root depth is fixed at 80 cm",
+      "initialStorageFraction": 0.99375,
+      "initialStorageMm": 79.5,
+      "initialDepletionMm": 0.5,
+      "precipitationMm": 5,
+      "runoffMm": 0,
+      "irrigationMm": 0,
+      "capillaryRiseMm": 0,
+      "rootGrowthStorageMm": 0,
+      "referenceEvapotranspirationMmDay": 0,
+      "potentialTranspirationMmDay": 0,
+      "actualTranspirationMmDay": 0,
+      "runoffAndInfiltrationBoundary": "All 5 mm precipitation is treated as root-zone inflow and runoff is fixed at 0 for this synthetic software boundary."
+    },
+    "dailyEnvironment": {
+      "startDate": "2026-10-01",
+      "dayCount": 1,
+      "intervalDays": 1,
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipMm": 5,
+      "etoMm": 0,
+      "dliNaturalMol": 18,
+      "gddBase10C": 15,
+      "weatherStatus": "One-day synthetic forcing retained from the parent fixture; light and temperature are ancillary to this water-balance check."
+    }
+  },
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "expected": {
+    "equations": "Capacity = AWC × fixed effective root depth. Initial storage = capacity × initialStorageFraction. With ETc, runoff, irrigation, capillary rise, and root-growth storage all zero, drainage = max(0, initial storage + precipitation - capacity); final storage = min(capacity, initial storage + precipitation); residual = initial storage + inflows - runoff - drainage - actual ETc - final storage.",
+    "calculation": {
+      "capacityMm": 80,
+      "initialStorageMm": 79.5,
+      "initialDepletionMm": 0.5,
+      "precipitationMm": 5,
+      "beforeDrainageStorageMm": 84.5,
+      "deepDrainageMm": 4.5,
+      "finalStorageMm": 80,
+      "endDepletionMm": 0,
+      "actualTranspirationMm": 0,
+      "waterBalanceResidualMm": 0
+    },
+    "directRootZoneStep": {
+      "stateWaterMm": 79.5,
+      "awcMmPerCm": 1.0,
+      "effectiveRootDepthCm": 80,
+      "depletionFractionAssertion": "Strict equality with fao56AdjustedDepletionFraction(0.4, 0); mathematical expected p=0.6; no tolerance and no frozen runtime binary representation.",
+      "fluxes": {
+        "precipMm": 5,
+        "irrigationMm": 0,
+        "runoffMm": 0,
+        "capillaryRiseMm": 0,
+        "rootGrowthStorageMm": 0,
+        "potentialTranspirationMm": 0
+      },
+      "deepDrainageMm": 4.5,
+      "finalWaterMm": 80,
+      "residualMm": 0
+    },
+    "integratedRoute": {
+      "route": "One-cell standard open-field crop-model-v2 createRun/stepDay/simulateRun path; no environment-v2.",
+      "createRunState": "Assert exact cell rootZoneWaterMm=79.5 and capacity=80 mm before stepDay; no root-depth state or root-growth inflow.",
+      "stepDayCallObservation": "Observe exactly one actual stepFao56RootZone call through a call-through observer that invokes the original reducer. Assert state.waterMm=79.5; params.awcMmPerCm=1.0; effectiveRootDepthCm=80; depletionFraction strictly equals fao56AdjustedDepletionFraction(0.4, 0); fluxes.precipMm=5; irrigationMm=0; runoffMm=0; capillaryRiseMm omitted/undefined and defaulted to zero; rootGrowthStorageMm=0; potentialTranspirationMm=0. Install after the direct-helper assertion and restore in finally before simulateRun.",
+      "stepDayOutputs": "Assert exact effective precipitation=5 mm and unrounded waterUseMm=0; assert final rootZoneWaterMm=80 mm and defined accumulated/max residuals=0. Integrated drainage is inferred by mass balance and is not a persisted daily output.",
+      "simulateRunOutputs": "Assert one simulated day, summary rainMm=5 and waterUseMm=0, final rootZoneWaterMm=80, and defined zero root-zone residual summaries. Mass balance implies integrated drainage=4.5 mm."
+    }
+  },
+  "tolerances": {
+    "waterArithmetic": "Absolute deviation <=1e-12 mm for direct root-step drainage/storage/depletion/residual arithmetic and integrated mass-balance drainage inference; double-precision arithmetic only.",
+    "exactChecks": "Frozen input values, one-cell/one-day count, fixed 80 cm depth, no environment-v2 route, exact createRun pre-step state and capacity, exactly one observed call with all frozen state/parameter/flux values, strict depletionFraction equality with the frozen helper expression and no tolerance, and exact final reducer state/summary fields.",
+    "scope": "Arithmetic-only bound; not a soil-parameter uncertainty, source-display, model-error, biological-validation, measured-agreement, or prediction tolerance."
+  },
+  "limitations": [
+    "AWC 1.0 mm/cm is not a soil/media default, a sourced soil value, or an observed profile.",
+    "This fixture does not validate soil hydraulics, infiltration, crop biology, or soilless/media behavior.",
+    "Zero ET means ordering when transpiration and drainage are simultaneously positive is untested.",
+    "The fixture is synthetic software evidence only; no crop, measured, source-trajectory, or prediction claim is made.",
+    "A-05 and 02A remain UNVERIFIED."
+  ],
+  "acceptanceOwner": "A-05 simulator acceptance owner; independent candidate validator S2. S3 provided the initial preregistration boundary review and implemented the candidate test.",
+  "acceptanceStatus": "The first local candidate attempt passed its focused test (1 passed, 26 skipped) under the incomplete preregistration and is not accepted. After S2 approved the corrected preregistration and docs commit 79eff1f passed all four named PR checks, the candidate consumed and asserted registered organicMatterPct=2.4; its focused run passed (1 passed, 26 skipped), and S2 approved the candidate review. Full local gates passed: 47 test files/251 tests, typecheck, standard/demo/Pages builds, private-file guard (526 tracked files), JSON parsing, and whitespace checks. No beta-specific build script exists. Exact-head code/evidence PR CI passed all four named contexts on aa849571044cd0dd20b4c2dab5e8ae3efbccbad2 in run 40635095614. Accepted only as synthetic software regression evidence; soil/media accuracy, measured agreement, crop accuracy, and prediction validity remain unestablished; A-05 and 02A remain UNVERIFIED.",
+  "reproductionOwner": "Assigned simulator test implementer.",
+  "retest": {
+    "testTitle": "reconciles v2 frozen AWC variant with positive root drainage",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 frozen AWC variant with positive root drainage\"",
+    "gate": "The initial local attempt under the incomplete preregistration is unaccepted. The corrected candidate focused test and S2 review passed; full local gates and exact-head code/evidence PR CI passed. Accept only this preregistered synthetic software regression; do not infer soil/media or crop validity.",
+    "candidateExecuted": true,
+    "candidateAcceptedUnderCorrectedPreregistration": true,
+    "localVerification": {
+      "npmTest": "PASS: 47 test files, 251 tests",
+      "typecheck": "PASS: npm run typecheck",
+      "builds": {
+        "standard": "PASS: npm run build",
+        "demo": "PASS: npm run build:demo",
+        "pages": "PASS: npm run build:pages",
+        "betaProfile": "No beta-specific build script is defined in package.json."
+      },
+      "privateFileGuard": "PASS: 526 tracked files",
+      "jsonAndWhitespace": "PASS: jq empty and git diff --check",
+      "productionBrowserJourneys": "PASS: run 40635095614 on aa849571044cd0dd20b4c2dab5e8ae3efbccbad2; Playwright production Pages-path smoke passed in 4m01s."
+    },
+    "exactHeadCi": {
+      "runId": 40635095614,
+      "headSha": "aa849571044cd0dd20b4c2dab5e8ae3efbccbad2",
+      "result": "All four named contexts passed.",
+      "checks": {
+        "testTypecheckBuild": "PASS, 38s",
+        "playwrightProductionPagesPathSmoke": "PASS, 4m01s",
+        "secretPrivateFileScan": "PASS, 12s",
+        "gitGuardianSecurityChecks": "PASS, 1s"
+      }
+    },
+    "priorAttempt": {
+      "baseSha": "e51a8f37604e4f4f0a0bced361ea580ca8b8ef59",
+      "candidateTestFileBlob": "76504c076765f633ecd7805e5aad3c6103e5e29d",
+      "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 frozen AWC variant with positive root drainage\"",
+      "reportedResult": "1 passed, 26 skipped",
+      "preliminaryFailures": [
+        "Initial focused run read frozenModelInputs from syntheticInputs; corrected to the top-level fixture record.",
+        "Next focused run read climateRoute from syntheticInputs; corrected to the top-level frozenModelInputs record."
+      ],
+      "accepted": false,
+      "reason": "The test supplied inherited synthetic organicMatterPct=2.4 from the root-drydown fixture without registering that frozen input."
+    },
+    "correctedPreregistrationAttempt": {
+      "baseSha": "79eff1f1c221e5c201764c8c9166ca30c2687309",
+      "candidateTestFileBlob": "ba062d8548a83214bc93625ebe35f34614c24821",
+      "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 frozen AWC variant with positive root drainage\"",
+      "preliminaryFailure": "The first rerun after the corrected docs CI failed on an obsolete exact sourceStatus wording assertion; the assertion was removed because the corrected fixture now describes both inherited values as synthetic.",
+      "reportedResult": "1 passed, 26 skipped",
+      "independentReview": "S2 approved the candidate review and confirmed exact registered-input and frozen-input assertions, reducer observation, cleanup, and arithmetic bounds.",
+      "accepted": true,
+      "reason": "The corrected focused synthetic test, independent review, full local gates, and exact-head code/evidence PR CI all passed. Acceptance is limited to synthetic software regression evidence; A-05 and 02A remain UNVERIFIED."
+    }
+  }
+}

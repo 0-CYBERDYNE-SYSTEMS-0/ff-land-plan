@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02",
+  "classification": "corrected synthetic crop-model-v3 software regression registration after fixture 01 was found unaligned; not measured crop or maturity evidence",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-04"
+  },
+  "candidateTest": {
+    "file": "src/lib/sim/model-inputs.test.ts",
+    "title": "starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint\"",
+    "fixtureId": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02"
+  },
+  "baseline": {
+    "branchHead": "65f6daa45532ec19d918ada1424ddec6abba9288",
+    "testFile": "src/lib/sim/model-inputs.test.ts",
+    "thermalSourceFile": "src/data/cropThermalParams.ts",
+    "thermalSourceFileSha256": "e54c574c928b4577ab14a0f7a429ab7a357d751f29a9f358d59f3b306a47d76c",
+    "testFileSha256": "fa1e0c15a9093f0cce6990c79ab9b99db685f0e7f52cf9b462b9130b7fa5383c",
+    "engineSourceFile": "src/lib/sim/engine.ts",
+    "engineSourceFileSha256": "3a8388eef614b43a4bb355b0a5986d68ef9ade71bba87c5fad7a71b3af131e15",
+    "modelInputSourceFile": "src/lib/sim/model-inputs.ts",
+    "modelInputSourceFileSha256": "eaa2f801eb2b654d83e42cace6b2b1d0b6c5fbf4c9297e457ebf958b6f2bb643"
+  },
+  "syntheticSetup": {
+    "modelIdentity": {
+      "cropModel": "crop-model-v3",
+      "runInputs": "run-inputs-v3",
+      "cropParameters": "crop-parameters-v4"
+    },
+    "run": {
+      "startDate": "2026-10-01",
+      "target": {
+        "kind": "floor",
+        "localCell": "0,0",
+        "targetCellKey": "0,0"
+      },
+      "crop": {
+        "id": 1,
+        "slug": "tomato"
+      },
+      "plantedAt": "2026-10-03",
+      "cropStartEvent": "transplanting",
+      "farmId": 1,
+      "cropModelVersion": "crop-model-v3",
+      "basePlan": {
+        "farmId": 1,
+        "widthM": 1,
+        "heightM": 1,
+        "cellM": 0.25,
+        "allowOutsideBeds": false,
+        "ground": {},
+        "planting": {
+          "0,0": 1
+        },
+        "updatedAt": "2026-10-01",
+        "plantedAt": {
+          "0,0": "2026-10-03"
+        }
+      },
+      "dayCount": 58,
+      "seed": 1,
+      "scenario": "baseline",
+      "tempDeltaC": 0,
+      "precipMultiplier": 1,
+      "interventions": [],
+      "autoHarvest": true,
+      "cropStartEvents": {
+        "0,0": "transplanting"
+      }
+    },
+    "frozenModelInputs": {
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "freezeInputSource": "omitted",
+        "frozenSource": "unknown",
+        "classification": "synthetic sentinels; source provenance is not asserted"
+      },
+      "crop": {
+        "id": 1,
+        "identitySource": "tomato catalog snapshot selected by the existing v3 test helper at the registered branch head"
+      },
+      "cropParameters": {
+        "factory": "syntheticStartEventParameter",
+        "factoryLocation": "src/lib/sim/model-inputs.test.ts:138-171",
+        "factoryInputs": {
+          "cropId": 1,
+          "thermal": "the frozen cropId 1 tomato row from src/data/cropThermalParams.ts, pinned by baseline.thermalSourceFileSha256"
+        },
+        "output": {
+          "cropId": 1,
+          "thermal": {
+            "cropId": 1,
+            "cropSlug": "tomato",
+            "sourceFile": "src/data/cropThermalParams.ts",
+            "sourceFileSha256": "e54c574c928b4577ab14a0f7a429ab7a357d751f29a9f358d59f3b306a47d76c",
+            "tBaseC": 7.2,
+            "tUpperC": 33.3,
+            "gddToMaturityCdays": [
+              1024,
+              1117
+            ],
+            "startEvents": [
+              "transplanting"
+            ],
+            "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6"
+          },
+          "production": {
+            "equationFamily": "LINTUL-net-RUE",
+            "rueGPerMjInterceptedPar": 2,
+            "initialDryMatterGPerM2": 0,
+            "interceptedParFraction": 0.5,
+            "harvestIndex": 0.5,
+            "status": "qualified",
+            "missing": [],
+            "limitations": [
+              "Synthetic production values exercise event timing only."
+            ],
+            "evidence": {
+              "evidenceId": "TEST-SYNTHETIC-START-EVENT",
+              "sourceCitation": "Synthetic software acceptance fixture; no biological claim",
+              "sourceUrl": "test-only:crop-start-event",
+              "validDomain": "software acceptance only"
+            }
+          },
+          "rootZone": {
+            "method": "FAO-56",
+            "effectiveRootDepthCm": 20,
+            "depletionFraction": 0.5,
+            "cropCoefficient": 1,
+            "initialStorageFraction": 0.7,
+            "status": "qualified",
+            "missing": [],
+            "limitations": [
+              "Synthetic static root-zone values exercise event timing only."
+            ],
+            "evidence": {
+              "evidenceId": "TEST-SYNTHETIC-START-EVENT",
+              "sourceCitation": "Synthetic software acceptance fixture; no biological claim",
+              "sourceUrl": "test-only:crop-start-event",
+              "validDomain": "software acceptance only"
+            }
+          }
+        }
+      },
+      "cropEstablishmentByCell": {
+        "0,0": {
+          "startEvent": "transplanting",
+          "establishedAtDate": "2026-10-03",
+          "initialAboveGroundDryMatterGPerM2": 7,
+          "evidence": {
+            "classification": "synthetic",
+            "evidenceId": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02",
+            "validDomain": "synthetic reducer timing and maturity-endpoint software invariant only"
+          }
+        }
+      }
+    },
+    "weather": {
+      "dateStart": "2026-10-01",
+      "dateEndInclusive": "2026-11-27",
+      "consecutiveDayCount": 58,
+      "dailyRecord": {
+        "tMinC": 25.2,
+        "tMaxC": 29.2,
+        "precipMm": 0,
+        "etoMm": 0,
+        "dliNaturalMol": 18,
+        "gddBase10C": 17.2,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        }
+      },
+      "dailySourceThermalCdays": 20,
+      "dailySourceThermalDerivation": "single-sine horizontal cutoff; the entire fixed temperature range is above 7.2 C and below 33.3 C"
+    },
+    "expected": {
+      "preTransplant": {
+        "dates": [
+          "2026-10-01",
+          "2026-10-02"
+        ],
+        "sourceThermalCdays": 0
+      },
+      "transplantDay": {
+        "date": "2026-10-03",
+        "postTransplantTick": 1,
+        "sourceThermalCdays": 20
+      },
+      "lastPreEndpointTick": {
+        "date": "2026-11-26",
+        "postTransplantTick": 55,
+        "sourceThermalCdays": 1100,
+        "biomassFrac": "less than 1"
+      },
+      "maturityEndpoint": {
+        "date": "2026-11-27",
+        "postTransplantTick": 56,
+        "rawSourceThermalCdays": 1120,
+        "cappedSourceThermalCdays": 1117,
+        "biomassFrac": 1
+      }
+    },
+    "testScope": {
+      "assertions": "exact deterministic sourceThermalCdays, biomassFrac, and event-date checks only; no tolerance",
+      "supportInspection": false,
+      "replay": false,
+      "directSowingComparison": false,
+      "defaultVersusCultivarComparison": false,
+      "sourceObservedOutcomeComparison": false
+    }
+  },
+  "syntheticSetupCanonicalization": "SHA-256 of UTF-8 JSON for syntheticSetup with recursively sorted object keys, compact separators, and Unicode preserved.",
+  "syntheticSetupSha256": "7cdf717aab20211fc02346f310b7b6f1b5723bc5f685f891b700ae73d528c3b8",
+  "sourceAttribution": {
+    "citation": "Oregon State University Extension EM 9305, Vegetable Degree-Day Models: An Introduction for Farmers and Gardeners, January 2021, Table 6.",
+    "url": "https://extension.oregonstate.edu/sites/default/files/documents/em9305.pdf",
+    "pdfSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+    "sourceFactsUsed": "Tomato transplanting at 3-5 true leaves; 45 F / 92 F thresholds; single-sine horizontal cutoff; first-ripe harvest target range 1844-2010 F-days, mapped to 7.2/33.3 C and [1024,1117] C-days.",
+    "sourceDomain": "Western Oregon observations from 2013-2015; source accuracy was calculated on original observations, not an independent holdout.",
+    "copyrightAndReuse": "Copyright © 2021 Oregon State University. No open reuse license identified. Cite and retain only derived parameter facts; do not reproduce source prose, table, or figures."
+  },
+  "status": {
+    "registration": "PREREGISTERED-CORRECTIVE-SOFTWARE-REGRESSION",
+    "S3IndependentReview": "PASS on 2026-10-28.",
+    "exactHeadPrCi": "PASS on exact registration docs head e35392779298c28287565c03f65c42a80b4ae5d1, PR #82 run 40786569153; all four named checks passed.",
+    "candidateExecution": "PASS only as a corrective synthetic software regression on code SHA bce83aa7b0340ea6f3206d977038cf2efc352071; see quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json. Fixture 01 remains UNACCEPTED; fixture 02 is not prospective crop validation.",
+    "candidateExactHeadPrCi": "PASS on exact candidate code SHA bce83aa7b0340ea6f3206d977038cf2efc352071, PR #82 run 40788255990; all four named checks passed.",
+    "candidateReview": "S3 independent candidate review PASS after removal of the redundant self-referential RunConfig assertion."
+  },
+  "independentReviewRecord": {
+    "reviewer": "S3 independent preregistration reviewer",
+    "result": "PASS",
+    "date": "2026-10-28",
+    "reviewedDocumentation": [
+      "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic.json",
+      "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json",
+      "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02.json",
+      "quality/beta/evidence/model-coverage.json",
+      "quality/beta/README.md",
+      "quality/beta/NEXT-TEAM-PROMPT.md",
+      "quality/beta/02A-MODEL-DECISION.md",
+      "implementation-notes.md"
+    ],
+    "reviewedCodeExcerpts": [
+      "src/lib/sim/model-inputs.test.ts at baseline 65f6daa",
+      "src/lib/sim/model-inputs.ts at baseline 65f6daa",
+      "src/lib/sim/engine.ts at baseline 65f6daa",
+      "src/data/cropThermalParams.ts at baseline 65f6daa"
+    ],
+    "findings": "No remaining preregistration mismatch. Fixture 02 uses the matching -02 establishment evidence ID, exact source-row accumulation method, dayCount 58, full baseline RunConfig/base plan/event map, matching hashes and setup digest. Fixture 01 is unchanged and its candidate result is UNACCEPTED.",
+    "claimBoundary": "Expected clock values remain unchanged. Fixture 02 follows observed fixture 01 outputs and is a software regression rerun, not prospective or independent crop validation. A-04 and overall 02A remain UNVERIFIED.",
+    "execution": "As of the preregistration review, exact-head PR CI was pending and candidate execution was prohibited; S3 did not run tests."
+  },
+  "claimBoundary": [
+    "This is a synthetic software timing and endpoint invariant only; no comparison to source-observed outcomes is made.",
+    "Default-versus-supported-cultivar behavior and a direct-sowing comparison remain untested by this fixture.",
+    "No biological maturity, measured transplant state, crop accuracy, independent reference agreement, or prediction is established.",
+    "A-04 and overall 02A remain UNVERIFIED.",
+    "This corrective registration follows an unaccepted fixture 01 run whose clock outputs were observed; a passing rerun is software regression evidence only and is not prospective or independent crop validation."
+  ],
+  "workerEstimate": {
+    "engineerHours": "0.25-0.5",
+    "assumptions": "S1 estimate: both corrections are confined to the existing test; replace the synthetic evidence ID with fixture 02 and spell out the already-used RunConfig values locally, without changing clock expectations.",
+    "excludes": "Test execution, independent review, CI, documentation, and git changes. S1 noted that additional config fields or setup changes beyond making current values explicit could increase the estimate."
+  },
+  "correctionOf": {
+    "fixtureId": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-01",
+    "preregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic.json",
+    "priorAttemptResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json",
+    "priorAttemptStatus": "UNACCEPTED",
+    "reason": "S3 candidate review found that fixture 01 copied the helper thermal accumulationMethod incorrectly and omitted the test RunConfig dayCount. This registration freezes the exact source-row string and full run configuration before the corrected regression rerun.",
+    "numericExpectedValuesChanged": false,
+    "claimBoundary": "Because the fixture 01 clock outputs were observed before this correction, fixture 02 is a transparent corrective software regression record, not blind, prospective, measured, or predictive validation."
+  },
+  "resultRecord": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json"
+}

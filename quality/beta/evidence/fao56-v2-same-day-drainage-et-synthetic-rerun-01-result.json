@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-SAME-DAY-DRAINAGE-ET-SYNTHETIC-RERUN-01-CANDIDATE-RESULT",
+  "status": "Synthetic software candidate PASS locally and on exact-head candidate CI; A-05 and overall 02A remain UNVERIFIED",
+  "classification": "Synthetic crop-model-v2 reducer/software result only; not crop, soil, or predictive validation",
+  "preregistration": {
+    "fixture": "quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json",
+    "commit": "78b82ef850ca5ae9c6051c07753cab225591a98b",
+    "ciRun": "40664774492",
+    "result": "PASS on the exact preregistration commit before candidate execution",
+    "contexts": {
+      "test + typecheck + build": "PASS",
+      "Playwright production Pages-path smoke": "PASS; 3/3 journeys; suite 4.5m, job 5m11s",
+      "secret + private-file scan": "PASS",
+      "GitGuardian Security Checks": "PASS"
+    },
+    "candidateOracleOrToleranceChanged": false
+  },
+  "implementation": {
+    "testFile": "src/lib/sim/model-inputs.test.ts",
+    "reducerFile": "src/lib/sim/crop-model-v2.ts",
+    "testName": "applies v2 transpiration before same-day drainage and replays exactly",
+    "candidateCodeState": "Committed and verified on the exact current PR #82 head",
+    "candidateCodeCommit": "f7b7c37974c7ca655352cc2c18223b5da5d0ee4b",
+    "candidateCodeCi": {
+      "pullRequest": 82,
+      "headSha": "f7b7c37974c7ca655352cc2c18223b5da5d0ee4b",
+      "baseRef": "main",
+      "baseSha": "59a93ee6ee26e98b728f84420bba7750f04ab5fe",
+      "runId": "40668663876",
+      "result": "PASS on the exact candidate code/evidence SHA",
+      "contexts": {
+        "test + typecheck + build": "PASS; 38s",
+        "Playwright production Pages-path smoke": "PASS; 3/3; suite 5.2m, job 5m58s",
+        "secret + private-file scan": "PASS; 22s",
+        "GitGuardian Security Checks": "PASS; 21s"
+      }
+    },
+    "localDate": "2026-10-28"
+  },
+  "observedDispatch": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsVersion": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "climateRoute": "One-day standard open-field route; no environment-v2 snapshot",
+    "cellKey": "0,0",
+    "cellCount": 1,
+    "cropSnapshotMatchedFrozenCatalogObject": true,
+    "soilSource": "unknown",
+    "rootDevelopment": "none; fixed effective root depth and no root-growth storage inflow"
+  },
+  "observedInputs": {
+    "awcMmPerCm": 2,
+    "effectiveRootDepthCm": 80,
+    "totalAvailableWaterMm": 160,
+    "initialStorageMm": 159,
+    "initialDepletionMm": 1,
+    "tableDepletionFractionP": 0.4,
+    "adjustedDepletionFractionP": 0.36,
+    "readilyAvailableWaterMm": 57.6,
+    "referenceEvapotranspirationMmDay": 5,
+    "cropCoefficient": 1.2,
+    "potentialTranspirationMm": 6,
+    "precipitationMm": 5,
+    "irrigationMm": 0,
+    "runoffMm": 0,
+    "capillaryRiseMm": "Omitted; reducer default is zero",
+    "rootGrowthStorageMm": 0,
+    "autoHarvest": false,
+    "dayCount": 1,
+    "date": "2026-10-01"
+  },
+  "observedResult": {
+    "adjustedDepletionFractionP": 0.36,
+    "readilyAvailableWaterMm": 57.6,
+    "startingStressCoefficientKs": 1,
+    "deepDrainageMm": 0,
+    "actualTranspirationMm": 6,
+    "endStorageMm": 158,
+    "endDepletionMm": 2,
+    "waterBalanceResidualMm": 0,
+    "engineCellDayResidualMm": 0,
+    "engineRunResidualMm": 0,
+    "harvestEvents": 0
+  },
+  "routeObservation": {
+    "method": "Call-through vi.spyOn observer around stepDay",
+    "stepFao56RootZoneCalls": 1,
+    "originalReducerCalled": true,
+    "observedStartingStorageMm": 159,
+    "observedPrecipitationMm": 5,
+    "observedPotentialTranspirationMm": 6,
+    "observerRestoredBeforeSimulateRun": true,
+    "runResultWaterUseMm": 6,
+    "runResultFinalStorageMm": 158,
+    "runResultEndDepletionMm": 2,
+    "runResultResidualMm": 0
+  },
+  "replay": {
+    "sameFrozenConfigAndEnvironment": true,
+    "eventsEqual": true,
+    "finalStateEqual": true,
+    "summaryEqual": true,
+    "qualification": "Deterministic same-input software replay only; no persistence or storage round-trip claim"
+  },
+  "tolerances": {
+    "oneStepWaterArithmetic": "Absolute deviation <=1e-12 mm for the preregistered one-step water arithmetic only",
+    "cellDayWaterBalanceResidual": "Absolute engine diagnostic residual <=1e-6 mm per cell-day",
+    "changedAfterExecution": false
+  },
+  "localVerification": {
+    "focusedTest": {
+      "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"applies v2 transpiration before same-day drainage and replays exactly\"",
+      "result": "1 passed; 30 skipped; 1 test file passed",
+      "durationMs": 165
+    },
+    "focusedWaterRegressionGroup": {
+      "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"applies v2 transpiration before same-day drainage and replays exactly|reconciles v2 frozen AWC variant with positive root drainage|caps v2 actual uptake at frozen available root-zone water\"",
+      "result": "3 passed; 28 skipped; 1 test file passed"
+    },
+    "fullTestSuite": "48 files / 257 tests passed",
+    "typecheck": "PASS",
+    "buildProfiles": {
+      "standard": "PASS",
+      "demo": "PASS",
+      "pages": "PASS"
+    },
+    "productionPagesE2E": "PASS; 3/3 journeys in 3.8m",
+    "privateGuardAndFinalDiffJsonChecks": "PASS after staging; private guard 536 tracked files, cached diff check, and duplicate-key-safe JSON parse"
+  },
+  "constructionCorrections": [
+    {
+      "attempt": "First attempt using the complete rerun fixture",
+      "outcome": "Stopped at the pre-reducer RunConfig snapshot assertion because expected config omitted frozen autoHarvest=false; corrected by binding the expected field to runInputs.autoHarvest. This was a construction attempt, not a candidate result."
+    },
+    {
+      "attempt": "Typecheck after adapting the frozen route",
+      "outcome": "JSON-imported cropModelVersion and scenario widened to string; corrected using the fixture-pinned crop-model-v2 and baseline literals. This was a test-construction/type issue, not a model result difference."
+    },
+    {
+      "attempt": "Earlier candidate attempts using the superseded incomplete preregistration",
+      "outcome": "Non-qualifying; inherited non-water inputs, including the complete tomato catalog object, were not frozen. Their outputs are excluded from this result."
+    }
+  ],
+  "evidenceBoundary": {
+    "claim": "The synthetic software test observed the preregistered one-day v2 water-balance ordering and exact same-input replay for the frozen route; its candidate code/evidence passed exact-head PR #82 CI.",
+    "notEstablished": [
+      "Crop or soil accuracy, biological validity, or crop prediction",
+      "Measured or independent reference-model agreement",
+      "FAO-56 example output or trajectory reproduction",
+      "Persistence or storage round-trip durability",
+      "Completion of A-05 or overall 02A acceptance"
+    ],
+    "acceptanceStatus": "A-05 and overall 02A remain UNVERIFIED"
+  }
+}

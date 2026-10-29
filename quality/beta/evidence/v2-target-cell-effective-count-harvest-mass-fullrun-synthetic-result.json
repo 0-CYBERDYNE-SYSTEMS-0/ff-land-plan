@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "id": "V2-TARGET-CELL-EFFECTIVE-COUNT-HARVEST-MASS-FULLRUN-SYNTHETIC-01-RESULT",
+  "recordedDate": "2026-10-28",
+  "fixtureId": "V2-TARGET-CELL-EFFECTIVE-COUNT-HARVEST-MASS-FULLRUN-SYNTHETIC-01",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-07",
+    "scope": "PASS for this bounded synthetic software subcase only; overall A-07 and 02A remain UNVERIFIED.",
+    "preregistration": "quality/beta/evidence/v2-target-cell-effective-count-harvest-mass-fullrun-synthetic.json"
+  },
+  "preregistrationCheckpoint": {
+    "commitSha": "3dadbe87da46f4934c0b2218e0c07d5e3be5e1ca",
+    "prCommit": 82,
+    "ciRunId": "40743888040",
+    "ciHeadSha": "3dadbe87da46f4934c0b2218e0c07d5e3be5e1ca",
+    "ciResult": "All four named checks passed before implementation; this run validates the preregistration documentation only.",
+    "checks": {
+      "test + typecheck + build": "passed",
+      "Playwright production Pages-path smoke": "passed, 3 tests",
+      "secret + private-file scan": "passed",
+      "GitGuardian Security Checks": "passed"
+    }
+  },
+  "implementation": {
+    "file": "src/lib/sim/model-inputs.test.ts",
+    "codeCommitSha": "d8effbea3843ffb243c972fee3520670f1d7051b",
+    "codeDiffSha256": "d4c4506a9d79893f938e12eabf31358d36675f98f4c36c424e2181885668b310",
+    "productionCodeChanged": false,
+    "estimate": "S1 estimated 0.5-1.0 engineer-hours; actual implementation and focused run took about 10 minutes."
+  },
+  "focusedTest": {
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 effective target plant count with target-scoped full-run harvest mass\"",
+    "workerResult": "passed: 1 passed, 33 skipped",
+    "independentReviewerResult": "passed: 1 passed, 33 skipped"
+  },
+  "registeredMetricResults": [
+    {
+      "id": "spacing-derived-effective-plant-count",
+      "result": "PASS",
+      "observed": "The test asserts the configured elevated target planting map is exactly { '0,0': 1 }, derives its cell count from that map, and passes the derived count with the frozen 25 cm by 25 cm spacing and 0.25 m cell size to effectivePlantingArea, yielding exactly one effective modeled plant.",
+      "boundary": "A spacing-derived software count, not an observed physical count."
+    },
+    {
+      "id": "target-harvest-event-and-payout",
+      "result": "PASS",
+      "observed": "Exactly one harvested event for the elevated target on dayIndex 63 / 2026-12-03; payout 0.007875 kg, within the preregistered absolute 1e-12 kg arithmetic/conversion bound."
+    },
+    {
+      "id": "same-coordinate-floor-isolation",
+      "result": "PASS",
+      "observed": "The floor sibling reaches biomassFrac 1 and remains unharvested; the elevated target is harvested. The first harvest-ready day is 62."
+    },
+    {
+      "id": "full-summary-and-replay",
+      "result": "PASS",
+      "observed": "Both executions report 80 simulated days, dry-matter yield basis, total yield 0.01 kg, and crop 1 yield 0.01 kg. Events, finalState, and the full RunSummary are structurally equal across identical executions."
+    },
+    {
+      "id": "finite-output",
+      "result": "PASS",
+      "observed": "Every numeric leaf in both complete SimulateResult objects (events, finalState, and summary) satisfies Number.isFinite."
+    }
+  ],
+  "independentReview": {
+    "preregistration": {
+      "S1ContractApiReview": "PASS; existing APIs and A-07 scope support the registered bounded test.",
+      "S2ExactRecordReview": "PASS; hashes, versions, source/provenance, metrics, and candidate/result separation are consistent.",
+      "S3ClaimBoundaryReview": "PASS; the count is explicitly effective modeled only, and two-cell outputs are prospective until execution."
+    },
+    "implementation": {
+      "S2CodeReview": "PASS; all registered metrics are asserted, and the independent focused rerun passed.",
+      "S3AdversarialFinding": "The first implementation used a literal one-cell count, which could remain one if the target map changed. The finding was fixed before commit by asserting the exact target planting map and deriving its cell count from that map.",
+      "S2CountCorrectionRereview": "PASS; the literal-count shortcut is removed and the focused rerun passed.",
+      "S3CountCorrectionRereview": "PASS; the false-positive path is closed."
+    }
+  },
+  "localVerification": {
+    "npmTest": "passed: 48 test files, 264 tests",
+    "typecheck": "passed",
+    "standardBuild": "passed",
+    "demoBuild": "passed",
+    "pagesBuild": "passed",
+    "privateFileGuard": "passed: 546 tracked files, no private-data patterns",
+    "gitDiffCheck": "passed"
+  },
+  "implementationCommitCi": {
+    "prCommit": 82,
+    "runId": "40745546128",
+    "headSha": "d8effbea3843ffb243c972fee3520670f1d7051b",
+    "conclusion": "passed",
+    "checks": {
+      "test + typecheck + build": "passed, 40 seconds",
+      "Playwright production Pages-path smoke": "passed, 3 tests in 3.8 minutes; job duration 4 minutes 38 seconds",
+      "secret + private-file scan": "passed, 21 seconds",
+      "GitGuardian Security Checks": "passed"
+    }
+  },
+  "acceptance": {
+    "subcaseStatus": "PASS",
+    "a07Status": "UNVERIFIED",
+    "overall02aStatus": "UNVERIFIED",
+    "candidateComparison": false,
+    "measuredOutputComparison": false,
+    "independentReferenceModelComparison": false,
+    "measuredHoldoutValidation": false
+  },
+  "evidenceBoundary": "This result demonstrates a bounded synthetic crop-model-v2 software invariant for a spacing-derived effective modeled target count, target-scoped area harvest payout, finite output, and deterministic full-summary replay. It does not establish physical plant counts, per-plant mass allocation, crop or cultivar accuracy, biological validity, measured/reference agreement, site observations, predictive validity, or overall A-07/02A acceptance."
+}

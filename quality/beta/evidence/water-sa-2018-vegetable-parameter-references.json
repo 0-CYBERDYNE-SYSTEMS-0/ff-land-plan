@@ -1,0 +1,1062 @@
+{
+  "schemaVersion": 1,
+  "status": "source-backed crop parameter references; not an executable FarmFriend parameter set; no candidate comparison authorized",
+  "source": {
+    "id": "VAHRMEIJER-2018-WATER-SA-44-4-02",
+    "citation": "Vahrmeijer, J.T., Annandale, J.G., Steyn, J.M. and Bristow, K.L. (2018), Model parameters of four important vegetable crops for improved water use and yield estimation, Water SA 44(4), 528–538.",
+    "doi": "10.4314/wsa.v44i4.02",
+    "url": "https://scielo.org.za/pdf/wsa/v44n4/02.pdf",
+    "htmlUrl": "https://www.scielo.org.za/scielo.php?pid=S1816-79502018000400002&script=sci_arttext",
+    "retrievedDate": "2026-10-27",
+    "artifact": {
+      "type": "publisher PDF, 11 pages",
+      "sha256": "fdbb613d00ccef4873200c01ab8dbb02e0caed0375988ce20b21cb9d6297adeb",
+      "localPath": null
+    },
+    "licenseOrReuse": "The publisher PDF states the article is under a Creative Commons Attribution Licence; the retrieved PDF does not state a license version. Only derived parameter values and method equations are recorded.",
+    "sourceVersion": "Water SA, Vol. 44, No. 4, October 2018; version of record."
+  },
+  "trialDomain": {
+    "location": "Rosaly Boerdery, Steenkoppies Aquifer, Tarlton, Gauteng, South Africa; 26°04′ S, 27°36′ E; 1,678 m elevation.",
+    "seasons": [
+      "summer 2007/08",
+      "winter 2008",
+      "summer 2008/09"
+    ],
+    "fieldDesign": "Four replicate field plots of 30 m² per crop; growth analysis sampled four 1 m² plots at least fortnightly. Replicate count and within-plot sampling are distinct.",
+    "weather": "Daily weather was collected at Deodar station 7.5 km from the site; the article provides period averages, not a daily series or a reusable dataset.",
+    "soil": "Measured profile to 0.60 m at 0.15 m depth intervals; loamy sand Bainsvlei form. Trial runoff was assumed negligible based on high infiltrability and flat topography.",
+    "sourceCropToCatalogMapping": [
+      {
+        "sourceCrop": "cabbage",
+        "catalogCropId": 20,
+        "catalogCropSlug": "cabbage",
+        "status": "cultivar-reference-only",
+        "caveat": "Source cultivars Tenacity (summer) and Grandslam (winter); catalog has no cultivar or season selection."
+      },
+      {
+        "sourceCrop": "broccoli",
+        "catalogCropId": 19,
+        "catalogCropSlug": "broccoli",
+        "status": "cultivar-reference-only",
+        "caveat": "Source uses Star 2204 in summer and Parthenon in winter; these are different broccoli groups and catalog has no cultivar or season selection."
+      },
+      {
+        "sourceCrop": "beetroot",
+        "catalogCropId": 10,
+        "catalogCropSlug": "beet",
+        "status": "unresolved-catalog-identity",
+        "caveat": "Do not map to generic catalog beet without confirming table-beet identity; the root reference inventory also leaves this crop unmatched."
+      },
+      {
+        "sourceCrop": "carrot",
+        "catalogCropId": 9,
+        "catalogCropSlug": "carrot",
+        "status": "cultivar-reference-only",
+        "caveat": "Source cultivars Star 3006 (summer) and Dordogne (winter); catalog has no cultivar or season selection."
+      }
+    ]
+  },
+  "table5MeasuredParameterReferences": [
+    {
+      "season": "summer-2007-08",
+      "crop": "cabbage",
+      "cultivar": "Tenacity",
+      "kpar": 1.08,
+      "kparFitR2": 0.98,
+      "rueDisplay": "6.6 × 10^-4",
+      "rueKgPerMj": 0.00066,
+      "rueFitR2": 0.93,
+      "leafStemPartitionParameterM2PerKg": 1.29,
+      "partitionFitR2": 0.93,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "summer-2007-08",
+      "crop": "broccoli",
+      "cultivar": "Star 2204",
+      "kpar": 1.09,
+      "kparFitR2": 0.94,
+      "rueDisplay": "6.6 × 10^-4",
+      "rueKgPerMj": 0.00066,
+      "rueFitR2": 0.96,
+      "leafStemPartitionParameterM2PerKg": 0.3,
+      "partitionFitR2": 0.07,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "summer-2007-08",
+      "crop": "beetroot",
+      "cultivar": "Red Ace",
+      "kpar": 1.11,
+      "kparFitR2": 0.96,
+      "rueDisplay": "1.1 × 10^-4",
+      "rueKgPerMj": 0.00011,
+      "rueFitR2": 0.69,
+      "leafStemPartitionParameterM2PerKg": 0.74,
+      "partitionFitR2": 0.7,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "winter-2008",
+      "crop": "cabbage",
+      "cultivar": "Grandslam",
+      "kpar": 0.87,
+      "kparFitR2": 0.98,
+      "rueDisplay": "9.4 × 10^-4",
+      "rueKgPerMj": 0.00094,
+      "rueFitR2": 0.96,
+      "leafStemPartitionParameterM2PerKg": 0.6,
+      "partitionFitR2": 0.85,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "winter-2008",
+      "crop": "broccoli",
+      "cultivar": "Parthenon",
+      "kpar": 1.14,
+      "kparFitR2": 0.98,
+      "rueDisplay": "9.9 × 10^-4",
+      "rueKgPerMj": 0.00099,
+      "rueFitR2": 0.9,
+      "leafStemPartitionParameterM2PerKg": 1.04,
+      "partitionFitR2": 0.92,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "winter-2008",
+      "crop": "beetroot",
+      "cultivar": "Red Ace",
+      "kpar": 0.9,
+      "kparFitR2": 0.88,
+      "rueDisplay": "1.2 × 10^-3",
+      "rueKgPerMj": 0.0012,
+      "rueFitR2": 0.78,
+      "leafStemPartitionParameterM2PerKg": 0.58,
+      "partitionFitR2": 0.81,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.00005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "winter-2008",
+      "crop": "carrot",
+      "cultivar": "Dordogne",
+      "kpar": 0.97,
+      "kparFitR2": 0.95,
+      "rueDisplay": "8.7 × 10^-4",
+      "rueKgPerMj": 0.00087,
+      "rueFitR2": 0.95,
+      "leafStemPartitionParameterM2PerKg": 1.1,
+      "partitionFitR2": 0.36,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "summer-2008-09",
+      "crop": "cabbage",
+      "cultivar": "Tenacity",
+      "kpar": 1.11,
+      "kparFitR2": 0.59,
+      "rueDisplay": "7.6 × 10^-4",
+      "rueKgPerMj": 0.00076,
+      "rueFitR2": 0.96,
+      "leafStemPartitionParameterM2PerKg": 1.47,
+      "partitionFitR2": 0.93,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "summer-2008-09",
+      "crop": "beetroot",
+      "cultivar": "Red Ace",
+      "kpar": 0.95,
+      "kparFitR2": 0.97,
+      "rueDisplay": "7.5 × 10^-4",
+      "rueKgPerMj": 0.00075,
+      "rueFitR2": 0.63,
+      "leafStemPartitionParameterM2PerKg": 2.01,
+      "partitionFitR2": 0.75,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    },
+    {
+      "season": "summer-2008-09",
+      "crop": "carrot",
+      "cultivar": "Star 3006",
+      "kpar": 1.03,
+      "kparFitR2": 0.59,
+      "rueDisplay": "7.0 × 10^-4",
+      "rueKgPerMj": 0.0007,
+      "rueFitR2": 0.94,
+      "leafStemPartitionParameterM2PerKg": 2.24,
+      "partitionFitR2": 0.83,
+      "rueBasis": "Regression against cumulative intercepted total solar radiation (not intercepted PAR); RUE is source-study biomass basis, not FarmFriend above-ground g DM per MJ intercepted PAR.",
+      "transcriptionTolerance": {
+        "kpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "fitR2": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "rueKgPerMj": {
+          "maximumDeviation": 0.000005,
+          "unit": "kg DM/MJ total solar radiation",
+          "basis": "Half of the final displayed coefficient digit, in the source unit; transcription only."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        }
+      }
+    }
+  ],
+  "table6SelectedSwbParameterSets": [
+    {
+      "crop": "cabbage",
+      "season": "winter",
+      "cultivar": "Grandslam",
+      "dwrKgDmPerKgWaterPerPa": 6,
+      "rueGPerMjTotalSolar": 0.94,
+      "specificLeafAreaM2PerKg": 9.5,
+      "leafStemPartitionParameterM2PerKg": 0.56,
+      "canopyExtinctionParKpar": 0.87,
+      "canopyExtinctionTotalSolar": 0.62,
+      "maximumRootDepthM": {
+        "value": 0.6,
+        "classification": "model input set to 0.60 m for all crops; not a direct root-depth measurement"
+      },
+      "baseTemperatureC": 2,
+      "optimumTemperatureC": 23.9,
+      "emergenceThermalSumCdays": 50,
+      "harvestThermalSumCdays": 1445,
+      "transcriptionTolerance": {
+        "dwrKgDmPerKgWaterPerPa": {
+          "maximumDeviation": 0.05,
+          "unit": "kg DM/(kg water·Pa)",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "rueGPerMjTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "g DM/MJ total solar radiation",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "specificLeafAreaM2PerKg": {
+          "maximumDeviation": 0.05,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionParKpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "maximumRootDepthM": {
+          "maximumDeviation": 0.005,
+          "unit": "m",
+          "basis": "Half the source displayed 0.01 increment; source-model parameter transcription only, not measurement tolerance."
+        },
+        "baseTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "optimumTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "emergenceThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        },
+        "harvestThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        }
+      }
+    },
+    {
+      "crop": "cabbage",
+      "season": "summer",
+      "cultivar": "Tenacity",
+      "dwrKgDmPerKgWaterPerPa": 9,
+      "rueGPerMjTotalSolar": 0.94,
+      "specificLeafAreaM2PerKg": 12,
+      "leafStemPartitionParameterM2PerKg": 1.55,
+      "canopyExtinctionParKpar": 1.11,
+      "canopyExtinctionTotalSolar": 0.78,
+      "maximumRootDepthM": {
+        "value": 0.6,
+        "classification": "model input set to 0.60 m for all crops; not a direct root-depth measurement"
+      },
+      "baseTemperatureC": 4.4,
+      "optimumTemperatureC": 23.9,
+      "emergenceThermalSumCdays": 130,
+      "harvestThermalSumCdays": 1477,
+      "transcriptionTolerance": {
+        "dwrKgDmPerKgWaterPerPa": {
+          "maximumDeviation": 0.05,
+          "unit": "kg DM/(kg water·Pa)",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "rueGPerMjTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "g DM/MJ total solar radiation",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "specificLeafAreaM2PerKg": {
+          "maximumDeviation": 0.05,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionParKpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "maximumRootDepthM": {
+          "maximumDeviation": 0.005,
+          "unit": "m",
+          "basis": "Half the source displayed 0.01 increment; source-model parameter transcription only, not measurement tolerance."
+        },
+        "baseTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "optimumTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "emergenceThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        },
+        "harvestThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        }
+      }
+    },
+    {
+      "crop": "broccoli",
+      "season": "winter",
+      "cultivar": "Parthenon",
+      "dwrKgDmPerKgWaterPerPa": 7,
+      "rueGPerMjTotalSolar": 1,
+      "specificLeafAreaM2PerKg": 9,
+      "leafStemPartitionParameterM2PerKg": 1.54,
+      "canopyExtinctionParKpar": 1.09,
+      "canopyExtinctionTotalSolar": 0.81,
+      "maximumRootDepthM": {
+        "value": 0.6,
+        "classification": "model input set to 0.60 m for all crops; not a direct root-depth measurement"
+      },
+      "baseTemperatureC": 0,
+      "optimumTemperatureC": 23.9,
+      "emergenceThermalSumCdays": 95,
+      "harvestThermalSumCdays": 1288,
+      "transcriptionTolerance": {
+        "dwrKgDmPerKgWaterPerPa": {
+          "maximumDeviation": 0.05,
+          "unit": "kg DM/(kg water·Pa)",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "rueGPerMjTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "g DM/MJ total solar radiation",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "specificLeafAreaM2PerKg": {
+          "maximumDeviation": 0.05,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionParKpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "maximumRootDepthM": {
+          "maximumDeviation": 0.005,
+          "unit": "m",
+          "basis": "Half the source displayed 0.01 increment; source-model parameter transcription only, not measurement tolerance."
+        },
+        "baseTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "optimumTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "emergenceThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        },
+        "harvestThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        }
+      }
+    },
+    {
+      "crop": "broccoli",
+      "season": "summer",
+      "cultivar": "Star 2204",
+      "dwrKgDmPerKgWaterPerPa": 6,
+      "rueGPerMjTotalSolar": 1,
+      "specificLeafAreaM2PerKg": 10.5,
+      "leafStemPartitionParameterM2PerKg": 1.54,
+      "canopyExtinctionParKpar": 1.14,
+      "canopyExtinctionTotalSolar": 0.77,
+      "maximumRootDepthM": {
+        "value": 0.6,
+        "classification": "model input set to 0.60 m for all crops; not a direct root-depth measurement"
+      },
+      "baseTemperatureC": 0,
+      "optimumTemperatureC": 23.9,
+      "emergenceThermalSumCdays": 123,
+      "harvestThermalSumCdays": 1899,
+      "transcriptionTolerance": {
+        "dwrKgDmPerKgWaterPerPa": {
+          "maximumDeviation": 0.05,
+          "unit": "kg DM/(kg water·Pa)",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "rueGPerMjTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "g DM/MJ total solar radiation",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "specificLeafAreaM2PerKg": {
+          "maximumDeviation": 0.05,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionParKpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "maximumRootDepthM": {
+          "maximumDeviation": 0.005,
+          "unit": "m",
+          "basis": "Half the source displayed 0.01 increment; source-model parameter transcription only, not measurement tolerance."
+        },
+        "baseTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "optimumTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "emergenceThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        },
+        "harvestThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        }
+      }
+    },
+    {
+      "crop": "beetroot",
+      "season": "summer-and-winter",
+      "cultivar": "Red Ace",
+      "dwrKgDmPerKgWaterPerPa": 7,
+      "rueGPerMjTotalSolar": 1.25,
+      "specificLeafAreaM2PerKg": 12,
+      "leafStemPartitionParameterM2PerKg": 3.02,
+      "canopyExtinctionParKpar": 0.9,
+      "canopyExtinctionTotalSolar": 0.64,
+      "maximumRootDepthM": {
+        "value": 0.6,
+        "classification": "model input set to 0.60 m for all crops; not a direct root-depth measurement"
+      },
+      "baseTemperatureC": 4.4,
+      "optimumTemperatureC": 23.9,
+      "emergenceThermalSumCdays": 64,
+      "harvestThermalSumCdays": 1356,
+      "transcriptionTolerance": {
+        "dwrKgDmPerKgWaterPerPa": {
+          "maximumDeviation": 0.05,
+          "unit": "kg DM/(kg water·Pa)",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "rueGPerMjTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "g DM/MJ total solar radiation",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "specificLeafAreaM2PerKg": {
+          "maximumDeviation": 0.05,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionParKpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "maximumRootDepthM": {
+          "maximumDeviation": 0.005,
+          "unit": "m",
+          "basis": "Half the source displayed 0.01 increment; source-model parameter transcription only, not measurement tolerance."
+        },
+        "baseTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "optimumTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "emergenceThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        },
+        "harvestThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        }
+      }
+    },
+    {
+      "crop": "carrot",
+      "season": "winter",
+      "cultivar": "Dordogne",
+      "dwrKgDmPerKgWaterPerPa": 8,
+      "rueGPerMjTotalSolar": 0.95,
+      "specificLeafAreaM2PerKg": 11.5,
+      "leafStemPartitionParameterM2PerKg": 3.08,
+      "canopyExtinctionParKpar": 0.97,
+      "canopyExtinctionTotalSolar": 0.69,
+      "maximumRootDepthM": {
+        "value": 0.6,
+        "classification": "model input set to 0.60 m for all crops; not a direct root-depth measurement"
+      },
+      "baseTemperatureC": 4.4,
+      "optimumTemperatureC": 23.9,
+      "emergenceThermalSumCdays": 95,
+      "harvestThermalSumCdays": 1286,
+      "transcriptionTolerance": {
+        "dwrKgDmPerKgWaterPerPa": {
+          "maximumDeviation": 0.05,
+          "unit": "kg DM/(kg water·Pa)",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "rueGPerMjTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "g DM/MJ total solar radiation",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "specificLeafAreaM2PerKg": {
+          "maximumDeviation": 0.05,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionParKpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "maximumRootDepthM": {
+          "maximumDeviation": 0.005,
+          "unit": "m",
+          "basis": "Half the source displayed 0.01 increment; source-model parameter transcription only, not measurement tolerance."
+        },
+        "baseTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "optimumTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "emergenceThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        },
+        "harvestThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        }
+      }
+    },
+    {
+      "crop": "carrot",
+      "season": "summer",
+      "cultivar": "Star 3006",
+      "dwrKgDmPerKgWaterPerPa": 7,
+      "rueGPerMjTotalSolar": 0.7,
+      "specificLeafAreaM2PerKg": 16,
+      "leafStemPartitionParameterM2PerKg": 2.24,
+      "canopyExtinctionParKpar": 1.03,
+      "canopyExtinctionTotalSolar": 0.7,
+      "maximumRootDepthM": {
+        "value": 0.6,
+        "classification": "model input set to 0.60 m for all crops; not a direct root-depth measurement"
+      },
+      "baseTemperatureC": 7.2,
+      "optimumTemperatureC": 23.9,
+      "emergenceThermalSumCdays": 105,
+      "harvestThermalSumCdays": 1281,
+      "transcriptionTolerance": {
+        "dwrKgDmPerKgWaterPerPa": {
+          "maximumDeviation": 0.05,
+          "unit": "kg DM/(kg water·Pa)",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "rueGPerMjTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "g DM/MJ total solar radiation",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "specificLeafAreaM2PerKg": {
+          "maximumDeviation": 0.05,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.1 increment."
+        },
+        "leafStemPartitionParameterM2PerKg": {
+          "maximumDeviation": 0.005,
+          "unit": "m²/kg",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionParKpar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "canopyExtinctionTotalSolar": {
+          "maximumDeviation": 0.005,
+          "unit": "dimensionless",
+          "basis": "Half the source displayed 0.01 increment."
+        },
+        "maximumRootDepthM": {
+          "maximumDeviation": 0.005,
+          "unit": "m",
+          "basis": "Half the source displayed 0.01 increment; source-model parameter transcription only, not measurement tolerance."
+        },
+        "baseTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "optimumTemperatureC": {
+          "maximumDeviation": 0.05,
+          "unit": "°C",
+          "basis": "Half the source displayed 0.1 °C increment."
+        },
+        "emergenceThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        },
+        "harvestThermalSumCdays": {
+          "maximumDeviation": 0.5,
+          "unit": "°C·day",
+          "basis": "Half the source displayed integer increment."
+        }
+      }
+    }
+  ],
+  "methodEvidence": {
+    "sourceCanopyEquation": "FI_PAR = 1 − exp(−K_PAR × LAI)",
+    "canopyEquationSource": "Vahrmeijer et al. (2018), Equation 2; K_PAR is derived from measured FI_PAR and LAI.",
+    "productionBasis": "Source SWB radiation-limited production uses fractional intercepted total solar radiation and its Table 6 RUE. This RUE is not interchangeable with FarmFriend v2 RUE per MJ intercepted PAR.",
+    "canopyExtinction": "K_PAR is PAR-specific. The source also reports K_s for total solar radiation; this K_s is not the FAO-56 soil-water stress coefficient K_s.",
+    "partitioning": "Table 6 p is the leaf-stem partition parameter (m²/kg), not the FAO-56 depletion fraction p."
+  },
+  "mismatchAndUnavailableInputs": [
+    "Table 6 crop/cultivar/season parameters were selected and adjusted to calibrate the source SWB model; they are not an independent FarmFriend holdout.",
+    "Source root crops include harvestable storage-root mass in reported DM; above-ground-only DM is used for cabbage and broccoli. Feeder roots are omitted from those source DM measurements.",
+    "FarmFriend v2 production requires above-ground net RUE per intercepted PAR, while this source uses source-model biomass basis and intercepted total solar radiation.",
+    "The 0.60 m maximum root depth is a source model input applied to all crops, not a direct measured root-depth result.",
+    "The article does not provide daily weather, daily soil-water trajectory, raw plot-level observations, seedling dry mass at establishment, or exact transplant/sowing mapping sufficient to reproduce FarmFriend v2/v3 outputs.",
+    "The source model includes radiation-or-transpiration limitation and crop organ partitioning but explicitly does not model nutrient or disease limitation; no such stress parameters are transferred.",
+    "The authors report cultivar-specific parameters can perform poorly for another cultivar. Star 3006 carrots also appeared in two summer seasons, but the 2007/08 carrot field was excluded from model development/testing because of Alternaria; the authors identify only Red Ace beetroot and Tenacity cabbage as having independent data across seasons. The source also reports poorer cabbage growth transfer. Do not infer generic cultivar performance or an independent holdout from Table 7.",
+    "Broccoli K_PAR differs between measured Table 5 values and selected-model Table 6 values in both seasons: winter Parthenon is 1.14 vs selected winter 1.09, and summer Star 2204 is 1.09 vs selected summer 1.14. Preserve both tables separately; no biological attribution is established."
+  ],
+  "preregisteredSyntheticCanopyEquationFixture": {
+    "classification": "synthetic software equation fixture only; not a field trajectory or candidate comparison",
+    "implementationStatus": "implemented and locally verified by the focused Vitest fixture; this verifies equation arithmetic only, not source-model reproduction or crop prediction",
+    "equation": "FI_PAR = 1 − exp(−K_PAR × LAI)",
+    "inputs": {
+      "kpar": 1.14,
+      "sourceCrop": "broccoli",
+      "sourceCultivar": "Parthenon",
+      "sourceSeason": "winter 2008",
+      "laiValues": [
+        0,
+        0.5,
+        1,
+        2
+      ]
+    },
+    "expectedFractions": [
+      0,
+      0.434474561300,
+      0.680180978184,
+      0.897715793284
+    ],
+    "tolerance": {
+      "maximumDeviation": 1e-12,
+      "unit": "fraction",
+      "basis": "Floating-point equation implementation check with synthetic LAI values; no biological accuracy claim."
+    },
+    "candidateComparison": false
+  },
+  "preregisteredSyntheticCanopyDryMassFixture": {
+    "classification": "synthetic equation fixture only; no measured trajectory or candidate comparison",
+    "implementationStatus": "implemented and locally verified by the focused Vitest fixture; independent review approved the arithmetic tolerance only",
+    "sourceEquation": "Eq. 5: (CDM × SLA / LAI) − 1 = p × CDM; rearranged as LAI = CDM × SLA / (1 + p × CDM)",
+    "subsequentEquation": "FI_PAR = 1 − exp(−K_PAR × LAI)",
+    "sourceParameterSet": {
+      "table": "Table 6 selected SWB parameter set",
+      "crop": "broccoli",
+      "cultivar": "Parthenon",
+      "season": "winter-2008",
+      "canopyExtinctionParKpar": 1.09,
+      "specificLeafAreaM2PerKg": 9,
+      "leafStemPartitionParameterM2PerKg": 1.54,
+      "domainNote": "Source-selected seasonal SWB parameters; not a generic broccoli default or a validated FarmFriend crop parameter set."
+    },
+    "sourceTableDiscrepancy": {
+      "winter2008": {
+        "table5MeasuredParthenonKpar": 1.14,
+        "table6SelectedBroccoliWinterKpar": 1.09
+      },
+      "summer2007_08": {
+        "table5MeasuredStar2204Kpar": 1.09,
+        "table6SelectedBroccoliSummerKpar": 1.14
+      },
+      "disposition": "The source's measured Table 5 and selected-model Table 6 K_PAR values differ in both seasons. This arithmetic fixture uses the winter Table 6 selected value (1.09) exactly; no biological attribution, table correction, or transfer between cultivars/seasons is inferred."
+    },
+    "syntheticCanopyDryMatterKgPerM2": [
+      0,
+      0.5,
+      1,
+      2
+    ],
+    "expectedLaiM2PerM2": [
+      0,
+      2.542372881356,
+      3.543307086614,
+      4.411764705882
+    ],
+    "expectedFractions": [
+      0,
+      0.937412295924,
+      0.978978398444,
+      0.991842548944
+    ],
+    "tolerance": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": {
+        "lai": "m²/m²",
+        "fraction": "dimensionless"
+      },
+      "basis": "Deterministic equation arithmetic only, with frozen source parameter transcriptions and synthetic CDM inputs; no biological or predictive accuracy claim."
+    },
+    "limitation": "The fixture treats CDM as an explicit canopy-only state. FarmFriend's current total dryMatterGPerM2 is not guaranteed to be canopy dry matter after organ allocation; this fixture alone does not authorize routing total run dry matter through the equation.",
+    "candidateComparison": false
+  },
+  "toleranceReview": {
+    "status": "independent validator approved source parameter transcription bounds and both synthetic canopy equation arithmetic tolerances only; helpers and fixtures passed locally. The Table 5/Table 6 broccoli K_PAR discrepancy is recorded without attribution. Measured-output and candidate predictive comparisons remain unauthorized",
+    "reviewedDate": "2026-10-27",
+    "approvedScope": [
+      "Table 5 and Table 6 parameter transcription bounds based on half the source display increment.",
+      "Synthetic FI_PAR and canopy-DM-to-LAI-to-FI_PAR equation implementation checks with maximum absolute difference 1e-12; the latter uses the Table 6 selected winter broccoli K_PAR while preserving the discrepant Table 5 value separately."
+    ],
+    "notApproved": [
+      "Any measured-output or candidate predictive comparison.",
+      "Direct use of these source parameters as FarmFriend v2 defaults.",
+      "Treating the 0.60 m source model root-depth input as a direct measurement."
+    ],
+    "policy": "All numeric tolerances above are half of the source display increment after same-unit conversion. They are transcription-only and do not represent uncertainty, parameter accuracy, or predictive acceptance thresholds.",
+    "measuredOutputComparison": "No tolerance proposed; no comparison is authorized without complete trial forcing, raw observations, preregistered metric and independent review."
+  }
+}

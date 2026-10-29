@@ -1,11 +1,25 @@
+import { toast } from 'sonner';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { plantsForArea } from '@/lib/plan';
+import { Button } from '@/components/ui/button';
+import { effectivePlantingArea } from '@/lib/plan';
+import { ASSET_PHYSICS_ENABLED } from '@/lib/featureFlags';
 import { dateFromMonthDay, isValidMonthDay } from '@/lib/frost';
 import { monthDayLabel } from '@/lib/calendar';
 import type { Crop } from '@/types';
+import type { EnvironmentAssetInstance } from '@/types';
 import { fallSowWeeksBeforeFirstFrost, sowWindow } from './usePlanEditor';
 import type { PlanEditor } from './usePlanEditor';
+
+function mountLabel(instance: EnvironmentAssetInstance, editor: PlanEditor): string {
+  const mount = instance.mount;
+  if (mount.kind === 'environment') return 'Environment mounted';
+  if (mount.kind === 'floor') return 'Floor mounted';
+  const space = editor.environment?.layout?.growingSpaces.find((entry) => entry.id === mount.growingSpaceId);
+  const level = space?.levels.find((entry) => entry.id === mount.levelId);
+  return `${space?.label ?? 'Growing level'}${level ? ` · ${level.label}` : ''} mounted`;
+}
 
 const SUN_LABELS: Record<Crop['sunRequirement'], string> = {
   full: 'Full sun',
@@ -54,7 +68,7 @@ export function SelectionPanel({ editor }: { editor: PlanEditor }) {
                   </div>
                   <div>
                     Spacing {selectedInfo.crop.spacingCm ?? 30} cm × {selectedInfo.crop.rowSpacingCm ?? selectedInfo.crop.spacingCm ?? 30} cm
-                    {' '}· this cell contributes ≈{plantsForArea(selectedInfo.crop, 1)} plant
+                    {' '}· this cell contributes ≈{effectivePlantingArea(selectedInfo.crop, [{ cells: 1, cellM: editor.planRef.current?.cellM ?? 0.25 }])} plant
                   </div>
                   <div>
                     Family {selectedInfo.crop.family ?? 'Unknown'} · {selectedInfo.crop.frostTolerance ?? 'unknown'} frost tolerance
@@ -70,7 +84,28 @@ export function SelectionPanel({ editor }: { editor: PlanEditor }) {
                 </div>
               </>
             )}
-            <div>Ground: {selectedInfo.asset ? `${selectedInfo.asset.emoji} ${selectedInfo.asset.label}` : 'Bare soil'}</div>
+            {selectedInfo.instance && selectedInfo.instanceAsset ? (
+              <div className="rounded-md border border-border p-2">
+                <div className="font-medium">Installed equipment: {selectedInfo.instanceAsset.emoji} {selectedInfo.instanceAsset.label}</div>
+                <div className="text-xs text-muted-foreground">
+                  {selectedInfo.instance.widthM.toFixed(2)} × {selectedInfo.instance.depthM.toFixed(2)} m · {mountLabel(selectedInfo.instance, editor)}
+                </div>
+                {selectedInfo.instance.slug === 'plant-rack' ? (
+                  <p className="mt-1 text-[10px] text-muted-foreground">Use Growing systems to remove this rack after reviewing affected crops.</p>
+                ) : ASSET_PHYSICS_ENABLED ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-7 text-xs"
+                    onClick={() => void editor.removeEquipmentInstance(selectedInfo.instance!.id).catch((error) => toast.error((error as Error).message))}
+                  >Remove equipment</Button>
+                ) : (
+                  <p className="mt-1 text-[10px] text-muted-foreground">Equipment editing is off while asset physics is disabled.</p>
+                )}
+              </div>
+            ) : (
+              <div>Ground: {selectedInfo.asset ? `${selectedInfo.asset.emoji} ${selectedInfo.asset.label}` : 'Bare soil'}</div>
+            )}
             <div className="text-xs text-muted-foreground">
               {selectedInfo.plantable ? 'Planting allowed here.' : 'This ground blocks planting.'}
             </div>

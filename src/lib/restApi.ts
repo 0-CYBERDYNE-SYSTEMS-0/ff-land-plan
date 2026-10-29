@@ -14,19 +14,26 @@
 import type {
   Alert,
   Crop,
+  Environment,
   Farm,
   FarmCell,
   ForecastDay,
   NdviEstimate,
+  Observation,
+  ObservationInput,
+  ObservationPatch,
   PlanState,
+  SitePlan,
   Sensor,
   SensorReading,
+  SeasonRecord,
   Simulation,
   Weather,
   WeatherHistoryPoint,
 } from '@/types';
 import type { Api } from '@/lib/localApi';
 import type { RunRecord } from '@/lib/sim/types';
+import type { FarmCalibration } from '@/lib/sim/calibration';
 
 export function createRestApi(baseUrl: string): Api {
   const base = baseUrl.replace(/\/+$/, '');
@@ -98,6 +105,11 @@ export function createRestApi(baseUrl: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    updateSensor: (id, patch) =>
+      request<Sensor>(`/sensors/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
     deleteSensor: async (id) => {
       await request<void>(`/sensors/${id}`, { method: 'DELETE' });
     },
@@ -108,6 +120,27 @@ export function createRestApi(baseUrl: string): Api {
         method: 'POST',
         body: JSON.stringify({ value, unit }),
       }),
+
+    // Twin observations ------------------------------------------------------
+    listObservations: (farmId, environmentId) => request<Observation[]>(
+      `/farms/${farmId}/observations${environmentId ? `?environmentId=${encodeURIComponent(environmentId)}` : ''}`,
+    ),
+    addObservation: (input: ObservationInput) => request<Observation>('/observations', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+    updateObservation: (id, patch: ObservationPatch) => request<Observation>(`/observations/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+    deleteObservation: async (id) => {
+      await request<void>(`/observations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+    listFarmCalibrations: (farmId) => request<FarmCalibration[]>(`/farms/${farmId}/calibrations`),
+    saveFarmCalibration: (calibration) => request<FarmCalibration>(`/calibrations/${encodeURIComponent(calibration.environmentId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(calibration),
+    }),
 
     // Legacy voxel cells / NDVI -------------------------------------------------
     listCells: (farmId) => request<FarmCell[]>(`/farms/${farmId}/cells`),
@@ -124,18 +157,64 @@ export function createRestApi(baseUrl: string): Api {
     getNdvi: (farmId) => request<NdviEstimate>(`/farms/${farmId}/ndvi-estimate`),
 
     // Plot plans ----------------------------------------------------------------
-    getPlan: (farmId) =>
-      request<PlanState | null>(`/farms/${farmId}/plan`).catch((err: unknown) => {
+    getPlan: (farmId, environmentId) =>
+      request<PlanState | null>(environmentId
+        ? `/farms/${farmId}/environments/${encodeURIComponent(environmentId)}/plan`
+        : `/farms/${farmId}/plan`).catch((err: unknown) => {
         // No plan yet is a normal state (the interface allows null), so map a
         // 404 from our own error format to null instead of surfacing an error.
         if (err instanceof Error && err.message.startsWith('404:')) return null;
         throw err;
       }),
-    savePlan: (plan) =>
-      request<PlanState>(`/farms/${plan.farmId}/plan`, {
+    savePlan: (plan, environmentId) =>
+      request<PlanState>(environmentId
+        ? `/farms/${plan.farmId}/environments/${encodeURIComponent(environmentId)}/plan`
+        : `/farms/${plan.farmId}/plan`, {
         method: 'POST',
         body: JSON.stringify(plan),
       }),
+    getSitePlan: (farmId) =>
+      request<SitePlan | null>(`/farms/${farmId}/site-plan`).catch((err: unknown) => {
+        if (err instanceof Error && err.message.startsWith('404:')) return null;
+        throw err;
+      }),
+    saveSitePlan: (site) =>
+      request<SitePlan>(`/farms/${site.farmId}/site-plan`, {
+        method: 'POST',
+        body: JSON.stringify(site),
+      }),
+    createEnvironment: (farmId, input) =>
+      request<Environment>(`/farms/${farmId}/environments`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    getEnvironment: (farmId, environmentId) =>
+      request<Environment | null>(`/farms/${farmId}/environments/${encodeURIComponent(environmentId)}`).catch((err: unknown) => {
+        if (err instanceof Error && err.message.startsWith('404:')) return null;
+        throw err;
+      }),
+    saveEnvironment: (environment) =>
+      request<Environment>(`/farms/${environment.farmId}/environments/${encodeURIComponent(environment.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(environment),
+      }),
+    duplicateEnvironment: (farmId, environmentId) =>
+      request<Environment>(`/farms/${farmId}/environments/${encodeURIComponent(environmentId)}/duplicate`, {
+        method: 'POST',
+      }),
+    deleteEnvironment: async (farmId, environmentId) => {
+      await request<void>(`/farms/${farmId}/environments/${encodeURIComponent(environmentId)}`, { method: 'DELETE' });
+    },
+    getSelectedEnvironmentId: async (farmId) => {
+      const result = await request<{ environmentId: string | null }>(`/farms/${farmId}/selected-environment`);
+      return result.environmentId;
+    },
+    setSelectedEnvironmentId: async (farmId, environmentId) => {
+      await request<void>(`/farms/${farmId}/selected-environment`, {
+        method: 'PATCH',
+        body: JSON.stringify({ environmentId }),
+      });
+    },
 
     // Simulations (legacy records only — creation was deleted with the
     // farm-blind slider arithmetic; the run manager owns new simulations) ---
@@ -151,8 +230,23 @@ export function createRestApi(baseUrl: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    saveSimRun: (run) =>
+      request<RunRecord>(`/sim-runs/${encodeURIComponent(run.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(run),
+      }),
     deleteSimRun: async (id) => {
       await request<void>(`/sim-runs/${id}`, { method: 'DELETE' });
+    },
+
+    // Campaign seasons (small summaries; detailed run replay stays with runs) --
+    listSeasons: (farmId) => request<SeasonRecord[]>(`/farms/${farmId}/seasons`),
+    saveSeason: (season) => request<SeasonRecord>(`/seasons/${encodeURIComponent(season.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(season),
+    }),
+    deleteSeason: async (id) => {
+      await request<void>(`/seasons/${encodeURIComponent(id)}`, { method: 'DELETE' });
     },
 
     // Crops ---------------------------------------------------------------------

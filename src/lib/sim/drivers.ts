@@ -2,7 +2,7 @@
 // mapping (SPEC-SIM-ECOSYSTEM §3.1 drivers.ts). All pure functions of their
 // inputs — determinism is what makes replay-as-storage work.
 
-import { SURFACE_SHELTER } from '@/lib/growth';
+import { DLI_MIN_MOL, LIGHT_STRESS_WEIGHT, SURFACE_SHELTER } from '@/lib/growth';
 import type { Crop, PlanSurface } from '@/types';
 import type { CellStress, DailyEnvironment, NeighborContext } from './types';
 
@@ -21,6 +21,12 @@ export const STRESS_RATE_FACTOR = 0.6;
 export const STRESS_ONSET = 0.4;
 /** An "on" stress term falling below 0.2 emits a stress-end event. */
 export const STRESS_RELIEF = 0.2;
+
+/** Legacy visual mortality thresholds reused by crop-model-v3 as an explicitly
+ * qualified simulation heuristic; they are not crop-specific mortality data. */
+export const DEAD_FROST_COLD = 0.95;
+export const DEAD_CHRONIC_DAYS = 21;
+export const DEAD_CHRONIC_STRESS = 0.85;
 
 /** GDD needed for full biomass: catalog growthDays × climatological mean
  * daily GDD over the run window, floored at 1 °C·day so cold windows keep
@@ -157,5 +163,15 @@ export function floweringForBiomass(biomassFrac: number): number {
 
 /** Mean of the four stress terms (yield penalty input). */
 export function meanStress(stress: CellStress): number {
-  return (stress.water + stress.heat + stress.cold + stress.nitrogen) / 4;
+  const sum = stress.water + stress.heat + stress.cold + stress.nitrogen + (stress.light ?? 0);
+  return sum / (stress.light === undefined ? 4 : 5);
+}
+
+/** Light deficit at the minimum-stress floor; null means the light input is unknown. */
+export function lightStressFromDli(crop: Crop, dliMol: number | null | undefined): number | undefined {
+  if (dliMol === undefined || dliMol === null || !Number.isFinite(dliMol)) return undefined;
+  const minimum = DLI_MIN_MOL[crop.category] ?? 0;
+  if (minimum <= 0) return undefined;
+  if (dliMol >= minimum) return 0;
+  return Math.max(0, Math.min(1, (minimum - dliMol) / minimum)) * LIGHT_STRESS_WEIGHT;
 }

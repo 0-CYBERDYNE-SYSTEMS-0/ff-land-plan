@@ -15,12 +15,17 @@ import {
 } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
+import { CAMPAIGN_ENABLED, ENV_RECORDS_ENABLED, TWIN_ENABLED } from '@/lib/featureFlags';
+import { archetypes, ARCHETYPE_FOR_SURFACE } from '@/creative/archetypes';
 import { useFarm } from '@/hooks/useFarms';
 import { useNavigation } from '@/hooks/useNavigation';
 import { SCENARIOS } from '@/lib/growth';
-import { isoDayNumber, isoFromDayNumber } from '@/lib/sim';
+import { isoDayNumber, isoFromDayNumber, runSummaryHasAvailableEstimates } from '@/lib/sim';
+import { yieldMassUnit } from '@/lib/sim';
+import { growingTargetKey } from '@/lib/growingTargets';
+import { createTwinRunRecord } from '@/lib/sim/twin';
 import type { RunRecord, RunSummary } from '@/lib/sim/types';
-import type { ScenarioType, Simulation } from '@/types';
+import type { Environment, Observation, ScenarioType, SeasonRecord, Simulation } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +35,7 @@ import { Slider } from '@/components/ui/slider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const SCENARIO_COLOR: Record<ScenarioType, string> = {
   baseline: 'text-blue-600',
@@ -40,6 +46,7 @@ const SCENARIO_COLOR: Record<ScenarioType, string> = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const EMPTY_ENVIRONMENTS: Environment[] = [];
 
 function dateRange(run: RunRecord): string {
   const start = run.config.startDate;
@@ -47,18 +54,27 @@ function dateRange(run: RunRecord): string {
   return `${start} → ${end}`;
 }
 
+function runWorldContext(run: RunRecord): string {
+  return run.config.environment
+    ? `${run.config.environment.label} · ${archetypes[run.config.environment.archetype].label}`
+    : `Legacy · ${archetypes[ARCHETYPE_FOR_SURFACE[run.config.basePlan.surface ?? 'outdoor']].label}`;
+}
+
 /** Honest summary tiles — raw RunSummary numbers, no arbitrary scaling. */
 function SummaryTiles({ summary }: { summary: RunSummary }) {
+  const unavailable = !runSummaryHasAvailableEstimates(summary);
+  const yieldUnit = yieldMassUnit(summary.yieldBasis) ?? '';
+  const dryMatterYield = summary.yieldBasis === 'dry-matter';
   const tiles: { icon: typeof Sprout; label: string; val: string }[] = [
-    { icon: Sprout, label: 'Yield', val: `${summary.totalYieldKg} kg` },
-    { icon: CloudRain, label: 'Rain', val: `${summary.rainMm} mm` },
-    { icon: Droplets, label: 'Irrigated', val: `${summary.irrigatedMm} mm` },
-    { icon: Sun, label: 'ET0', val: `${summary.etoMmTotal} mm` },
-    { icon: AlertTriangle, label: 'Stress', val: `${summary.stressCellDays} cell-days` },
+    { icon: Sprout, label: dryMatterYield ? 'Harvestable dry matter' : 'Yield', val: unavailable ? '—' : `${summary.totalYieldKg} ${yieldUnit}` },
+    { icon: CloudRain, label: 'Rain', val: unavailable ? '—' : `${summary.rainMm} mm` },
+    { icon: Droplets, label: 'Irrigated', val: unavailable ? '—' : `${summary.irrigatedMm} mm` },
+    { icon: Sun, label: 'ET0', val: unavailable ? '—' : `${summary.etoMmTotal} mm` },
+    { icon: AlertTriangle, label: 'Stress', val: unavailable ? '—' : `${summary.stressCellDays} cell-days` },
     {
       icon: FlaskConical,
       label: 'Mature',
-      val: `${summary.matureCells} / ${summary.cellCount} cells`,
+      val: unavailable ? '—' : `${summary.matureCells} / ${summary.cellCount} cells`,
     },
   ];
   return (
@@ -80,11 +96,17 @@ function RunCard({
   selected,
   selectDisabled,
   onToggleSelect,
+  hasMatchingObservations,
+  twinPending,
+  onCreateTwin,
 }: {
   run: RunRecord;
   selected: boolean;
   selectDisabled: boolean;
   onToggleSelect: () => void;
+  hasMatchingObservations: boolean;
+  twinPending: boolean;
+  onCreateTwin: () => void;
 }) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -101,6 +123,10 @@ function RunCard({
     window.location.href = openInWorldUrl(run);
   };
 
+  const noEstimates = !runSummaryHasAvailableEstimates(run.summary);
+  const unavailableReasons = Array.isArray(run.summary.modelQualification?.reasons)
+    ? run.summary.modelQualification.reasons
+    : ['Saved estimate status is unknown; numeric estimates are hidden.'];
   const ready =
     run.summary.harvestReadyDay !== null
       ? `day ${run.summary.harvestReadyDay}`
@@ -132,6 +158,10 @@ function RunCard({
                 <Badge variant="outline" className={`text-xs ${SCENARIO_COLOR[run.config.scenario] ?? ''}`}>
                   {run.config.scenario.replace('_', ' ')}
                 </Badge>
+                <Badge variant="outline" className="max-w-[220px] truncate text-xs" title={runWorldContext(run)}>
+                  {runWorldContext(run)}
+                </Badge>
+                {(run.observations?.length ?? 0) > 0 && <Badge variant="secondary" className="text-xs">Twin · {run.observations!.length}</Badge>}
                 <span className="text-xs tabular-nums text-muted-foreground">{dateRange(run)}</span>
               </div>
             </div>
@@ -170,13 +200,39 @@ function RunCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {noEstimates && (
+          <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100">
+            <div className="font-semibold">Crop estimates are unavailable</div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {(unavailableReasons.length ? unavailableReasons : ['Saved estimate status is unknown; numeric estimates are hidden.'])
+                .map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          </div>
+        )}
+        {run.summary.modelQualification?.status === 'qualified' && (
+          <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100">
+            <div className="font-semibold">Qualified crop-model estimate</div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {run.summary.modelQualification.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          </div>
+        )}
         <SummaryTiles summary={run.summary} />
         <p className="text-xs italic text-muted-foreground">
-          First harvest-ready: {ready} · {run.summary.daysSimulated} days simulated · seed {run.config.seed}
+          {noEstimates
+            ? `No crop estimates · seed ${run.config.seed}`
+            : `First harvest-ready: ${ready} · ${run.summary.daysSimulated} days simulated · seed ${run.config.seed}`}
         </p>
-        <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={openInWorld}>
-          <MapIcon className="h-3.5 w-3.5" /> Open in world
-        </Button>
+        <div className={TWIN_ENABLED && run.status === 'complete' && !(run.observations?.length) ? 'grid grid-cols-2 gap-2' : ''}>
+          <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={openInWorld}>
+            <MapIcon className="h-3.5 w-3.5" /> Open in world
+          </Button>
+          {TWIN_ENABLED && run.status === 'complete' && !(run.observations?.length) && (
+            <Button size="sm" variant="secondary" className="w-full" onClick={onCreateTwin} disabled={!hasMatchingObservations || twinPending} title={hasMatchingObservations ? 'Freeze matching measurements into a new twin run' : 'Add measurements from this world and run dates in Monitoring'}>
+              {twinPending ? 'Creating…' : 'Create twin copy'}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -187,7 +243,7 @@ const MAX_COMPARE = 6;
 
 function openInWorldUrl(run: RunRecord): string {
   // Query params BEFORE the hash (wouter hash routing — see HANDOFF trap 9).
-  return `/?ffrun=${encodeURIComponent(run.id)}#/farms/${run.farmId}/map`;
+  return `${import.meta.env.BASE_URL}?ffrun=${encodeURIComponent(run.id)}&ffview=world#/farms/${run.farmId}/map`;
 }
 
 /** A/B launch: primary = first selected, ghost = second (Phase 4). */
@@ -248,6 +304,11 @@ function MetricCell({ value, baseline, better, digits }: {
 
 function ComparePanel({ runs }: { runs: RunRecord[] }) {
   const baseline = runs[0]!;
+  const baselineAvailable = runSummaryHasAvailableEstimates(baseline.summary);
+  const unavailableRuns = runs.filter((run) => !runSummaryHasAvailableEstimates(run.summary));
+  const yieldBases = new Set(runs.map((run) => run.summary.yieldBasis ?? 'fresh-matter'));
+  const yieldBasisCompatible = yieldBases.size === 1;
+  const yieldUnit = yieldBasisCompatible && baseline.summary.yieldBasis === 'dry-matter' ? 'kg DM' : 'kg';
   return (
     <Card className="border-primary/30 bg-primary/5" data-testid="compare-panel">
       <CardHeader className="pb-2">
@@ -274,6 +335,16 @@ function ComparePanel({ runs }: { runs: RunRecord[] }) {
         </p>
       </CardHeader>
       <CardContent className="overflow-x-auto">
+        {unavailableRuns.length > 0 && (
+          <p role="status" className="mb-2 text-[10px] text-muted-foreground">
+            Comparison values are unavailable for {unavailableRuns.map((run) => run.label).join(', ')}; no numeric comparison is shown for an unavailable baseline.
+          </p>
+        )}
+        {!yieldBasisCompatible && (
+          <p role="status" className="mb-2 text-[10px] text-muted-foreground">
+            Yield values use different mass bases and are not compared.
+          </p>
+        )}
         <table className="w-full text-left text-xs">
           <thead className="text-muted-foreground">
             <tr className="border-b border-border">
@@ -299,12 +370,22 @@ function ComparePanel({ runs }: { runs: RunRecord[] }) {
               const baseVal = m.get(baseline.summary);
               return (
                 <tr key={m.key} className="border-b border-border/60 last:border-0">
-                  <td className="py-1.5 pr-3" title={m.unit || undefined}>
-                    {m.label}
-                    {m.unit && <span className="ml-1 text-[10px] text-muted-foreground">{m.unit}</span>}
+                  <td className="py-1.5 pr-3" title={m.key === 'yield' ? yieldUnit : m.unit || undefined}>
+                    {m.key === 'yield' && yieldBasisCompatible && yieldUnit === 'kg DM' ? 'Harvestable dry matter' : m.label}
+                    {m.unit && <span className="ml-1 text-[10px] text-muted-foreground">{m.key === 'yield' ? yieldUnit : m.unit}</span>}
                   </td>
-                  {runs.map((r, i) =>
-                    i === 0 ? (
+                  {runs.map((r, i) => {
+                    const unavailable = !baselineAvailable
+                      || !runSummaryHasAvailableEstimates(r.summary)
+                      || (m.key === 'yield' && !yieldBasisCompatible);
+                    if (unavailable) {
+                      return (
+                        <td key={r.id} className="py-1.5 pr-3 text-right text-muted-foreground" title="No comparable estimate is available.">
+                          —
+                        </td>
+                      );
+                    }
+                    return i === 0 ? (
                       <td key={r.id} className="py-1.5 pr-3 text-right tabular-nums">
                         {baseVal.toFixed(m.digits)}
                       </td>
@@ -316,8 +397,8 @@ function ComparePanel({ runs }: { runs: RunRecord[] }) {
                         better={m.better}
                         digits={m.digits}
                       />
-                    ),
-                  )}
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -366,11 +447,50 @@ export function Simulations({ farmId }: { farmId: number }) {
     queryKey: ['sim-runs', farmId],
     queryFn: () => apiFetch.listSimRuns(farmId),
   });
+  const { data: observations = [] } = useQuery<Observation[]>({
+    queryKey: ['observations', farmId],
+    queryFn: () => apiFetch.listObservations(farmId),
+    enabled: TWIN_ENABLED,
+  });
   // Pre-engine records (read-only legacy of the old slider arithmetic).
   const { data: legacy = [] } = useQuery({
     queryKey: ['simulations', farmId],
     queryFn: () => apiFetch.listSimulations(farmId),
   });
+  const { data: sitePlan, isLoading: siteLoading } = useQuery({
+    queryKey: ['site-plan', farmId],
+    queryFn: () => apiFetch.getSitePlan(farmId),
+    enabled: ENV_RECORDS_ENABLED,
+  });
+  const { data: savedEnvironmentId } = useQuery({
+    queryKey: ['selected-environment', farmId],
+    queryFn: () => apiFetch.getSelectedEnvironmentId(farmId),
+    enabled: ENV_RECORDS_ENABLED,
+  });
+  const { data: seasons = [] } = useQuery<SeasonRecord[]>({
+    queryKey: ['seasons', farmId],
+    queryFn: () => apiFetch.listSeasons(farmId),
+    enabled: CAMPAIGN_ENABLED,
+  });
+  const environments = sitePlan?.environments ?? EMPTY_ENVIRONMENTS;
+  const [runEnvironmentId, setRunEnvironmentId] = useState('');
+  useEffect(() => {
+    if (!ENV_RECORDS_ENABLED) return;
+    if (environments.some((environment) => environment.id === runEnvironmentId)) return;
+    if (savedEnvironmentId && environments.some((environment) => environment.id === savedEnvironmentId)) {
+      setRunEnvironmentId(savedEnvironmentId);
+      return;
+    }
+    if (environments.length === 1) {
+      setRunEnvironmentId(environments[0]!.id);
+      return;
+    }
+    setRunEnvironmentId('');
+  }, [environments, runEnvironmentId, savedEnvironmentId]);
+  const selectedEnvironment = environments.find((environment) => environment.id === runEnvironmentId) ?? null;
+  const [soilCarrySeasonId, setSoilCarrySeasonId] = useState('none');
+  const selectedCarrySeason = seasons.find((season) => season.id === soilCarrySeasonId) ?? null;
+  const selectedCarryScopes = (selectedCarrySeason?.soil ?? []).filter((scope) => scope.environmentId === selectedEnvironment?.id);
 
   // Multi-select comparison (Phase 4): selection ORDER matters — the first
   // selected run is the baseline, the second becomes the A/B ghost. Capped at
@@ -397,6 +517,28 @@ export function Simulations({ farmId }: { farmId: number }) {
     });
   };
 
+  const matchingObservations = (run: RunRecord): Observation[] => {
+    const runDates = new Set(run.envSeries.map((day) => day.date));
+    return observations.filter((observation) => observation.farmId === run.farmId
+      && (run.config.environment
+        ? observation.environmentId === run.config.environment.id
+        : observation.environmentId === undefined)
+      && runDates.has(observation.date));
+  };
+  const twin = useMutation({
+    mutationFn: async (parent: RunRecord) => {
+      const twinRecord = createTwinRunRecord(parent, matchingObservations(parent));
+      return apiFetch.saveSimRun(twinRecord);
+    },
+    onSuccess: (saved) => {
+      qc.setQueryData<RunRecord[]>(['sim-runs', farmId], (current) =>
+        [saved, ...(current ?? runs).filter((run) => run.id !== saved.id)].slice(0, 40),
+      );
+      toast.success('Twin run saved; the source run is unchanged');
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not create a twin run.'),
+  });
+
   const [formOpen, setFormOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [startDate, setStartDate] = useState(todayISO);
@@ -407,9 +549,22 @@ export function Simulations({ farmId }: { farmId: number }) {
   const [seed, setSeed] = useState(1);
 
   const create = useMutation({
-    mutationFn: () =>
-      apiFetch.createSimRun({
+    mutationFn: () => {
+      if (ENV_RECORDS_ENABLED && !selectedEnvironment) {
+        throw new Error('Choose a growing world before creating a run.');
+      }
+      if (soilCarrySeasonId !== 'none' && selectedCarryScopes.length === 0) {
+        throw new Error('The selected season has no soil carry for this growing world.');
+      }
+      return apiFetch.createSimRun({
         farmId,
+        ...(ENV_RECORDS_ENABLED ? { environmentId: selectedEnvironment!.id } : {}),
+        ...(CAMPAIGN_ENABLED && selectedCarryScopes.length > 0 ? {
+          soilCarryByTarget: Object.fromEntries(selectedCarryScopes.map((scope) => [
+            growingTargetKey(scope.target),
+            scope.soilOut,
+          ])),
+        } : {}),
         label: label.trim() || undefined,
         startDate,
         dayCount,
@@ -417,14 +572,26 @@ export function Simulations({ farmId }: { farmId: number }) {
         tempDeltaC,
         precipMultiplier,
         seed,
-      }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sim-runs', farmId] });
       toast.success('Run created — open it in the world to watch it play');
       setFormOpen(false);
     },
-    onError: () => toast.error('Could not create the run'),
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not create the run'),
   });
+
+  const selectEnvironment = async (environmentId: string) => {
+    setRunEnvironmentId(environmentId);
+    setSoilCarrySeasonId('none');
+    try {
+      await apiFetch.setSelectedEnvironmentId(farmId, environmentId);
+      qc.setQueryData(['selected-environment', farmId], environmentId);
+    } catch {
+      toast.error('The run target could not be saved. It is still selected for this run.');
+    }
+  };
 
   const applyPreset = (s: ScenarioType) => {
     const p = SCENARIOS[s];
@@ -441,7 +608,7 @@ export function Simulations({ farmId }: { farmId: number }) {
         </Button>
         <PageHeader
           title="Simulation Runs"
-          subtitle={`${farm?.name ?? 'Farm'} — deterministic runs over this farm's plan, weather and soil`}
+          subtitle={`${farm?.name ?? 'Farm'} — deterministic runs over ${ENV_RECORDS_ENABLED ? 'a growing world' : 'this farm’s plan'}, weather and soil`}
           actions={
             <Button size="sm" onClick={() => setFormOpen((v) => !v)} className="gap-1.5" data-testid="btn-new-simulation">
               <Plus className="h-4 w-4" /> New Run
@@ -458,6 +625,60 @@ export function Simulations({ farmId }: { farmId: number }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {ENV_RECORDS_ENABLED && (
+              <div className="space-y-2 rounded-md border border-border bg-background p-3">
+                <Label className="text-xs">Growing world for this run</Label>
+                {siteLoading ? (
+                  <Skeleton className="h-9 w-full" />
+                ) : environments.length === 0 ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="text-muted-foreground">Set up a growing world before creating a run.</span>
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/farms/${farmId}/map`)}>
+                      Set up world
+                    </Button>
+                  </div>
+                ) : (
+                  <Select value={selectedEnvironment?.id ?? ''} onValueChange={(id) => void selectEnvironment(id)}>
+                    <SelectTrigger className="h-9" aria-label="Growing world for this run">
+                      <SelectValue placeholder="Choose a growing world" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {environments.map((environment) => (
+                        <SelectItem key={environment.id} value={environment.id}>
+                          {environment.label} · {archetypes[environment.archetype].label} ({environment.widthM} × {environment.heightM} m)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {selectedEnvironment && (
+                  <p className="text-xs text-muted-foreground">
+                    This run will use {selectedEnvironment.label} ({archetypes[selectedEnvironment.archetype].label}); the run keeps this world’s frozen context if you edit or delete it later.
+                  </p>
+                )}
+                {CAMPAIGN_ENABLED && selectedEnvironment && (
+                  <div className="space-y-1.5 border-t border-border pt-2">
+                    <Label className="text-xs">Soil input for this run (optional)</Label>
+                    <Select value={soilCarrySeasonId} onValueChange={setSoilCarrySeasonId}>
+                      <SelectTrigger className="h-9" aria-label="Campaign soil input for this run">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Ordinary soil inputs</SelectItem>
+                        {seasons.filter((season) => (season.soil ?? []).some((scope) => scope.environmentId === selectedEnvironment.id)).map((season) => (
+                          <SelectItem key={season.id} value={season.id}>{season.label} · {season.year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      {selectedCarrySeason
+                        ? `${selectedCarryScopes.length} saved soil surface(s) from this world are frozen into the run. Hydro targets and other worlds are excluded.`
+                        : 'Choose a saved season to explicitly carry its matching floor and tier soil into this run. No carry is applied automatically.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             <div>
               <p className="mb-2 text-xs text-muted-foreground">Scenario presets:</p>
               <div className="flex flex-wrap gap-2">
@@ -545,7 +766,7 @@ export function Simulations({ farmId }: { farmId: number }) {
               <Button
                 type="button"
                 size="sm"
-                disabled={create.isPending}
+                disabled={create.isPending || (ENV_RECORDS_ENABLED && (!selectedEnvironment || siteLoading))}
                 className="gap-1.5"
                 data-testid="btn-run-simulation"
                 onClick={() => create.mutate()}
@@ -583,9 +804,10 @@ export function Simulations({ farmId }: { farmId: number }) {
               <thead className="text-muted-foreground">
                 <tr className="border-b border-border">
                   <th className="py-1.5 pr-3 font-medium">Run</th>
+                  <th className="py-1.5 pr-3 font-medium">Growing world</th>
                   <th className="py-1.5 pr-3 font-medium">Scenario</th>
                   <th className="py-1.5 pr-3 font-medium text-right">Days</th>
-                  <th className="py-1.5 pr-3 font-medium text-right">Yield (kg)</th>
+                  <th className="py-1.5 pr-3 font-medium text-right">Harvest output</th>
                   <th className="py-1.5 pr-3 font-medium text-right">Rain (mm)</th>
                   <th className="py-1.5 pr-3 font-medium text-right">Irrigated (mm)</th>
                   <th className="py-1.5 pr-3 font-medium text-right">Stress (cell-days)</th>
@@ -597,14 +819,17 @@ export function Simulations({ farmId }: { farmId: number }) {
                     <td className="max-w-[180px] truncate py-1.5 pr-3" title={r.label}>
                       {r.label}
                     </td>
+                    <td className="max-w-[190px] truncate py-1.5 pr-3" title={runWorldContext(r)}>
+                      {runWorldContext(r)}
+                    </td>
                     <td className={`py-1.5 pr-3 ${SCENARIO_COLOR[r.config.scenario] ?? ''}`}>
                       {r.config.scenario.replace('_', ' ')}
                     </td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.daysSimulated}</td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.totalYieldKg}</td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.rainMm}</td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.irrigatedMm}</td>
-                    <td className="py-1.5 pr-3 text-right">{r.summary.stressCellDays}</td>
+                    <td className="py-1.5 pr-3 text-right">{runSummaryHasAvailableEstimates(r.summary) ? r.summary.daysSimulated : '—'}</td>
+                    <td className="py-1.5 pr-3 text-right">{runSummaryHasAvailableEstimates(r.summary) ? `${r.summary.totalYieldKg} ${yieldMassUnit(r.summary.yieldBasis)}` : '—'}</td>
+                    <td className="py-1.5 pr-3 text-right">{runSummaryHasAvailableEstimates(r.summary) ? r.summary.rainMm : '—'}</td>
+                    <td className="py-1.5 pr-3 text-right">{runSummaryHasAvailableEstimates(r.summary) ? r.summary.irrigatedMm : '—'}</td>
+                    <td className="py-1.5 pr-3 text-right">{runSummaryHasAvailableEstimates(r.summary) ? r.summary.stressCellDays : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -634,6 +859,9 @@ export function Simulations({ farmId }: { farmId: number }) {
               selected={selectedIds.includes(r.id)}
               selectDisabled={selectedIds.length >= MAX_COMPARE}
               onToggleSelect={() => toggleSelect(r.id)}
+              hasMatchingObservations={matchingObservations(r).length > 0}
+              twinPending={twin.isPending && twin.variables?.id === r.id}
+              onCreateTwin={() => twin.mutate(r)}
             />
           ))}
         </div>

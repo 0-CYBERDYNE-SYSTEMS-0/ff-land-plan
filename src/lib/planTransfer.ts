@@ -41,7 +41,9 @@ function copyPlanting(value: unknown): Record<string, number> {
 
 /** Encode a plan as a versioned, portable JSON document. */
 export function serializePlanJson(plan: PlanState): string {
-  const file: PlanFile = { format: FORMAT, version: VERSION, plan };
+  const targetPlan = { ...plan };
+  delete targetPlan.targets;
+  const file: PlanFile = { format: FORMAT, version: VERSION, plan: targetPlan };
   return JSON.stringify(file, null, 2);
 }
 
@@ -60,6 +62,9 @@ export function parsePlanJson(json: string, farmId: number): PlanState {
   }
 
   const source = value.plan;
+  if (source.targets !== undefined) {
+    throw new Error('Invalid plan JSON: target maps must be exported as a selected growing target.');
+  }
   const { widthM, heightM, cellM, allowOutsideBeds, updatedAt } = source;
   if (
     typeof widthM !== 'number' || !Number.isFinite(widthM) || widthM < 2 || widthM > 60 ||

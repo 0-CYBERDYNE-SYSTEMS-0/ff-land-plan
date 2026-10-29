@@ -17,6 +17,7 @@ import {
 import { LineChart, Line, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { apiFetch } from '@/lib/api';
+import { TWIN_ENABLED } from '@/lib/featureFlags';
 import { useFarm } from '@/hooks/useFarms';
 import { planNdviGrid } from '@/lib/ndvi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,7 +29,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Stat } from '@/components/shared/Stat';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ndviColor, ndviLabel } from '@/components/ndvi/ndviColor';
-import type { Alert, Crop, PlanState, Sensor, SensorType, Weather, WeatherHistoryPoint } from '@/types';
+import { TwinObservationsPanel } from '@/components/twin/TwinObservationsPanel';
+import type { Alert, Crop, Environment, ObservationInput, PlanState, Sensor, SensorType, SitePlan, Weather, WeatherHistoryPoint } from '@/types';
 
 const SENSOR_ICON: Record<SensorType, typeof Droplets> = {
   soil_moisture: Droplets,
@@ -69,6 +71,45 @@ function virtualReading(
 
 const MS_24H = 24 * 60 * 60 * 1000;
 
+function sensorUnit(sensorType: SensorType): string {
+  if (sensorType === 'soil_moisture' || sensorType === 'humidity') return '%';
+  if (sensorType === 'rainfall') return 'mm';
+  if (sensorType === 'ndvi_proxy') return 'index';
+  return '°C';
+}
+
+function sensorObservation(sensor: Sensor, value: number, unit: string, at: string): ObservationInput | null {
+  let metric: ObservationInput['metric'];
+  let normalized = value;
+  let canonicalUnit: string;
+  if (sensor.sensorType === 'soil_moisture') {
+    if (unit === '%' && value >= 0 && value <= 100) normalized = value / 100;
+    else if (unit !== 'fraction' || value < 0 || value > 1) return null;
+    metric = 'soilMoistureFrac';
+    canonicalUnit = 'fraction';
+  } else if (sensor.sensorType === 'temperature') {
+    if (unit === '°F') normalized = (value - 32) * 5 / 9;
+    else if (unit !== '°C') return null;
+    metric = 'airTempC';
+    canonicalUnit = '°C';
+  } else if (sensor.sensorType === 'humidity' && value >= 0 && value <= 100) {
+    metric = 'rhPct';
+    canonicalUnit = '%';
+  } else {
+    return null;
+  }
+  return {
+    farmId: sensor.farmId,
+    ...(sensor.environmentId ? { environmentId: sensor.environmentId } : {}),
+    metric,
+    value: normalized,
+    unit: canonicalUnit,
+    date: at.slice(0, 10),
+    at,
+    source: 'sensor',
+  };
+}
+
 function AlertItem({ alert, onRead }: { alert: Alert; onRead: (id: number) => void }) {
   const variant = alert.severity === 'critical' ? 'destructive' : alert.severity === 'warning' ? 'secondary' : 'outline';
   return (
@@ -101,11 +142,13 @@ function SensorCard({
   farmId,
   weather,
   history,
+  environments,
 }: {
   sensor: Sensor;
   farmId: number;
   weather: Weather | null;
   history: WeatherHistoryPoint[] | undefined;
+  environments: Environment[];
 }) {
   const qc = useQueryClient();
   const { data: readings = [] } = useQuery({
@@ -117,11 +160,28 @@ function SensorCard({
   const Icon = SENSOR_ICON[sensor.sensorType] ?? Activity;
 
   const addReading = useMutation({
-    mutationFn: (v: number) => apiFetch.addReading(sensor.id, v, sensor.sensorType === 'soil_moisture' ? '%' : '°C'),
-    onSuccess: () => {
+    mutationFn: async (v: number) => {
+      const unit = sensorUnit(sensor.sensorType);
+      const reading = await apiFetch.addReading(sensor.id, v, unit);
+      let observationError: string | null = null;
+      if (TWIN_ENABLED) {
+        const input = sensorObservation(sensor, v, unit, reading.recordedAt);
+        if (input) {
+          try {
+            await apiFetch.addObservation(input);
+          } catch (error) {
+            observationError = error instanceof Error ? error.message : 'The twin observation could not be saved.';
+          }
+        }
+      }
+      return { reading, observationError };
+    },
+    onSuccess: ({ observationError }) => {
       qc.invalidateQueries({ queryKey: ['readings', sensor.id] });
       qc.invalidateQueries({ queryKey: ['sensors', farmId] });
+      if (TWIN_ENABLED) qc.invalidateQueries({ queryKey: ['observations', farmId] });
       toast.success('Reading recorded');
+      if (observationError) toast.error(`Sensor reading saved, but the twin observation was not: ${observationError}`);
     },
   });
   const del = useMutation({
@@ -172,6 +232,26 @@ function SensorCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {TWIN_ENABLED && (
+          <div className="space-y-1">
+            <label className="text-[10px] text-muted-foreground" htmlFor={`sensor-world-${sensor.id}`}>Observation world</label>
+            <Select value={sensor.environmentId ?? 'site'} onValueChange={(value) => {
+              const environmentId = value === 'site' ? null : value;
+              void apiFetch.updateSensor(sensor.id, { environmentId }).then(() => {
+                qc.invalidateQueries({ queryKey: ['sensors', farmId] });
+                toast.success('Sensor world updated');
+              }).catch((error) => toast.error(error instanceof Error ? error.message : 'Could not update sensor world.'));
+            }}>
+              <SelectTrigger id={`sensor-world-${sensor.id}`} className="h-7 text-[10px]" aria-label={`Observation world for ${sensor.name}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="site">Farm-level / outdoor</SelectItem>
+                {environments.map((environment) => <SelectItem key={environment.id} value={environment.id}>{environment.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <span className="text-2xl font-bold">{shownValue !== null ? shownValue.toFixed(1) : '—'}</span>
@@ -332,7 +412,14 @@ export function Monitoring({ farmId }: { farmId: number }) {
   const { data: farm } = useFarm(farmId);
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [draft, setDraft] = useState<{ name: string; sensorType: SensorType }>({ name: '', sensorType: 'soil_moisture' });
+  const [draft, setDraft] = useState<{ name: string; sensorType: SensorType; environmentId: string }>({ name: '', sensorType: 'soil_moisture', environmentId: '' });
+
+  const { data: sitePlan } = useQuery<SitePlan | null>({
+    queryKey: ['site-plan', farmId],
+    queryFn: () => apiFetch.getSitePlan(farmId),
+    enabled: TWIN_ENABLED,
+  });
+  const environments = sitePlan?.environments ?? [];
 
   const { data: sensors = [], isLoading } = useQuery({
     queryKey: ['sensors', farmId],
@@ -369,12 +456,20 @@ export function Monitoring({ farmId }: { farmId: number }) {
   });
 
   const addSensor = useMutation({
-    mutationFn: () => apiFetch.createSensor(farmId, draft),
+    mutationFn: () => apiFetch.createSensor(farmId, {
+      name: draft.name,
+      sensorType: draft.sensorType,
+      ...(draft.environmentId === 'site'
+        ? {}
+        : draft.environmentId
+          ? { environmentId: draft.environmentId }
+          : environments.length === 1 ? { environmentId: environments[0]!.id } : {}),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sensors', farmId] });
       toast.success('Sensor added');
       setAddOpen(false);
-      setDraft({ name: '', sensorType: 'soil_moisture' });
+      setDraft({ name: '', sensorType: 'soil_moisture', environmentId: '' });
     },
   });
   const markRead = useMutation({
@@ -447,6 +542,8 @@ export function Monitoring({ farmId }: { farmId: number }) {
         <Stat label="Active Alerts" value={unreadAlerts} sub={unreadAlerts > 0 ? 'Needs attention' : 'All clear'} progress={Math.min(100, unreadAlerts * 20)} />
       </div>
 
+      <TwinObservationsPanel farmId={farmId} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-4">
           {addOpen && (
@@ -468,6 +565,18 @@ export function Monitoring({ farmId }: { farmId: number }) {
                     </SelectContent>
                   </Select>
                 </div>
+                {TWIN_ENABLED && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Observation world</label>
+                    <Select value={draft.environmentId || (environments.length === 1 ? environments[0]!.id : 'site')} onValueChange={(environmentId) => setDraft((current) => ({ ...current, environmentId }))}>
+                      <SelectTrigger className="h-8 text-sm" aria-label="New sensor observation world"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="site">Farm-level / outdoor</SelectItem>
+                        {environments.map((environment) => <SelectItem key={environment.id} value={environment.id}>{environment.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Button size="sm" className="gap-1.5" onClick={() => addSensor.mutate()} disabled={!draft.name || addSensor.isPending} data-testid="btn-save-sensor">
                     Add Sensor
@@ -499,7 +608,7 @@ export function Monitoring({ farmId }: { farmId: number }) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {sensors.map((s) => (
-                  <SensorCard key={s.id} sensor={s} farmId={farmId} weather={weather ?? null} history={history} />
+                  <SensorCard key={s.id} sensor={s} farmId={farmId} weather={weather ?? null} history={history} environments={environments} />
                 ))}
               </div>
             )}

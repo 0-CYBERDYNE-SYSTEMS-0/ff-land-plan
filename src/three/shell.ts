@@ -1,15 +1,14 @@
 /**
- * Enclosure shells for non-outdoor plan surfaces — the visual "you are
- * inside" read for grow tents, hoophouses, greenhouses, grow rooms and
- * vertical-farm warehouses.
+ * Enclosure shells keyed by growing-world archetype — the visual "you are
+ * inside" read for protected structures, rooms and indoor farm shells.
  *
  * Thin runtime adapter over the creative environment kit
  * (src/creative/environments/shells.ts): the makers own all the geometry
  * (glow reads included — tent/indoor/warehouse carry unlit LED strips, so no
  * legacy light-bar code remains here; sky.ts keeps owning THE light).
- * Makers return fresh meshes sized in meters, centered at origin in XZ with
- * ground at y=0 — the same anchor the old box shell used (walls at
- * ±widthM/2, ±heightM/2), so no repositioning is needed.
+ * Makers return fresh meshes in 10 cm voxels, centered at origin in XZ with
+ * ground at y=0. The runtime root scales those voxels to world meters so the
+ * shell matches the floor grid and camera bounds.
  *
  * MODULE-SCOPE CACHE (red-team): the World3D planVersion effect calls
  * buildShell on EVERY brush dab, and a shell is a ~10k-voxel merged geometry.
@@ -22,27 +21,33 @@
  * zero after.
  */
 import * as THREE from 'three';
-import type { PlanState, PlanSurface } from '@/types';
+import { archetypes, ARCHETYPE_FOR_SURFACE, LEGACY_SURFACE_FOR_ARCHETYPE } from '@/creative/archetypes';
+import type { ArchetypeId, EnvironmentArchetype, PlanState, PlanSurface } from '@/types';
 import {
   makeTentShell,
   makeIndoorShell,
   makeGreenhouseShell,
   makeHoophouseShell,
   makeWarehouseShell,
+  makeContainerShell,
+  makeColdFrameShell,
   type ShellSpec,
 } from '@/creative/environments/shells';
 
 export interface ShellGroup {
   root: THREE.Group;
   surface: PlanSurface;
+  archetype: ArchetypeId;
 }
 
-const SHELL_MAKERS: Partial<Record<PlanSurface, (spec: ShellSpec) => THREE.Object3D>> = {
+const SHELL_MAKERS: Partial<Record<EnvironmentArchetype['shell'], (spec: ShellSpec) => THREE.Object3D>> = {
   greenhouse: makeGreenhouseShell,
   hoophouse: makeHoophouseShell,
+  'cold-frame': makeColdFrameShell,
   tent: makeTentShell,
-  indoor: makeIndoorShell,
+  room: makeIndoorShell,
   warehouse: makeWarehouseShell,
+  container: makeContainerShell,
 };
 
 // --- module-scope cache (single entry) ----------------------------------------
@@ -54,8 +59,12 @@ interface CachedShell {
 
 let cachedShell: CachedShell | null = null;
 
-function shellKey(surface: PlanSurface, widthM: number, depthM: number): string {
-  return `${surface}|${widthM}|${depthM}`;
+function shellKey(archetype: ArchetypeId, widthM: number, depthM: number): string {
+  return `${archetype}|${widthM}|${depthM}`;
+}
+
+function hasOwn(object: object, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(object, key);
 }
 
 /** Free every geometry/material under the group (the makers never share any). */
@@ -79,9 +88,15 @@ function freeGroup(group: ShellGroup): void {
   for (const m of mats) m.dispose();
 }
 
-export function buildShell(plan: PlanState, scene: THREE.Scene): ShellGroup | null {
+export function buildShell(plan: PlanState, scene: THREE.Scene, targetArchetype?: ArchetypeId | null): ShellGroup | null {
   const surface = plan.surface ?? 'outdoor';
-  const maker = SHELL_MAKERS[surface];
+  const archetype = targetArchetype && hasOwn(archetypes, targetArchetype)
+    ? targetArchetype
+    : hasOwn(ARCHETYPE_FOR_SURFACE, surface)
+      ? ARCHETYPE_FOR_SURFACE[surface]
+      : 'open-field';
+  const shell = archetypes[archetype].shell;
+  const maker = hasOwn(SHELL_MAKERS, shell) ? SHELL_MAKERS[shell] : undefined;
   if (!maker) {
     // No shell for this surface (outdoor): release the cached shell so
     // switching canvases doesn't strand one in GPU memory.
@@ -92,7 +107,7 @@ export function buildShell(plan: PlanState, scene: THREE.Scene): ShellGroup | nu
     return null;
   }
 
-  const key = shellKey(surface, plan.widthM, plan.heightM);
+  const key = shellKey(archetype, plan.widthM, plan.heightM);
   if (cachedShell && cachedShell.key === key) {
     // Idempotent: an already-attached root returns immediately (no re-add), so
     // callers can buildShell on every plan change without pre-disposing.
@@ -112,11 +127,16 @@ export function buildShell(plan: PlanState, scene: THREE.Scene): ShellGroup | nu
   }
 
   const root = new THREE.Group();
-  root.name = `shell:${surface}`;
+  root.name = `shell:${archetype}`;
+  root.scale.setScalar(0.1);
   root.add(maker({ widthM: plan.widthM, depthM: plan.heightM }));
   scene.add(root);
 
-  const group: ShellGroup = { root, surface };
+  const group: ShellGroup = {
+    root,
+    surface: hasOwn(LEGACY_SURFACE_FOR_ARCHETYPE, archetype) ? LEGACY_SURFACE_FOR_ARCHETYPE[archetype] : 'outdoor',
+    archetype,
+  };
   cachedShell = { key, group };
   return group;
 }

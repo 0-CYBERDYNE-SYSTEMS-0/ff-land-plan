@@ -1,5 +1,7 @@
+import type { CropStartEvent } from '@/types';
+
 // Literature-backed thermal targets for representative catalog crops.
-// Reference data only: the sim does not consume this table yet.
+// The v2 freezer snapshots this table; replay uses only the frozen inputs.
 // GDD totals are Celsius degree-days. OSU Extension Fahrenheit degree-day
 // totals are converted with ×5/9; source-specific methods and endpoints are
 // retained because the totals are not interchangeable across models.
@@ -13,6 +15,8 @@ export interface CropThermalParam {
   readonly tUpperC?: number;
   /** Source cultivar range [minimum, maximum] in °C·days; points repeat. */
   readonly gddToMaturityCdays: readonly [minimum: number, maximum: number];
+  /** Explicit event meanings covered by the source accumulation target. */
+  readonly startEvents: readonly CropStartEvent[];
   readonly accumulationStart: string;
   readonly maturityEndpoint: string;
   readonly accumulationMethod: string;
@@ -30,6 +34,7 @@ export const cropThermalParams = [
     tBaseC: 7.2,
     tUpperC: 33.3,
     gddToMaturityCdays: [1024, 1117],
+    startEvents: ['transplanting'],
     accumulationStart: 'Transplanting at 3–5 true leaves',
     maturityEndpoint: 'First ripe harvest (four or more fruits show ripe color)',
     accumulationMethod: 'Single sine with horizontal cutoff; OSU Table 6',
@@ -42,6 +47,7 @@ export const cropThermalParams = [
     cropSlug: 'lettuce',
     tBaseC: 4,
     gddToMaturityCdays: [662, 731],
+    startEvents: ['transplanting'],
     accumulationStart: 'Transplanting',
     maturityEndpoint: 'Harvest',
     accumulationMethod: 'Study thermal-time accumulation; base 4 °C',
@@ -55,6 +61,7 @@ export const cropThermalParams = [
     tBaseC: 11.1,
     tUpperC: 37.8,
     gddToMaturityCdays: [934, 1110],
+    startEvents: ['transplanting'],
     accumulationStart: 'Transplanting at 4–7 true leaves',
     maturityEndpoint: 'First ripe harvest (four or more fruits show ripe color)',
     accumulationMethod: 'Single sine with horizontal cutoff; OSU Table 5',
@@ -68,6 +75,7 @@ export const cropThermalParams = [
     tBaseC: 0,
     tUpperC: 21.1,
     gddToMaturityCdays: [1168, 1324],
+    startEvents: ['transplanting'],
     accumulationStart: 'Transplanting at 2–4 true leaves',
     maturityEndpoint: 'First harvest at approximately 6-inch head diameter',
     accumulationMethod: 'Single sine with horizontal cutoff; OSU Table 1',
@@ -80,6 +88,7 @@ export const cropThermalParams = [
     cropSlug: 'cabbage',
     tBaseC: 10,
     gddToMaturityCdays: [1000, 1050],
+    startEvents: ['direct-sowing', 'transplanting'],
     accumulationStart: 'Field establishment (direct seeded or transplanted)',
     maturityEndpoint: 'Storage-cabbage market maturity (head density 0.72–0.80)',
     accumulationMethod: 'Study heat-unit accumulation; base 10 °C',
@@ -93,6 +102,7 @@ export const cropThermalParams = [
     tBaseC: 10,
     tUpperC: 32.2,
     gddToMaturityCdays: [447, 673],
+    startEvents: ['direct-sowing', 'transplanting'],
     accumulationStart: 'Direct seeding or transplanting at 2 true leaves',
     maturityEndpoint: 'First harvest at market size',
     accumulationMethod: 'Single sine with horizontal cutoff; OSU Table 2',
@@ -106,6 +116,7 @@ export const cropThermalParams = [
     tBaseC: 10,
     tUpperC: 30,
     gddToMaturityCdays: [855, 855],
+    startEvents: ['direct-sowing'],
     accumulationStart: 'Planting',
     maturityEndpoint: 'Mature for fresh market',
     accumulationMethod: 'Max–min (source recommendation: single sine); horizontal cutoff',
@@ -119,6 +130,7 @@ export const cropThermalParams = [
     tBaseC: 4.4,
     tUpperC: 32.2,
     gddToMaturityCdays: [906, 1003],
+    startEvents: ['direct-sowing'],
     accumulationStart: 'Direct seeding',
     maturityEndpoint: 'Snap-bean harvest at 3.5–4 inches',
     accumulationMethod: 'Single sine with horizontal cutoff; OSU Table 3',
@@ -131,6 +143,7 @@ export const cropThermalParams = [
     cropSlug: 'pea',
     tBaseC: 2.9,
     gddToMaturityCdays: [1370, 1450],
+    startEvents: ['direct-sowing'],
     accumulationStart: 'Sowing',
     maturityEndpoint: 'Green-pea maturity at tenderometer reading 130',
     accumulationMethod: 'Study thermal-time accumulation; base 2.9 °C',

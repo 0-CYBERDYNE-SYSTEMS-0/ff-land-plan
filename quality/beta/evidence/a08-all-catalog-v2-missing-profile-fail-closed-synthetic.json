@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "id": "A08-ALL-CATALOG-V2-MISSING-PARAMETERS-FAIL-CLOSED-SYNTHETIC-01",
+  "preparedDate": "2026-10-28",
+  "status": "Preregistered in commit 1082ef3d6ff881129d0a430cb55f37440b5349ea; exact-head documentation CI run 40750831499 passed all four checks before implementation. The candidate test subsequently passed on code SHA a8b5505db8c110840c3f45dc4dcc5626ce30c34e; see the result record. The registered setup, metrics, tolerances, and synthetic setup digest are unchanged.",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-08",
+    "requirement": "For the frozen built-in catalog snapshot, each crop with no complete crop-model-v2 production/root-zone profile is identified as unsupported, blocks replay, and exposes crop-associated missing-profile reasons; preserve the historical-summary policy flag. A-08 and 02A overall remain UNVERIFIED."
+  },
+  "classification": "synthetic crop-model-v2 missing-profile fail-closed software coverage; not a supported-crop or accuracy benchmark",
+  "comparisonType": "Structural compatibility checks over a pinned catalog snapshot; no numeric crop output is compared.",
+  "registeredAgainstCodeSha": "f943b6921ff2a2acb2fa94f1458dc359b4a920c1",
+  "syntheticSetupSha256": {
+    "value": "6eddd53cb1c1f474833ce0c0ee4844edd7651ca059a5fe9e75e724fc5c7f0351",
+    "algorithm": "SHA-256 over UTF-8 canonical JSON for syntheticSetup, with recursively sorted keys and no whitespace separators."
+  },
+  "acceptanceScope": {
+    "existingA08Evidence": "quality/beta/02A-MODEL-DECISION.md A-08 row records browser summary retention for a missing environment-v2 input case and an unsupported v4 lifecycle case.",
+    "newCaseLimit": "This all-catalog unit test checks support qualification, the preserveStoredSummary policy flag, and replay rejection for missing v2 profiles. It does not claim actual per-record summary retention across all 50 crops; the replayRunToDay API does not accept a summary."
+  },
+  "syntheticSetup": {
+    "catalogSnapshot": {
+      "source": "src/data/crops.ts symbol cropLibrary, registered against the code SHA above; compare to the coverage rows in quality/beta/evidence/model-coverage.json.",
+      "expectedEntryCount": 50,
+      "entriesSortedByCropId": [
+        { "cropId": 1, "slug": "tomato" },
+        { "cropId": 2, "slug": "lettuce" },
+        { "cropId": 3, "slug": "wheat" },
+        { "cropId": 4, "slug": "apple" },
+        { "cropId": 5, "slug": "basil" },
+        { "cropId": 6, "slug": "pepper" },
+        { "cropId": 7, "slug": "eggplant" },
+        { "cropId": 8, "slug": "potato" },
+        { "cropId": 9, "slug": "carrot" },
+        { "cropId": 10, "slug": "beet" },
+        { "cropId": 11, "slug": "radish" },
+        { "cropId": 12, "slug": "onion" },
+        { "cropId": 13, "slug": "garlic" },
+        { "cropId": 14, "slug": "leek" },
+        { "cropId": 15, "slug": "spinach" },
+        { "cropId": 16, "slug": "arugula" },
+        { "cropId": 17, "slug": "chard" },
+        { "cropId": 18, "slug": "kale" },
+        { "cropId": 19, "slug": "broccoli" },
+        { "cropId": 20, "slug": "cabbage" },
+        { "cropId": 21, "slug": "cauliflower" },
+        { "cropId": 22, "slug": "cucumber" },
+        { "cropId": 23, "slug": "zucchini" },
+        { "cropId": 24, "slug": "pumpkin" },
+        { "cropId": 25, "slug": "melon" },
+        { "cropId": 26, "slug": "corn" },
+        { "cropId": 27, "slug": "bush-bean" },
+        { "cropId": 28, "slug": "pole-bean" },
+        { "cropId": 29, "slug": "pea" },
+        { "cropId": 30, "slug": "strawberry" },
+        { "cropId": 31, "slug": "raspberry" },
+        { "cropId": 32, "slug": "blueberry" },
+        { "cropId": 33, "slug": "parsley" },
+        { "cropId": 34, "slug": "cilantro" },
+        { "cropId": 35, "slug": "dill" },
+        { "cropId": 36, "slug": "thyme" },
+        { "cropId": 37, "slug": "rosemary" },
+        { "cropId": 38, "slug": "sage" },
+        { "cropId": 39, "slug": "oregano" },
+        { "cropId": 40, "slug": "chives" },
+        { "cropId": 41, "slug": "mint" },
+        { "cropId": 42, "slug": "marigold" },
+        { "cropId": 43, "slug": "nasturtium" },
+        { "cropId": 44, "slug": "sunflower" },
+        { "cropId": 45, "slug": "borage" },
+        { "cropId": 46, "slug": "crimson-clover" },
+        { "cropId": 47, "slug": "winter-rye" },
+        { "cropId": 48, "slug": "oyster-mushroom" },
+        { "cropId": 49, "slug": "button-mushroom" },
+        { "cropId": 50, "slug": "shiitake" }
+      ],
+      "coverageSummaryAtRegistration": {
+        "builtInCatalogCrops": 50,
+        "completeV2ProductionParameterSets": 0,
+        "completeV2RootZoneParameterSets": 0,
+        "thermalReferenceOnlyCropIds": [1, 2, 6, 19, 20, 22, 26, 27, 29],
+        "cropsWithoutThermalReferenceCount": 41,
+        "fungalCropIds": [48, 49, 50]
+      }
+    },
+    "caseTemplate": {
+      "model": "crop-model-v2",
+      "modelInputs": "run-inputs-v2 / crop-parameters-v3",
+      "oneCell": "floor cell 0,0 planted with exactly the current catalog crop ID",
+      "startEvent": "transplanting for the synthetic input; source-event-domain reasons may also occur and are not used to satisfy the missing-profile metric",
+      "soil": {
+        "awcMmPerCm": 1.7,
+        "organicMatterPct": 2.4,
+        "source": "omitted and interpreted as unknown; test-only sentinel values"
+      },
+      "profileConstruction": "Call freezeRunModelInputsV2 for one crop with no prior inputs and without cropParametersV2. The existing freezer creates a same-crop-ID explicit parameter record with missing production and root-zone fields; no fallback profile is supplied.",
+      "catalogCropLifecycle": {
+        "plantCropProductionMissing": [
+          "crop-specific net RUE",
+          "initial above-ground dry matter at establishment",
+          "canopy PAR interception",
+          "harvest index"
+        ],
+        "fungalProductionMissing": ["separate substrate/lifecycle model parameters"],
+        "rootZoneMissing": [
+          "effective crop root depth",
+          "crop depletion fraction",
+          "crop coefficient",
+          "initial root-zone storage fraction"
+        ],
+        "fungalLifecycle": "fungus"
+      },
+      "requiredReasonTemplates": {
+        "invalidV2Profile": "Crop {cropId}: one or more frozen v2 parameter values are missing, invalid, or unsupported.",
+        "fungalLifecycle": "Crop {cropId}: separate fungus lifecycle is unsupported"
+      },
+      "replayAttempt": "For each case, call replayRunToDay with a synthetic record id, the matching config, an empty environment series, and a fresh ReplayStateCache. The registered expectation is UnsupportedRunReplayError before any tick. The replay API accepts no stored summary, so this fixture does not claim persisted-summary equality."
+    }
+  },
+  "registeredMetrics": [
+    {
+      "id": "catalog-snapshot-equality",
+      "expected": "The unique numeric crop IDs and slugs in cropLibrary exactly equal entriesSortedByCropId, with 50 entries and no duplicate IDs.",
+      "tolerance": "Exact array equality after sorting by cropId; exact unique-ID count.",
+      "basis": "The software check is pinned to a named catalog snapshot rather than an unversioned dynamic crop count."
+    },
+    {
+      "id": "same-crop-identity-and-explicit-missing-profile",
+      "expected": "For each catalog entry, RunConfig planting crop ID, frozen crops[0].id, and cropParameters[0].cropId match exactly. Production and rootZone statuses are unsupported; each missing array exactly matches the lifecycle-specific registered fields; frozen qualification is unsupported.",
+      "tolerance": "Exact crop-ID equality, status equality, and missing-field array equality.",
+      "basis": "Prevent a wrong-crop or missing-snapshot case from masquerading as the registered crop's missing v2 profile."
+    },
+    {
+      "id": "persisted-support-fails-closed",
+      "expected": "For every matching v2 config and frozen input, inspectRunModelSupport returns model crop-model-v2, status unsupported, canReplay false, and preserveStoredSummary true. Its reasons include requiredReasonTemplates.invalidV2Profile with {cropId} replaced by that crop ID.",
+      "tolerance": "Exact structural fields and exact interpolated reason template. Other source-thermal/start-event reasons may also appear; the full reasons array is not compared because 41 crops lack a thermal table entry and fungi have a separate lifecycle reason.",
+      "basis": "Fail-closed historical replay qualification. The preserveStoredSummary field is a policy signal, not an assertion that this test executed or proved actual record-summary retention."
+    },
+    {
+      "id": "replay-fails-closed",
+      "expected": "Each crop-specific replayRunToDay call throws UnsupportedRunReplayError whose reasons include requiredReasonTemplates.invalidV2Profile with {cropId} replaced by that crop ID; no unsupported state is returned.",
+      "tolerance": "Exact exception class and exact interpolated reason template; the environment series is empty. This asserts replay rejection, not internal tick instrumentation.",
+      "basis": "The current replay API checks persisted support before creating or advancing state; this fixture records only the observable exception and absence of a returned state."
+    },
+    {
+      "id": "fungal-lifecycle-remains-explicit",
+      "expected": "For crop IDs 48, 49, and 50, the frozen parameter lifecycle is fungus and the qualification reasons include requiredReasonTemplates.fungalLifecycle with {cropId} replaced by that crop ID.",
+      "tolerance": "Exact lifecycle string and exact crop-associated reason for those three IDs.",
+      "basis": "Do not map fungal catalog entries to the plant lifecycle to obtain a uniform test pass."
+    }
+  ],
+  "catalogReview": {
+    "status": "PASS; all 50 crop ID/slug pairs and registered coverage counts match cropLibrary and model-coverage.json.",
+    "reviewedBy": "Herdr S1 (a07-fullrun-test-worker)",
+    "reviewedDate": "2026-10-28"
+  },
+  "apiSemanticsReview": {
+    "status": "PASS; the freezer creates same-ID explicit missing profiles, support inspection fails closed, and replayRunToDay throws UnsupportedRunReplayError before state creation or ticks.",
+    "reviewedBy": "Herdr S2 (a07-fullrun-code-reviewer)",
+    "reviewedDate": "2026-10-28"
+  },
+  "toleranceReview": {
+    "status": "PASS; all registered metrics are structural exact-equality checks and require no numerical tolerance because no numeric model output is compared.",
+    "reviewedBy": "Herdr S2 (a07-fullrun-code-reviewer)",
+    "reviewedDate": "2026-10-28"
+  },
+  "claimBoundaryReview": {
+    "status": "PASS; at preregistration, S3 reviewed the then-proposed all-catalog synthetic case and limited it to fail-closed software behavior, without claiming crop support, accuracy, actual summary retention, or A-08/02A completion.",
+    "reviewedBy": "Herdr S3 (a07-fullrun-claim-adversary)",
+    "reviewedDate": "2026-10-28"
+  },
+  "reproduction": {
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed for every catalog crop without a complete v2 profile\"",
+    "status": "Implemented and run after the preregistration CI gate: 1 passed / 34 skipped on candidate SHA a8b5505db8c110840c3f45dc4dcc5626ce30c34e; the independent S2 rerun also passed. See quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic-result.json. The test was not run at the preregistration checkpoint."
+  },
+  "implementationEstimate": {
+    "engineerHours": "0.5-1.0",
+    "source": "S1 inspect-only estimate",
+    "assumptions": [
+      "Extend the existing v2 missing-parameter test or add one adjacent test in src/lib/sim/model-inputs.test.ts.",
+      "The current cropLibrary and model-coverage catalog snapshot remain identical to the registered ID/slug list.",
+      "No production code, parameter defaults, equations, or data acquisition are needed.",
+      "Independent review, local full gates, docs, and PR CI are excluded."
+    ]
+  },
+  "sourceBoundary": "Only the repository's pinned built-in crop catalog and current v2 model-input semantics are used. Soil values are synthetic test-only sentinels. No crop parameter source, measured outcome, reference-model output, or site observation is added.",
+  "missingInputs": [
+    "No complete v2 production profile is registered for any catalog crop.",
+    "No complete v2 root-zone profile is registered for any catalog crop.",
+    "Forty-one catalog crops have no thermal table entry; nine have thermal-reference-only entries that do not create complete v2 profiles.",
+    "No actual stored-summary mutation/retention path is exercised by this all-catalog support/replay test; existing A-08 browser evidence remains limited to its named scenarios."
+  ],
+  "acceptanceBoundary": "Registered acceptance criterion (worded before execution): If approved and passed, this closes only a bounded synthetic software fail-closed subcase for the pinned 50-crop catalog snapshot: profile identity, explicit production/root-zone missing fields, support qualification, preserved-summary policy flag, and replay rejection. It does not establish a supported v2 profile for any crop, all-catalog simulator support, actual summary retention for every crop, crop accuracy, biological validity, measured/reference agreement, or overall A-08/02A acceptance.",
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false
+}

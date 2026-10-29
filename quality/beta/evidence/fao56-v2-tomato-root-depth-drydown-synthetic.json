@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-TOMATO-ROOT-DEPTH-DRYDOWN-SYNTHETIC-01",
+  "status": "preregistered synthetic crop-model-v2 root-depth and production-response software fixture; candidate not run",
+  "source": {
+    "evidenceId": "FAO-56-1998",
+    "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Table 22 and footnotes 1–2.",
+    "url": "https://www.fao.org/4/x0490e/x0490e0e.htm",
+    "sourceVersion": "FAO-56 (1998), Chapter 8, Table 22; official HTML chapter page.",
+    "retrievedDate": "2026-10-27",
+    "artifactSha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+    "artifactBytes": 137909,
+    "licenseOrReuse": "FAO publication; derived numerical references and method equations only, with no source text or code copied.",
+    "referenceValues": {
+      "crop": "Tomato",
+      "maximumEffectiveRootDepthRangeM": [0.7, 1.5],
+      "tableDepletionFractionAtETc5MmDay": 0.4,
+      "rootDepthFootnote": "The larger value is applicable where soil layering or other restrictions do not limit rooting; the source associates larger values with modeling soil-water stress and rainfed conditions."
+    }
+  },
+  "modelDispatch": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsVersion": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "climate": "standard open-field crop-model-v2",
+    "newRunDefaultChanged": false
+  },
+  "classification": "Synthetic software invariant only. The FAO-56 maximum-depth range endpoints are used as fixed scenario bounds; this is not a tomato root-growth trajectory, soil profile, crop calibration, measured comparison, or prediction.",
+  "syntheticInputs": {
+    "crop": {
+      "catalogCropId": 1,
+      "slug": "tomato",
+      "cultivar": "not asserted; frozen catalog identity routes the software fixture only",
+      "startEvent": "transplanting",
+      "transplantDate": "2026-10-01",
+      "thermalParameters": {
+        "tBaseC": 7.2,
+        "tUpperC": 33.3,
+        "gddToMaturityCdays": [1024, 1117],
+        "startEvents": ["transplanting"],
+        "accumulationStart": "Transplanting at 3–5 true leaves",
+        "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
+        "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6",
+        "sourceCitation": "Andrews et al., OSU Extension EM 9305, Tomato degree-days, Table 6 (four cultivars; 1844–2010 °F·days).",
+        "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-models-introduction-farmers-gardeners",
+        "useLimit": "Frozen only to keep the crop active and below maturity for ten synthetic ticks; cultivar and maturity accuracy are not asserted."
+      },
+      "cell": "0,0",
+      "cellSizeM": 0.25,
+      "autoHarvest": false
+    },
+    "soil": {
+      "awcMmPerCm": 1.5,
+      "organicMatterPct": 2.4,
+      "sourceTag": "unknown",
+      "classification": "Both numeric soil inputs are synthetic software values; not an observed profile or fertility estimate.",
+      "initialNitrogenPoolKgHa": 600,
+      "maximumStressThresholdKgHa": 216
+    },
+    "rootZone": {
+      "method": "FAO-56 single effective root-zone balance",
+      "awcMmPerCm": 1.5,
+      "fixedEffectiveRootDepthScenariosCm": [70, 150],
+      "depthInterpretation": "The two values are the endpoints of the source maximum-depth range and are synthetic fixed-depth boundary scenarios. No rootDevelopment profile or crop trajectory is implied.",
+      "totalAvailableWaterMm": [105, 225],
+      "initialStorageFraction": 1,
+      "initialStorageMm": [105, 225],
+      "tableDepletionFractionAtEtc5MmDay": 0.4,
+      "referenceEvapotranspirationMmDay": 5,
+      "cropCoefficient": 1.2,
+      "potentialEtcMmDay": 6,
+      "adjustedDepletionFraction": 0.36,
+      "readilyAvailableWaterMm": [37.8, 81],
+      "rootDevelopment": "none",
+      "dailyExternalInflowsMm": {
+        "precipitation": 0,
+        "irrigation": 0,
+        "capillaryRise": 0
+      },
+      "otherWaterBalanceTermsMm": {
+        "surfaceRunoff": 0,
+        "rootGrowthStorage": 0,
+        "deepDrainage": 0
+      }
+    },
+    "production": {
+      "equationFamily": "LINTUL-net-RUE",
+      "dailyLightIntegralMolParM2": 18,
+      "parMolPerMj": 4.5,
+      "interceptedParFraction": 0.5,
+      "rueGPerMjInterceptedPar": 2,
+      "harvestIndex": 0.5,
+      "initialDryMatterGPerM2": 0,
+      "unstressedDailyGainGPerM2": 4,
+      "classification": "All production values are synthetic and are frozen only to expose the v2 root-zone water-stress multiplier."
+    },
+    "dailyEnvironment": {
+      "startDate": "2026-10-01",
+      "dayCount": 10,
+      "intervalDays": 1,
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipitationMm": 0,
+      "etoMm": 5,
+      "dliNaturalMol": 18,
+      "gddBase10C": 15,
+      "provenance": "Every daily value is synthetic software forcing, not source weather or a measured site series."
+    },
+    "pairedRuns": "Both frozen crop-model-v2 runs have identical crop, frozen crop record, soil, production, ten-day environment series, planting event and management settings. The only changed parameter is rootZone.effectiveRootDepthCm: 70 cm versus 150 cm. Both initial storage fractions are 1, so each starts at its own TAW."
+  },
+  "expected": {
+    "recurrence": "p=clamp(0.40+0.04*(5-6),0.1,0.8)=0.36; TAW=AWC*root depth; RAW=p*TAW; Ks=1 when beginning depletion<=RAW, otherwise clamp((TAW-depletion)/(TAW-RAW),0,1); actual transpiration=min(storage,6*Ks); next storage=storage-actual transpiration; synthetic daily DM gain=4*Ks g/m². Keep values unrounded.",
+    "shallow70cm": {
+      "tawMm": 105,
+      "rawMm": 37.8,
+      "stressBeginsOnDay": 8,
+      "dailyRows": [
+        {"day":1,"startDepletionMm":0,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":99,"endDepletionMm":6,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":4},
+        {"day":2,"startDepletionMm":6,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":93,"endDepletionMm":12,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":8},
+        {"day":3,"startDepletionMm":12,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":87,"endDepletionMm":18,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":12},
+        {"day":4,"startDepletionMm":18,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":81,"endDepletionMm":24,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":16},
+        {"day":5,"startDepletionMm":24,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":75,"endDepletionMm":30,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":20},
+        {"day":6,"startDepletionMm":30,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":69,"endDepletionMm":36,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":24},
+        {"day":7,"startDepletionMm":36,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":63,"endDepletionMm":42,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":28},
+        {"day":8,"startDepletionMm":42,"stressCoefficient":0.9375,"actualTranspirationMm":5.625,"endStorageMm":57.375,"endDepletionMm":47.625,"dryMatterIncrementGPerM2":3.75,"cumulativeDryMatterGPerM2":31.75},
+        {"day":9,"startDepletionMm":47.625,"stressCoefficient":0.8537946428571428,"actualTranspirationMm":5.122767857142857,"endStorageMm":52.252232142857146,"endDepletionMm":52.747767857142854,"dryMatterIncrementGPerM2":3.415178571428571,"cumulativeDryMatterGPerM2":35.16517857142857},
+        {"day":10,"startDepletionMm":52.747767857142854,"stressCoefficient":0.7775629783163266,"actualTranspirationMm":4.665377869897959,"endStorageMm":47.58685427295919,"endDepletionMm":57.41314572704081,"dryMatterIncrementGPerM2":3.1102519132653064,"cumulativeDryMatterGPerM2":38.27543048469388}
+      ]
+    },
+    "deep150cm": {
+      "tawMm": 225,
+      "rawMm": 81,
+      "stressBeginsOnDay": null,
+      "dailyRows": [
+        {"day":1,"startDepletionMm":0,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":219,"endDepletionMm":6,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":4},
+        {"day":2,"startDepletionMm":6,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":213,"endDepletionMm":12,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":8},
+        {"day":3,"startDepletionMm":12,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":207,"endDepletionMm":18,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":12},
+        {"day":4,"startDepletionMm":18,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":201,"endDepletionMm":24,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":16},
+        {"day":5,"startDepletionMm":24,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":195,"endDepletionMm":30,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":20},
+        {"day":6,"startDepletionMm":30,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":189,"endDepletionMm":36,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":24},
+        {"day":7,"startDepletionMm":36,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":183,"endDepletionMm":42,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":28},
+        {"day":8,"startDepletionMm":42,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":177,"endDepletionMm":48,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":32},
+        {"day":9,"startDepletionMm":48,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":171,"endDepletionMm":54,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":36},
+        {"day":10,"startDepletionMm":54,"stressCoefficient":1,"actualTranspirationMm":6,"endStorageMm":165,"endDepletionMm":60,"dryMatterIncrementGPerM2":4,"cumulativeDryMatterGPerM2":40}
+      ]
+    },
+    "pairedOutcome": "The shallow scenario first has Ks<1 on day 8; the deep scenario remains at Ks=1 for all 10 days. Both storage traces remain nonnegative. The shallow day-10 cumulative synthetic DM is 38.27543048469388 g/m² versus 40 g/m² deep. Both runs remain alive, active, immature, and unharvested; heat, cold and nitrogen stress are zero.",
+    "massBalance": "For each day: beginning storage + precipitation + irrigation + capillary rise + root-growth storage - runoff - deep drainage - actual transpiration - ending storage = 0 mm."
+  },
+  "acceptanceChecks": {
+    "dispatchAndFreeze": "Both records use crop-model-v2/run-inputs-v2/crop-parameters-v3; frozen parameter snapshots contain the exact synthetic soil, production, root-zone and crop values. Ordinary new-run default remains v1.",
+    "pairedInputs": "The two RunConfigs and frozen crop snapshots are identical except effectiveRootDepthCm; both initial storage fractions are exactly 1 and rootDevelopment is absent.",
+    "dailyTrace": "Assert every registered daily row for stress coefficient, actual transpiration, end storage, end depletion, dry-matter increment and cumulative dry matter.",
+    "waterBalance": "Assert per-tick water mass balance, max residual, nonnegative storage, zero inflow/runoff/root-growth/deep drainage, and no uptake above potential ETc or available storage.",
+    "productionConsequence": "Assert the shallow run begins water stress on day 8, the deep run remains unstressed through day 10, and the expected day-10 cumulative DM ordering/values hold.",
+    "nonWaterTerms": "Assert zero heat, cold and nitrogen stress, no maturity or harvest events, and no death in all 20 ticks.",
+    "deterministicReplay": "Repeat both ten-day traces from the same frozen inputs/environment series; events, cells, residuals and summaries must match exactly."
+  },
+  "toleranceReview": {
+    "status": "approved before candidate execution by independent GPT-6 Luna max validator S2; candidate execution not authorized",
+    "reviewedBy": "S2, independent GPT-6 Luna max validator",
+    "reviewedDate": "2026-10-27",
+    "reviewSummary": "S2 independently verified FAO-56 Table 22 tomato values and footnotes, recomputed all 20 daily recurrence rows (maximum absolute difference 7.11e-15), and approved the arithmetic-only tolerances and synthetic scope. No candidate test was run.",
+    "numericTolerances": {
+      "pAndRaw": {"maximumAbsoluteDeviation": 1e-12, "units": "dimensionless p; mm RAW"},
+      "stressCoefficient": {"maximumAbsoluteDeviation": 1e-12, "units": "dimensionless"},
+      "waterFluxStorageDepletionAndResidual": {"maximumAbsoluteDeviation": 1e-9, "units": "mm per cell-day"},
+      "dailyDryMatterGain": {"maximumAbsoluteDeviation": 1e-9, "units": "g DM/m²/day"},
+      "cumulativeDryMatter": {"maximumAbsoluteDeviation": 1e-8, "units": "g DM/m²"}
+    },
+    "rationale": "Arithmetic-only bounds for the frozen double-precision FAO-56 and v2 RUE recurrence over at most ten daily updates. Exact source-reference transcription, model dispatch, frozen inputs, stress onset day, direction, storage bounds, harvest/death state and replay equality are not tolerance-based. These values are not crop-error, calibration, holdout, measured-data or predictive tolerances."
+  },
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "referenceModelAgreement": false,
+  "candidateExecution": "not run; this record is frozen before the code fixture"
+}

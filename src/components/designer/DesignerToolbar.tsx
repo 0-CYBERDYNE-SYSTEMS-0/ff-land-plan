@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { ASSET_PHYSICS_ENABLED } from '@/lib/featureFlags';
 import type { PlanSurface } from '@/types';
 import { DESIGNER_CONSTANTS, type EraseLayer, type PlanEditor, type RectMode, type Tool } from './usePlanEditor';
 
@@ -62,6 +63,10 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
     draftAllowOutsideBeds, setDraftAllowOutsideBeds,
     draftSurface, setDraftSurface,
     applySettings,
+    pendingResize,
+    cancelResize,
+    confirmResize,
+    scope,
     showSpacing, toggleSpacing,
     showCompanions, toggleCompanions,
     showSimMoisture, toggleSimMoisture,
@@ -114,6 +119,7 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
             <SelectContent>
               <SelectItem value="plants">Plants</SelectItem>
               <SelectItem value="ground">Ground</SelectItem>
+              {editor.scope.kind === 'env' && ASSET_PHYSICS_ENABLED && <SelectItem value="equipment">Equipment</SelectItem>}
             </SelectContent>
           </Select>
         )}
@@ -244,7 +250,7 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
             <Label className="text-xs">Height (m)</Label>
             <Input type="number" min={MIN_DIM_M} max={MAX_DIM_M} step="0.25" value={draftHeight} onChange={(e) => setDraftHeight(Number(e.target.value))} className="h-8" />
           </div>
-          <div className="space-y-1">
+          {scope.kind === 'legacy' && <div className="space-y-1">
             <Label className="text-xs">Surface</Label>
             <Select value={draftSurface} onValueChange={(v) => setDraftSurface(v as PlanSurface)}>
               <SelectTrigger className="h-8 text-xs" title="Canvas surface — swaps floor, enclosure shell, weather and equipment palette">
@@ -256,7 +262,7 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div>}
           <label className="flex items-center gap-2 pt-5 text-sm">
             <input
               type="checkbox"
@@ -265,7 +271,16 @@ export function DesignerToolbar({ editor }: { editor: PlanEditor }) {
             />
             Allow planting outside beds
           </label>
-          <Button size="sm" className="mt-5 h-8" onClick={applySettings}>Apply</Button>
+          <Button size="sm" className="mt-5 h-8" onClick={() => applySettings()}>Apply</Button>
+          {pendingResize && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-600/40 bg-amber-500/10 p-2 text-xs sm:col-span-full" role="alert">
+              <span>Resize to {pendingResize.widthM} × {pendingResize.heightM} m removes {pendingResize.crops} crop cells, {pendingResize.ground} ground cells and {pendingResize.equipment} equipment footprints. Apply as one undoable change?</span>
+              <span className="flex gap-2">
+                <Button size="sm" variant="ghost" onClick={cancelResize}>Cancel</Button>
+                <Button size="sm" onClick={confirmResize}>Confirm resize</Button>
+              </span>
+            </div>
+          )}
         </div>
       )}
     </>

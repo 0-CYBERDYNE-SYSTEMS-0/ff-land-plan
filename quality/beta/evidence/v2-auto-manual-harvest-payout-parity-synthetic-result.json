@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "id": "V2-AUTO-MANUAL-HARVEST-PAYOUT-PARITY-SYNTHETIC-01-RESULT",
+  "recordedDate": "2026-10-28",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-07",
+    "scope": "PASS for this bounded synthetic software invariant only; broader A-07 and overall 02A remain UNVERIFIED.",
+    "preregistration": "quality/beta/evidence/v2-auto-manual-harvest-payout-parity-synthetic.json"
+  },
+  "implementationCheckpoint": {
+    "sha": "b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8",
+    "preregistrationSha": "9d246deab10f19ffa6f01a9162b2c9487a006066",
+    "scope": "Test-only change in src/lib/sim/model-inputs.test.ts; no simulator equations, production model, or frozen inputs changed.",
+    "test": {
+      "title": "runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified",
+      "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\"",
+      "focusedResult": {
+        "result": "passed",
+        "passed": 1,
+        "skipped": 32
+      }
+    }
+  },
+  "registeredAssertions": {
+    "fixture": "V2-AUTO-MANUAL-HARVEST-PAYOUT-PARITY-SYNTHETIC-01",
+    "inputSource": "Same frozen one-cell synthetic v2 tomato run and 80-day sunnySeries used by the existing A-07 test; model inputs are crop-model-v2/run-inputs-v2/crop-parameters-v3. The crop cultivar and production/root parameter accuracy are not assessed.",
+    "preManualPool": "A no-harvest prefix through dayIndex 62 reaches harvestReadyDay 62, biomassFrac 1, and 252 g/m2 dry matter using the preregistered toBeCloseTo(252, 8) precision. stepDay applies dayIndex 63 manual harvest before that day's growth, so this is the pool consumed by the manual payout.",
+    "automaticArm": "Exactly one event for cell 0,0 on dayIndex 62 / 2026-12-02, payout 0.007875 kg within 1e-12 kg; total and per-crop summaries exactly 0.01 kg.",
+    "singleManualArm": "Exactly one manual request for cell 0,0 on dayIndex 63 / 2026-12-03, one event and 0.007875 kg payout within 1e-12 kg; automatic/manual payout difference <=1e-12 kg; total and per-crop summaries exactly 0.01 kg.",
+    "replay": "Repeated execution of each arm from the same frozen inputs and its exact environment series yields equal events, finalState, and summary.",
+    "duplicateRequestCase": "The pre-existing two-request idempotency case is unchanged and remains a separate assertion."
+  },
+  "workerEstimate": {
+    "estimateEngineerHours": "0.5-1.0",
+    "assumptions": [
+      "Reuse the existing frozen one-cell tomato inputs and sunnySeries in the existing v2 test.",
+      "Keep the code change test-only and leave duplicate-request suppression separate.",
+      "Do not change production equations or introduce new tolerances."
+    ],
+    "observedImplementationTime": "Approximately 1m32s from assignment through focused test; independent review, lead gates, and CI excluded."
+  },
+  "review": {
+    "preregistrationToleranceReview": "S2 approved the unchanged 1e-12 kg arithmetic bound and existing 252 g/m2 pool precision before implementation on 2026-10-28.",
+    "causalOrderingReview": "S3 confirmed manual interventions run before dayIndex 63 growth, so the registered 63-entry prefix captures the pool used by the manual payout.",
+    "independentCodeReview": "S2 approved the implementation against the frozen inputs, event timing, payout bounds, summaries, replay, and A-07 contract; no changes requested.",
+    "adjacentRegressionReview": "S3 confirmed the automatic, duplicate-manual suppression, and early-retry assertions remain intact and separate; no changes requested."
+  },
+  "localGates": {
+    "focusedTest": "passed: 1 passed, 32 skipped",
+    "fullVitest": {
+      "result": "passed",
+      "files": 48,
+      "tests": 263
+    },
+    "typecheck": "passed",
+    "builds": {
+      "standard": "passed",
+      "demo": "passed",
+      "pages": "passed",
+      "separateBetaProfile": "not configured in package.json"
+    },
+    "privateFileGuard": {
+      "result": "passed",
+      "trackedFiles": 542
+    },
+    "duplicateKeySafeJsonParse": "passed for preregistration and model-coverage manifest before implementation",
+    "diffCheck": "passed",
+    "productionPagesE2e": {
+      "result": "passed",
+      "journeys": [
+        "production build boots under the GitHub Pages project base path",
+        "unsupported environment-v2 run opens under Pages and retains its stored summary",
+        "unsupported v4 crop lifecycle is explained in World and retains its stored summary"
+      ],
+      "reportedTests": "3 passed",
+      "reportedDuration": "3.8m"
+    }
+  },
+  "preregistrationCommitCi": {
+    "pr": 82,
+    "runId": "40730932151",
+    "headSha": "9d246deab10f19ffa6f01a9162b2c9487a006066",
+    "result": "success",
+    "allThreeWorkflowJobsPassed": true,
+    "allFourPrHeadChecksPassed": true,
+    "pagesSmoke": "3 passed (4.6m); job 5m14s"
+  },
+  "exactHeadCi": {
+    "pr": 82,
+    "runId": "40733075575",
+    "headSha": "b7d59341576d0bbea58f2b63ed3fd3f6b9f10bc8",
+    "result": "success",
+    "workflowRunJobs": [
+      {
+        "name": "test + typecheck + build",
+        "result": "passed",
+        "duration": "56s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "result": "passed",
+        "reportedTests": "3 passed (4.7m)",
+        "jobDuration": "6m25s"
+      },
+      {
+        "name": "secret + private-file scan",
+        "result": "passed",
+        "duration": "19s"
+      }
+    ],
+    "prHeadCheckRollup": [
+      {
+        "name": "test + typecheck + build",
+        "result": "passed",
+        "duration": "56s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "result": "passed",
+        "reportedTests": "3 passed (4.7m)",
+        "jobDuration": "6m25s"
+      },
+      {
+        "name": "secret + private-file scan",
+        "result": "passed",
+        "duration": "19s"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "result": "passed",
+        "duration": "34s",
+        "sourceNote": "Separate PR-level check; not a job in workflow run 40733075575."
+      }
+    ]
+  },
+  "acceptance": {
+    "row": "A-07",
+    "status": "PASS for this bounded synthetic v2 automatic/single-manual payout software invariant only; broader A-07 and overall 02A remain UNVERIFIED.",
+    "candidateComparison": false,
+    "measuredOutputComparison": false,
+    "independentReferenceModelComparison": false,
+    "measuredHoldoutValidation": false
+  },
+  "evidenceBoundary": "This result verifies deterministic event routing, one-cell synthetic payout conversion, summary aggregation, and per-arm replay for two management modes. It does not establish crop or cultivar accuracy, biological maturity, measured-trial agreement, reference-model agreement, predictive validity, or the remaining A-07 spacing, mortality, target, management, and golden coverage."
+}

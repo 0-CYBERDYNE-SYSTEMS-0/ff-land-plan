@@ -69,24 +69,25 @@ export function makeGrowLight(): THREE.Object3D {
 // Plant rack — open vertical shelving unit on castors
 // ---------------------------------------------------------------------------
 
-export function makePlantRack(): THREE.Object3D {
+export function makePlantRack(tierCount = 3, showSeedlings = true): THREE.Object3D {
   const rand = rng(6201);
   const solid: Voxel[] = [];
   const X1 = 8; // x: 0..8 → 0.9 m
   const Z1 = 5; // z: 0..5 → 0.6 m
+  const levels = Array.from({ length: Math.max(1, Math.min(8, Math.floor(tierCount))) }, (_, index) => 2 + index * 4.5);
+  const postTop = levels[levels.length - 1]! + 4.5;
 
   // castors + slim metal corner posts (clean single tone, joint bands darker)
   for (const [px, pz] of [[0, 0], [X1, 0], [0, Z1], [X1, Z1]] as Array<[number, number]>) {
     solid.push({ x: px, y: 0.28, z: pz, s: 0.78, color: PALETTE.metalDark });
     solid.push({ x: px, y: 0.62, z: pz, s: 0.55, color: PALETTE.black });
-    for (let y = 1; y <= 11; y++)
+    for (let y = 1; y <= postTop; y++)
       solid.push({ x: px, y, z: pz, s: 0.7, color: y % 4 === 0 ? PALETTE.metalDark : PALETTE.iron });
-    solid.push({ x: px, y: 11.6, z: pz, s: 0.8, color: PALETTE.metal }); // top cap
+    solid.push({ x: px, y: postTop + 0.6, z: pz, s: 0.8, color: PALETTE.metal }); // top cap
   }
 
-  // three shelf levels: slatted tray decks with a raised lip, left OPEN so
-  // plants placed on them read through from every side
-  for (const L of [2, 6, 10]) {
+  // Each saved GrowingSpaceLevel has matching shelf geometry at its elevation.
+  for (const L of levels) {
     for (let x = 0; x <= X1; x++)
       for (let z = 0; z <= Z1; z++) {
         if (z % 2 === 1) continue; // air gaps between the tray slats
@@ -98,20 +99,23 @@ export function makePlantRack(): THREE.Object3D {
       for (const x of [0, X1]) solid.push({ x, y: L + 0.42, z, s: 0.66, color: PALETTE.iron });
   }
 
-  // seedling trays with young greens on every shelf
-  for (const L of [2, 6, 10])
-    for (const tx of [1.6, 4.4, 7]) {
-      solid.push({ x: tx, y: L + 0.55, z: 2.6, s: 1.35, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.3) });
-      for (const [dx, dz] of [[-0.4, -0.3], [0.35, -0.35], [-0.35, 0.4], [0.4, 0.35]] as Array<[number, number]>)
-        solid.push({ x: tx + dx, y: L + 1.05, z: 2.6 + dz, s: 0.42, color: rand() < 0.5 ? PALETTE.leafLight : PALETTE.leaf });
-    }
+  // Showcase-only nursery trays; planner racks are empty so visible crops
+  // always come from a saved growing-level target.
+  if (showSeedlings) {
+    for (const L of levels)
+      for (const tx of [1.6, 4.4, 7]) {
+        solid.push({ x: tx, y: L + 0.55, z: 2.6, s: 1.35, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.3) });
+        for (const [dx, dz] of [[-0.4, -0.3], [0.35, -0.35], [-0.35, 0.4], [0.4, 0.35]] as Array<[number, number]>)
+          solid.push({ x: tx + dx, y: L + 1.05, z: 2.6 + dz, s: 0.42, color: rand() < 0.5 ? PALETTE.leafLight : PALETTE.leaf });
+      }
+  }
 
   // LED bar clipped under the top shelf, glowing down on the middle trays
   for (let x = 0.6; x <= X1 - 0.2; x++)
-    solid.push({ x, y: 9.35, z: 2.6, s: 0.5, color: x % 3 === 1 ? LED_HOT : LED_GLOW });
+    solid.push({ x, y: levels[levels.length - 1]! - 0.65, z: 2.6, s: 0.5, color: x % 3 === 1 ? LED_HOT : LED_GLOW });
 
   // small power cord running down one post to a plug
-  for (let y = 9.2; y >= 1.4; y -= 0.6)
+  for (let y = postTop + 0.2; y >= 1.4; y -= 0.6)
     solid.push({ x: X1 + 0.42, y, z: Z1, s: 0.2, color: PALETTE.black });
   solid.push({ x: X1 + 0.42, y: 1, z: Z1, s: 0.42, color: PALETTE.charcoal });
 

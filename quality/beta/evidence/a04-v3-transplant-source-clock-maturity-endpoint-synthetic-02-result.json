@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02",
+  "classification": "corrective synthetic software regression after fixture 01 was explicitly UNACCEPTED; not prospective, measured, or predictive crop evidence",
+  "preregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02.json",
+  "setupSha256": "7cdf717aab20211fc02346f310b7b6f1b5723bc5f685f891b700ae73d528c3b8",
+  "priorAttempt": {
+    "fixtureId": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-01",
+    "status": "UNACCEPTED",
+    "resultRecord": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json",
+    "reason": "Fixture 01 did not register the exact source-row accumulationMethod string or RunConfig.dayCount=58. Its observed clock outputs are retained but not counted or used as prospective/independent evidence."
+  },
+  "registrationReview": {
+    "reviewer": "S3 independent preregistration reviewer",
+    "result": "PASS",
+    "date": "2026-10-28",
+    "registrationCommit": "e35392779298c28287565c03f65c42a80b4ae5d1",
+    "setupDigest": "PASS; canonical fixture 02 setup digest matches the manifest and registered inputs."
+  },
+  "registrationExactHeadCi": {
+    "pullRequest": 82,
+    "headSha": "e35392779298c28287565c03f65c42a80b4ae5d1",
+    "runId": 40786569153,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40786569153",
+    "checks": {
+      "test + typecheck + build": "PASS",
+      "Playwright production Pages-path smoke": "PASS",
+      "secret + private-file scan": "PASS",
+      "GitGuardian Security Checks": "PASS"
+    }
+  },
+  "candidate": {
+    "worker": "S1 implementation worker",
+    "estimateEngineerHours": "0.25-0.5",
+    "assumptions": "Both corrections stayed in the existing test: the fixture evidence ID was updated to -02 and the frozen RunConfig values were spelled out. Clock values and weather stayed unchanged.",
+    "actualScope": "One test in src/lib/sim/model-inputs.test.ts; no production/data changes.",
+    "testFileSha256": "7814464dca3907feb1731e745f1832d3d17a26582729f1f86f5fe7aca543a49b",
+    "testName": "starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint\"",
+    "focusedResult": "PASS, 1 passed / 36 skipped.",
+    "expectedStates": "0 source C-days on Oct 1-2; 20 on Oct 3; 1100 and biomassFrac<1 on Nov 26; capped 1117 and biomassFrac=1 on Nov 27.",
+    "implementationReview": {
+      "reviewer": "S3 independent candidate reviewer",
+      "result": "PASS after removing the redundant self-referential expect(run).toMatchObject block.",
+      "reviewed": "The corrected test hunk, fixture 02, frozen config/helper, tomato thermal row, and reducer clock logic. S3 did not run tests."
+    }
+  },
+  "localVerification": {
+    "npm test": "PASS, 48 files / 267 tests.",
+    "npm run typecheck": "PASS.",
+    "npm run build": "PASS.",
+    "npm run build:demo": "PASS.",
+    "npm run build:pages": "PASS.",
+    "npm run check:private": "PASS, 554 tracked files; no private-data patterns.",
+    "npm run test:e2e": "PASS, 3/3 production Pages-path journeys in 4.1 minutes.",
+    "jsonAndDiff": "PASS duplicate-safe JSON parsing, setup digest verification, and git diff --check.",
+    "buildProfiles": "No beta-specific build script is defined in package.json.",
+    "warnings": "Non-fatal Vite config-loader and large-chunk advisories; browser runner also printed NO_COLOR/FORCE_COLOR warnings."
+  },
+  "candidateExactHeadCi": {
+    "pullRequest": 82,
+    "headSha": "bce83aa7b0340ea6f3206d977038cf2efc352071",
+    "runId": 40788255990,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40788255990",
+    "checks": {
+      "test + typecheck + build": "PASS",
+      "Playwright production Pages-path smoke": "PASS",
+      "secret + private-file scan": "PASS",
+      "GitGuardian Security Checks": "PASS"
+    }
+  },
+  "status": "PASS only for the corrected synthetic software regression; fixture 01 remains UNACCEPTED. A-04 and overall 02A remain UNVERIFIED.",
+  "claimBoundary": [
+    "The case exercises deterministic v3 source-clock timing and upper maturity endpoint software behavior only.",
+    "Fixture 02 follows observed fixture 01 test outputs and is not blind or prospective validation.",
+    "No measured transplant state, biological maturity, crop accuracy, independent reference agreement, holdout validation, or prediction is established.",
+    "Default-versus-cultivar behavior and direct-sowing comparison remain untested by this fixture.",
+    "A-04 and overall 02A remain UNVERIFIED."
+  ],
+  "validatorAvailability": "S2 audit was unavailable: its Herdr pane reported, \"Your access token could not be refreshed because you have since logged out or signed in to another account.\" S3 provided the independent review; no S2 approval is claimed.",
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false,
+  "retest": "Repeat the focused test, S3 review, full local gates, and exact-head PR CI if any registered input, helper/source row, reducer logic, or assertion changes."
+}

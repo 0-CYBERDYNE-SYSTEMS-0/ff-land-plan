@@ -9,16 +9,243 @@
 //      rewrites).
 //   2. Every environment number traces to a source via EnvSourceTag.
 
-import type { PlanState, PlanSurface, ScenarioType } from '@/types';
+import type { ArchetypeId, Crop, CropStartEvent, EnvironmentArchetype, EnvironmentSnapshot, GrowingTargetKey, GrowingTargetRef, Observation, ObservationMetric, PlanState, PlanSurface, ScenarioType, SoilCarry } from '@/types';
+import type { EnvironmentClimateDay } from './environment-climate';
+import type { ClimateEquipmentInput } from './environment-climate';
+import type { EquipmentTerms } from './equipment';
+
+export interface RunAssetPhysicsSnapshot {
+  model: 'assets-v1';
+  room: EquipmentTerms;
+  targets: Partial<Record<GrowingTargetKey, EquipmentTerms>>;
+  /** Local cells physically covered by a hydro asset at run creation. */
+  soillessCells: Partial<Record<GrowingTargetKey, string[]>>;
+  /** Cells on a hydro-designed level that require installed hydro coverage. */
+  hydroRequiredCells: Partial<Record<GrowingTargetKey, string[]>>;
+}
+
+/** Complete environment-v2 climate context, copied at run creation for replay. */
+export interface EnvironmentModelInputsV2 {
+  model: 'environment-inputs-v2';
+  archetypeId: ArchetypeId;
+  legacySurface: PlanSurface;
+  archetype: EnvironmentArchetype;
+  noEquipment: ClimateEquipmentInput;
+  climateEquipment: ClimateEquipmentInput;
+  climateTargetEquipment: Partial<Record<GrowingTargetKey, ClimateEquipmentInput>>;
+  outdoorDefaults: { rhPct: number; co2Ppm: number };
+  modelOverrides: { coverTransmission: number | null; uValueWm2K: number | null };
+  initialClimateState: Pick<EnvironmentClimateDay, 'tMinC' | 'tMaxC' | 'rhPct' | 'co2Ppm' | 'etFactor'> | null;
+}
+
+export type CropModelVersion = 'crop-model-v1' | 'crop-model-v2' | 'crop-model-v3' | 'crop-model-v4';
+
+/** Minimum crop/soil inputs frozen by the legacy reducer. */
+export interface RunModelInputsV1 {
+  model: 'run-inputs-v1';
+  soil: { awcMmPerCm: number | null; organicMatterPct: number | null } | null;
+  /** Only crops referenced by the frozen plan or its planting interventions. */
+  crops: Crop[];
+}
+
+export interface FrozenCropModelParametersV2 {
+  cropId: number;
+  /** Source-specific thermal reference; cultivar selection may still be required. */
+  thermal: {
+    tBaseC: number;
+    tUpperC?: number;
+    gddToMaturityCdays: readonly [number, number];
+    startEvents: readonly CropStartEvent[];
+    accumulationStart: string;
+    maturityEndpoint: string;
+    accumulationMethod: string;
+    sourceCitation: string;
+    sourceUrl: string;
+  } | null;
+  production: {
+    equationFamily: 'LINTUL-net-RUE';
+    rueGPerMjInterceptedPar: number | null;
+    /** Frozen initial above-ground dry matter; zero is an explicit assumption. */
+    initialDryMatterGPerM2: number | null;
+    interceptedParFraction: number | null;
+    harvestIndex: number | null;
+    status: 'unsupported' | 'qualified' | 'supported';
+    missing: string[];
+    /** Explicit domain/measurement assumptions; these qualify, but do not prevent replay. */
+    limitations?: string[];
+    evidence: { evidenceId: string | null; sourceCitation: string | null; sourceUrl: string | null; validDomain: string | null };
+  };
+  rootZone: {
+    method: 'FAO-56';
+    /** Maximum effective depth for static profiles; cap for rootDevelopment profiles. */
+    effectiveRootDepthCm: number | null;
+    depletionFraction: number | null;
+    cropCoefficient: number | null;
+    initialStorageFraction: number | null;
+    /** Optional versioned root-depth trajectory; absent on historical static v2 inputs. */
+    rootDevelopment?: {
+      methodVersion: 'thermal-linear-root-depth-v1';
+      storageExpansionMethod: 'uniform-initial-awc-fraction-v1';
+      startEvent: CropStartEvent;
+      initialRootDepthCm: number;
+      growthStartsAfterCdays: number;
+      growthMmPerCday: number;
+      thermalBaseC: number;
+      thermalUpperC?: number;
+      thermalAccumulationMethod: string;
+      evidence: { evidenceId: string; sourceCitation: string; sourceUrl: string; validDomain: string };
+    };
+    /** Explicit assumptions are retained and surfaced when replayed. */
+    limitations?: string[];
+    status: 'unsupported' | 'qualified' | 'supported';
+    missing: string[];
+    evidence: { evidenceId: string | null; sourceCitation: string | null; sourceUrl: string | null; validDomain: string | null };
+  };
+  lifecycle: 'plant' | 'fungus' | 'unsupported';
+}
+
+/** V3 keeps crop-level production parameters separate from the per-cell
+ * establishment state; initial above-ground DM is supplied for each cell. */
+export type FrozenCropModelParametersV3 = Omit<FrozenCropModelParametersV2, 'production'> & {
+  production: Omit<FrozenCropModelParametersV2['production'], 'initialDryMatterGPerM2'>;
+};
+
+type FrozenCropModelProductionV4Common = {
+  status: 'unsupported' | 'qualified' | 'supported';
+  missing: string[];
+  limitations?: string[];
+  evidence: FrozenCropModelParametersV2['production']['evidence'];
+  canopy: {
+    specificLeafAreaM2PerKg: number | null;
+    leafStemPartitionParameterM2PerKg: number | null;
+    evidence: FrozenCropModelParametersV2['production']['evidence'];
+  };
+  allocation: {
+    canopyShare: number | null;
+    harvestableShare: number | null;
+    classification: 'measured' | 'explicit-assumption' | 'synthetic';
+    evidenceId: string;
+    validDomain: string;
+  };
+};
+
+export type FrozenCropModelProductionV4 = FrozenCropModelProductionV4Common & (
+  | {
+    equationFamily: 'LINTUL-net-RUE';
+    rueGPerMjInterceptedPar: number | null;
+    canopy: FrozenCropModelProductionV4Common['canopy'] & { kPar: number | null };
+  }
+  | {
+    equationFamily: 'OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1';
+    rueGPerMjInterceptedTotalSolar: number | null;
+    stressFactor: number | null;
+    stressFactorClassification: 'synthetic';
+    canopy: FrozenCropModelProductionV4Common['canopy'] & {
+      kTotalSolar: number | null;
+      laiMappingClassification: 'synthetic';
+    };
+  }
+);
+
+export type FrozenCropModelParametersV4 = Omit<FrozenCropModelParametersV3, 'production'> & {
+  production: FrozenCropModelProductionV4;
+};
+
+export interface CropEstablishmentInput {
+  startEvent: CropStartEvent;
+  /** Emergence date for direct-sowing; transplant date for transplanting. */
+  establishedAtDate: string;
+  initialAboveGroundDryMatterGPerM2: number;
+  evidence: {
+    classification: 'measured' | 'explicit-assumption' | 'synthetic';
+    evidenceId: string;
+    validDomain: string;
+  };
+}
+
+/** V4 freezes canopy and harvestable dry matter as separate establishment pools. */
+export interface CropCanopyEstablishmentInput {
+  startEvent: CropStartEvent;
+  establishedAtDate: string;
+  initialCanopyDryMatterGPerM2: number;
+  initialHarvestableDryMatterGPerM2: number;
+  evidence: CropEstablishmentInput['evidence'];
+}
+
+/** Complete v2 snapshot shape, including explicit missing-parameter status. */
+export interface RunModelInputsV2 {
+  model: 'run-inputs-v2';
+  parameterSetVersion: 'crop-parameters-v3';
+  soil: { awcMmPerCm: number | null; organicMatterPct: number | null; source?: 'usda-sda' | 'soilgrids' | 'unknown' } | null;
+  crops: Crop[];
+  cropParameters: FrozenCropModelParametersV2[];
+  qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
+}
+
+/** V3 freezes per-cell post-emergence state and uses a separate establishment
+ * event date; older v2 inputs retain their historical sowing-day behavior. */
+export interface RunModelInputsV3 {
+  model: 'run-inputs-v3';
+  parameterSetVersion: 'crop-parameters-v4';
+  soil: RunModelInputsV2['soil'];
+  crops: Crop[];
+  cropParameters: FrozenCropModelParametersV3[];
+  establishmentByCell: Record<string, CropEstablishmentInput>;
+  qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
+}
+
+/** V4 adds canopy-derived interception and a single-pass two-pool DM balance. */
+export interface RunModelInputsV4 {
+  model: 'run-inputs-v4';
+  /** Keep unknown persisted versions representable so replay/freezing can fail closed without rewriting them. */
+  parameterSetVersion: string;
+  soil: RunModelInputsV2['soil'];
+  crops: Crop[];
+  cropParameters: FrozenCropModelParametersV4[];
+  establishmentByCell: Record<string, CropCanopyEstablishmentInput>;
+  qualification: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
+}
+
+export type RunModelInputs = RunModelInputsV1 | RunModelInputsV2 | RunModelInputsV3 | RunModelInputsV4;
+
+export interface FarmCalibration {
+  version: 'farm-calibration-v1';
+  revision: number;
+  farmId: number;
+  environmentId: string;
+  fittedAt: string;
+  pairedDays: number;
+  parameters: Partial<{ coverTransmission: number; uValueWm2K: number }>;
+}
+
+export interface EnsembleBand {
+  p10: number | null;
+  p50: number | null;
+  p90: number | null;
+  samples: number;
+}
+
+export interface RunEnsembleResult {
+  source: 'era5' | 'nasa-power';
+  years: number[];
+  /** Explicit model/input caveats shown beside the percentile bands. */
+  limitations?: string[];
+  totalYieldKg: EnsembleBand;
+  harvestReadyDay: EnsembleBand;
+  waterUseMm: EnsembleBand;
+}
 
 /** Provenance chip for one environment value. */
 export type EnvSourceTag =
   | 'open-meteo-archive' // observed ERA5 daily value (Open-Meteo archive API)
+  | 'nasa-power' // daily temperature/precipitation from NASA POWER
   | 'open-meteo-forecast' // reserved for forecast-backed days (not produced yet)
   | 'era5-normals' // synthesized from ERA5 climate normals (monthly means)
   | 'model-estimate' // v1 proxy formula (documented fallback, e.g. ETO proxy)
   | 'scenario-delta' // = raw source value + run scenario perturbation (see `raw`)
   | 'default'; // documented built-in fallback (no site data at all)
+
+export type SolarRadiationSourceTag = EnvSourceTag | 'synthetic';
 
 /** One composed day. Effective values include the run scenario; when the
  * scenario perturbed a field, that field's tag becomes 'scenario-delta' and
@@ -31,6 +258,10 @@ export interface DailyEnvironment {
   /** Reference ET (FAO-56 ET0, mm/day): real archive/normals value when
    * available, else the documented temp-range proxy (model-estimate). */
   etoMm: number;
+  /** Outdoor monthly-mean DLI input, frozen when light data is available. */
+  dliNaturalMol?: number;
+  /** Total solar radiation in MJ/m²/day; never inferred from DLI. */
+  solarRadiationMJm2Day?: number | null;
   /** max(0, (tMin + tMax)/2 − 10), °C·day — computed from EFFECTIVE temps so
    * climate scenarios actually move the GDD clock. */
   gddBase10C: number;
@@ -39,7 +270,11 @@ export interface DailyEnvironment {
     tMaxC: EnvSourceTag;
     precipMm: EnvSourceTag;
     etoMm: EnvSourceTag;
+    dliNaturalMol?: EnvSourceTag;
+    solarRadiationMJm2Day?: SolarRadiationSourceTag;
   };
+  /** Derived interior values attached only to the current effective day. */
+  climate?: EnvironmentClimateDay;
   /** Pre-scenario values; present only when the scenario changed the day. */
   raw?: { tMinC: number; tMaxC: number; precipMm: number; source: EnvSourceTag };
 }
@@ -54,10 +289,11 @@ export interface DailyEnvironment {
  *   composed env series is the single weather truth a step sees.
  */
 export type Intervention =
-  | { kind: 'irrigate'; date: string; cells?: string[]; zone?: string; mm: number }
-  | { kind: 'fertilize'; date: string; cells?: string[]; zone?: string; nKgHa: number }
-  | { kind: 'plant'; date: string; cell: string; cropId: number }
-  | { kind: 'harvest'; date: string; cell: string }
+  | { kind: 'irrigate'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; mm: number }
+  | { kind: 'fertilize'; date: string; cells?: string[]; target?: GrowingTargetRef; allTargets?: boolean; zone?: string; nKgHa: number }
+  | { kind: 'refill-water'; date: string; litres: number }
+  | { kind: 'plant'; date: string; cell: string; target?: GrowingTargetRef; cropId: number; startEvent?: CropStartEvent; establishment?: CropEstablishmentInput | CropCanopyEstablishmentInput }
+  | { kind: 'harvest'; date: string; cell: string; target?: GrowingTargetRef }
   | { kind: 'surface'; date: string; surface: PlanSurface } // greenhouse/tent/etc.
   | { kind: 'weather'; fromDate: string; tempDeltaC?: number; precipMultiplier?: number };
 
@@ -67,6 +303,7 @@ export interface CellStress {
   cold: number;
   /** Real since Phase 3: pool vs remaining seasonal N demand (ecosystem.ts). */
   nitrogen: number;
+  light?: number;
 }
 
 /** Static per-cell neighbor context, built once per run (and on 'plant'
@@ -95,9 +332,40 @@ export interface CellState {
   /** Plant-available N, kg/ha. OM-derived start + daily mineralization −
    * uptake − leaching (ecosystem.ts). */
   nitrogenKgHa: number;
+  /** V1/v2 development clock; in v3 this is establishment-relative physiology, not source maturity time. */
   gddAccumC: number;
-  biomassFrac: number; // 0..1 = gddAccum / gddRequired
-  stage: number; // 0..5 = round(biomass × 5)
+  biomassFrac: number; // v1/v2 thermal progress; v3 source-maturity endpoint latch, not mass fraction
+  /** v2-v4 total above-ground dry matter, g DM/m² of planted cell area. */
+  dryMatterGPerM2?: number;
+  /** V4 pools; total dryMatterGPerM2 is their exact sum. */
+  canopyDryMatterGPerM2?: number;
+  harvestableDryMatterGPerM2?: number;
+  /** v2 FAO-56 effective root-zone storage and accumulated closure residual, mm. */
+  rootZoneWaterMm?: number;
+  /** Frozen establishment event whose date is represented by plantedAtDay. */
+  startEvent?: CropStartEvent;
+  /** V3 day at which the emerged/transplanted above-ground state activates. */
+  physiologyStartDay?: number;
+  /** V3 initial above-ground DM applied once at physiologyStartDay. */
+  establishmentDryMatterGPerM2?: number;
+  /** V3 latch prevents the initial state from being applied twice. */
+  establishmentApplied?: boolean;
+  /** V3 source-event thermal clock; starts at sowing/transplant per frozen thermal evidence. */
+  sourceThermalCdays?: number;
+  /** V3 has no source-supported stage map; remains false even when maturity is known. */
+  stageEstimateAvailable?: boolean;
+  /** V3 terminal crop mortality; v1/v2 visual mortality remains projected. */
+  dead?: boolean;
+  /** v2 root-growth thermal clock and effective rooting depth. */
+  rootThermalCdays?: number;
+  rootZoneDepthCm?: number;
+  /** Cumulative storage entering as newly rooted subsoil is added to the bucket, mm. */
+  rootZoneExpansionInflowMm?: number;
+  rootZoneResidualAccumulatedMm?: number;
+  rootZoneResidualMaxAbsMm?: number;
+  /** v2 water removed when a replant shrinks effective root-zone capacity, mm. */
+  rootZoneReplantDrainageMm?: number;
+  stage: number; // v1/v2: 0..5 from progress; v3: endpoint-only without sourced intermediate mapping
   floweringFrac: number; // 0..1 bump across the stage 3–4 band
   pestPressure: number; // 0..1, daily dynamics in ecosystem.ts
   /** Season-high pestPressure — the yield penalty reads the peak, not today. */
@@ -113,14 +381,23 @@ export interface CellState {
    * snapshot, so season-long nitrogen/water management shows in yield. */
   stressSum?: number;
   stressDaysCount?: number;
+  /** Omitted only for historic floor cells; elevated cells keep their target. */
+  target?: GrowingTargetRef;
   stress: CellStress;
 }
 
 export interface SimState {
   dayIndex: number; // days completed; stepDay(state, day d) returns dayIndex d+1
-  /** Current run surface (shelter source); mutable mid-run via 'surface'. */
+  /** Current archetype; 'surface' is the one-release legacy climate adapter. */
+  archetype: ArchetypeId;
   surface: PlanSurface;
+  /** Current deterministic interior estimate; absent for legacy/outdoor runs. */
+  climate?: EnvironmentClimateDay;
+  /** Remaining shared physical water storage, present for ASSET_PHYSICS runs. */
+  waterStoreL?: number;
   cells: Record<string, CellState>; // sparse, planted cells only
+  /** Runtime qualifications from explicitly unknown daily model inputs. */
+  modelQualificationReasons?: string[];
   /** Neighbor context per cell key — cached (built at createRun, rebuilt on
    * 'plant'); drivers read it, nothing rescans the grid per day. */
   neighbors?: Record<string, NeighborContext>;
@@ -139,7 +416,7 @@ export interface DayStats {
   waterUseMm: number;
   /** Cell-days with max stress ≥ STRESS_ONSET (any term). */
   stressCellDays: number;
-  stressDays: { water: number; heat: number; cold: number; nitrogen: number };
+  stressDays: { water: number; heat: number; cold: number; nitrogen: number; light?: number };
   /** Cell-days with pestPressure ≥ PEST_OUTBREAK. */
   outbreakDays: number;
 }
@@ -156,22 +433,115 @@ export type SimEventKind =
   | 'frost'
   | 'outbreak' // pestPressure crossed 0.6 upward (hysteresis: ends below 0.3)
   | 'outbreak-end'
-  | 'harvest-too-early'; // manual harvest below the 0.8 biomass minimum
+  | 'assimilated'
+  | 'harvest-too-early' // manual harvest before the model-specific maturity threshold
+  | 'water-short'
+  | 'water-refilled';
 
-export interface SimEvent {
+export interface SimEventDataByKind {
+  planted: {};
+  irrigated: { mmPerCell: number; cellCount: number; totalMm: number };
+  fertilized: { nKgHa: number; cellCount: number };
+  'water-refilled': { requestedL: number; acceptedL: number; remainingL: number };
+  'water-short': {
+    requestedL?: number;
+    acceptedL?: number;
+    remainingL?: number;
+    capacityL?: number;
+    requestedMm?: number;
+    unmetCells?: number;
+    cellCount?: number;
+    deliveredMm?: number;
+  };
+  stage: { stage: number; biomass: number };
+  'harvest-ready': { biomass?: number; gddAccumC?: number };
+  'stress-onset': { value: number };
+  'stress-end': { value: number };
+  frost: { tMinC: number };
+  outbreak: { pressure: number };
+  'outbreak-end': { pressure: number };
+  assimilated: { metric: ObservationMetric; innovation: number };
+  harvested: { yieldKg: number; seasonMeanStress?: number; peakPest?: number };
+  'harvest-too-early': { biomass: number; minimum: number };
+}
+
+interface SimEventBase {
   dayIndex: number;
   date: string;
-  kind: SimEventKind;
   cell?: string;
+  /** Omitted for floor events to preserve the legacy x,y event payload; elevated cell keys are target-qualified. */
+  target?: GrowingTargetRef;
   cropId?: number;
   message: string;
-  data?: Record<string, number>;
 }
+
+interface SimEventDataFields {
+  metric: ObservationMetric;
+  innovation: number;
+  yieldKg: number;
+  seasonMeanStress: number;
+  peakPest: number;
+  biomass: number;
+  gddAccumC: number;
+  stage: number;
+  value: number;
+  minimum: number;
+  tMinC: number;
+  pressure: number;
+  mmPerCell: number;
+  cellCount: number;
+  totalMm: number;
+  requestedL: number;
+  acceptedL: number;
+  remainingL: number;
+  capacityL: number;
+  requestedMm: number;
+  unmetCells: number;
+  deliveredMm: number;
+  nKgHa: number;
+}
+
+type SimEventDataFor<K extends SimEventKind> = SimEventDataByKind[K] & {
+  [P in Exclude<keyof SimEventDataFields, keyof SimEventDataByKind[K]>]?: never;
+};
+
+export type SimEvent = {
+  [K in SimEventKind]: SimEventBase & { kind: K } & (
+    K extends 'assimilated'
+      ? { data: SimEventDataFor<K> }
+      : K extends 'planted'
+        ? { data?: SimEventDataFor<K> }
+        : { data: SimEventDataFor<K> }
+  )
+}[SimEventKind];
 
 export interface RunConfig {
   farmId: number;
+  /** Missing on historical records, which retain the v1 equations. */
+  cropModelVersion?: CropModelVersion;
   /** Forked at create time (deep copy) — runs never mutate the live plan. */
   basePlan: PlanState;
+  /** Frozen world metadata/layout. Absent only on historical v1 RunRecords;
+   * basePlan is the sole plan snapshot and is never duplicated here. */
+  environment?: EnvironmentSnapshot;
+  /** Missing means the pre-environment legacy surface model. */
+  climateModel?: 'environment-v1' | 'environment-v2';
+  /** Frozen archetype, equipment, calibration and climate defaults for v2 replay. */
+  environmentModelInputs?: EnvironmentModelInputsV2;
+  /** User-approved, per-world model calibration frozen for deterministic replay. */
+  calibration?: FarmCalibration;
+  /** Frozen placed-asset contributions used by replay; absent means legacy semantics. */
+  assetPhysics?: RunAssetPhysicsSnapshot;
+  /** New records freeze model-driving soil values and the crops they use; absent on legacy runs. */
+  modelInputs?: RunModelInputs;
+  /** v2-v4 event keyed by canonical targetCellKey; basePlan.plantedAt supplies its date. */
+  cropStartEvents?: Record<string, CropStartEvent>;
+  /** Frozen equipment contribution used by the climate solver during replay. */
+  climateEquipment?: ClimateEquipmentInput;
+  /** Frozen light/air terms per growing target; keys use growingTargetKey(). */
+  climateTargetEquipment?: Partial<Record<GrowingTargetKey, ClimateEquipmentInput>>;
+  /** Campaign carry copied into this run; only soil-growing targets are read. */
+  soilCarryByTarget?: Partial<Record<GrowingTargetKey, SoilCarry>>;
   /** "YYYY-MM-DD" of dayIndex 0. */
   startDate: string;
   /** Planned sim days. */
@@ -200,6 +570,8 @@ export interface RunSummary {
   irrigatedMm: number;
   etoMmTotal: number;
   totalYieldKg: number;
+  /** v1 catalog yields are fresh-mass estimates; v2/v3/v4 outputs are dry mass. */
+  yieldBasis?: 'fresh-matter' | 'dry-matter';
   /** cropId → kg (JSON keys are strings). */
   yieldKgByCrop: Record<string, number>;
   /** Cell-days with max stress ≥ 0.4 (drivers.STRESS_ONSET). */
@@ -208,7 +580,7 @@ export interface RunSummary {
    * ET0 × Kc(biomass) across live cells (an average cell's season depth). */
   waterUseMm: number;
   /** Cell-days at/above STRESS_ONSET per term (nitrogen included since Phase 3). */
-  stressDays: { water: number; heat: number; cold: number; nitrogen: number };
+  stressDays: { water: number; heat: number; cold: number; nitrogen: number; light?: number };
   /** Cell-days with pestPressure ≥ ecosystem.PEST_OUTBREAK (0.6). */
   outbreakDays: number;
   /** Residual plant-available N at run end, mean over live cells, kg/ha. */
@@ -218,20 +590,36 @@ export interface RunSummary {
   matureCells: number; // cells at biomass ≥ 1.0 at the end (harvest keeps them standing)
   cellCount: number; // cells alive at the end (harvests mark, not remove)
   eventCounts: Record<string, number>;
+  /** Missing on historical summaries; explicit on newly generated v2 records. */
+  modelQualification?: { status: 'supported' | 'qualified' | 'unsupported'; reasons: string[] };
+  /** v2 unrounded per-cell FAO-56 closure totals across the run. */
+  rootZoneBalanceResidualAccumulatedMm?: number;
+  rootZoneBalanceResidualMaxAbsMm?: number;
+  /** v2 water counted as drainage when replanting shrinks root-zone capacity, mm. */
+  rootZoneReplantDrainageMm?: number;
+  /** v2 water brought into the moving root-zone control volume, mm. */
+  rootZoneExpansionInflowMm?: number;
 }
 
-/** What localStorage holds for one run — tiny by design: config + frozen
- * envSeries + summary. Replay (config × envSeries through simulateRun)
- * rebuilds all state in milliseconds; NEVER persist per-tick snapshots. */
+/** Persist run inputs (config, frozen envSeries, optional observations) + summary.
+ * Replay rebuilds all state in milliseconds; NEVER persist per-tick snapshots. */
 export interface RunRecord {
   id: string;
   farmId: number;
+  /** Parent record for a saved counterfactual fork. */
+  parentId?: string;
+  /** Number of completed days at the fork boundary. */
+  forkedAtDay?: number;
   label: string;
   createdAt: string;
   config: RunConfig;
   /** Frozen provenance artifact ⇒ stable replay regardless of later weather. */
   envSeries: DailyEnvironment[];
+  /** Frozen measured inputs used by deterministic twin replay. */
+  observations?: Observation[];
   summary: RunSummary;
+  /** Small historical uncertainty result; never stores per-year states. */
+  ensembleCache?: { key: string; configKey?: string; result: RunEnsembleResult };
   status: 'running' | 'complete';
 }
 
@@ -239,6 +627,10 @@ export interface RunRecord {
  * (localApi) / by the backend (rest) — callers never ship a PlanState. */
 export interface CreateSimRunInput {
   farmId: number;
+  /** Omission preserves the ordinary v1 default; v2 is an explicit opt-in. */
+  cropModelVersion?: 'crop-model-v1' | 'crop-model-v2';
+  /** New callers name the environment. Omission is a legacy one-world adapter. */
+  environmentId?: string;
   label?: string;
   /** "YYYY-MM-DD"; default = today (UTC). */
   startDate?: string;
@@ -251,4 +643,6 @@ export interface CreateSimRunInput {
   precipMultiplier?: number;
   seed?: number; // default 1
   interventions?: Intervention[];
+  /** Explicit, target-scoped campaign input. Omission retains ordinary soil defaults. */
+  soilCarryByTarget?: Partial<Record<GrowingTargetKey, SoilCarry>>;
 }

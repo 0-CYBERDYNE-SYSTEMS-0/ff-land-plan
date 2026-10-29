@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "id": "WATERSA-2018-DYNAMIC-CANOPY-ENGINE-SYNTHETIC-01",
+  "status": "preregistered synthetic engine-integration fixture; no measured trajectory or candidate comparison",
+  "source": {
+    "evidenceId": "VAHRMEIJER-2018-WATER-SA-44-4-02",
+    "citation": "Vahrmeijer, J.T., Annandale, J.G., Steyn, J.M. and Bristow, K.L. (2018), Model parameters of four important vegetable crops for improved water use and yield estimation, Water SA 44(4), 528–538.",
+    "url": "https://doi.org/10.4314/wsa.v44i4.02",
+    "sourceParameterTable": "Table 6 selected winter broccoli SWB parameter set",
+    "crop": "broccoli",
+    "cultivar": "Parthenon",
+    "season": "winter 2008",
+    "sourceParameters": {
+      "kPar": 1.09,
+      "specificLeafAreaM2PerKg": 9,
+      "leafStemPartitionParameterM2PerKg": 1.54
+    },
+    "tableDiscrepancy": "Table 5 measured winter Parthenon K_PAR=1.14 and Table 6 selected winter broccoli K_PAR=1.09. Table 5 summer Star 2204 K_PAR=1.09 and Table 6 selected summer broccoli K_PAR=1.14. Values are preserved separately; no biological attribution is inferred.",
+    "domainLimits": [
+      "These selected values are not generic broccoli defaults or a complete FarmFriend parameter set.",
+      "Source cultivar Parthenon (var. cymosa) and the FarmFriend broccoli catalog record (var. italica) are distinct domains; this source reference is not a catalog default.",
+      "The source RUE uses intercepted total solar radiation and cannot be copied into FarmFriend's intercepted-PAR RUE equation.",
+      "The source p/SLA relation calculates LAI from canopy dry matter; it does not define the daily share of new net dry matter allocated to canopy versus harvestable organs."
+    ]
+  },
+  "modelDispatch": {
+    "cropModelVersion": "crop-model-v4",
+    "runModelInputs": "run-inputs-v4",
+    "parameterSetVersion": "crop-parameters-v5",
+    "historicalVersions": "crop-model-v1, v2 and v3 retain their existing equations and frozen-input interpretation; ordinary new-run creation remains v1 until acceptance gates pass."
+  },
+  "fixtureClassification": "synthetic software integration only; not a source reproduction, measured comparison, reference-model agreement, or crop prediction",
+  "frozenSyntheticInputs": {
+    "dryMatterUnits": "g DM/m² ground",
+    "canopyMassConversion": "Convert canopy DM from g/m² to kg/m² by dividing by 1000 before applying the source LAI relation.",
+    "leafAreaEquation": "LAI = canopy DM (kg/m²) × SLA (m²/kg) / (1 + p (m²/kg) × canopy DM (kg/m²)).",
+    "interceptionEquation": "FI_PAR = 1 - exp(-K_PAR × LAI).",
+    "parEnergyConversion": "Intercepted PAR (MJ/m²/day) = DLI (mol PAR/m²/day) / 4.5 (mol PAR/MJ PAR) × FI_PAR.",
+    "netProductionEquation": "Net DM gain (g/m²/day) = synthetic RUE (g DM/MJ intercepted PAR) × intercepted PAR (MJ/m²/day) × frozen stress factor.",
+    "massBalanceEquation": "Canopy end = canopy start + canopy share × net DM gain; harvestable end = harvestable start + harvestable share × net DM gain; total above-ground DM = canopy end + harvestable end.",
+    "rounding": "Keep all internal state and flux values unrounded; round only fixture display values. Compute total from the two pools each tick so total DM equals canopy plus harvestable DM.",
+    "initialPerCellCanopyDryMatterGPerM2": 10,
+    "initialPerCellHarvestableDryMatterGPerM2": 5,
+    "initialPerCellTotalAboveGroundDryMatterGPerM2": 15,
+    "syntheticDailyCanopyAllocationShare": 0.6,
+    "syntheticDailyHarvestableAllocationShare": 0.4,
+    "allocationConstraint": "Canopy and harvestable shares are synthetic frozen assumptions, sum to exactly 1, and partition each net DM increment once. No harvest-index multiplier is applied on top of the harvestable pool.",
+    "syntheticNetRueGPerMjInterceptedPar": 2,
+    "dailyDliMolParM2": 18,
+    "dailyStressFactor": 1,
+    "dailyEtoMm": 0,
+    "dailyPrecipitationMm": 0,
+    "dailyIrrigationMm": 0,
+    "dailyRunoffMm": 0,
+    "rootZoneWaterStressCoefficient": 1,
+    "syntheticDailyEnvironment": {
+      "classification": "synthetic software-test forcing; not measured or source-weather data",
+      "tMinC": 15,
+      "tMaxC": 20,
+      "meanTemperatureC": 17.5,
+      "gddBase10C": 7.5,
+      "gddClassification": "synthetic value derived from the synthetic 17.5 °C daily mean",
+      "naturalDliMolParM2": 18,
+      "etoMm": 0,
+      "precipitationMm": 0,
+      "irrigationMm": 0,
+      "runoffMm": 0,
+      "cropCatalogRecord": "broccoli id 19; Brassica oleracea var. italica, min 4 °C, max 26 °C",
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 5,
+        "provenance": "unknown; synthetic numerical fixture input"
+      },
+      "rootZone": {
+        "effectiveDepthCm": 20,
+        "initialStorageFraction": 1,
+        "initialStorageMm": 30,
+        "totalAvailableWaterMm": 30
+      },
+      "neighbors": 0,
+      "initialPestPressure": 0,
+      "stressIsolation": "Temperature remains within the catalog crop band; mean temperature is below the pest driver threshold; N starts at the model cap of 1200 kg/ha, above 1.2 times the crop's 180 kg/ha need; zero ET and full initial root storage give Ks=1; no neighbors or prior pest pressure. The reducer stress factor is therefore 1 on both days."
+    },
+    "fluxScope": "Use the frozen synthetic environment above to make reducer stress exactly 1 while keeping water and climate fluxes at zero; this fixture does not test climate or root-zone coupling.",
+    "dailyTimeStep": "one deterministic daily tick",
+    "interceptionTiming": "Compute LAI and FI_PAR from the frozen beginning-of-day canopy DM; use that same fraction for the day's photosynthesis, then partition the resulting net DM gain. Do not feed the same day's gain into that day's interception."
+  },
+  "expectedDailyRows": [
+    {
+      "day": 1,
+      "beginningCanopyDryMatterGPerM2": 10,
+      "leafAreaIndexM2PerM2": 0.088635020682,
+      "interceptedParFraction": 0.092091950467,
+      "netDryMatterGainGPerM2": 0.736735603736,
+      "endingCanopyDryMatterGPerM2": 10.442041362242,
+      "endingHarvestableDryMatterGPerM2": 5.294694241494,
+      "endingTotalAboveGroundDryMatterGPerM2": 15.736735603736
+    },
+    {
+      "day": 2,
+      "beginningCanopyDryMatterGPerM2": 10.442041362242,
+      "leafAreaIndexM2PerM2": 0.092491047432,
+      "interceptedParFraction": 0.095899942555,
+      "netDryMatterGainGPerM2": 0.767199540443,
+      "endingCanopyDryMatterGPerM2": 10.902361086508,
+      "endingHarvestableDryMatterGPerM2": 5.601574057672,
+      "endingTotalAboveGroundDryMatterGPerM2": 16.503935144179
+    }
+  ],
+  "acceptanceChecks": {
+    "equationArithmeticTolerance": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": "LAI m²/m²; FI_PAR dimensionless; net DM g/m²/day",
+      "basis": "Synthetic deterministic arithmetic check with frozen displayed source transcriptions; not biological or predictive accuracy."
+    },
+    "dryMatterClosureTolerance": {
+      "maximumAbsoluteResidual": 1e-12,
+      "units": "g DM/m²/day",
+      "residual": "total dry-matter increment minus canopy increment minus harvestable increment",
+      "basis": "Numerical conservation invariant for each partitioned daily net-production increment; check unrounded internal state and require total above-ground DM to equal the sum of its two pools at every tick."
+    },
+    "zeroLight": "Exactly zero photosynthetic gain in both canopy and harvestable pools when DLI is known zero.",
+    "unknownLight": "No DM pool changes when DLI is unknown; output is qualified as unsupported for that day's production.",
+    "candidateComparison": false,
+    "measuredOutputComparison": false
+  },
+  "qualification": [
+    "The source K_PAR/SLA/p values are source-selected seasonal references; the Table 5/Table 6 K_PAR discrepancy is disclosed without attribution. The Parthenon source cultivar and FarmFriend broccoli var. italica catalog record are distinct domains.",
+    "The intercepted-PAR RUE, 0.6/0.4 daily canopy/harvestable allocation, and initial per-cell pool values are synthetic assumptions, not source parameters.",
+    "The source RUE and water/climate equations are not transferred. This fixture sets water and climate fluxes to zero and stress to 1; it makes no claim about root-zone or enclosure climate integration. FI_PAR is checked only as a production interception input, not as a climate-exchange or transpiration proxy.",
+    "This fixture does not validate broccoli growth, harvest timing, water response, or model accuracy."
+  ],
+  "toleranceReview": {
+    "status": "limited synthetic arithmetic and closure approved; no predictive comparison authorized",
+    "requestedScope": "Canopy g/m² to kg/m² conversion, LAI/FI_PAR equations, DLI-to-intercepted-PAR conversion, synthetic net-production arithmetic, zero/unknown light behavior, exact pool-sum invariant, and unrounded two-pool daily dry-matter closure only. No climate integration, measured, or candidate comparison is authorized.",
+    "reviewedBy": "independent integration validator",
+    "reviewedDate": "2026-10-27"
+  },
+  "implementationStatus": "implemented in the crop-model-v4 reducer; all preregistered synthetic engine checks pass, including known-zero pool closure and unknown-light qualification; crop-model-v4 test file and full local suite (46 files, 244 tests) pass; exact-head PR CI run 40601160981 on eb940aa passed all four named checks; no measured or candidate comparison run"
+}

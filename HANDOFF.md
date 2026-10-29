@@ -349,8 +349,9 @@ Deliverable: undo/redo history visualization as translucent ghost overlays.
   pickers, Spacing + Companions overlay toggles, history/export/settings.
 - `CropPalette.tsx` / `AssetPalette.tsx` — palettes with search + recently-used
   rings (`ff-pro:recent-crops` / `ff-pro:recent-assets`).
-- `TemplatesCard.tsx` (+ data in `src/data/templates.ts`) — four starter plans;
-  apply = confirm → one `replacePlan(..., {save:true})` → one undo entry.
+- `TemplatesCard.tsx` (+ data in `src/data/templates.ts`) — profile-compatible
+  floor, bench, hydro and rack starters for all nine world archetypes; applying
+  replaces crop, ground, growing-space and equipment content in one undo entry.
 - `SelectionPanel.tsx`, `StatsPanel.tsx`, `PairingsPanel.tsx` — presentational;
   rail order: Templates → CropPalette → AssetPalette → Selection → Stats →
   Pairings.

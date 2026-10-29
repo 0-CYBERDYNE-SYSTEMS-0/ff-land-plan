@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 1,
+  "id": "FAO56-V2-AVAILABLE-WATER-CAP-SYNTHETIC-01",
+  "status": "preregistered synthetic software invariant; candidate not executed",
+  "classification": "One synthetic crop-model-v2 reducer-route check that actual root-zone transpiration is bounded by available storage. Not a soil, media, crop, or prediction benchmark.",
+  "sourceContext": {
+    "sourceId": "FAO-56-1998",
+    "sourceArtifact": {
+      "url": "https://www.fao.org/4/X0490E/x0490e0e.htm",
+      "retrievedDate": "2026-10-27",
+      "sha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+      "bytes": 137909,
+      "licenseOrReuse": "The existing source artifact is retained as provenance only; no source text or code is copied."
+    },
+    "thermalReference": "OSU EM 9305 Table 6 values are frozen only to reproduce the existing reducer route; no cultivar equivalence or maturity-accuracy claim is made.",
+    "rootZoneReference": "FAO-56 Table 22 p=0.40 at ETc approximately 5 mm/day and the Chapter 8 balance equations are reference inputs/method context only; no Example 37 trajectory or output is reproduced or compared.",
+    "catalogCropSnapshotUse": "The tomato catalog snapshot identifies the frozen software input only; it does not assert cultivar equivalence or crop-parameter accuracy.",
+    "sourceUse": "AWC, organic matter, effective depth, initial storage, Kc, environment, production, and the uptake-bound scenario are synthetic. Source references do not validate these scenario values or outputs."
+  },
+  "modelDispatch": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsVersion": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "climateRoute": "standard open-field one-cell route; no environment-v2 snapshot",
+    "ordinaryNewRunDefaultChanged": false
+  },
+  "syntheticInputs": {
+    "run": {
+      "farmId": 1,
+      "startDate": "2026-10-01",
+      "dayCount": 1,
+      "seed": 1,
+      "scenario": "baseline",
+      "tempDeltaC": 0,
+      "precipMultiplier": 1,
+      "autoHarvest": false,
+      "interventions": [],
+      "cellKey": "0,0",
+      "cellSizeM": 0.25,
+      "cropStartEvent": "transplanting",
+      "cropStartEvents": { "0,0": "transplanting" },
+      "environmentClimateSnapshot": "omitted"
+    },
+    "cropSnapshotSourceMetadata": "src/data/crops.ts cropLibrary entry id 1; frozen for replay identity only",
+    "cropSnapshot": {
+      "id": 1,
+      "slug": "tomato",
+      "name": "Tomato",
+      "scientificName": "Solanum lycopersicum",
+      "category": "vegetable",
+      "family": "Solanaceae",
+      "growthDays": 75,
+      "spacingCm": 50,
+      "rowSpacingCm": 90,
+      "sowDepthCm": 0.6,
+      "frostTolerance": "tender",
+      "sowIndoorsWeeksBeforeLastFrost": 6,
+      "transplantWeeksAfterLastFrost": 1,
+      "directSowStartWeeks": null,
+      "directSowEndWeeks": null,
+      "harvestWindowDays": 60,
+      "yieldKgPerPlant": 4.5,
+      "waterNeedMmDay": 5.5,
+      "nitrogenNeed": "high",
+      "sunRequirement": "full",
+      "minTempC": 10,
+      "maxTempC": 32,
+      "yieldTonHa": 35,
+      "colorHex": "#D4380D",
+      "emoji": "🍅",
+      "companions": ["basil", "carrot", "onion", "marigold", "parsley", "borage"],
+      "antagonists": ["fennel", "potato", "cabbage", "corn"],
+      "description": "Warm-season staple. Stake or cage; prune suckers on indeterminates.",
+      "isCustom": false
+    },
+    "thermalParameters": {
+      "tBaseC": 7.2,
+      "tUpperC": 33.3,
+      "gddToMaturityCdays": [1024, 1117],
+      "startEvents": ["transplanting"],
+      "accumulationStart": "Transplanting at 3–5 true leaves",
+      "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
+      "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6",
+      "sourceCitation": "Andrews et al., OSU Extension EM 9305, Table 6",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-models-introduction-farmers-gardeners"
+    },
+    "soil": {
+      "awcMmPerCm": 1.0,
+      "organicMatterPct": 2.4,
+      "source": "unknown",
+      "classification": "Synthetic software values only; not a soil/media default, profile, or fertility claim."
+    },
+    "productionParameters": {
+      "equationFamily": "LINTUL-net-RUE",
+      "rueGPerMjInterceptedPar": 2,
+      "initialDryMatterGPerM2": 0,
+      "interceptedParFraction": 0.5,
+      "harvestIndex": 0.5,
+      "status": "qualified",
+      "missing": [],
+      "limitations": ["Synthetic ancillary inputs; production response is not an acceptance output for this fixture."],
+      "evidence": {
+        "evidenceId": "TEST-SYNTHETIC-START-EVENT",
+        "sourceCitation": "Synthetic software acceptance fixture; no biological claim",
+        "sourceUrl": "test-only:crop-start-event",
+        "validDomain": "software acceptance only"
+      }
+    },
+    "rootZoneParameters": {
+      "method": "FAO-56",
+      "effectiveRootDepthCm": 5,
+      "rootDevelopment": "none; static effective depth and zero root-growth storage",
+      "tableDepletionFractionP": 0.4,
+      "cropCoefficient": 1.2,
+      "initialStorageFraction": 0.2,
+      "initialStorageMm": 1,
+      "status": "qualified",
+      "missing": [],
+      "limitations": ["Synthetic static root-zone values exercise the reducer cap only."],
+      "evidence": {
+        "evidenceId": "TEST-SYNTHETIC-START-EVENT",
+        "sourceCitation": "Synthetic software acceptance fixture; no biological claim",
+        "sourceUrl": "test-only:crop-start-event",
+        "validDomain": "software acceptance only"
+      },
+      "lifecycle": "plant"
+    },
+    "rootZoneParameterSourceContext": "The p=0.40 reference is held fixed only to exercise the reducer's p adjustment; no cultivar-specific depletion response is validated.",
+    "nitrogen": {
+      "soilOrganicMatterSource": "synthetic with unknown soil source tag",
+      "initialPoolKgHa": 600,
+      "role": "frozen ancillary input to keep the one-day reducer route qualified; no nutrient-response claim"
+    },
+    "dailyEnvironment": {
+      "date": "2026-10-01",
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipMm": 0,
+      "etoMm": 5,
+      "dliNaturalMol": 18,
+      "gddBase10C": 15,
+      "provenance": {
+        "tMinC": "default",
+        "tMaxC": "default",
+        "precipMm": "default",
+        "etoMm": "default",
+        "dliNaturalMol": "default"
+      },
+      "status": "one-day synthetic forcing; temperature is within the frozen crop min/max range"
+    },
+    "waterFluxesMm": {
+      "precipitation": 0,
+      "irrigation": 0,
+      "runoff": 0,
+      "capillaryRise": "omitted at reducer boundary; defaults to 0",
+      "rootGrowthStorage": 0,
+      "referenceEvapotranspiration": 5,
+      "cropCoefficient": 1.2,
+      "potentialTranspiration": 6
+    }
+  },
+  "expected": {
+    "equations": "TAW = AWC × effective root depth. Initial depletion = TAW − initial storage. Adjusted p = clamp(0.1, 0.8, pTable + 0.04 × (5 − ETc)). Ks = (TAW − depletion)/(TAW − pAdjusted × TAW) when depletion exceeds readily available water. Actual transpiration = min(storage after inflows, ETc × Ks). Water residual = storage start + inflows − runoff − drainage − actual transpiration − storage end.",
+    "calculation": {
+      "capacityMm": 5,
+      "initialStorageMm": 1,
+      "initialDepletionMm": 4,
+      "referenceEvapotranspirationMmDay": 5,
+      "cropCoefficient": 1.2,
+      "potentialTranspirationMm": 6,
+      "adjustedDepletionFractionP": 0.36,
+      "readilyAvailableWaterMm": 1.8,
+      "stressCoefficientKs": 0.3125,
+      "ksAdjustedPotentialTranspirationMm": 1.875,
+      "availableWaterBeforeTranspirationMm": 1,
+      "actualTranspirationMm": 1,
+      "deepDrainageMm": 0,
+      "finalStorageMm": 0,
+      "endDepletionMm": 5,
+      "waterBalanceResidualMm": 0,
+      "massBalance": "1 + 0 − 0 − 0 − 1 − 0 = 0 mm"
+    },
+    "directRootZoneStep": {
+      "input": {
+        "state": { "waterMm": 1 },
+        "params": { "awcMmPerCm": 1.0, "effectiveRootDepthCm": 5, "depletionFraction": 0.36 },
+        "fluxes": {
+          "precipMm": 0,
+          "irrigationMm": 0,
+          "runoffMm": 0,
+          "capillaryRiseMm": "omitted/default zero",
+          "rootGrowthStorageMm": 0,
+          "potentialTranspirationMm": 6
+        }
+      },
+      "expected": {
+        "capacityMm": 5,
+        "stressCoefficient": 0.3125,
+        "actualTranspirationMm": 1,
+        "deepDrainageMm": 0,
+        "stateWaterMm": 0,
+        "depletionMm": 5,
+        "residualMm": 0
+      }
+    },
+    "stepDayAndRunAssertions": {
+      "route": "One-cell standard open-field crop-model-v2 stepDay/simulateRun path; no environment-v2 snapshot.",
+      "callThroughObserver": "Observe exactly one actual stepFao56RootZone invocation during stepDay and invoke the original reducer unchanged. Assert initial state waterMm=1; AWC=1.0 mm/cm; effectiveRootDepthCm=5; depletionFraction is within the registered dimensionless arithmetic bound of 0.36; zero precipitation, irrigation, runoff, and root-growth storage; capillaryRiseMm omitted/undefined and defaulted to 0; potentialTranspirationMm=6. Restore the observer in finally before simulateRun.",
+      "integratedStep": "createRun must begin with rootZoneWaterMm=1 and capacity=5 mm. Assert effective environment ETo=5 mm, one-day unrounded dayStats.waterUseMm=1 mm, final cell rootZoneWaterMm=0 mm, nonnegative storage, and defined zero cell residuals. The captured Ks-adjusted potential demand is 1.875 mm, greater than the available 1 mm; actual uptake is capped at 1 mm.",
+      "simulateRunAndReplay": "One simulated day; summary waterUseMm=1; final storage and defined root-zone residuals match stepDay. A second simulateRun from the same frozen config and environment series must exactly match events, final state, and summary. No harvest event is expected."
+    }
+  },
+  "tolerances": {
+    "waterArithmetic": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "unit": "mm",
+      "metrics": [
+        "capacityMm",
+        "initialStorageMm",
+        "initialDepletionMm",
+        "readilyAvailableWaterMm",
+        "ksAdjustedPotentialTranspirationMm",
+        "actualTranspirationMm",
+        "deepDrainageMm",
+        "finalStorageMm",
+        "endDepletionMm",
+        "dailyWaterBalanceResidualMm",
+        "dayStats.waterUseMm"
+      ],
+      "rationale": "One root-zone tick uses only the frozen additions, multiplications, division, min/max, and subtractions shown above. At these magnitudes 1e-12 mm is a conservative allowance for double-precision rounding across this single step; it is not accumulated numerical drift or model error."
+    },
+    "dimensionlessArithmetic": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "unit": "dimensionless",
+      "metrics": ["adjustedDepletionFractionP", "stressCoefficientKs"],
+      "rationale": "The p adjustment and Ks are evaluated by one-step double-precision arithmetic from the frozen inputs; this bound covers floating-point representation only and is not a parameter or model-fit tolerance."
+    },
+    "exactStructuralChecks": [
+      "Frozen model/input/parameter versions and standard open-field route",
+      "Frozen crop and thermal identity/values, unknown soil source, static root parameters, zero precipitation/irrigation/runoff/root-growth inputs, capillary rise omitted and defaulted to zero, and potential transpiration fixed at 6 mm/day",
+      "Exactly one actual reducer call through the original implementation and observer restoration before simulateRun",
+      "Actual transpiration does not exceed available root-zone water; final storage is nonnegative",
+      "One-day count, no harvest, and exact same-input replay equality"
+    ],
+    "scope": "Arithmetic bounds only. No measured/reference comparison, source-display bound, calibration threshold, crop-error tolerance, biological validation, or predictive tolerance is proposed."
+  },
+  "notCovered": [
+    "Measured soil, crop, or weather behavior",
+    "Soil/media defaults, hydraulic profile, infiltration, or runoff response",
+    "Multi-day depletion, irrigation, drainage, capillary rise, or root growth",
+    "A-05 shortage-to-production response beyond existing fixtures",
+    "Crop accuracy, biological validity, predictive validity, or full A-05/02A acceptance"
+  ],
+  "review": {
+    "S1Arithmetic": "Approved the frozen one-step arithmetic before candidate execution.",
+    "S2Novelty": "Approved the stressed-demand-at-storage-cap case as a distinct reducer-route assertion before candidate execution.",
+    "S2ContractAndProvenance": "Approved source metadata, synthetic-only boundaries, and fixture/manifest/decision-record consistency before candidate execution."
+  },
+  "preregistrationCI": {
+    "pullRequest": 82,
+    "pullRequestState": "draft",
+    "headSha": "6526af7ab27b13b7ba6368c65f7f7c1a07b97591",
+    "runId": "40649451133",
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40649451133",
+    "result": "passed; verifies the preregistration commit only, not candidate execution or acceptance",
+    "contexts": [
+      {
+        "name": "test + typecheck + build",
+        "result": "PASS",
+        "duration": "40s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "result": "PASS",
+        "casesPassed": "3/3",
+        "testDuration": "5.6m",
+        "jobDuration": "6m14s",
+        "journeys": [
+          "production Pages boot",
+          "unsupported environment-v2 stored-summary retention",
+          "unsupported v4 lifecycle explanation and stored-summary retention"
+        ]
+      },
+      {
+        "name": "secret + private-file scan",
+        "result": "PASS",
+        "duration": "18s"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "result": "PASS",
+        "duration": "2s"
+      }
+    ],
+    "nextGate": "Candidate execution remains gated on all exact-head PR CI contexts passing for this documentation-reconciliation commit."
+  },
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "candidateExecution": "not run; the preregistration SHA passed its exact-head CI, but candidate execution remains gated on exact-head PR CI for this documentation-reconciliation commit"
+}
