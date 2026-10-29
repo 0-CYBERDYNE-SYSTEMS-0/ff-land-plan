@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "A04-V3-TRANSPLANT-ESTABLISHMENT-DATE-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+  "classification": "synthetic crop-model-v3 fail-closed software regression; not a crop benchmark",
+  "preregistration": "quality/beta/evidence/a04-v3-transplant-establishment-date-mismatch-fail-closed-synthetic.json",
+  "registeredCodeSha": "83e46eb39c476f8856bc1343a40b9063d3ae42b1",
+  "registeredDocumentationCommit": {
+    "sha": "9c81b89f1b3a5fb8c278fdf4303ba0992a4cb785",
+    "exactHeadCiRun": 40792260017,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40792260017",
+    "status": "PASS before candidate execution. The preregistration JSON's frozen registrationStatus text still says exact-head CI pending.",
+    "checks": [
+      {
+        "name": "test + typecheck + build",
+        "status": "PASS"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "status": "PASS"
+      },
+      {
+        "name": "secret + private-file scan",
+        "status": "PASS"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "status": "PASS"
+      }
+    ]
+  },
+  "syntheticSetupSha256": "c2baf0b855b9b639959932ca89696af97054de92b0f4007793781763ed4788d7",
+  "candidateCode": {
+    "commit": "f262c9c0d0abb7e332730783e1dbd874b57b7a8d",
+    "changedFiles": [
+      "src/lib/sim/model-inputs.test.ts"
+    ],
+    "productionCodeChanged": false
+  },
+  "execution": {
+    "status": "PASS for the preregistered bounded synthetic fail-closed software invariant.",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell has a mismatched establishment date\"",
+    "focusedResult": "PASS; 1 passed, 37 skipped; 38 tests total.",
+    "registeredAssertions": {
+      "testFile": "src/lib/sim/model-inputs.test.ts",
+      "testTitle": "fails closed when a v3 transplanted cell has a mismatched establishment date",
+      "frozenModelIdentity": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "frozenCropIds": [
+        1
+      ],
+      "frozenParameterCropIds": [
+        1
+      ],
+      "frozenThermalSource": {
+        "cropId": 1,
+        "cropSlug": "tomato",
+        "tBaseC": 7.2,
+        "tUpperC": 33.3,
+        "gddToMaturityCdays": [
+          1024,
+          1117
+        ],
+        "startEvents": [
+          "transplanting"
+        ],
+        "accumulationStart": "Transplanting at 3–5 true leaves",
+        "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
+        "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6",
+        "sourceCitation": "Andrews et al., OSU Extension EM 9305, Tomato degree-days, Table 6 (four cultivars; 1844–2010 °F·days).",
+        "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners"
+      },
+      "frozenSoil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "source": "unknown"
+      },
+      "frozenEstablishment": {
+        "startEvent": "transplanting",
+        "establishedAtDate": "2026-10-04",
+        "initialAboveGroundDryMatterGPerM2": 7,
+        "evidence": {
+          "classification": "synthetic",
+          "evidenceId": "A04-V3-TRANSPLANT-ESTABLISHMENT-DATE-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+          "validDomain": "synthetic frozen-establishment date validation only"
+        }
+      },
+      "transplantEventDate": "2026-10-03",
+      "support": {
+        "status": "unsupported",
+        "canReplay": false,
+        "preserveStoredSummary": true,
+        "preserveStoredSummaryMeaning": "Policy flag only; actual stored-summary retention is not tested."
+      },
+      "supportReasonsContainExactStrings": [
+        "Crop 1: transplant initial state date must match the transplant event date."
+      ],
+      "fullReasonsArrayCompared": false,
+      "replayAsserted": false,
+      "numericModelOutputCompared": false
+    },
+    "worker": {
+      "role": "S1 candidate implementation worker",
+      "estimateEngineerHours": "0.25-0.5",
+      "assumptions": "Existing config and syntheticStartEventParameter helpers supported the frozen fixture; no production changes were required."
+    },
+    "independentCandidateReview": {
+      "reviewer": "S3",
+      "initialFinding": "The test initially omitted registered crop and parameter IDs, thermal source identity, and exact frozen soil identity.",
+      "resolution": "Added assertions for crop IDs [1], parameter crop IDs [1], the tomato thermal source including transplant start event, and frozen soil sentinels/provenance.",
+      "finalStatus": "PASS"
+    }
+  },
+  "localVerification": {
+    "npmTest": "PASS; 48 test files / 268 tests.",
+    "typecheck": "PASS; npm run typecheck.",
+    "standardBuild": "PASS; npm run build.",
+    "demoBuild": "PASS; npm run build:demo.",
+    "pagesBuild": "PASS; npm run build:pages.",
+    "privateFileGuard": "PASS; npm run check:private; 556 tracked files.",
+    "duplicateSafeJsonAndDiffCheck": "PASS.",
+    "productionBrowserSmoke": "Not run locally.",
+    "buildProfiles": "No build:beta script exists.",
+    "warnings": "Builds passed with non-blocking Vite config-loader and large-chunk warnings."
+  },
+  "candidateExactHeadPrCi": {
+    "pullRequest": 82,
+    "headSha": "f262c9c0d0abb7e332730783e1dbd874b57b7a8d",
+    "runId": 40793492236,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40793492236",
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "test + typecheck + build",
+        "status": "PASS",
+        "duration": "27s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "status": "PASS",
+        "tests": "3 passed / 3 total",
+        "jobDuration": "5m51s"
+      },
+      {
+        "name": "secret + private-file scan",
+        "status": "PASS",
+        "duration": "12s"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "status": "PASS",
+        "duration": "2s"
+      }
+    ]
+  },
+  "status": "PASS only for this synthetic fail-closed software invariant; A-04 and overall 02A remain UNVERIFIED.",
+  "claimBoundary": [
+    "PASS is limited to this synthetic fail-closed software invariant; A-04 and overall 02A remain UNVERIFIED.",
+    "No measured transplant state, nursery mass, nursery growth, or biological establishment behavior is represented.",
+    "No crop accuracy, biological validity, independent reference agreement, or prediction is established.",
+    "preserveStoredSummary is a policy flag only; actual stored-summary retention is not tested.",
+    "The test compares categorical support fields and exact reason membership only; no numeric tolerance applies."
+  ],
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false,
+  "owner": "S1 candidate implementation worker; S3 independent candidate validator; lead integration",
+  "retest": "Repeat the registered focused test, independent candidate review, local gates, and exact-head PR CI if any registered fixture input or candidate assertion changes."
+}
