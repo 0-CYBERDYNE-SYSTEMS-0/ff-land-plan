@@ -58,7 +58,10 @@
     "a04V3TransplantSourceClockMaturityEndpointCorrectedResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json",
     "a04V3TransplantEstablishmentDateMismatchPreregisteredFixture": "A04-V3-TRANSPLANT-ESTABLISHMENT-DATE-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
     "a04V3TransplantEstablishmentDateMismatchPreregistration": "quality/beta/evidence/a04-v3-transplant-establishment-date-mismatch-fail-closed-synthetic.json",
-    "a04V3TransplantEstablishmentDateMismatchResult": "quality/beta/evidence/a04-v3-transplant-establishment-date-mismatch-fail-closed-synthetic-result.json"
+    "a04V3TransplantEstablishmentDateMismatchResult": "quality/beta/evidence/a04-v3-transplant-establishment-date-mismatch-fail-closed-synthetic-result.json",
+    "a04V3TransplantEstablishmentEventLabelMismatchPreregisteredFixture": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+    "a04V3TransplantEstablishmentEventLabelMismatchPreregistration": "quality/beta/evidence/a04-v3-establishment-event-label-mismatch-fail-closed-synthetic.json",
+    "a04V3TransplantEstablishmentEventLabelMismatchResult": "quality/beta/evidence/a04-v3-establishment-event-label-mismatch-fail-closed-synthetic-result.json"
   },
   "sources": [
     {
@@ -366,6 +369,7 @@
       "licenseOrReuse": "The publisher page states © 2023 Japanese Society for Horticultural Science and All rights reserved; no open reuse license was identified. This manifest records derived parameter facts and a citation; it does not redistribute article text, figures, tables, or raw data.",
       "sourceVersion": "2023 version of record, Horticulture Journal 92(1), pages 77–87; J-STAGE PDF retrieved 2026-10-27"
     }
+
   ],
   "evidenceRecords": [
     {
@@ -2807,6 +2811,38 @@
       "independentReferenceModelComparison": false,
       "measuredHoldoutValidation": false,
       "status": "PASS only for this bounded synthetic software invariant. No crop accuracy, biology, maturity endpoint, source agreement, holdout, or prediction claim; A-04 and overall 02A remain UNVERIFIED."
+    },
+    {
+      "id": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+      "classification": "preregistered synthetic v3 per-cell transplant establishment event-label mismatch fail-closed software invariant; not measured crop evidence",
+      "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
+      "preregistration": "quality/beta/evidence/a04-v3-establishment-event-label-mismatch-fail-closed-synthetic.json",
+      "resultRecord": "quality/beta/evidence/a04-v3-establishment-event-label-mismatch-fail-closed-synthetic-result.json",
+      "setupDigest": "ce0ce4a4918c345b6773fdce384c57ae991183bd312eadb58289cf53b0b11b4d",
+      "baselineCodeHead": "c7b34a6aa994021feb4608c386b0ef6d8ef63be5",
+      "inputFixtureReferences": [
+        "src/lib/sim/model-inputs.test.ts#config and #syntheticStartEventParameter",
+        "src/lib/sim/model-inputs.ts#cropEstablishmentChecks",
+        "src/data/crops.ts#cropId-1-tomato snapshot",
+        "src/data/cropThermalParams.ts#cropId-1-tomato thermal row",
+        "quality/beta/evidence/model-coverage.json#THERMAL-OSU-TOMATO-FIRST-RIPE"
+      ],
+      "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "syntheticInputs": "Two synthetic arms share one frozen tomato v3 run, crop and parameter records, transplanting run event, matching 2026-10-03 plantedAt and establishedAtDate, initial synthetic dry matter and soil sentinels. The matching-label control uses establishment startEvent transplanting; the mismatch arm changes only establishment startEvent to direct-sowing. The source row is frozen for transplant-event identity only.",
+      "expected": "The matching-label control is expected to remain replayable. The mismatch arm is expected to be unsupported with canReplay false and exact membership of the establishment-state versus frozen-transplant-event mismatch reason. preserveStoredSummary is a policy flag only; the mismatch is not asserted as the sole unsupported reason.",
+      "tolerance": "Not applicable; categorical support fields and exact reason membership only. No numeric model output or maturity endpoint is compared.",
+      "reproduction": "Candidate execution is prohibited until independent preregistration review and exact-head registration documentation PR CI pass. Then run npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell has a mismatched establishment event label\".",
+      "acceptance": {
+        "row": "A-04",
+        "status": "Preregistered synthetic software guard only; candidate not executed. A-04 and overall 02A remain UNVERIFIED. No biological initial-state, cultivar, maturity, accuracy or prediction claim.",
+        "owner": "S1 candidate implementation worker; S2/S3 independent preregistration reviewers; lead integration",
+        "retest": "Any change to the frozen RunConfig, crop/thermal/helper identity, soil sentinels, either event label, expected reason or assertion requires a new reviewed registration and exact-head documentation CI before candidate execution."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "independentReferenceModelComparison": false,
+      "measuredHoldoutValidation": false,
+      "status": "Registered but not executed. No crop accuracy, biology, transplant initial-state validity, cultivar behavior, maturity, source agreement, holdout or prediction is established; A-04 and overall 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {
