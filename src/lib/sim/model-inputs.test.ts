@@ -8,6 +8,7 @@ import fao56V2PositiveDrainageFixture from '../../../quality/beta/evidence/fao56
 import fao56V2RootDrydownFixture from '../../../quality/beta/evidence/fao56-v2-root-drydown-integration-synthetic.json';
 import fao56V2SameDayDrainageEtRerunFixture from '../../../quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json';
 import fao56V2TomatoRootDepthFixture from '../../../quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json';
+import a04CucumberEventClockFixture from '../../../quality/beta/evidence/a04-v3-cucumber-direct-sow-transplant-event-clock-synthetic.json';
 import a08AllCatalogMissingProfileFixture from '../../../quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json';
 import v3AutoHarvestMixedTargetFixture from '../../../quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
@@ -920,6 +921,149 @@ describe('frozen crop model inputs and replay support', () => {
         expect(cell.sourceThermalCdays).toBe(1117);
         expect(cell.biomassFrac).toBe(1);
       }
+    }
+  });
+
+  it("starts v3 cucumber source clocks at each cell's frozen sowing or transplant event", () => {
+    const fixture = a04CucumberEventClockFixture.syntheticSetup;
+    const cucumber = cropLibrary.find((crop) => crop.id === 22)!;
+    const cucumberThermal = cropThermalParams.find((parameter) => parameter.cropId === cucumber.id)!;
+    expect(cucumber).toEqual(fixture.cropSnapshot);
+    expect(cucumberThermal).toEqual(fixture.thermalSource.cropThermalParamsEntry);
+
+    const directCellKey = targetCellKey({ kind: 'floor' }, '0,0');
+    const transplantCellKey = targetCellKey({ kind: 'floor' }, '1,0');
+    const evidence = {
+      classification: 'synthetic' as const,
+      evidenceId: a04CucumberEventClockFixture.id,
+      validDomain: 'synthetic per-cell direct-sowing/transplant event-clock software assertion only',
+    };
+    const directEstablishment: CropEstablishmentInput = {
+      startEvent: 'direct-sowing',
+      establishedAtDate: '2026-10-03',
+      initialAboveGroundDryMatterGPerM2: 0,
+      evidence,
+    };
+    const transplantEstablishment: CropEstablishmentInput = {
+      startEvent: 'transplanting',
+      establishedAtDate: '2026-10-03',
+      initialAboveGroundDryMatterGPerM2: 0,
+      evidence,
+    };
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      startDate: '2026-10-01',
+      dayCount: 4,
+      seed: 1,
+      scenario: 'baseline',
+      tempDeltaC: 0,
+      precipMultiplier: 1,
+      interventions: [],
+      basePlan: {
+        farmId: 1,
+        widthM: 1,
+        heightM: 1,
+        cellM: 0.5,
+        allowOutsideBeds: false,
+        ground: {},
+        planting: { '0,0': 22, '1,0': 22 },
+        plantedAt: { '0,0': '2026-10-01', '1,0': '2026-10-03' },
+        updatedAt: '2026-10-01',
+      },
+      cropStartEvents: {
+        [directCellKey]: 'direct-sowing',
+        [transplantCellKey]: 'transplanting',
+      },
+    });
+    expect(run).toEqual(fixture.runConfig);
+
+    const parameterInput = syntheticStartEventParameter(cucumber.id, cucumberThermal);
+    expect(parameterInput).toEqual(fixture.freezeRunModelInputsV3Source.cropParametersV2[0]);
+    const source = {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [cucumber],
+      cropParametersV2: [parameterInput],
+      cropEstablishmentByCell: {
+        [directCellKey]: directEstablishment,
+        [transplantCellKey]: transplantEstablishment,
+      },
+    };
+    expect(source).toEqual(fixture.freezeRunModelInputsV3Source);
+
+    const modelInputs = freezeRunModelInputsV3(run, source);
+    expect(modelInputs.model).toBe('run-inputs-v3');
+    expect(modelInputs.parameterSetVersion).toBe('crop-parameters-v4');
+    expect(modelInputs.crops).toEqual([cucumber]);
+    expect(modelInputs.cropParameters.map((parameter) => parameter.cropId)).toEqual([22]);
+    expect(modelInputs.cropParameters.map((parameter) => parameter.thermal)).toEqual([cucumberThermal]);
+    expect(modelInputs.soil).toEqual({ awcMmPerCm: 1.5, organicMatterPct: 2.4, source: 'unknown' });
+    expect({
+      model: modelInputs.model,
+      parameterSetVersion: modelInputs.parameterSetVersion,
+      cropIds: modelInputs.crops.map((crop) => crop.id),
+      parameterCropIds: modelInputs.cropParameters.map((parameter) => parameter.cropId),
+      thermalStartEvents: modelInputs.cropParameters.flatMap((parameter) => parameter.thermal?.startEvents ?? []),
+      establishmentByCell: modelInputs.establishmentByCell,
+      soil: modelInputs.soil,
+    }).toEqual(fixture.frozenModelInputIdentity);
+
+    const activeRun = { ...run, modelInputs };
+    const weatherProvenance = {
+      tMinC: 'default' as const,
+      tMaxC: 'default' as const,
+      precipMm: 'default' as const,
+      etoMm: 'default' as const,
+      dliNaturalMol: 'default' as const,
+    };
+    const dates = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'] as const;
+    const days = dates.map((date) => ({
+      date,
+      tMinC: 20,
+      tMaxC: 30,
+      precipMm: 0,
+      etoMm: 4,
+      dliNaturalMol: 18,
+      gddBase10C: 15,
+      provenance: weatherProvenance,
+    }));
+    expect(days).toEqual(fixture.syntheticWeather);
+
+    const expectedClockState = [
+      {
+        date: '2026-10-01',
+        directSowing: { sourceThermalCdays: 15, gddAccumC: 0, establishmentApplied: false },
+        transplanting: { sourceThermalCdays: 0, gddAccumC: 0, establishmentApplied: false },
+      },
+      {
+        date: '2026-10-02',
+        directSowing: { sourceThermalCdays: 30, gddAccumC: 0, establishmentApplied: false },
+        transplanting: { sourceThermalCdays: 0, gddAccumC: 0, establishmentApplied: false },
+      },
+      {
+        date: '2026-10-03',
+        directSowing: { sourceThermalCdays: 45, gddAccumC: 15, establishmentApplied: true },
+        transplanting: { sourceThermalCdays: 15, gddAccumC: 15, establishmentApplied: true },
+      },
+      {
+        date: '2026-10-04',
+        directSowing: { sourceThermalCdays: 60, gddAccumC: 30, establishmentApplied: true },
+        transplanting: { sourceThermalCdays: 30, gddAccumC: 30, establishmentApplied: true },
+      },
+    ] as const;
+    expect(expectedClockState).toEqual(fixture.expectedPerDayClockState);
+
+    let state = createRun(activeRun);
+    for (const day of days) {
+      state = stepDay(state, day, activeRun).state;
+      const expected = expectedClockState.find((entry) => entry.date === day.date)!;
+      expect(state.cells[directCellKey]).toMatchObject({
+        startEvent: 'direct-sowing',
+        ...expected.directSowing,
+      });
+      expect(state.cells[transplantCellKey]).toMatchObject({
+        startEvent: 'transplanting',
+        ...expected.transplanting,
+      });
     }
   });
 
