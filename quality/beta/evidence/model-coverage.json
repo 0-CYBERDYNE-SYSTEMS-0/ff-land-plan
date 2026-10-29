@@ -2831,18 +2831,20 @@
       "syntheticInputs": "Two synthetic arms share one frozen tomato v3 run, crop and parameter records, transplanting run event, matching 2026-10-03 plantedAt and establishedAtDate, initial synthetic dry matter and soil sentinels. The matching-label control uses establishment startEvent transplanting; the mismatch arm changes only establishment startEvent to direct-sowing. The source row is frozen for transplant-event identity only.",
       "expected": "The matching-label control is expected to remain replayable. The mismatch arm is expected to be unsupported with canReplay false and exact membership of the establishment-state versus frozen-transplant-event mismatch reason. preserveStoredSummary is a policy flag only; the mismatch is not asserted as the sole unsupported reason.",
       "tolerance": "Not applicable; categorical support fields and exact reason membership only. No numeric model output or maturity endpoint is compared.",
-      "reproduction": "Candidate execution is prohibited until independent preregistration review and exact-head registration documentation PR CI pass. Then run npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell has a mismatched establishment event label\".",
+      "reproduction": "PASS: npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell has a mismatched establishment event label\" (1 passed / 39 skipped); candidate ff57192a93038384ce693d2320a1ad496879a96a passed exact-head PR #82 CI run 40804981716 (https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40804981716), all four named checks PASS. Local gates also passed.",
       "acceptance": {
         "row": "A-04",
-        "status": "Preregistered synthetic software guard only; candidate not executed. A-04 and overall 02A remain UNVERIFIED. No biological initial-state, cultivar, maturity, accuracy or prediction claim.",
-        "owner": "S1 candidate implementation worker; S2/S3 independent preregistration reviewers; lead integration",
+        "status": "PASS only for bounded synthetic establishment event-label fail-closed software behavior; exact-head candidate PR CI passed. A-04 and overall 02A remain UNVERIFIED.",
+        "owner": "S1 candidate implementation worker; S2 input-binding reviewer; S3 reducer reviewer; lead integration",
         "retest": "Any change to the frozen RunConfig, crop/thermal/helper identity, soil sentinels, either event label, expected reason or assertion requires a new reviewed registration and exact-head documentation CI before candidate execution."
       },
       "candidateComparison": false,
       "measuredOutputComparison": false,
       "independentReferenceModelComparison": false,
       "measuredHoldoutValidation": false,
-      "status": "Registered but not executed. No crop accuracy, biology, transplant initial-state validity, cultivar behavior, maturity, source agreement, holdout or prediction is established; A-04 and overall 02A remain UNVERIFIED."
+      "status": "PASS for bounded synthetic event-label fail-closed software behavior; exact-head candidate PR CI PASS (run 40804981716). No biological, accuracy, cultivar, maturity, source-agreement, holdout or prediction claim; A-04 and overall 02A remain UNVERIFIED.",
+      "candidateCodeSha": "ff57192a93038384ce693d2320a1ad496879a96a",
+      "candidateExactHeadCiRun": 40804981716
     }
   ],
   "coverageSummary": {

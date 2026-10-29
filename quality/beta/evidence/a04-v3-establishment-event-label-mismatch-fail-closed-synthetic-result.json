@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+  "classification": "bounded synthetic v3 establishment event-label fail-closed software invariant; not measured crop evidence",
+  "preregistration": "quality/beta/evidence/a04-v3-establishment-event-label-mismatch-fail-closed-synthetic.json",
+  "registeredCodeBaseline": "c7b34a6aa994021feb4608c386b0ef6d8ef63be5",
+  "registeredDocumentationBaseline": "1df249f4f3e12265f5e9a21288a431e6ff8d518b",
+  "syntheticSetupSha256": "ce0ce4a4918c345b6773fdce384c57ae991183bd312eadb58289cf53b0b11b4d",
+  "registrationExactHeadPrCi": {
+    "pullRequest": 82,
+    "headSha": "1df249f4f3e12265f5e9a21288a431e6ff8d518b",
+    "runId": 40803354612,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40803354612",
+    "status": "PASS before candidate execution; preregistration remains immutable with its registration-time pending status.",
+    "checks": [
+      {
+        "name": "test + typecheck + build",
+        "status": "PASS"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "status": "PASS",
+        "tests": "3 passed / 3 total"
+      },
+      {
+        "name": "secret + private-file scan",
+        "status": "PASS"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "status": "PASS"
+      }
+    ]
+  },
+  "candidateCode": {
+    "commit": "ff57192a93038384ce693d2320a1ad496879a96a",
+    "commitStatus": "PASS; this test-only candidate is the exact head verified by PR CI.",
+    "changedFiles": [
+      "src/lib/sim/model-inputs.test.ts"
+    ],
+    "testFileSha256": "e999fe84c38144b5672fbd940bf028bf8390b3bce621f32ae318da9a6a01b596",
+    "productionCodeChanged": false
+  },
+  "execution": {
+    "status": "PASS for the registered bounded synthetic software invariant; candidate exact-head PR CI passed.",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell has a mismatched establishment event label\"",
+    "focusedResult": "PASS; 1 passed, 39 skipped; 40 tests total.",
+    "registeredAssertions": {
+      "testFile": "src/lib/sim/model-inputs.test.ts",
+      "testTitle": "fails closed when a v3 transplanted cell has a mismatched establishment event label",
+      "importsFrozenFixture": true,
+      "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "sameFrozenRunForControlAndMismatch": true,
+      "configuredEvent": "transplanting",
+      "plantedAt": "2026-10-03",
+      "establishedAtDate": "2026-10-03",
+      "matchingControlCanReplay": true,
+      "mismatchArmOnlyChangedInput": "per-cell establishment startEvent changes from transplanting to direct-sowing",
+      "mismatchSupport": {
+        "status": "unsupported",
+        "canReplay": false,
+        "preserveStoredSummary": "policy flag only",
+        "reasonsContain": [
+          "Crop 1: establishment state does not match its frozen transplanting start event."
+        ],
+        "reasonsArrayCompared": false,
+        "assertedAsSoleUnsupportedReason": false
+      },
+      "numericModelOutputCompared": false,
+      "tolerance": "Not applicable; categorical fields and exact string membership only."
+    },
+    "worker": {
+      "role": "S1 candidate implementation worker",
+      "estimateEngineerHours": "0.25-0.5",
+      "assumptions": "Existing config, syntheticStartEventParameter, freezeRunModelInputsV3 and inspectRunModelSupport helpers suffice."
+    },
+    "independentCandidateReviews": [
+      {
+        "reviewer": "S2 input-binding auditor",
+        "result": "PASS"
+      },
+      {
+        "reviewer": "S3 reducer validator",
+        "result": "PASS"
+      }
+    ],
+    "sourceUseBoundary": "The source row is pinned only for the configured transplanting event label and frozen parameter identity. No cultivar-specific target, maturity, or harvest comparison is made."
+  },
+  "localVerification": {
+    "npmTest": "PASS; 48 test files / 270 tests.",
+    "typecheck": "PASS; npm run typecheck.",
+    "standardBuild": "PASS; npm run build.",
+    "demoBuild": "PASS; npm run build:demo.",
+    "pagesBuild": "PASS; npm run build:pages.",
+    "privateFileGuard": "PASS; 560 tracked files.",
+    "duplicateSafeJsonAndDiffCheck": "PASS; duplicate-safe JSON validation and git diff --check.",
+    "productionBrowserSmoke": "PASS; production Pages-path Playwright 3/3 in 3.8m.",
+    "buildProfiles": "No build:beta script exists."
+  },
+  "candidateExactHeadPrCi": {
+    "pullRequest": 82,
+    "headSha": "ff57192a93038384ce693d2320a1ad496879a96a",
+    "runId": 40804981716,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40804981716",
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "test + typecheck + build",
+        "status": "PASS",
+        "duration": "34s",
+        "suite": "48 files / 270 tests"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "status": "PASS",
+        "tests": "3 passed / 3 total",
+        "jobDuration": "6m23s"
+      },
+      {
+        "name": "secret + private-file scan",
+        "status": "PASS",
+        "duration": "17s"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "status": "PASS",
+        "duration": "2s"
+      }
+    ],
+    "browserJourneys": [
+      "Production build boots under GitHub Pages base path.",
+      "Unsupported environment-v2 stored-summary retention.",
+      "Unsupported v4 lifecycle explanation and stored-summary retention."
+    ],
+    "journeyScopeNote": "These are general production Pages smoke journeys; they do not test stored-summary retention for this A04 fixture."
+  },
+  "status": "PASS only for the bounded synthetic establishment event-label fail-closed software behavior; exact-head candidate PR CI passed. A-04 and overall 02A remain UNVERIFIED.",
+  "claimBoundary": [
+    "The matching-label control is replayable; the mismatch candidate is rejected with exact mismatch-reason membership. The complete reasons array and sole-cause status are not asserted.",
+    "preserveStoredSummary is a policy flag only; actual summary retention is not tested.",
+    "The OSU Table 6 row is used for transplant-event identity and parameter provenance only; no cultivar-specific target, maturity or harvest comparison is asserted.",
+    "No numeric output, measured crop output, biological validity, crop accuracy, independent reference agreement, holdout validation or prediction is established.",
+    "A-04 and overall 02A remain UNVERIFIED."
+  ],
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false,
+  "owner": "S1 candidate implementation worker; S2 input-binding reviewer; S3 reducer reviewer; lead integration",
+  "retest": "Repeat the registered focused command, independent review, local gates and exact-head PR CI if any frozen input, test assertion or relevant reducer behavior changes."
+}
