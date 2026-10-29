@@ -2771,6 +2771,40 @@
       "independentReferenceModelComparison": false,
       "measuredHoldoutValidation": false,
       "status": "PASS only for the bounded synthetic fail-closed software invariant; A-04 and overall 02A remain UNVERIFIED. No measured transplant state, biological validity, crop accuracy, independent reference agreement, or prediction is established; see resultRecord."
+    },
+    {
+      "id": "A04-V3-CUCUMBER-DIRECT-SOW-TRANSPLANT-EVENT-CLOCK-SYNTHETIC-01",
+      "classification": "draft preregistered synthetic v3 cucumber per-cell event-clock routing software invariant; not measured crop evidence",
+      "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
+      "preregistration": "quality/beta/evidence/a04-v3-cucumber-direct-sow-transplant-event-clock-synthetic.json",
+      "resultRecord": "quality/beta/evidence/a04-v3-cucumber-direct-sow-transplant-event-clock-synthetic-result.json",
+      "setupDigest": "1bc480f9147d2498b37888c1a6ffd43f5132113a9bd3e208e4dd8c31ab0aa687",
+      "baselineCodeHead": "f262c9c0d0abb7e332730783e1dbd874b57b7a8d",
+      "inputFixtureReferences": [
+        "src/lib/sim/model-inputs.test.ts#config and #syntheticStartEventParameter",
+        "src/lib/sim/model-inputs.ts#cropStartEventChecks and #cropEstablishmentChecks",
+        "src/lib/sim/engine.ts#stepDay per-cell source thermal and physiology clocks",
+        "src/lib/sim/crop-model-v2.ts#dailyThermalUnits",
+        "src/data/crops.ts#cropId-22-cucumber snapshot",
+        "src/data/cropThermalParams.ts#cropId-22-cucumber thermal row",
+        "quality/beta/evidence/model-coverage.json#THERMAL-OSU-CUCUMBER-FIRST-HARVEST"
+      ],
+      "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "syntheticInputs": "Two planted floor cucumber cells, each with synthetic 0.25 m2 grid-cell area and the same frozen crop/thermal/production/root parameters: cell 0,0 direct-sowing on 2026-10-01 with synthetic establishment on 2026-10-03; cell 1,0 transplanting and establishment on 2026-10-03. Four identical synthetic weather days use Tmin 20 C, Tmax 30 C, precip 0 mm, ETo 4 mm, natural DLI 18 mol/m2/day and gddBase10C 15. Synthetic soil AWC 1.5 mm/cm and organicMatterPct 2.4 are passed without provenance and freeze as source unknown. Full inputs and helper output are frozen in the preregistration.",
+      "expected": "Exact per-day states are frozen in the preregistration. The direct-sowing source clock advances 15/30/45/60 C-days while physiology GDD is 0/0/15/30 and establishment is false/false/true/true. The transplant source clock is 0/0/15/30 C-days with physiology GDD 0/0/15/30 and establishment false/false/true/true. No maturity or harvest endpoint is asserted.",
+      "tolerance": "0 C-days; exact deterministic software clock-state assertions only. No maturity-output or source-observation comparison.",
+      "reproduction": "Independent preregistration reviews passed; exact-head documentation CI is pending and candidate execution is prohibited until it passes: npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 cucumber source clocks at each cell's frozen sowing or transplant event\".",
+      "acceptance": {
+        "row": "A-04",
+        "status": "Independent preregistration reviews passed; exact-head documentation CI pending; candidate not executed. This covers synthetic event-clock routing only; A-04 and overall 02A remain UNVERIFIED.",
+        "owner": "S1 candidate test implementation worker; S2/S3 independent reviewers; lead integration",
+        "retest": "Any change to a frozen input, thermal row, helper output, dates, expected daily states or assertion requires a new reviewed registration and exact-head documentation CI before candidate execution."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "independentReferenceModelComparison": false,
+      "measuredHoldoutValidation": false,
+      "status": "Reviewed preregistration; candidate execution is prohibited pending exact-head documentation CI. No maturity/harvest, cultivar-equivalence, biological, accuracy, reference-agreement or prediction claim. A-04 and overall 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {

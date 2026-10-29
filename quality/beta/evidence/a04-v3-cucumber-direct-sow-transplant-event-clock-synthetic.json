@@ -1,0 +1,547 @@
+{
+  "id": "A04-V3-CUCUMBER-DIRECT-SOW-TRANSPLANT-EVENT-CLOCK-SYNTHETIC-01",
+  "schemaVersion": 1,
+  "classification": "Synthetic crop-model-v3 per-cell event-clock routing software invariant only; not measured crop evidence.",
+  "registrationStatus": "Independent preregistration review passed (S2 source/provenance; S3 A-04 contract after soil-input correction); exact-head PR CI for this registration pending; candidate execution remains prohibited until that CI passes.",
+  "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
+  "baseline": {
+    "codeSha": "f262c9c0d0abb7e332730783e1dbd874b57b7a8d",
+    "documentationSha": "17677a3bb28867426a93a4ad1b878c2cc4108f77",
+    "documentationExactHeadCiRun": 40796266601,
+    "documentationCiStatus": "PASS for this preceding documentation baseline; it does not cover this preregistration.",
+    "testFile": "src/lib/sim/model-inputs.test.ts",
+    "testTitle": "starts v3 cucumber source clocks at each cell's frozen sowing or transplant event",
+    "focusedCommand": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 cucumber source clocks at each cell's frozen sowing or transplant event\"",
+    "candidateExecution": false
+  },
+  "candidateResultPath": "quality/beta/evidence/a04-v3-cucumber-direct-sow-transplant-event-clock-synthetic-result.json",
+  "candidateResultStatus": "PENDING; candidate has not been executed.",
+  "implementationEstimate": {
+    "engineerHours": "0.5-0.75",
+    "assumptions": "The existing per-cell v3 event and establishment inputs, config helper, syntheticStartEventParameter helper, and createRun/stepDay path are sufficient. Estimate excludes preregistration review, candidate review, and full CI gates."
+  },
+  "syntheticSetup": {
+    "constructionHelpers": [
+      "cropLibrary.find(crop => crop.id === 22)!",
+      "cropThermalParams.find(parameter => parameter.cropId === 22)!",
+      "config({ cropModelVersion: 'crop-model-v3', ... })",
+      "targetCellKey({ kind: 'floor' }, '0,0')",
+      "targetCellKey({ kind: 'floor' }, '1,0')",
+      "syntheticStartEventParameter(22, cucumberThermal)",
+      "freezeRunModelInputsV3(run, source)",
+      "createRun({ ...run, modelInputs })",
+      "stepDay(state, day, activeRun)"
+    ],
+    "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+    "runConfig": {
+      "farmId": 1,
+      "cropModelVersion": "crop-model-v3",
+      "basePlan": {
+        "farmId": 1,
+        "widthM": 1,
+        "heightM": 1,
+        "cellM": 0.5,
+        "allowOutsideBeds": false,
+        "ground": {},
+        "planting": {
+          "0,0": 22,
+          "1,0": 22
+        },
+        "plantedAt": {
+          "0,0": "2026-10-01",
+          "1,0": "2026-10-03"
+        },
+        "updatedAt": "2026-10-01"
+      },
+      "startDate": "2026-10-01",
+      "dayCount": 4,
+      "seed": 1,
+      "scenario": "baseline",
+      "tempDeltaC": 0,
+      "precipMultiplier": 1,
+      "interventions": [],
+      "cropStartEvents": {
+        "0,0": "direct-sowing",
+        "1,0": "transplanting"
+      }
+    },
+    "cellGeometry": {
+      "cellM": 0.5,
+      "areaM2PerCell": 0.25,
+      "note": "Synthetic plan geometry only; no spacing, planting-density, yield, or physical crop claim is tested."
+    },
+    "cells": [
+      {
+        "target": "floor",
+        "cell": "0,0",
+        "targetCellKey": "0,0",
+        "cropId": 22,
+        "cropSlug": "cucumber",
+        "startEvent": "direct-sowing",
+        "startEventDate": "2026-10-01",
+        "establishedAtDate": "2026-10-03",
+        "initialAboveGroundDryMatterGPerM2": 0
+      },
+      {
+        "target": "floor",
+        "cell": "1,0",
+        "targetCellKey": "1,0",
+        "cropId": 22,
+        "cropSlug": "cucumber",
+        "startEvent": "transplanting",
+        "startEventDate": "2026-10-03",
+        "establishedAtDate": "2026-10-03",
+        "initialAboveGroundDryMatterGPerM2": 0
+      }
+    ],
+    "cropSnapshot": {
+      "id": 22,
+      "slug": "cucumber",
+      "name": "Cucumber",
+      "scientificName": "Cucumis sativus",
+      "category": "vegetable",
+      "family": "Cucurbitaceae",
+      "growthDays": 60,
+      "spacingCm": 30,
+      "rowSpacingCm": 100,
+      "sowDepthCm": 1.5,
+      "frostTolerance": "tender",
+      "sowIndoorsWeeksBeforeLastFrost": 3,
+      "transplantWeeksAfterLastFrost": 2,
+      "directSowStartWeeks": 2,
+      "directSowEndWeeks": 6,
+      "harvestWindowDays": 45,
+      "yieldKgPerPlant": 2.5,
+      "waterNeedMmDay": 5.5,
+      "nitrogenNeed": "medium",
+      "sunRequirement": "full",
+      "minTempC": 15,
+      "maxTempC": 35,
+      "yieldTonHa": 30,
+      "colorHex": "#229954",
+      "emoji": "🥒",
+      "companions": [
+        "bush-bean",
+        "pea",
+        "radish",
+        "dill",
+        "sunflower"
+      ],
+      "antagonists": [
+        "potato",
+        "sage"
+      ],
+      "description": "Trellis for straight fruit and airflow; pick daily at peak.",
+      "isCustom": false
+    },
+    "thermalSource": {
+      "cropThermalParamsEntry": {
+        "cropId": 22,
+        "cropSlug": "cucumber",
+        "tBaseC": 10,
+        "tUpperC": 32.2,
+        "gddToMaturityCdays": [
+          447,
+          673
+        ],
+        "startEvents": [
+          "direct-sowing",
+          "transplanting"
+        ],
+        "accumulationStart": "Direct seeding or transplanting at 2 true leaves",
+        "maturityEndpoint": "First harvest at market size",
+        "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 2",
+        "sourceCitation": "Andrews et al., OSU Extension EM 9305, Cucumber degree-days, Table 2 (direct-seeded and transplanted cultivars; 805–1211 °F·days).",
+        "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners"
+      },
+      "sourceRecordId": "THERMAL-OSU-CUCUMBER-FIRST-HARVEST",
+      "sourceId": "OSU-EM9305-2021",
+      "classification": "parameter-reference / model-development data",
+      "cultivarScope": "Direct-seeded and transplanted varieties; source range only.",
+      "sourceDomain": "OSU Croptime source domain; most source data were collected in the Willamette Valley in 2013–2015.",
+      "sourceThermalRangeFday": [
+        805,
+        1211
+      ],
+      "convertedThermalRangeCday": [
+        447,
+        673
+      ],
+      "units": {
+        "baseTemperature": "°C",
+        "upperTemperature": "°C",
+        "sourceThermalRange": "°F·day",
+        "convertedThermalRange": "°C·day"
+      },
+      "sourceMethod": "EM 9305 Table 2 cucumber; single sine with horizontal cutoff",
+      "documentedStartEvent": "Direct seeding or transplanting at 2 true leaves",
+      "normalizedStartEvents": [
+        "direct-sowing",
+        "transplanting"
+      ],
+      "documentedEndpoint": "First harvest at market size",
+      "sourceSampleSizeNote": "Source cultivar/method values; exact count is not carried into the current thermal table.",
+      "validDomain": "Named OSU Croptime crop/cultivar and transplant or direct-seed method; regional use outside the source domain is unverified.",
+      "dataStatus": "Parameter reference only; not an executable fixture and not independent validation.",
+      "missingData": [
+        "complete daily weather/input series",
+        "raw independent observations and variance",
+        "independent validation records"
+      ],
+      "calibrationOrHoldout": "Model-development/reference; not holdout.",
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+      "sourceRetrievedDate": "2026-10-27",
+      "sourceArtifactSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+      "sourceLicenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction.",
+      "sourceUseLimitation": "Table 2 is cited only to document both direct-sowing and transplanting event labels. The broad [447, 673] C-day row range is retained for source-row identity only and is not used as a common cultivar endpoint in this fixture."
+    },
+    "soilSentinelAnnotations": {
+      "classification": "Synthetic soil sentinels; not a measured soil profile.",
+      "units": {
+        "awcMmPerCm": "mm/cm",
+        "organicMatterPct": "percent"
+      },
+      "provenance": "The source property is omitted from the frozen helper input; freezeRunModelInputsV3 resolves it to 'unknown'."
+    },
+    "freezeRunModelInputsV3Source": {
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4
+      },
+      "crops": [
+        {
+          "id": 22,
+          "slug": "cucumber",
+          "name": "Cucumber",
+          "scientificName": "Cucumis sativus",
+          "category": "vegetable",
+          "family": "Cucurbitaceae",
+          "growthDays": 60,
+          "spacingCm": 30,
+          "rowSpacingCm": 100,
+          "sowDepthCm": 1.5,
+          "frostTolerance": "tender",
+          "sowIndoorsWeeksBeforeLastFrost": 3,
+          "transplantWeeksAfterLastFrost": 2,
+          "directSowStartWeeks": 2,
+          "directSowEndWeeks": 6,
+          "harvestWindowDays": 45,
+          "yieldKgPerPlant": 2.5,
+          "waterNeedMmDay": 5.5,
+          "nitrogenNeed": "medium",
+          "sunRequirement": "full",
+          "minTempC": 15,
+          "maxTempC": 35,
+          "yieldTonHa": 30,
+          "colorHex": "#229954",
+          "emoji": "🥒",
+          "companions": [
+            "bush-bean",
+            "pea",
+            "radish",
+            "dill",
+            "sunflower"
+          ],
+          "antagonists": [
+            "potato",
+            "sage"
+          ],
+          "description": "Trellis for straight fruit and airflow; pick daily at peak.",
+          "isCustom": false
+        }
+      ],
+      "cropParametersV2": [
+        {
+          "cropId": 22,
+          "thermal": {
+            "cropId": 22,
+            "cropSlug": "cucumber",
+            "tBaseC": 10,
+            "tUpperC": 32.2,
+            "gddToMaturityCdays": [
+              447,
+              673
+            ],
+            "startEvents": [
+              "direct-sowing",
+              "transplanting"
+            ],
+            "accumulationStart": "Direct seeding or transplanting at 2 true leaves",
+            "maturityEndpoint": "First harvest at market size",
+            "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 2",
+            "sourceCitation": "Andrews et al., OSU Extension EM 9305, Cucumber degree-days, Table 2 (direct-seeded and transplanted cultivars; 805–1211 °F·days).",
+            "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners"
+          },
+          "production": {
+            "equationFamily": "LINTUL-net-RUE",
+            "rueGPerMjInterceptedPar": 2,
+            "initialDryMatterGPerM2": 0,
+            "interceptedParFraction": 0.5,
+            "harvestIndex": 0.5,
+            "status": "qualified",
+            "missing": [],
+            "limitations": [
+              "Synthetic production values exercise event timing only."
+            ],
+            "evidence": {
+              "evidenceId": "TEST-SYNTHETIC-START-EVENT",
+              "sourceCitation": "Synthetic software acceptance fixture; no biological claim",
+              "sourceUrl": "test-only:crop-start-event",
+              "validDomain": "software acceptance only"
+            }
+          },
+          "rootZone": {
+            "method": "FAO-56",
+            "effectiveRootDepthCm": 20,
+            "depletionFraction": 0.5,
+            "cropCoefficient": 1,
+            "initialStorageFraction": 0.7,
+            "status": "qualified",
+            "missing": [],
+            "limitations": [
+              "Synthetic static root-zone values exercise event timing only."
+            ],
+            "evidence": {
+              "evidenceId": "TEST-SYNTHETIC-START-EVENT",
+              "sourceCitation": "Synthetic software acceptance fixture; no biological claim",
+              "sourceUrl": "test-only:crop-start-event",
+              "validDomain": "software acceptance only"
+            }
+          },
+          "lifecycle": "plant"
+        }
+      ],
+      "cropEstablishmentByCell": {
+        "0,0": {
+          "startEvent": "direct-sowing",
+          "establishedAtDate": "2026-10-03",
+          "initialAboveGroundDryMatterGPerM2": 0,
+          "evidence": {
+            "classification": "synthetic",
+            "evidenceId": "A04-V3-CUCUMBER-DIRECT-SOW-TRANSPLANT-EVENT-CLOCK-SYNTHETIC-01",
+            "validDomain": "synthetic per-cell direct-sowing/transplant event-clock software assertion only"
+          }
+        },
+        "1,0": {
+          "startEvent": "transplanting",
+          "establishedAtDate": "2026-10-03",
+          "initialAboveGroundDryMatterGPerM2": 0,
+          "evidence": {
+            "classification": "synthetic",
+            "evidenceId": "A04-V3-CUCUMBER-DIRECT-SOW-TRANSPLANT-EVENT-CLOCK-SYNTHETIC-01",
+            "validDomain": "synthetic per-cell direct-sowing/transplant event-clock software assertion only"
+          }
+        }
+      }
+    },
+    "frozenModelInputIdentity": {
+      "model": "run-inputs-v3",
+      "parameterSetVersion": "crop-parameters-v4",
+      "cropIds": [
+        22
+      ],
+      "parameterCropIds": [
+        22
+      ],
+      "thermalStartEvents": [
+        "direct-sowing",
+        "transplanting"
+      ],
+      "establishmentByCell": {
+        "0,0": {
+          "startEvent": "direct-sowing",
+          "establishedAtDate": "2026-10-03",
+          "initialAboveGroundDryMatterGPerM2": 0,
+          "evidence": {
+            "classification": "synthetic",
+            "evidenceId": "A04-V3-CUCUMBER-DIRECT-SOW-TRANSPLANT-EVENT-CLOCK-SYNTHETIC-01",
+            "validDomain": "synthetic per-cell direct-sowing/transplant event-clock software assertion only"
+          }
+        },
+        "1,0": {
+          "startEvent": "transplanting",
+          "establishedAtDate": "2026-10-03",
+          "initialAboveGroundDryMatterGPerM2": 0,
+          "evidence": {
+            "classification": "synthetic",
+            "evidenceId": "A04-V3-CUCUMBER-DIRECT-SOW-TRANSPLANT-EVENT-CLOCK-SYNTHETIC-01",
+            "validDomain": "synthetic per-cell direct-sowing/transplant event-clock software assertion only"
+          }
+        }
+      },
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "source": "unknown"
+      }
+    },
+    "syntheticWeather": [
+      {
+        "date": "2026-10-01",
+        "tMinC": 20,
+        "tMaxC": 30,
+        "precipMm": 0,
+        "etoMm": 4,
+        "dliNaturalMol": 18,
+        "gddBase10C": 15,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        }
+      },
+      {
+        "date": "2026-10-02",
+        "tMinC": 20,
+        "tMaxC": 30,
+        "precipMm": 0,
+        "etoMm": 4,
+        "dliNaturalMol": 18,
+        "gddBase10C": 15,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        }
+      },
+      {
+        "date": "2026-10-03",
+        "tMinC": 20,
+        "tMaxC": 30,
+        "precipMm": 0,
+        "etoMm": 4,
+        "dliNaturalMol": 18,
+        "gddBase10C": 15,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        }
+      },
+      {
+        "date": "2026-10-04",
+        "tMinC": 20,
+        "tMaxC": 30,
+        "precipMm": 0,
+        "etoMm": 4,
+        "dliNaturalMol": 18,
+        "gddBase10C": 15,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        }
+      }
+    ],
+    "expectedPerDayClockState": [
+      {
+        "date": "2026-10-01",
+        "directSowing": {
+          "sourceThermalCdays": 15,
+          "gddAccumC": 0,
+          "establishmentApplied": false
+        },
+        "transplanting": {
+          "sourceThermalCdays": 0,
+          "gddAccumC": 0,
+          "establishmentApplied": false
+        }
+      },
+      {
+        "date": "2026-10-02",
+        "directSowing": {
+          "sourceThermalCdays": 30,
+          "gddAccumC": 0,
+          "establishmentApplied": false
+        },
+        "transplanting": {
+          "sourceThermalCdays": 0,
+          "gddAccumC": 0,
+          "establishmentApplied": false
+        }
+      },
+      {
+        "date": "2026-10-03",
+        "directSowing": {
+          "sourceThermalCdays": 45,
+          "gddAccumC": 15,
+          "establishmentApplied": true
+        },
+        "transplanting": {
+          "sourceThermalCdays": 15,
+          "gddAccumC": 15,
+          "establishmentApplied": true
+        }
+      },
+      {
+        "date": "2026-10-04",
+        "directSowing": {
+          "sourceThermalCdays": 60,
+          "gddAccumC": 30,
+          "establishmentApplied": true
+        },
+        "transplanting": {
+          "sourceThermalCdays": 30,
+          "gddAccumC": 30,
+          "establishmentApplied": true
+        }
+      }
+    ],
+    "expectedSourceThermalUnitsPerTickCdays": 15,
+    "clockDerivation": "For each day, Tmin 20 C and Tmax 30 C are above Tbase 10 C and below Tupper 32.2 C. Under the frozen single-sine method, mean temperature 25 C yields exactly 15 C-days. The source thermal clock starts at each per-cell plantedAt date/event; v3 physiology GDD starts at each per-cell establishedAtDate.",
+    "unasserted": [
+      "No maturity or harvest endpoint is reached, asserted, or compared.",
+      "The broad [447, 673] C-day source range is frozen only as part of the full thermal row and is not used as a common cultivar endpoint.",
+      "No production, yield, spacing, physical plant, biological, accuracy, reference-agreement, or prediction output is compared."
+    ],
+    "tolerance": {
+      "sourceThermalCdays": 0,
+      "gddAccumC": 0,
+      "units": "C-days",
+      "scope": "Exact deterministic software clock-state assertions only; no model-output tolerance or external comparison."
+    }
+  },
+  "sourceAttribution": {
+    "sourceRecordId": "THERMAL-OSU-CUCUMBER-FIRST-HARVEST",
+    "sourceId": "OSU-EM9305-2021",
+    "citation": "Andrews et al., Oregon State University Extension EM 9305, Vegetable Degree-Day Models: An Introduction for Farmers and Gardeners, January 2021, Table 2.",
+    "url": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+    "retrievedDate": "2026-10-27",
+    "pdfSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+    "sourceVersion": "EM 9305, January 2021 PDF",
+    "licenseOrReuse": "No open license identified in the source artifact; cite and retain only derived parameter values, with no text/code reproduction.",
+    "domain": "OSU Croptime source domain; most source data were collected in the Willamette Valley in 2013–2015.",
+    "method": "Single sine with horizontal cutoff; cucumber Table 2.",
+    "units": {
+      "thermalParameters": "°C",
+      "sourceThermalRange": "°F·day",
+      "convertedThermalRange": "°C·day"
+    },
+    "eventClaimBoundary": "Table 2 is cited only to document direct-sowing and transplanting event labels; no cultivar-specific target or maturity comparison is made."
+  },
+  "setupCanonicalization": "SHA-256 of UTF-8 JSON for syntheticSetup with recursively sorted object keys, compact separators, and Unicode preserved.",
+  "setupSha256": "1bc480f9147d2498b37888c1a6ffd43f5132113a9bd3e208e4dd8c31ab0aa687",
+  "claimBoundary": [
+    "This registration covers only deterministic v3 per-cell source-thermal and physiology-clock event routing on synthetic cucumber inputs.",
+    "The broad cucumber source range is not a common cultivar endpoint in this fixture; no maturity or harvest assertion is included.",
+    "No real plant count, crop spacing, plant physiology, measured outcome, biological validity, crop accuracy, independent reference agreement, holdout validation, or prediction is established.",
+    "A-04 and overall 02A remain UNVERIFIED."
+  ],
+  "candidateExecution": false,
+  "review": {
+    "independentPreregistrationReview": "PASS: S2 source/provenance review and S3 event-clock contract review after correction of the soil-source input.",
+    "exactHeadDocumentationCi": "PENDING; must pass before candidate execution.",
+    "candidateReview": "PENDING after candidate execution is authorized.",
+    "owner": "S1 candidate test implementation worker; S2/S3 independent reviewers; lead integration"
+  },
+  "retest": "Any change to a frozen input, source row, helper output, dates, expected per-day clock state, or assertion requires a new reviewed registration and exact-head documentation CI before candidate execution."
+}
