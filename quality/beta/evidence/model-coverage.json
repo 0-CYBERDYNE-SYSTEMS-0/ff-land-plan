@@ -55,7 +55,9 @@
     "a04V3TransplantSourceClockMaturityEndpointAttemptResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-result.json",
     "a04V3TransplantSourceClockMaturityEndpointCorrectedPreregisteredFixture": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-02",
     "a04V3TransplantSourceClockMaturityEndpointCorrectedPreregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02.json",
-    "a04V3TransplantSourceClockMaturityEndpointCorrectedResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json"
+    "a04V3TransplantSourceClockMaturityEndpointCorrectedResult": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json",
+    "a04V3TransplantEstablishmentDateMismatchPreregisteredFixture": "A04-V3-TRANSPLANT-ESTABLISHMENT-DATE-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+    "a04V3TransplantEstablishmentDateMismatchPreregistration": "quality/beta/evidence/a04-v3-transplant-establishment-date-mismatch-fail-closed-synthetic.json"
   },
   "sources": [
     {
@@ -2737,6 +2739,36 @@
       "measuredHoldoutValidation": false,
       "status": "PASS only as a corrective synthetic software regression after fixture 01 was UNACCEPTED. Registration/docs CI run 40786569153 passed; candidate code SHA bce83aa7b0340ea6f3206d977038cf2efc352071 passed exact run 40788255990. Not prospective crop validation; A-04 and overall 02A remain UNVERIFIED.",
       "resultRecord": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic-02-result.json"
+    },
+    {
+      "id": "A04-V3-TRANSPLANT-ESTABLISHMENT-DATE-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+      "classification": "preregistered synthetic v3 transplant establishment-date mismatch fail-closed software invariant; not measured crop evidence",
+      "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
+      "preregistration": "quality/beta/evidence/a04-v3-transplant-establishment-date-mismatch-fail-closed-synthetic.json",
+      "setupDigest": "c2baf0b855b9b639959932ca89696af97054de92b0f4007793781763ed4788d7",
+      "baselineCodeHead": "83e46eb39c476f8856bc1343a40b9063d3ae42b1",
+      "inputFixtureReferences": [
+        "src/lib/sim/model-inputs.test.ts#config and #syntheticStartEventParameter, baseline code SHA 83e46eb39c476f8856bc1343a40b9063d3ae42b1",
+        "src/lib/sim/model-inputs.ts#cropEstablishmentChecks, transplant date guard",
+        "src/data/cropThermalParams.ts#cropId-1-tomato, file SHA-256 e54c574c928b4577ab14a0f7a429ab7a357d751f29a9f358d59f3b306a47d76c",
+        "Oregon State University Extension EM 9305, January 2021, Table 6; PDF SHA-256 469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d"
+      ],
+      "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "syntheticInputs": "One floor tomato cropId 1 cell 0,0; full RunConfig, full crop snapshot, source thermal row and syntheticStartEventParameter output are frozen in the preregistration. Transplant/plantedAt is 2026-10-03; complete synthetic establishment input has startEvent transplanting but establishedAtDate 2026-10-04 and initial above-ground dry matter 7 g/m2. Synthetic soil AWC 1.5 mm/cm and organicMatterPct 2.4 percent are passed without provenance and freeze as source unknown.",
+      "expected": "inspectRunModelSupport reports crop-model-v3 unsupported, canReplay false, and preserveStoredSummary true as a policy flag only; reasons contain the exact string 'Crop 1: transplant initial state date must match the transplant event date.'. Unknown-soil qualification may also appear; do not compare the full reasons array.",
+      "tolerance": "Not applicable; exact categorical fields and exact reason membership only, no numeric model output.",
+      "reproduction": "Independent preregistration review passed; exact-head PR CI pending: npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell has a mismatched establishment date\". Candidate execution is prohibited until exact-head PR CI passes.",
+      "acceptance": {
+        "row": "A-04",
+        "status": "PREREGISTERED; independent preregistration review passed; exact-head PR CI pending; candidate execution prohibited until exact-head PR CI passes. Only the synthetic transplant-date mismatch software invariant is in scope. A-04 and overall 02A remain UNVERIFIED.",
+        "owner": "S1 implementation worker; S3 independent preregistration reviewer; lead integration",
+        "retest": "Do not execute until exact-head PR CI passes. Any frozen input, helper output, source row, or exact reason change requires a new reviewed registration."
+      },
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "independentReferenceModelComparison": false,
+      "measuredHoldoutValidation": false,
+      "status": "PREREGISTERED; independent preregistration review passed; exact-head PR CI pending; no candidate result. No measured transplant state, biological validity, crop accuracy, independent reference agreement, or A-04/02A completion claim."
     }
   ],
   "coverageSummary": {
