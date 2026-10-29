@@ -9,6 +9,7 @@ import fao56V2RootDrydownFixture from '../../../quality/beta/evidence/fao56-v2-r
 import fao56V2SameDayDrainageEtRerunFixture from '../../../quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json';
 import fao56V2TomatoRootDepthFixture from '../../../quality/beta/evidence/fao56-v2-tomato-root-depth-drydown-synthetic.json';
 import a04CucumberEventClockFixture from '../../../quality/beta/evidence/a04-v3-cucumber-direct-sow-transplant-event-clock-synthetic.json';
+import a04EstablishmentEventLabelMismatchFixture from '../../../quality/beta/evidence/a04-v3-establishment-event-label-mismatch-fail-closed-synthetic.json';
 import a08AllCatalogMissingProfileFixture from '../../../quality/beta/evidence/a08-all-catalog-v2-missing-profile-fail-closed-synthetic.json';
 import v3AutoHarvestMixedTargetFixture from '../../../quality/beta/evidence/v3-auto-harvest-mixed-target-synthetic.json';
 import { growingTargetKey, targetCellKey } from '@/lib/growingTargets';
@@ -784,6 +785,96 @@ describe('frozen crop model inputs and replay support', () => {
     expect(support.reasons).toContain(
       'Crop 1: transplant initial state date must match the transplant event date.',
     );
+  });
+
+  it('fails closed when a v3 transplanted cell has a mismatched establishment event label', () => {
+    const fixture = a04EstablishmentEventLabelMismatchFixture;
+    const setup = fixture.syntheticSetup;
+    const tomato = cropLibrary.find((crop) => crop.id === 1)!;
+    const thermal = cropThermalParams.find((parameter) => parameter.cropId === tomato.id)!;
+    const cellKey = targetCellKey({ kind: 'floor' }, '0,0');
+    expect(tomato).toEqual(setup.cropSnapshot);
+    expect(thermal).toEqual(setup.thermalSource.cropThermalParamsEntry);
+
+    const run = config({
+      cropModelVersion: 'crop-model-v3',
+      startDate: '2026-10-01',
+      dayCount: 7,
+      basePlan: {
+        ...config().basePlan,
+        planting: { '0,0': tomato.id },
+        plantedAt: { '0,0': '2026-10-03' },
+      },
+      cropStartEvents: { [cellKey]: 'transplanting' },
+    });
+    expect(run).toEqual(setup.runConfig);
+
+    const parameterInput = syntheticStartEventParameter(tomato.id, thermal);
+    expect(parameterInput).toEqual(setup.freezeRunModelInputsV3SourceCommon.cropParametersV2[0]);
+    const sourceCommon = {
+      soil: { awcMmPerCm: 1.5, organicMatterPct: 2.4 },
+      crops: [tomato],
+      cropParametersV2: [parameterInput],
+    };
+    expect(sourceCommon).toEqual(setup.freezeRunModelInputsV3SourceCommon);
+
+    const evidence = {
+      classification: 'synthetic' as const,
+      evidenceId: fixture.id,
+      validDomain: 'synthetic frozen establishment event-label consistency only',
+    };
+    const matchingEstablishment: CropEstablishmentInput = {
+      startEvent: 'transplanting',
+      establishedAtDate: '2026-10-03',
+      initialAboveGroundDryMatterGPerM2: 7,
+      evidence,
+    };
+    const mismatchedEstablishment: CropEstablishmentInput = {
+      ...matchingEstablishment,
+      startEvent: 'direct-sowing',
+    };
+    const controlArm = setup.establishmentArms.matchingLabelControl;
+    const mismatchArm = setup.establishmentArms.mismatchCandidate;
+    const controlEstablishmentByCell = { [cellKey]: matchingEstablishment };
+    const mismatchEstablishmentByCell = { [cellKey]: mismatchedEstablishment };
+    expect(controlEstablishmentByCell).toEqual(controlArm.cropEstablishmentByCell);
+    expect(mismatchEstablishmentByCell).toEqual(mismatchArm.cropEstablishmentByCell);
+    expect({ ...mismatchedEstablishment, startEvent: matchingEstablishment.startEvent })
+      .toEqual(matchingEstablishment);
+
+    const controlSource = { ...sourceCommon, cropEstablishmentByCell: controlEstablishmentByCell };
+    const mismatchSource = { ...sourceCommon, cropEstablishmentByCell: mismatchEstablishmentByCell };
+    const controlInputs = freezeRunModelInputsV3(run, controlSource);
+    const mismatchInputs = freezeRunModelInputsV3(run, mismatchSource);
+    const frozenIdentity = (inputs: ReturnType<typeof freezeRunModelInputsV3>) => ({
+      model: inputs.model,
+      parameterSetVersion: inputs.parameterSetVersion,
+      cropIds: inputs.crops.map((crop) => crop.id),
+      parameterCropIds: inputs.cropParameters.map((parameter) => parameter.cropId),
+      thermalStartEvents: inputs.cropParameters.flatMap((parameter) => parameter.thermal?.startEvents ?? []),
+      establishmentByCell: inputs.establishmentByCell,
+      soil: inputs.soil,
+    });
+    expect(controlInputs.cropParameters.map((parameter) => parameter.thermal)).toEqual([thermal]);
+    expect(mismatchInputs.cropParameters.map((parameter) => parameter.thermal)).toEqual([thermal]);
+    expect(frozenIdentity(controlInputs)).toEqual(controlArm.frozenModelInputIdentity);
+    expect(frozenIdentity(mismatchInputs)).toEqual(mismatchArm.frozenModelInputIdentity);
+
+    const controlSupport = inspectRunModelSupport({ ...run, modelInputs: controlInputs });
+    const mismatchSupport = inspectRunModelSupport({ ...run, modelInputs: mismatchInputs });
+    expect(controlSupport.model).toBe(controlArm.expectedSupport.model);
+    expect(controlSupport.canReplay).toBe(controlArm.expectedSupport.canReplay);
+    expect(mismatchSupport).toMatchObject({
+      model: mismatchArm.expectedSupport.model,
+      status: mismatchArm.expectedSupport.status,
+      canReplay: mismatchArm.expectedSupport.canReplay,
+      preserveStoredSummary: mismatchArm.expectedSupport.preserveStoredSummary,
+    });
+    const eventMismatchReason = 'Crop 1: establishment state does not match its frozen transplanting start event.';
+    expect(mismatchArm.expectedSupport.reasonsContain).toContain(eventMismatchReason);
+    expect(mismatchSupport.reasons).toContain(eventMismatchReason);
+    expect(mismatchArm.expectedSupport.reasonsArrayCompared).toBe(false);
+    expect(mismatchArm.expectedSupport.mismatchAssertedAsSoleUnsupportedReason).toBe(false);
   });
 
   it('starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint', () => {
