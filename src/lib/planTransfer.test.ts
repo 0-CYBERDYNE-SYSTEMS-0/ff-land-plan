@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { growingTargetKey, planForTarget, planWithTarget } from '@/lib/growingTargets';
+import type { GrowingTargetRef } from '@/types';
 import type { PlanState } from '@/types';
 import { parsePlanJson, serializePlanJson } from './planTransfer';
 
@@ -22,11 +24,39 @@ describe('plan JSON transfer', () => {
     expect(parsePlanJson(exported, 9)).toEqual({ ...plan, farmId: 9 });
   });
 
+  it('round-trips the selected growing level without replacing sibling target maps', () => {
+    const lower: GrowingTargetRef = { kind: 'growing-level', growingSpaceId: 'rack-a', levelId: 'lower' };
+    const upper: GrowingTargetRef = { kind: 'growing-level', growingSpaceId: 'rack-a', levelId: 'upper' };
+    const lowerKey = growingTargetKey(lower);
+    const upperKey = growingTargetKey(upper);
+    const worldPlan: PlanState = {
+      ...plan,
+      targets: {
+        [lowerKey]: { growingSpaceId: 'rack-a', levelId: 'lower', planting: { '1,1': 2 } },
+        [upperKey]: { growingSpaceId: 'rack-a', levelId: 'upper', planting: { '2,2': 3 } },
+      },
+    };
+    const selectedView = { ...planForTarget(worldPlan, upper), planting: { '4,5': 1000 } };
+    const exported = serializePlanJson(selectedView);
+    expect((JSON.parse(exported) as { plan: PlanState }).plan.targets).toBeUndefined();
+
+    const imported = parsePlanJson(exported, 9);
+    const saved = planWithTarget({ ...worldPlan, farmId: 9 }, upper, imported);
+    expect(saved.targets?.[upperKey]?.planting).toEqual({ '4,5': 1000 });
+    expect(saved.targets?.[lowerKey]).toEqual(worldPlan.targets?.[lowerKey]);
+  });
+
   it('rejects malformed or unsupported files without returning a partial plan', () => {
     expect(() => parsePlanJson('{', 1)).toThrow('not valid JSON');
     expect(() => parsePlanJson('{"format":"other","version":1,"plan":{}}', 1)).toThrow('Unsupported plan file');
     const malformed = JSON.parse(serializePlanJson(plan)) as { plan: PlanState };
     malformed.plan.planting['bad-key'] = 1;
     expect(() => parsePlanJson(JSON.stringify(malformed), 1)).toThrow('invalid cell');
+
+    const ambiguous = JSON.parse(serializePlanJson(plan)) as { plan: PlanState };
+    ambiguous.plan.targets = {
+      'level/rack-a/upper': { growingSpaceId: 'rack-a', levelId: 'upper', planting: { '0,0': 1 } },
+    };
+    expect(() => parsePlanJson(JSON.stringify(ambiguous), 1)).toThrow('selected growing target');
   });
 });

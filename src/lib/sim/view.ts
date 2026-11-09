@@ -14,6 +14,7 @@
 
 import type { Crop } from '@/types';
 import type { CellState, DailyEnvironment } from './types';
+import { DEAD_CHRONIC_DAYS, DEAD_CHRONIC_STRESS, DEAD_FROST_COLD } from './drivers';
 
 export type PlantLifecycle = 'alive' | 'dead' | 'harvested' | 'overripe';
 
@@ -28,7 +29,7 @@ export interface PlantVariation {
 }
 
 export interface PlantViewParams {
-  /** Continuous 0..1 growth (biomassFrac). */
+  /** Continuous 0..1 growth (biomassFrac); zero when the model has no stage map. */
   growth: number;
   /** Resolved keyframe index 0..stageCount-1 on the crop's keyframe axis. */
   stage: number;
@@ -147,12 +148,6 @@ export function stageCountFor(id: string): number {
 
 // --- lifecycle derivation (SPEC §2.3 — tuned ONLY here, engine untouched) ----
 
-/** Hard frost kill: cold stress at/above this reads as frost death. */
-const DEAD_FROST_COLD = 0.95;
-/** Chronic decline: this many stress days at sustained high stress kills. */
-const DEAD_CHRONIC_DAYS = 21;
-const DEAD_CHRONIC_STRESS = 0.85;
-
 /** Overripe grace window (days past readyAtDay) by crop category. */
 function graceDaysFor(crop: Crop): number {
   return crop.category === 'fruit' ? 21 : 7;
@@ -177,13 +172,17 @@ export interface PlantViewInput {
 export function projectPlant(input: PlantViewInput): PlantViewParams {
   const { cell, crop, dayIndex, cellKey } = input;
   const stageCount = input.stageCount ?? 6;
-  const growth = Math.min(1, Math.max(0, cell.biomassFrac));
+  const growth = cell.stageEstimateAvailable === false
+    ? 0
+    : Math.min(1, Math.max(0, cell.biomassFrac));
   const stress = effectiveStress(cell);
 
   // Precedence: harvested > dead > overripe > alive (SPEC §2.3).
   let lifecycle: PlantLifecycle = 'alive';
   if (cell.harvested) {
     lifecycle = 'harvested';
+  } else if (cell.dead) {
+    lifecycle = 'dead';
   } else if (
     cell.stress.cold >= DEAD_FROST_COLD ||
     ((cell.stressDaysCount ?? 0) >= DEAD_CHRONIC_DAYS && stress >= DEAD_CHRONIC_STRESS)
@@ -204,7 +203,9 @@ export function projectPlant(input: PlantViewInput): PlantViewParams {
     lifecycle,
     wilt,
     tint: stress > 0.2 ? stressTintMultiplier(stress) : null,
-    flowering: Math.min(1, Math.max(0, cell.floweringFrac ?? 0)),
+    flowering: cell.stageEstimateAvailable === false
+      ? 0
+      : Math.min(1, Math.max(0, cell.floweringFrac ?? 0)),
     moisture: cell.moistureFrac === undefined ? null : Math.min(1, Math.max(0, cell.moistureFrac)),
     variation: variationForCell(cellKey),
   };

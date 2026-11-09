@@ -83,13 +83,37 @@ export interface PlanStats {
 
 const DEFAULT_SPACING_CM = 30;
 
-export function plantsForArea(crop: Crop, cells: number): number {
-  // SPEC amendment 3 (binding): floor(area / spacingArea) with no minimum —
-  // an area smaller than one spacing footprint counts zero plants.
-  const areaM2 = cells * CELL_AREA_M2;
+export interface PlantingAreaPart {
+  cells: number;
+  cellM: number;
+  /** Targets with distinct growing systems are floored independently. */
+  system?: string;
+}
+
+/** Single plant-count seam. Equivalent targets aggregate before spacing is floored. */
+export function effectivePlantingArea(crop: Crop, cells: number, tiers?: number): number;
+export function effectivePlantingArea(crop: Crop, areas: PlantingAreaPart[], tiers?: number): number;
+export function effectivePlantingArea(crop: Crop, input: number | PlantingAreaPart[], tiers = 1): number {
   const spacing = (crop.spacingCm ?? DEFAULT_SPACING_CM) / 100;
   const rowSpacing = (crop.rowSpacingCm ?? crop.spacingCm ?? DEFAULT_SPACING_CM) / 100;
-  return Math.floor(areaM2 / (spacing * rowSpacing));
+  const spacingArea = spacing * rowSpacing;
+  if (typeof input === 'number') {
+    // Legacy uniform-rack adapter: tiers are included before the single floor.
+    return Math.floor((input * CELL_AREA_M2 * tiers) / spacingArea);
+  }
+  const areasBySystem = new Map<string, number>();
+  for (const area of input) {
+    const system = area.system ?? 'default';
+    areasBySystem.set(system, (areasBySystem.get(system) ?? 0) + area.cells * area.cellM * area.cellM);
+  }
+  let plants = 0;
+  for (const areaM2 of areasBySystem.values()) plants += Math.floor((areaM2 * tiers) / spacingArea);
+  return plants;
+}
+
+/** @deprecated Use effectivePlantingArea so level groups and tiers share one floor. */
+export function plantsForArea(crop: Crop, cells: number): number {
+  return effectivePlantingArea(crop, cells);
 }
 
 export function computeStats(plan: PlanState, crops: Crop[]): PlanStats {
@@ -98,6 +122,7 @@ export function computeStats(plan: PlanState, crops: Crop[]): PlanStats {
   // stats only ever count cells the canvas can actually show.
   const cols = planCols(plan);
   const rows = planRows(plan);
+  const cellAreaM2 = plan.cellM > 0 ? plan.cellM * plan.cellM : CELL_AREA_M2;
   const inBounds = (key: string) => {
     const [x, y] = parseKey(key);
     return x >= 0 && y >= 0 && x < cols && y < rows;
@@ -115,8 +140,8 @@ export function computeStats(plan: PlanState, crops: Crop[]): PlanStats {
   for (const [id, cells] of cellCounts) {
     const crop = byId.get(id);
     if (!crop) continue;
-    const areaM2 = cells * CELL_AREA_M2;
-    const plants = plantsForArea(crop, cells);
+    const areaM2 = cells * cellAreaM2;
+    const plants = effectivePlantingArea(crop, [{ cells, cellM: plan.cellM }]);
     perCrop.push({
       crop,
       cells,
@@ -134,15 +159,15 @@ export function computeStats(plan: PlanState, crops: Crop[]): PlanStats {
     if (!inBounds(key)) continue;
     const asset = assetBySlug(plan.ground[key]);
     if (!asset) continue;
-    if (asset.plantable) bedAreaM2 += CELL_AREA_M2;
-    else infrastructureAreaM2 += CELL_AREA_M2;
+    if (asset.plantable) bedAreaM2 += cellAreaM2;
+    else infrastructureAreaM2 += cellAreaM2;
   }
 
   const families = [...new Set(perCrop.map((s) => s.crop.family).filter((f): f is string => !!f))];
 
   return {
     perCrop,
-    plantedAreaM2: plantedCells * CELL_AREA_M2,
+    plantedAreaM2: plantedCells * cellAreaM2,
     bedAreaM2,
     infrastructureAreaM2,
     totalYieldKg: perCrop.reduce((s, c) => s + c.yieldKg, 0),

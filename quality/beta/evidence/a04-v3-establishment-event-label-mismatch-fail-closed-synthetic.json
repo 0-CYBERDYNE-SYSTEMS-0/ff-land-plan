@@ -1,0 +1,404 @@
+{
+  "id": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+  "schemaVersion": 1,
+  "registrationStatus": "DRAFT PREREGISTRATION; independent S2/S3 review and exact-head documentation PR CI pending; candidate execution prohibited until review and CI pass.",
+  "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-04",
+  "classification": "Synthetic crop-model-v3 establishment event-label fail-closed software invariant only; not measured crop evidence.",
+  "baseline": {
+    "testFile": "src/lib/sim/model-inputs.test.ts",
+    "testTitle": "fails closed when a v3 transplanted cell has a mismatched establishment event label",
+    "focusedCommand": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell has a mismatched establishment event label\"",
+    "candidateExecution": false
+  },
+  "candidateResultPath": "quality/beta/evidence/a04-v3-establishment-event-label-mismatch-fail-closed-synthetic-result.json",
+  "candidateResultStatus": "PENDING; candidate has not been executed.",
+  "syntheticSetup": {
+    "fixtureId": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+    "constructionHelpers": [
+      "cropLibrary.find(crop => crop.id === 1)!",
+      "cropThermalParams.find(parameter => parameter.cropId === 1)!",
+      "targetCellKey({ kind: 'floor' }, '0,0')",
+      "config({ cropModelVersion: 'crop-model-v3', ... })",
+      "syntheticStartEventParameter(1, tomatoThermal)",
+      "freezeRunModelInputsV3(run, source)",
+      "inspectRunModelSupport({ ...run, modelInputs })"
+    ],
+    "modelVersion": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+    "runConfig": {
+      "farmId": 1,
+      "cropModelVersion": "crop-model-v3",
+      "basePlan": {
+        "farmId": 1,
+        "widthM": 1,
+        "heightM": 1,
+        "cellM": 0.25,
+        "allowOutsideBeds": false,
+        "ground": {},
+        "planting": {
+          "0,0": 1
+        },
+        "plantedAt": {
+          "0,0": "2026-10-03"
+        },
+        "updatedAt": "2026-10-01"
+      },
+      "startDate": "2026-10-01",
+      "dayCount": 7,
+      "seed": 1,
+      "scenario": "baseline",
+      "tempDeltaC": 0,
+      "precipMultiplier": 1,
+      "interventions": [],
+      "cropStartEvents": {
+        "0,0": "transplanting"
+      }
+    },
+    "target": {
+      "kind": "floor",
+      "cell": "0,0",
+      "cellKey": "0,0",
+      "cropId": 1,
+      "cropSlug": "tomato",
+      "configuredEvent": "transplanting",
+      "plantedAt": "2026-10-03",
+      "establishedAtDate": "2026-10-03"
+    },
+    "cropSnapshot": {
+      "id": 1,
+      "slug": "tomato",
+      "name": "Tomato",
+      "scientificName": "Solanum lycopersicum",
+      "category": "vegetable",
+      "family": "Solanaceae",
+      "growthDays": 75,
+      "spacingCm": 50,
+      "rowSpacingCm": 90,
+      "sowDepthCm": 0.6,
+      "frostTolerance": "tender",
+      "sowIndoorsWeeksBeforeLastFrost": 6,
+      "transplantWeeksAfterLastFrost": 1,
+      "directSowStartWeeks": null,
+      "directSowEndWeeks": null,
+      "harvestWindowDays": 60,
+      "yieldKgPerPlant": 4.5,
+      "waterNeedMmDay": 5.5,
+      "nitrogenNeed": "high",
+      "sunRequirement": "full",
+      "minTempC": 10,
+      "maxTempC": 32,
+      "yieldTonHa": 35,
+      "colorHex": "#D4380D",
+      "emoji": "🍅",
+      "companions": [
+        "basil",
+        "carrot",
+        "onion",
+        "marigold",
+        "parsley",
+        "borage"
+      ],
+      "antagonists": [
+        "fennel",
+        "potato",
+        "cabbage",
+        "corn"
+      ],
+      "description": "Warm-season staple. Stake or cage; prune suckers on indeterminates.",
+      "isCustom": false
+    },
+    "thermalSource": {
+      "cropThermalParamsEntry": {
+        "cropId": 1,
+        "cropSlug": "tomato",
+        "tBaseC": 7.2,
+        "tUpperC": 33.3,
+        "gddToMaturityCdays": [
+          1024,
+          1117
+        ],
+        "startEvents": [
+          "transplanting"
+        ],
+        "accumulationStart": "Transplanting at 3–5 true leaves",
+        "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
+        "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6",
+        "sourceCitation": "Andrews et al., OSU Extension EM 9305, Tomato degree-days, Table 6 (four cultivars; 1844–2010 °F·days).",
+        "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners"
+      },
+      "sourceRecordId": "THERMAL-OSU-TOMATO-FIRST-RIPE",
+      "sourceId": "OSU-EM9305-2021",
+      "sourceVersion": "EM 9305, January 2021 PDF",
+      "retrievedDate": "2026-10-27",
+      "sourceFileSha256": "e54c574c928b4577ab14a0f7a429ab7a357d751f29a9f358d59f3b306a47d76c",
+      "sourceDomainLimit": "The source records four-cultivar range values; it does not provide a cultivar-specific mapping or validate this synthetic state."
+    },
+    "soilSentinelAnnotations": {
+      "classification": "Synthetic soil sentinels; not a measured soil profile.",
+      "units": {
+        "awcMmPerCm": "mm/cm",
+        "organicMatterPct": "percent"
+      },
+      "provenance": "The source property is omitted from the helper input; freezeRunModelInputsV3 resolves it to 'unknown'."
+    },
+    "freezeRunModelInputsV3SourceCommon": {
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4
+      },
+      "crops": [
+        {
+          "id": 1,
+          "slug": "tomato",
+          "name": "Tomato",
+          "scientificName": "Solanum lycopersicum",
+          "category": "vegetable",
+          "family": "Solanaceae",
+          "growthDays": 75,
+          "spacingCm": 50,
+          "rowSpacingCm": 90,
+          "sowDepthCm": 0.6,
+          "frostTolerance": "tender",
+          "sowIndoorsWeeksBeforeLastFrost": 6,
+          "transplantWeeksAfterLastFrost": 1,
+          "directSowStartWeeks": null,
+          "directSowEndWeeks": null,
+          "harvestWindowDays": 60,
+          "yieldKgPerPlant": 4.5,
+          "waterNeedMmDay": 5.5,
+          "nitrogenNeed": "high",
+          "sunRequirement": "full",
+          "minTempC": 10,
+          "maxTempC": 32,
+          "yieldTonHa": 35,
+          "colorHex": "#D4380D",
+          "emoji": "🍅",
+          "companions": [
+            "basil",
+            "carrot",
+            "onion",
+            "marigold",
+            "parsley",
+            "borage"
+          ],
+          "antagonists": [
+            "fennel",
+            "potato",
+            "cabbage",
+            "corn"
+          ],
+          "description": "Warm-season staple. Stake or cage; prune suckers on indeterminates.",
+          "isCustom": false
+        }
+      ],
+      "cropParametersV2": [
+        {
+          "cropId": 1,
+          "thermal": {
+            "cropId": 1,
+            "cropSlug": "tomato",
+            "tBaseC": 7.2,
+            "tUpperC": 33.3,
+            "gddToMaturityCdays": [
+              1024,
+              1117
+            ],
+            "startEvents": [
+              "transplanting"
+            ],
+            "accumulationStart": "Transplanting at 3–5 true leaves",
+            "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
+            "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6",
+            "sourceCitation": "Andrews et al., OSU Extension EM 9305, Tomato degree-days, Table 6 (four cultivars; 1844–2010 °F·days).",
+            "sourceUrl": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners"
+          },
+          "production": {
+            "equationFamily": "LINTUL-net-RUE",
+            "rueGPerMjInterceptedPar": 2,
+            "initialDryMatterGPerM2": 0,
+            "interceptedParFraction": 0.5,
+            "harvestIndex": 0.5,
+            "status": "qualified",
+            "missing": [],
+            "limitations": [
+              "Synthetic production values exercise event timing only."
+            ],
+            "evidence": {
+              "evidenceId": "TEST-SYNTHETIC-START-EVENT",
+              "sourceCitation": "Synthetic software acceptance fixture; no biological claim",
+              "sourceUrl": "test-only:crop-start-event",
+              "validDomain": "software acceptance only"
+            }
+          },
+          "rootZone": {
+            "method": "FAO-56",
+            "effectiveRootDepthCm": 20,
+            "depletionFraction": 0.5,
+            "cropCoefficient": 1,
+            "initialStorageFraction": 0.7,
+            "status": "qualified",
+            "missing": [],
+            "limitations": [
+              "Synthetic static root-zone values exercise event timing only."
+            ],
+            "evidence": {
+              "evidenceId": "TEST-SYNTHETIC-START-EVENT",
+              "sourceCitation": "Synthetic software acceptance fixture; no biological claim",
+              "sourceUrl": "test-only:crop-start-event",
+              "validDomain": "software acceptance only"
+            }
+          },
+          "lifecycle": "plant"
+        }
+      ]
+    },
+    "sourceConstruction": "For each arm, pass {...freezeRunModelInputsV3SourceCommon, cropEstablishmentByCell: arm.cropEstablishmentByCell} to freezeRunModelInputsV3(run, source). The common soil input contains only awcMmPerCm and organicMatterPct; source is omitted and freezes as 'unknown'.",
+    "establishmentArms": {
+      "matchingLabelControl": {
+        "cropEstablishmentByCell": {
+          "0,0": {
+            "startEvent": "transplanting",
+            "establishedAtDate": "2026-10-03",
+            "initialAboveGroundDryMatterGPerM2": 7,
+            "evidence": {
+              "classification": "synthetic",
+              "evidenceId": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+              "validDomain": "synthetic frozen establishment event-label consistency only"
+            }
+          }
+        },
+        "frozenModelInputIdentity": {
+          "model": "run-inputs-v3",
+          "parameterSetVersion": "crop-parameters-v4",
+          "cropIds": [
+            1
+          ],
+          "parameterCropIds": [
+            1
+          ],
+          "thermalStartEvents": [
+            "transplanting"
+          ],
+          "establishmentByCell": {
+            "0,0": {
+              "startEvent": "transplanting",
+              "establishedAtDate": "2026-10-03",
+              "initialAboveGroundDryMatterGPerM2": 7,
+              "evidence": {
+                "classification": "synthetic",
+                "evidenceId": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+                "validDomain": "synthetic frozen establishment event-label consistency only"
+              }
+            }
+          },
+          "soil": {
+            "awcMmPerCm": 1.5,
+            "organicMatterPct": 2.4,
+            "source": "unknown"
+          }
+        },
+        "expectedSupport": {
+          "model": "crop-model-v3",
+          "canReplay": true,
+          "purpose": "Confirms the same frozen run and all non-label inputs are replayable when establishment.startEvent matches the configured transplanting event."
+        }
+      },
+      "mismatchCandidate": {
+        "cropEstablishmentByCell": {
+          "0,0": {
+            "startEvent": "direct-sowing",
+            "establishedAtDate": "2026-10-03",
+            "initialAboveGroundDryMatterGPerM2": 7,
+            "evidence": {
+              "classification": "synthetic",
+              "evidenceId": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+              "validDomain": "synthetic frozen establishment event-label consistency only"
+            }
+          }
+        },
+        "frozenModelInputIdentity": {
+          "model": "run-inputs-v3",
+          "parameterSetVersion": "crop-parameters-v4",
+          "cropIds": [
+            1
+          ],
+          "parameterCropIds": [
+            1
+          ],
+          "thermalStartEvents": [
+            "transplanting"
+          ],
+          "establishmentByCell": {
+            "0,0": {
+              "startEvent": "direct-sowing",
+              "establishedAtDate": "2026-10-03",
+              "initialAboveGroundDryMatterGPerM2": 7,
+              "evidence": {
+                "classification": "synthetic",
+                "evidenceId": "A04-V3-TRANSPLANT-ESTABLISHMENT-EVENT-LABEL-MISMATCH-FAIL-CLOSED-SYNTHETIC-01",
+                "validDomain": "synthetic frozen establishment event-label consistency only"
+              }
+            }
+          },
+          "soil": {
+            "awcMmPerCm": 1.5,
+            "organicMatterPct": 2.4,
+            "source": "unknown"
+          }
+        },
+        "expectedSupport": {
+          "model": "crop-model-v3",
+          "status": "unsupported",
+          "canReplay": false,
+          "preserveStoredSummary": true,
+          "preserveStoredSummaryMeaning": "Policy flag only; actual stored-summary retention is not tested.",
+          "reasonsContain": [
+            "Crop 1: establishment state does not match its frozen transplanting start event."
+          ],
+          "reasonsArrayCompared": false,
+          "mismatchAssertedAsSoleUnsupportedReason": false
+        }
+      }
+    },
+    "comparison": {
+      "onlyChangedInputBetweenArms": "cropEstablishmentByCell[\"0,0\"].startEvent: matching control transplanting; mismatch candidate direct-sowing.",
+      "configuredEventAndDates": "Both arms configure transplanting; plantedAt and establishedAtDate are both 2026-10-03.",
+      "numericModelOutputCompared": false,
+      "tolerance": "Not applicable; categorical support fields and exact reason membership only.",
+      "replay": "Not part of this candidate."
+    }
+  },
+  "sourceAttribution": {
+    "citation": "Oregon State University Extension EM 9305, Vegetable Degree-Day Models: An Introduction for Farmers and Gardeners, January 2021, Table 6.",
+    "url": "https://extension.oregonstate.edu/sites/default/files/documents/em9305.pdf",
+    "retrievedDate": "2026-10-27",
+    "pdfSha256": "469f49948e969b9ab150e53cb9c8fd88f8133f8993c8dd4552a41d278a1f427d",
+    "thermalSourceFileSha256": "e54c574c928b4577ab14a0f7a429ab7a357d751f29a9f358d59f3b306a47d76c",
+    "sourceDomain": "The cited tomato row records four-cultivar range values based on Western Oregon observations from 2013-2015; reported source accuracy is not an independent holdout.",
+    "sourceUse": "The source row is pinned only for the configured transplanting event label and frozen parameter identity. No cultivar-specific target, maturity, or harvest comparison is made.",
+    "copyrightAndReuse": "Copyright © 2021 Oregon State University. No open reuse license identified. Cite and retain only derived parameter values; do not reproduce source prose, table, or figures."
+  },
+  "setupCanonicalization": "SHA-256 of UTF-8 JSON for syntheticSetup with recursively sorted object keys, compact separators, and Unicode preserved.",
+  "setupSha256": "ce0ce4a4918c345b6773fdce384c57ae991183bd312eadb58289cf53b0b11b4d",
+  "candidateExecution": false,
+  "review": {
+    "independentPreregistrationReview": "PENDING",
+    "exactHeadDocumentationPrCi": "PENDING",
+    "candidateExecutionGate": "PROHIBITED until independent preregistration review and exact-head documentation PR CI pass.",
+    "candidateReview": "PENDING after authorized candidate implementation."
+  },
+  "claimBoundary": [
+    "This registration covers only the synthetic fail-closed software check that per-cell establishment.startEvent matches the configured transplanting event.",
+    "A matching-label control is included to establish replayability when the label is consistent; the mismatch reason is asserted by exact membership, not as the sole possible unsupported reason.",
+    "The OSU source row is used for transplanting event identity only. No cultivar-specific target, maturity or harvest claim is made.",
+    "No numeric model output or external crop-data comparison is in scope; no numeric tolerance applies.",
+    "No measured establishment state, biological validity, crop accuracy, independent reference agreement, or prediction is established.",
+    "A-04 and overall 02A remain UNVERIFIED."
+  ],
+  "owner": "S1 candidate implementation worker; S2/S3 independent reviewers; lead integration",
+  "retest": "Any change to the frozen RunConfig, crop/thermal/helper identity, soil sentinels, establishment state, expected reason or assertion requires a new reviewed preregistration and exact-head documentation CI before candidate execution.",
+  "workerEstimate": {
+    "engineerHours": "0.25-0.5",
+    "assumptions": "One focused support-invariant test uses existing config, syntheticStartEventParameter, freezeRunModelInputsV3 and inspectRunModelSupport paths; no production changes.",
+    "excludes": "Independent review, preregistration CI, candidate execution, and full local/PR gates."
+  }
+}

@@ -35,6 +35,10 @@ npm run dev
 
 Open the address it prints. North Meadow is the farm in the picture.
 
+To run or build the full demo with all six core-loop feature flags enabled, use
+`npm run dev:demo` or `npm run build:demo`. The standard `dev` and `build`
+commands keep those opt-in features disabled.
+
 ## License
 
 [MIT](LICENSE).
@@ -81,7 +85,8 @@ The notes below are the developer contract. They are not the farmer guide.
 The app runs without a server. `src/lib/api.ts` exports the single API seam used
 by pages; it currently points at `src/lib/localApi.ts`, backed by:
 
-- `src/lib/store.ts` — persistent localStorage state under `ff-pro:v1`.
+- `src/lib/store.ts` — persistent localStorage state under `ff-pro:v1`; its
+  payload is versioned and contains site plans with independent growing worlds.
 - `src/data/crops.ts` — real crop library with spacing, frost, yield, companion,
   and rotation metadata.
 - `src/data/assets.ts` — placeable garden assets with real-world footprints.
@@ -91,8 +96,9 @@ by pages; it currently points at `src/lib/localApi.ts`, backed by:
 Legacy cell, sensor, and NDVI APIs remain for Monitoring and Dashboard. The
 Simulations page is a run manager over the deterministic engine (`src/lib/sim/`):
 old slider-`Simulation` records stay readable/deletable, but creation is gone —
-new what-ifs are `createSimRun` runs. Plot Designer uses `getPlan`/`savePlan`
-and the sparse `PlanState` model instead of legacy `FarmCell`.
+new what-ifs are `createSimRun` runs. Plot Designer uses `getSitePlan` and
+environment-targeted plan reads/writes; every growing world owns a sparse
+`PlanState` independent of the other worlds on its farm.
 
 The API seam mirrors these logical endpoints:
 
@@ -109,21 +115,49 @@ The API seam mirrors these logical endpoints:
 - `POST   /api/farms/:id/alerts/read-all`
 - `GET    /api/farms/:id/sensors`
 - `POST   /api/farms/:id/sensors`
+- `PATCH  /api/sensors/:id` (sensor world association)
 - `DELETE /api/sensors/:id`
 - `GET    /api/sensors/:id/readings?limit=20`
 - `POST   /api/sensors/:id/readings`
+- `GET    /api/farms/:id/observations?environmentId=...` (environment filter optional)
+- `POST   /api/observations`
+- `PATCH  /api/observations/:id`
+- `DELETE /api/observations/:id`
+- `GET    /api/farms/:id/calibrations`
+- `PUT    /api/calibrations/:environmentId`
 - `GET    /api/farms/:id/cells`
 - `POST   /api/farms/:id/cells`
 - `GET    /api/farms/:id/plan`
 - `POST   /api/farms/:id/plan`
+- `GET    /api/farms/:id/site-plan`
+- `POST   /api/farms/:id/site-plan`
+- `GET    /api/farms/:id/environments`
+- `POST   /api/farms/:id/environments`
+- `GET    /api/farms/:id/environments/:environmentId`
+- `PATCH  /api/farms/:id/environments/:environmentId`
+- `DELETE /api/farms/:id/environments/:environmentId`
+- `POST   /api/farms/:id/environments/:environmentId/duplicate`
+- `GET    /api/farms/:id/environments/:environmentId/plan`
+- `POST   /api/farms/:id/environments/:environmentId/plan`
+- `GET    /api/farms/:id/selected-environment`
+- `PATCH  /api/farms/:id/selected-environment`
 - `GET    /api/farms/:id/ndvi-estimate`
 - `GET    /api/farms/:id/simulations` (legacy records, read-only)
 - `DELETE /api/simulations/:id` (legacy records)
 - `GET    /api/farms/:id/sim-runs`
 - `POST   /api/farms/:id/sim-runs`
+- `PUT    /api/sim-runs/:id` (persist a forked or ensemble-enriched RunRecord)
 - `DELETE /api/sim-runs/:id`
 - `GET    /api/crops`
 - `POST   /api/crops`
+
+The farm-level `/plan` routes remain a compatibility adapter for farms with
+exactly one growing world: `getPlan(farmId)` returns `null` when a farm has
+several worlds, and `savePlan(plan)` rejects an ambiguous target. New planner
+code always supplies an explicit `environmentId`; it never chooses an
+arbitrary world. Environment metadata owns canonical dimensions, and its
+nested plan mirrors those extents on save. A run freezes environment
+metadata plus one `basePlan` snapshot. Each run targets one growing world.
 
 ### Swapping in a backend
 
@@ -132,15 +166,48 @@ contract above — including its prefix, e.g. `http://localhost:8787/api` — an
 `src/lib/api.ts` swaps `apiFetch` to `createRestApi(base)` from
 `src/lib/restApi.ts`: a dependency-free `fetch` client covering every seam
 method (farms CRUD, weather/forecast/history, alerts, sensors + readings,
-legacy cells + NDVI, plans, simulations, sim runs, crops). One mapping
+observations + calibrations, legacy cells + NDVI, plans, simulations, sim runs,
+crops). One mapping
 assumption: assigning a cell's crop posts to `/api/farms/:id/cells` with
 `{ id, cropId }`, since the table defines only GET/POST on that collection.
 Sim runs (`src/lib/sim/`) are deterministic engine runs over a forked plan:
 `POST /sim-runs` takes a `CreateSimRunInput` (farm, dates, scenario,
-interventions — never a full plan) and the server composes + replays the run,
+interventions, optional `cropModelVersion` — never a full plan) and the server
+composes + replays the run,
 returning a `RunRecord` (config + frozen daily env series + summary; per-tick
-state is never stored — replay rebuilds it). Local-first remains
-the default — with the variable unset or empty, the local store plus live
+state is never stored — replay rebuilds it). `PUT /sim-runs/:id` accepts the
+complete frozen record to persist a management fork or its small cached
+ensemble result without recomposing weather or reading the current plan.
+The returned and persisted `RunRecord.config` must round-trip `cropModelVersion`
+and `modelInputs` without dropping or rewriting them. `cropModelVersion` names
+the crop equations (`crop-model-v1` or `crop-model-v2`; it is absent on older
+records). `modelInputs.model` is a separate schema tag: `run-inputs-v1` freezes
+the crop records and soil fields used by v1, while `run-inputs-v2` also carries
+`parameterSetVersion`, per-crop parameters and explicit qualification status.
+Current v2 replay requires `parameterSetVersion: 'crop-parameters-v3'`, which
+freezes source-supported sowing/transplant event choices and initial above-ground
+dry matter. `RunConfig.cropStartEvents` is keyed by canonical `targetCellKey`;
+its event is associated with the date in `basePlan.plantedAt`, and v2 plant
+interventions carry their own `startEvent`. A `crop-parameters-v2` record is
+unsupported and preserves its stored summary because it lacks those frozen
+inputs. Direct-sown v2 crops currently begin thermal accumulation, light-driven
+production, and root-zone transpiration on the sowing date; emergence delay,
+seed reserves, and emergence-dependent canopy are not modeled, so this behavior
+is qualified and unvalidated. The shape tag does not choose the equations. Complete v1 inputs on an older
+record with no `cropModelVersion` retain v1 replay semantics; a missing model
+version plus missing frozen inputs, or an unknown version, must preserve the
+stored summary and must not be replayed from the current catalog or caller
+context. `CreateSimRunInput.cropModelVersion` accepts `crop-model-v1` and
+`crop-model-v2`; omission keeps ordinary local run creation on v1, while an
+explicit v2 request freezes `run-inputs-v2` with
+`parameterSetVersion: 'crop-parameters-v3'`. Selecting v2 does not qualify a
+crop run: incomplete or out-of-domain v2 inputs are
+unsupported and preserve their stored summary; complete v2 inputs remain
+qualified and expose their assumptions rather than being represented as
+zero-valued estimates.
+Campaign mode stores season summaries separately: `GET /farms/:id/seasons` lists a farm's seasons,
+`PUT /seasons/:id` upserts a complete `SeasonRecord`, and `DELETE /seasons/:id` removes it.
+Local-first remains the default — with the variable unset or empty, the local store plus live
 Open-Meteo weather (`src/lib/localApi.ts`) stays exactly as before.
 
 ## Develop

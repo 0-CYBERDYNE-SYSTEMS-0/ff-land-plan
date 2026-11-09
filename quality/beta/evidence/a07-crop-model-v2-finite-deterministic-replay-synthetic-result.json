@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "id": "A07-CROP-MODEL-V2-FINITE-DETERMINISTIC-REPLAY-SYNTHETIC-01-RESULT",
+  "recordedDate": "2026-10-28",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-07",
+    "scope": "Finite deterministic replay is one bounded software subcase. The complete A-07 spacing, mortality, management, target, and golden acceptance remains UNVERIFIED.",
+    "preregistration": "No separate numerical comparison preregistration was used: this regression asserts exact replay and finiteness only, with no model-output tolerance, retuning, or candidate comparison."
+  },
+  "implementationCheckpoint": {
+    "sha": "eb38f8da346b9d05303d4e62c40a42ded75e9dad",
+    "scope": "Test-only change in src/lib/sim/crop-model-v2.test.ts; no production equations or frozen fixture values changed.",
+    "test": {
+      "title": "replays a complete frozen v2 run deterministically with finite output",
+      "command": "npx vitest run src/lib/sim/crop-model-v2.test.ts -t \"replays a complete frozen v2 run deterministically with finite output\"",
+      "focusedResult": {
+        "result": "passed",
+        "passed": 1,
+        "skipped": 17
+      },
+      "wholeFileResult": {
+        "command": "npm test -- src/lib/sim/crop-model-v2.test.ts",
+        "result": "passed",
+        "files": 1,
+        "tests": 18
+      },
+      "independentValidator": {
+        "result": "passed",
+        "command": "npm test -- src/lib/sim/crop-model-v2.test.ts -t \"replays a complete frozen v2 run deterministically with finite output\"",
+        "passed": 1,
+        "skipped": 17
+      }
+    }
+  },
+  "registeredAssertions": {
+    "fixture": "A07-CROP-MODEL-V2-FINITE-DETERMINISTIC-REPLAY-SYNTHETIC-01",
+    "inputSource": "First weather case and synthetic soil/crop parameter scaffolding from A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01; frozen with freezeRunModelInputsV2.",
+    "dispatch": "crop-model-v2 and run-inputs-v2 are asserted exactly.",
+    "replay": "events, finalState, and summary are compared exactly across repeated simulateRun calls.",
+    "finiteness": "Numeric leaves of both results are traversed through the current enumerable object/array result structure and checked with direct Number.isFinite calls.",
+    "numericCropOutputTolerance": "None; no model output comparison is made."
+  },
+  "workerEstimate": {
+    "estimateEngineerHours": "1.5-2.5",
+    "assumptions": [
+      "Reuse the frozen synthetic v2 tomato/weather scaffold and freezeRunModelInputsV2.",
+      "Keep the change test-only in the existing crop-model-v2 test file."
+    ],
+    "observedImplementationTime": "Approximately 52 seconds for the test patch; independent review, lead gates, and CI excluded."
+  },
+  "review": {
+    "implementation": "S1 implemented the test-only finite deterministic replay assertion.",
+    "independentCodeReview": "S2 approved the bounded assertions and independently reran the focused test; broader A-07 coverage remains open.",
+    "documentationReview": "S3 independently approved the corrected record, manifest entry, and decision note after verifying that the three workflow jobs and four PR-head checks are distinguished; GitGuardian is correctly identified as a separate PR-level check.",
+    "independentCiFactCheck": "S2 verified the PR head, workflow run SHA, and all three workflow jobs via local gh CLI. Lead verification of PR statusCheckRollup confirms the separate GitGuardian Security Checks check passed for the same exact PR head SHA."
+  },
+  "localGates": {
+    "focusedTest": "passed: 1 passed, 17 skipped",
+    "wholeTestFile": "passed: 1 file, 18 tests",
+    "fullVitest": {
+      "result": "passed",
+      "files": 48,
+      "tests": 263
+    },
+    "typecheck": "passed",
+    "builds": {
+      "standard": "passed",
+      "demo": "passed",
+      "pages": "passed",
+      "separateBetaProfile": "not configured in package.json"
+    },
+    "privateFileGuard": {
+      "result": "passed",
+      "trackedFiles": 540
+    },
+    "duplicateKeySafeJsonParse": "passed for the result record and model-coverage manifest",
+    "diffCheck": "passed",
+    "productionPagesE2e": {
+      "result": "passed",
+      "journeys": "3/3",
+      "reportedDuration": "3.7m"
+    }
+  },
+  "exactHeadCi": {
+    "pr": 82,
+    "runId": "40725412832",
+    "headSha": "eb38f8da346b9d05303d4e62c40a42ded75e9dad",
+    "result": "success",
+    "workflowRunJobs": [
+      {
+        "name": "test + typecheck + build",
+        "result": "passed",
+        "duration": "49s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "result": "passed",
+        "reportedTests": "3 passed (5.4m)",
+        "jobDuration": "5m58s"
+      },
+      {
+        "name": "secret + private-file scan",
+        "result": "passed",
+        "duration": "26s"
+      }
+    ],
+    "prHeadCheckRollupSource": "gh pr view 82 --json headRefOid,statusCheckRollup",
+    "prHeadCheckRollup": [
+      {
+        "name": "test + typecheck + build",
+        "result": "passed",
+        "duration": "49s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "result": "passed",
+        "duration": "5m58s",
+        "reportedTests": "3 passed (5.4m)"
+      },
+      {
+        "name": "secret + private-file scan",
+        "result": "passed",
+        "duration": "26s"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "result": "passed",
+        "duration": "42s",
+        "sourceNote": "Separate PR-level check; not a job in workflow run 40725412832."
+      }
+    ]
+  },
+  "acceptance": {
+    "row": "A-07",
+    "status": "PASS for this bounded synthetic finite-deterministic-replay software subcase only; broader A-07 and overall 02A remain UNVERIFIED.",
+    "candidateComparison": false,
+    "measuredOutputComparison": false,
+    "independentReferenceModelComparison": false,
+    "measuredHoldoutValidation": false
+  },
+  "evidenceBoundary": "This result establishes exact in-memory replay equality and finite numeric outputs for one synthetic v2 tomato/weather fixture. It does not test durable serialization, browser journeys for this replay case, broad A-07 spacing/mortality/management/target/golden parity, crop or cultivar accuracy, biological validity, measured-trial agreement, reference-model agreement, or predictive validity."
+}

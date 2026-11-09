@@ -76,6 +76,8 @@ export interface BuildEnvOpts {
    * null → skip the fetch (known offline / already failed). */
   climateNormals?: ClimateNormals | null;
   weatherOverrides?: WeatherOverride[];
+  /** Monthly natural DLI from the archive light source; absent in the legacy path. */
+  monthlyDli?: readonly number[] | null;
 }
 
 interface ArchiveRow {
@@ -379,6 +381,11 @@ export async function buildEnvSeries(
       precipMm: source,
       etoMm: eto !== null ? source : 'model-estimate',
     };
+    const dliMonth = opts.monthlyDli?.[Number(date.slice(5, 7)) - 1];
+    const dliNaturalMol = typeof dliMonth === 'number' && Number.isFinite(dliMonth)
+      ? round2(Math.max(0, dliMonth))
+      : undefined;
+    if (dliNaturalMol !== undefined) provenance.dliNaturalMol = 'open-meteo-archive';
 
     let raw: DailyEnvironment['raw'];
     if (tempDeltaC !== 0 || precipMultiplier !== 1) {
@@ -404,6 +411,7 @@ export async function buildEnvSeries(
       etoMm: round2(eto),
       gddBase10C: round2(Math.max(0, (tMinC + tMaxC) / 2 - 10)),
       provenance,
+      ...(dliNaturalMol !== undefined ? { dliNaturalMol } : {}),
       raw: raw
         ? {
             tMinC: round2(raw.tMinC),

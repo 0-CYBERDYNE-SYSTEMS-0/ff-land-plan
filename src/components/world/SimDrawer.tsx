@@ -1,8 +1,11 @@
 import { X } from 'lucide-react';
 import { SCENARIOS } from '@/lib/growth';
+import { TIMELINE_ENABLED } from '@/lib/featureFlags';
 import type { ScenarioType, WeatherCurrent } from '@/types';
-import type { DailyEnvironment, EnvSourceTag, Intervention } from '@/lib/sim';
+import type { ComparisonMetric, DailyEnvironment, EnsembleBand, EnvSourceTag, Intervention, RunComparison, RunEnsembleResult } from '@/lib/sim';
+import { yieldMassUnit } from '@/lib/sim';
 import type { ApplyInterventionResult, CellDiagnosticRow, SimRunTimeline } from '@/hooks/useSimRun';
+import type { RunModelSupport } from '@/lib/sim/model-inputs';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
@@ -14,7 +17,11 @@ export interface CropProgressRow {
   label?: string;
   /** Raw sow date ("" when undated); part of the React key so same-name rows stay unique. */
   plantedAt?: string;
+  targetKey?: string;
+  targetLabel?: string;
   stage: number;
+  /** False when the run has only an endpoint and no sourced intermediate stage map. */
+  stageAvailable?: boolean;
   pct: number;
   stress: number;
 }
@@ -37,6 +44,7 @@ export const MOISTURE_BANDS: { maxFrac: number; color: string; label: string }[]
 /** Short provenance labels for environment source tags (chip pattern). */
 const TAG_LABEL: Record<EnvSourceTag, string> = {
   'open-meteo-archive': 'ERA5 archive',
+  'nasa-power': 'NASA POWER',
   'open-meteo-forecast': 'forecast',
   'era5-normals': 'ERA5 normals',
   'model-estimate': 'estimate',
@@ -46,6 +54,7 @@ const TAG_LABEL: Record<EnvSourceTag, string> = {
 
 const TAG_TITLE: Record<EnvSourceTag, string> = {
   'open-meteo-archive': 'Observed ERA5 reanalysis value (Open-Meteo archive)',
+  'nasa-power': 'NASA POWER daily temperature or precipitation input',
   'open-meteo-forecast': 'Forecast-backed day',
   'era5-normals': 'Synthesized from ERA5 climate normals (monthly means)',
   'model-estimate': 'Documented v1 proxy formula',
@@ -53,7 +62,8 @@ const TAG_TITLE: Record<EnvSourceTag, string> = {
   default: 'Built-in documented fallback (no site data)',
 };
 
-function SourceTag({ tag }: { tag: EnvSourceTag }) {
+function SourceTag({ tag }: { tag: EnvSourceTag | null }) {
+  if (tag === null) return null;
   return (
     <span
       title={TAG_TITLE[tag]}
@@ -65,6 +75,128 @@ function SourceTag({ tag }: { tag: EnvSourceTag }) {
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
+
+export interface RunEnsemblePanelState {
+  status: 'idle' | 'loading-weather' | 'running' | 'saving' | 'ready' | 'unavailable' | 'error' | 'cancelled';
+  completed: number;
+  total: number;
+  message?: string;
+  result?: RunEnsembleResult;
+  persisted?: boolean;
+}
+
+function signedDelta(metric: ComparisonMetric, unit: string, digits = 1): string {
+  if (metric.delta === null) return 'Unavailable';
+  const sign = metric.delta > 0 ? '+' : '';
+  return `${sign}${metric.delta.toFixed(digits)} ${unit}`;
+}
+
+function EnsembleBandMetric({ label, band, unit, digits = 1 }: {
+  label: string;
+  band: EnsembleBand;
+  unit: string;
+  digits?: number;
+}) {
+  if (band.samples < 3) {
+    return (
+      <div className="rounded bg-muted/50 px-2 py-1">
+        <div className="text-[10px] text-muted-foreground">{label}</div>
+        <div className="mt-1 text-[9px] text-muted-foreground">Fewer than 3 values · n={band.samples}</div>
+      </div>
+    );
+  }
+  const fmt = (value: number | null) => value === null ? '—' : value.toFixed(digits);
+  const marker = band.p10 === null || band.p50 === null || band.p90 === null || band.p10 === band.p90
+    ? 50
+    : Math.min(100, Math.max(0, ((band.p50 - band.p10) / (band.p90 - band.p10)) * 100));
+  const bandLabel = `p10 ${fmt(band.p10)} to p90 ${fmt(band.p90)} ${unit}; p50 ${fmt(band.p50)} ${unit}`;
+  return (
+    <div className="rounded bg-muted/50 px-2 py-1">
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="mt-1 flex items-center gap-1 text-[9px] tabular-nums">
+        <span>p10 {fmt(band.p10)}</span>
+        <div className="relative h-1.5 min-w-0 flex-1 rounded-full bg-muted" role="img" aria-label={bandLabel}>
+          <span className="absolute inset-0 rounded-full bg-primary/30" />
+          <span className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-primary" style={{ left: `${marker}%` }} />
+        </div>
+        <span>p90 {fmt(band.p90)} {unit} · n={band.samples}</span>
+      </div>
+      <div className="text-[9px] text-muted-foreground">p50 {fmt(band.p50)} {unit}</div>
+    </div>
+  );
+}
+
+function EnsemblePanel({ state, onRun, onCancel }: { state?: RunEnsemblePanelState; onRun?: () => void; onCancel?: () => void }) {
+  if (!onRun) return null;
+  const status = state?.status ?? 'idle';
+  const busy = status === 'loading-weather' || status === 'running' || status === 'saving';
+  const result = state?.result;
+  const progressPct = state?.total ? Math.min(100, Math.round((state.completed / state.total) * 100)) : 0;
+  const source = result?.source === 'era5' ? 'ERA5 archive' : result?.source === 'nasa-power' ? 'NASA POWER' : null;
+
+  return (
+    <div className="mt-3 border-t border-primary/20 pt-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-foreground/80">Historical range</span>
+        <span className="flex items-center gap-1">
+          {busy && status !== 'saving' && onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-destructive"
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRun}
+            disabled={busy}
+            className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground disabled:opacity-50"
+          >
+            {busy ? 'Working…' : result ? 'Recalculate' : 'Calculate'}
+          </button>
+        </span>
+      </div>
+      {status === 'loading-weather' && <p className="mt-1 text-[10px] text-muted-foreground">Loading historical weather…</p>}
+      {status === 'running' && (
+        <div className="mt-1" role="progressbar" aria-label="Historical ensemble progress" aria-valuemin={0} aria-valuemax={state?.total ?? 0} aria-valuenow={state?.completed ?? 0}>
+          <div className="h-1.5 overflow-hidden rounded bg-muted">
+            <div className="h-full bg-primary transition-[width]" style={{ width: `${progressPct}%` }} />
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">Year {state?.completed ?? 0} of {state?.total ?? 0}</p>
+        </div>
+      )}
+      {status === 'saving' && <p className="mt-1 text-[10px] text-muted-foreground">Saving range with this run…</p>}
+      {status === 'cancelled' && <p role="status" className="mt-1 text-[10px] text-muted-foreground">Historical calculation cancelled.</p>}
+      {(status === 'unavailable' || status === 'error') && (
+        <p role="status" className="mt-1 text-[10px] text-muted-foreground">
+          {state?.message ?? (status === 'error' ? 'Could not calculate the historical range.' : 'Fewer than three complete historical windows are available.')}
+        </p>
+      )}
+      {result && (
+        <>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <EnsembleBandMetric label="Yield" band={result.totalYieldKg} unit="kg" />
+            <EnsembleBandMetric label="Harvest-ready day" band={result.harvestReadyDay} unit="days" digits={0} />
+            <EnsembleBandMetric label="Water use" band={result.waterUseMm} unit="mm" />
+          </div>
+          <p className="mt-1 text-[9px] leading-snug text-muted-foreground">
+            p50 is the typical year. The p10–p90 band covers {result.years.length} historical weather years under the same management; this is not a forecast. Source: {source}.
+          </p>
+          {result.limitations && result.limitations.length > 0 && (
+            <ul className="mt-1 list-disc space-y-0.5 pl-3 text-[9px] leading-snug text-muted-foreground">
+              {result.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
+            </ul>
+          )}
+          {state?.persisted === false && (
+            <p className="mt-1 text-[9px] text-amber-700 dark:text-amber-300">Session-only while run changes are unsaved. Save as a fork to preserve the run; calculate again to store its range.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 // --- In-world intervention authoring (spec §3.2/§3.3, presentational) ------
 // All form state is UNCONTROLLED DOM state (FormData at submit time); the
@@ -136,6 +268,7 @@ export interface SimDrawerProps {
   cropProgress: CropProgressRow[];
   // --- Run transport (RunInspector, spec §3.3) — all presentational ---
   runLabel?: string;
+  runModelSupport?: RunModelSupport;
   runTimeline?: SimRunTimeline;
   runPlaying?: boolean;
   runEnded?: boolean;
@@ -156,8 +289,14 @@ export interface SimDrawerProps {
   showMoisture?: boolean;
   onToggleMoisture?: (v: boolean) => void;
   /** True when the in-session amended config diverges from the stored
-   * RunRecord (authoring is session-only; save-as-new is a follow-up seam). */
+   * RunRecord; it can be promoted into a saved fork while timeline is enabled. */
   runUnsaved?: boolean;
+  onSaveFork?: () => void;
+  forkSaving?: boolean;
+  runComparison?: RunComparison;
+  runEnsemble?: RunEnsemblePanelState;
+  onCalculateEnsemble?: () => void;
+  onCancelEnsemble?: () => void;
   /** Author an intervention on the active run — present only in run mode;
    * the whole Interventions section renders only when set. Returns the
    * controller's verdict so the form can flash a confirmation or reason. */
@@ -186,19 +325,21 @@ function DiagnosticsPanel({ diag }: { diag: CellDiagnosticRow }) {
   const gddPct = Math.round((diag.gddAccumC / Math.max(1, diag.gddRequiredC)) * 100);
   return (
     <div className="mt-1 rounded-md border border-border bg-muted/30 p-2 text-[11px] leading-relaxed">
-      <div className="font-medium text-foreground">{diag.cropName} — drivers today</div>
+      <div className="font-medium text-foreground">{diag.cropName} · {diag.targetLabel} — drivers today</div>
       <ul className="mt-1 space-y-0.5 text-muted-foreground">
         <li>
-          GDD {r1(diag.gddAccumC)} / {r1(diag.gddRequiredC)} °C·day ({gddPct}%)
-          · +{r1(diag.todayGddC)} today
+          {diag.gddLabel} {r1(diag.gddAccumC)} / {r1(diag.gddRequiredC)} °C·day ({gddPct}%)
+          · +{diag.todayGddC === null ? '—' : r1(diag.todayGddC)} today
           <SourceTag tag={diag.sources.temp} />
         </li>
         <li>
-          bucket {r1(diag.bucketMm)} / {r1(diag.awcCapMm)} mm
-          · AWC {diag.awcMmPerCm} mm/cm × {diag.rootDepthCm} cm ({Math.round(diag.moistureFrac * 100)}%)
+          {diag.bucketMm === null || diag.awcCapMm === null || diag.awcMmPerCm === null
+            || diag.rootDepthCm === null || diag.moistureFrac === null
+            ? 'root-zone storage unavailable'
+            : <>bucket {r1(diag.bucketMm)} / {r1(diag.awcCapMm)} mm · AWC {diag.awcMmPerCm} mm/cm × {diag.rootDepthCm} cm ({Math.round(diag.moistureFrac * 100)}%)</>}
         </li>
         <li>
-          ET0 {r1(diag.todayEtMm)} mm
+          ET0 {diag.todayEtMm === null ? '—' : r1(diag.todayEtMm)} mm
           <SourceTag tag={diag.sources.eto} />
           · rain source
           <SourceTag tag={diag.sources.precip} />
@@ -206,17 +347,17 @@ function DiagnosticsPanel({ diag }: { diag: CellDiagnosticRow }) {
         <li>nitrogen {r1(diag.nitrogenKgHa)} kg/ha</li>
         {s.heat > 0 && (
           <li className="text-amber-600">
-            heat stress {r1(s.heat)} · tMax {r1(diag.todayTMaxC)} °C &gt; max {diag.cropMaxTempC} °C
+            heat stress {r1(s.heat)} · tMax {diag.todayTMaxC === null ? '—' : r1(diag.todayTMaxC)} °C &gt; max {diag.cropMaxTempC} °C
           </li>
         )}
         {s.cold > 0 && (
           <li className="text-sky-600">
-            cold stress {r1(s.cold)} · tMin {r1(diag.todayTMinC)} °C &lt; min {diag.cropMinTempC} °C
+            cold stress {r1(s.cold)} · tMin {diag.todayTMinC === null ? '—' : r1(diag.todayTMinC)} °C &lt; min {diag.cropMinTempC} °C
           </li>
         )}
         {s.water > 0 && (
           <li className="text-amber-600">
-            water stress {r1(s.water)} · bucket {Math.round(diag.moistureFrac * 100)}% full
+            water stress {r1(s.water)} · bucket {diag.moistureFrac === null ? 'unavailable' : `${Math.round(diag.moistureFrac * 100)}% full`}
           </li>
         )}
         {s.nitrogen > 0 && <li className="text-amber-600">nitrogen stress {r1(s.nitrogen)}</li>}
@@ -249,6 +390,7 @@ export function SimDrawer({
   climateBaseline,
   cropProgress,
   runLabel,
+  runModelSupport,
   runTimeline,
   runPlaying,
   runEnded,
@@ -265,6 +407,12 @@ export function SimDrawer({
   showMoisture,
   onToggleMoisture,
   runUnsaved,
+  onSaveFork,
+  forkSaving,
+  runComparison,
+  runEnsemble,
+  onCalculateEnsemble,
+  onCancelEnsemble,
   onAddIntervention,
   compareRuns,
   ghostLabel,
@@ -278,9 +426,16 @@ export function SimDrawer({
   };
 
   const days = Math.max(1, runTimeline?.days ?? 1);
+  const runTransportAvailable = runModelSupport?.canReplay !== false;
+  const comparisonYieldUnit = yieldMassUnit(runComparison?.yieldBasis);
+  const comparisonYieldLabel = comparisonYieldUnit === 'kg DM' ? 'Harvestable dry matter' : 'Yield';
+  const cropModelLabel = runModelSupport?.model === 'crop-model-v2' ? 'v2'
+    : runModelSupport?.model === 'crop-model-v3' ? 'v3'
+      : runModelSupport?.model === 'crop-model-v4' ? 'v4' : undefined;
   const eventDots = (runTimeline?.events ?? []).filter(
     (e) => e.kind === 'stress-onset' || e.kind === 'harvest-ready',
   );
+  const assimilationEvents = (runTimeline?.events ?? []).filter((event) => event.kind === 'assimilated');
 
   // Intervention form season bounds: in run mode `scrubDate` IS the current
   // sim date (World3D passes runDateISO), so the season starts dayIndex days
@@ -318,6 +473,29 @@ export function SimDrawer({
             : 'pointer-events-none translate-x-full max-xl:translate-x-0 max-xl:translate-y-full',
         )}
       >
+        {runModelSupport && (!runModelSupport.canReplay || runModelSupport.status === 'qualified') && (
+          <div role="status" className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[11px] text-amber-900 dark:text-amber-100">
+            <div className="font-semibold">
+              {cropModelLabel && runModelSupport.canReplay
+                ? `Qualified ${cropModelLabel} estimate`
+                : cropModelLabel
+                  ? 'Crop estimate unavailable'
+                  : 'Saved summary preserved'}
+            </div>
+            <p className="mt-0.5">
+              {cropModelLabel && runModelSupport.canReplay
+                ? `This ${cropModelLabel} dry-matter estimate is qualified; independent measured accuracy remains UNVERIFIED.`
+                : cropModelLabel
+                  ? 'This model version cannot replay these frozen inputs; its saved summary is left unchanged.'
+                : 'This saved record has no supported frozen model version or complete inputs; its stored summary is unchanged.'}
+            </p>
+            {runModelSupport.reasons.length > 0 && (
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {runModelSupport.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">Simulation</h2>
           <button
@@ -370,22 +548,24 @@ export function SimDrawer({
                 )}
               </div>
               <div className="mt-2 flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={runPlaying ? onRunPause : onRunPlay}
-                  disabled={runEnded}
-                  title={runEnded ? 'Run complete' : runPlaying ? 'Pause the run' : 'Play the run'}
-                  className={cn(
-                    'min-w-[72px] rounded px-2 py-1 text-xs font-medium',
-                    runEnded
-                      ? 'bg-muted text-muted-foreground/60'
-                      : runPlaying
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground',
-                  )}
-                >
-                  {runPlaying ? '⏸ Pause' : '▶ Play'}
-                </button>
+                {runTransportAvailable && (
+                  <button
+                    type="button"
+                    onClick={runPlaying ? onRunPause : onRunPlay}
+                    disabled={runEnded}
+                    title={runEnded ? 'Run complete' : runPlaying ? 'Pause the run' : 'Play the run'}
+                    className={cn(
+                      'min-w-[72px] rounded px-2 py-1 text-xs font-medium',
+                      runEnded
+                        ? 'bg-muted text-muted-foreground/60'
+                        : runPlaying
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground',
+                    )}
+                  >
+                    {runPlaying ? '⏸ Pause' : '▶ Play'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onRunStop}
@@ -399,14 +579,16 @@ export function SimDrawer({
                 </span>
               </div>
               <div className="relative mt-3">
-                <Slider
-                  aria-label="Seek to run day"
-                  value={[Math.min(runTimeline.dayIndex, runTimeline.days)]}
-                  min={0}
-                  max={runTimeline.days}
-                  step={1}
-                  onValueChange={(v) => onRunSeek?.(v[0] ?? 0)}
-                />
+                {runTransportAvailable && (
+                  <Slider
+                    aria-label="Seek to run day"
+                    value={[Math.min(runTimeline.dayIndex, runTimeline.days)]}
+                    min={0}
+                    max={runTimeline.days}
+                    step={1}
+                    onValueChange={(v) => onRunSeek?.(v[0] ?? 0)}
+                  />
+                )}
                 <div className="pointer-events-none absolute inset-x-2 top-1/2 h-0 -translate-y-1/2">
                   {runTimeline.interventions.map((m, i) => (
                     <span
@@ -429,29 +611,48 @@ export function SimDrawer({
                   ))}
                 </div>
               </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <span id="ff-run-speed-label" className="shrink-0 text-xs text-muted-foreground">
-                  Speed
-                </span>
-                <Select
-                  value={String(runSpeed != null && runSpeed >= 15 ? 30 : runSpeed != null && runSpeed >= 4 ? 7 : 1)}
-                  onValueChange={(v) => onRunSpeed?.(Number(v))}
-                >
-                  <SelectTrigger
-                    aria-labelledby="ff-run-speed-label"
-                    title="Simulated days per real second"
-                    className="h-7 min-w-0 flex-1 text-xs"
+              {assimilationEvents.length > 0 && (
+                <details className="mt-2 rounded-md border border-border/70 bg-muted/30 px-2 py-1.5">
+                  <summary className="cursor-pointer text-[10px] font-medium text-foreground/80">
+                    Observation corrections · {assimilationEvents.length}
+                  </summary>
+                  <p className="mt-1 text-[9px] text-muted-foreground">Innovation = observation minus the model before correction.</p>
+                  <ul className="mt-1 max-h-28 space-y-1 overflow-y-auto text-[10px]">
+                    {assimilationEvents.slice(-8).reverse().map((event, index) => (
+                      <li key={`${event.day}:${event.metric ?? 'observation'}:${index}`} className="border-t border-border/50 pt-1">
+                        <span className="font-medium">Day {event.day + 1} · {(event.metric ?? 'measurement').replace(/([A-Z])/g, ' $1').toLowerCase()}</span>
+                        {event.innovation !== undefined && <span className="ml-1 text-muted-foreground tabular-nums">innovation {event.innovation > 0 ? '+' : ''}{event.innovation.toFixed(3)}</span>}
+                        <span className="block text-[9px] text-muted-foreground">{event.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {runTransportAvailable && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span id="ff-run-speed-label" className="shrink-0 text-xs text-muted-foreground">
+                    Speed
+                  </span>
+                  <Select
+                    value={String(runSpeed != null && runSpeed >= 15 ? 30 : runSpeed != null && runSpeed >= 4 ? 7 : 1)}
+                    onValueChange={(v) => onRunSpeed?.(Number(v))}
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  {/* Portal renders at body level: lift above the z-[150] drawer */}
-                  <SelectContent className="z-[200]">
-                    <SelectItem value="1">1 day/s</SelectItem>
-                    <SelectItem value="7">1 week/s</SelectItem>
-                    <SelectItem value="30">1 month/s</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                    <SelectTrigger
+                      aria-labelledby="ff-run-speed-label"
+                      title="Simulated days per real second"
+                      className="h-7 min-w-0 flex-1 text-xs"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    {/* Portal renders at body level: lift above the z-[150] drawer */}
+                    <SelectContent className="z-[200]">
+                      <SelectItem value="1">1 day/s</SelectItem>
+                      <SelectItem value="7">1 week/s</SelectItem>
+                      <SelectItem value="30">1 month/s</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {onToggleMoisture && (
                 <div className="mt-2">
                   <div className="flex items-center justify-between">
@@ -507,6 +708,28 @@ export function SimDrawer({
                         solid = {runLabel ?? 'primary run'} · ghost = {ghostLabel}
                         {ghostCapped && ' · ghost season ended'}
                       </p>
+                      {TIMELINE_ENABLED && runComparison && (
+                        <div className="mt-2 rounded-md bg-muted/50 p-2" title={`${runComparison.b.label} minus ${runComparison.a.label}`}>
+                          <div className="mb-1 text-[10px] font-medium text-foreground/80">Delta · B − A ({runComparison.b.label} − {runComparison.a.label})</div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                            <span className="text-muted-foreground">{comparisonYieldUnit ? `${comparisonYieldLabel} (${comparisonYieldUnit})` : 'Yield (not comparable)'}</span><span className="text-right tabular-nums">{signedDelta(runComparison.totalYieldKg, comparisonYieldUnit ?? '')}</span>
+                            <span className="text-muted-foreground">Water</span><span className="text-right tabular-nums">{signedDelta(runComparison.waterUseMm, 'mm')}</span>
+                            <span className="text-muted-foreground">Stress cell-days</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressCellDays, 'days', 0)}</span>
+                            <span className="text-muted-foreground">Harvest-ready day</span><span className="text-right tabular-nums">{signedDelta(runComparison.harvestReadyDay, 'days', 0)}</span>
+                            <span className="text-muted-foreground">Outbreak days</span><span className="text-right tabular-nums">{signedDelta(runComparison.outbreakDays, 'days', 0)}</span>
+                          </div>
+                          <details className="mt-1 border-t border-border/60 pt-1">
+                            <summary className="cursor-pointer text-[9px] font-medium text-muted-foreground">Stress by cause · B − A</summary>
+                            <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
+                              <span className="text-muted-foreground">Water</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.water, 'cell-days', 0)}</span>
+                              <span className="text-muted-foreground">Heat</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.heat, 'cell-days', 0)}</span>
+                              <span className="text-muted-foreground">Cold</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.cold, 'cell-days', 0)}</span>
+                              <span className="text-muted-foreground">Nitrogen</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.nitrogen, 'cell-days', 0)}</span>
+                              <span className="text-muted-foreground">Light</span><span className="text-right tabular-nums">{signedDelta(runComparison.stressDays.light, 'cell-days', 0)}</span>
+                            </div>
+                          </details>
+                        </div>
+                      )}
                     </div>
                   ) : compareRuns && compareRuns.length > 0 ? (
                     // Native select (the drawer's uncontrolled-form pattern):
@@ -532,10 +755,13 @@ export function SimDrawer({
                     </select>
                   ) : (
                     <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-                      No other runs of this farm to compare against yet — create one on the Simulations page.
+                      No replayable comparison runs are available. Saved runs without compatible frozen model inputs cannot be loaded as ghosts.
                     </p>
                   )}
                 </div>
+              )}
+              {runTimeline && TIMELINE_ENABLED && (
+                <EnsemblePanel state={runEnsemble} onRun={onCalculateEnsemble} onCancel={onCancelEnsemble} />
               )}
               {onAddIntervention && (
                 <div className="mt-3 border-t border-primary/20 pt-2">
@@ -548,6 +774,17 @@ export function SimDrawer({
                       >
                         unsaved
                       </span>
+                    )}
+                    {TIMELINE_ENABLED && runUnsaved && onSaveFork && (
+                      <button
+                        type="button"
+                        onClick={onSaveFork}
+                        disabled={forkSaving}
+                        title="Save the current what-if as a new run, frozen at this day"
+                        className="rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground disabled:opacity-50"
+                      >
+                        {forkSaving ? 'Saving…' : 'Save as fork'}
+                      </button>
                     )}
                   </div>
                   {(runTimeline?.interventions.length ?? 0) > 0 ? (
@@ -808,10 +1045,12 @@ export function SimDrawer({
               ) : (
                 <div className="flex flex-col gap-0.5">
                   {cropProgress.map((row) => {
-                    const rowKey = `${row.id}|${row.plantedAt ?? ''}|${row.label ?? ''}`;
-                    const diagKey = `${row.id}|${row.plantedAt ?? ''}`;
+                    const targetKey = row.targetKey ?? 'floor';
+                    const rowKey = `${row.id}|${row.plantedAt ?? ''}|${targetKey}|${row.label ?? ''}`;
                     const selected = selectedRowKey === rowKey;
-                    const diag = cellDiagnostics?.find((d) => `${d.cropId}|${d.plantedAt}` === diagKey);
+                    const diag = cellDiagnostics?.find((d) =>
+                      d.cropId === row.id && d.plantedAt === (row.plantedAt ?? '') && d.targetKey === targetKey,
+                    );
                     return (
                       <div key={rowKey}>
                         <button
@@ -820,11 +1059,17 @@ export function SimDrawer({
                           title={cellDiagnostics ? 'Click for the driver breakdown' : undefined}
                           className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
                         >
-                          <span className="min-w-0 flex-1 truncate">{row.label ?? row.name}</span>
-                          <span className="tracking-tighter text-foreground">
-                            {'●'.repeat(row.stage)}{'○'.repeat(5 - row.stage)}
+                          <span className="min-w-0 flex-1 truncate">
+                            {row.label ?? row.name}
                           </span>
-                          <span className="tabular-nums">{row.pct}%</span>
+                          {row.stageAvailable === false ? (
+                            <span className="text-[10px] text-muted-foreground" title="No source-supported intermediate crop-stage map is available.">stage —</span>
+                          ) : (
+                            <span className="tracking-tighter text-foreground">
+                              {'●'.repeat(row.stage)}{'○'.repeat(5 - row.stage)}
+                            </span>
+                          )}
+                          <span className="tabular-nums">{row.stageAvailable === false ? '—' : `${row.pct}%`}</span>
                           {row.stress > 0.2 && <span className="text-amber-500">stress</span>}
                         </button>
                         {selected && diag && <DiagnosticsPanel diag={diag} />}

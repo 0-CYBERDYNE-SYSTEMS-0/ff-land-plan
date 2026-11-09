@@ -55,6 +55,21 @@ export const DLI_NEED_MOL: Record<CropCategory, number> = {
   fungus: 0,
 };
 
+/** Explicit name used by the environment climate model; values preserve the
+ * shipped minimum-stress thresholds above. */
+export const DLI_MIN_MOL = DLI_NEED_MOL;
+
+/** Representative CEA targets for sizing lights, separate from stress floors. */
+export const DLI_TARGET_MOL: Record<CropCategory, number> = {
+  fruit: 25,
+  grain: 18,
+  vegetable: 14,
+  herb: 14,
+  cover_crop: 8,
+  flower: 10,
+  fungus: 0,
+};
+
 /**
  * Weight of the light-deficit term in the stress sum. Supplemental LEDs are
  * the normal grower mitigation for a low-DLI enclosed structure — this term

@@ -14,7 +14,8 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { PlanState, PlanSurface } from '@/types';
+import { archetypes } from '@/creative/archetypes';
+import type { ArchetypeId, PlanState, PlanSurface } from '@/types';
 import {
   makeGrass01, makeGrass02, makeGrass03, makeGrassFlower,
   makeSoilTilledDry,
@@ -83,8 +84,16 @@ function hash2(x: number, z: number): number {
   return ((h ^ (h >>> 16)) >>> 0);
 }
 
-function resolveTileId(slug: string | null, x: number, z: number, surface: PlanSurface = 'outdoor'): TileId {
-  const floor = SURFACE_FLOOR[surface];
+function resolveTileId(
+  slug: string | null,
+  x: number,
+  z: number,
+  surface: PlanSurface = 'outdoor',
+  floorOverride?: TileId | null,
+): TileId {
+  const floor = floorOverride !== undefined
+    ? floorOverride
+    : Object.prototype.hasOwnProperty.call(SURFACE_FLOOR, surface) ? SURFACE_FLOOR[surface] : null;
   if (slug === null || slug === undefined) {
     // Enclosed surfaces tile their own floor; outdoors it's grass.
     if (floor) return floor;
@@ -192,7 +201,7 @@ function buildTemplate(id: TileId, cellM: number): TileTemplate {
 
 // --- public API ----------------------------------------------------------------
 
-export function buildGround(plan: PlanState, scene: THREE.Scene): GroundBatch[] {
+export function buildGround(plan: PlanState, scene: THREE.Scene, archetypeId?: ArchetypeId | null): GroundBatch[] {
   const cols = Math.round(plan.widthM / plan.cellM);
   const rows = Math.round(plan.heightM / plan.cellM);
   const offsetX = -(plan.widthM / 2);
@@ -201,11 +210,18 @@ export function buildGround(plan: PlanState, scene: THREE.Scene): GroundBatch[] 
 
   // Group cells by resolved tile id
   const surface = plan.surface ?? 'outdoor';
+  const archetype = archetypeId && Object.prototype.hasOwnProperty.call(archetypes, archetypeId)
+    ? archetypes[archetypeId]
+    : undefined;
+  const floorOverride = archetype?.floorTile === null ? null
+    : typeof archetype?.floorTile === 'string' && Object.prototype.hasOwnProperty.call(TILE_MAKERS, archetype.floorTile)
+      ? archetype.floorTile as TileId
+      : undefined;
   const cellsByType = new Map<TileId, { x: number; z: number }[]>();
   for (let cz = 0; cz < rows; cz++) {
     for (let cx = 0; cx < cols; cx++) {
       const slug = plan.ground[`${cx},${cz}`] ?? null;
-      const id = resolveTileId(slug, cx, cz, surface);
+      const id = resolveTileId(slug, cx, cz, surface, floorOverride);
       const arr = cellsByType.get(id) ?? [];
       arr.push({ x: cx, z: cz });
       cellsByType.set(id, arr);
@@ -250,9 +266,14 @@ export function buildGround(plan: PlanState, scene: THREE.Scene): GroundBatch[] 
   return batches;
 }
 
-export function updateGround(batches: GroundBatch[], plan: PlanState, scene: THREE.Scene): GroundBatch[] {
+export function updateGround(
+  batches: GroundBatch[],
+  plan: PlanState,
+  scene: THREE.Scene,
+  archetypeId?: ArchetypeId | null,
+): GroundBatch[] {
   disposeGround(batches);
-  return buildGround(plan, scene);
+  return buildGround(plan, scene, archetypeId);
 }
 
 export function disposeGround(batches: GroundBatch[]): void {

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "A04-V3-TRANSPLANT-SOURCE-CLOCK-MATURITY-ENDPOINT-SYNTHETIC-01",
+  "preregistration": "quality/beta/evidence/a04-v3-transplant-source-clock-maturity-endpoint-synthetic.json",
+  "preregistrationCommit": "65f6daa45532ec19d918ada1424ddec6abba9288",
+  "preregisteredSetupSha256": "cf4e4c737c8b5bedb3ff26f5feaa3d0664e98b9bcc52c26aa9670134a8f54838",
+  "preregistrationReview": {
+    "reviewer": "S3 independent preregistration reviewer",
+    "result": "PASS"
+  },
+  "preregistrationExactHeadCi": {
+    "pullRequest": 82,
+    "headSha": "65f6daa45532ec19d918ada1424ddec6abba9288",
+    "runId": 40781317269,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40781317269",
+    "checks": {
+      "test + typecheck + build": "PASS",
+      "Playwright production Pages-path smoke": "PASS",
+      "secret + private-file scan": "PASS",
+      "GitGuardian Security Checks": "PASS"
+    }
+  },
+  "candidateAttempt": {
+    "worker": "S1 implementation worker",
+    "date": "2026-10-28",
+    "testFile": "src/lib/sim/model-inputs.test.ts",
+    "candidateTestFileSha256": "158669a9d771dbcfb9c4fda95422131a329d92a0b2ea5b1f27782a016bc1b666",
+    "testName": "starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"starts v3 transplanted source thermal time at transplant and caps it at the frozen maturity endpoint\"",
+    "firstImplementationIteration": {
+      "result": "FAIL",
+      "reason": "The test compared the raw helper output including initialDryMatterGPerM2=0 to the normalized frozen model input, which omits that zero-valued field."
+    },
+    "correctedImplementationIteration": {
+      "result": "PASS",
+      "summary": "1 passed, 36 skipped; expected source thermal states observed: 0 before transplant, 20 on 2026-10-03, 1100 with biomassFrac below 1 on 2026-11-26, 1117 with biomassFrac 1 on 2026-11-27."
+    }
+  },
+  "independentCandidateReview": {
+    "reviewer": "S3 independent candidate reviewer",
+    "result": "FAIL",
+    "findings": [
+      "Registered frozen helper thermal.accumulationMethod was \"single-sine horizontal cutoff\", while the source row passed through by the helper and expected by the test is \"Single sine with horizontal cutoff; OSU Table 6\".",
+      "The test set RunConfig.dayCount=58, but fixture 01 did not freeze that run input."
+    ],
+    "reviewed": "Added test hunk, syntheticStartEventParameter helper, fixture 01 registration, and v3 source-clock/upper-target reducer logic. No tests were run by S3."
+  },
+  "status": "UNACCEPTED",
+  "acceptanceDisposition": "The focused test output is retained as a test trace but does not count as an accepted fixture result because the candidate inputs did not match the registered setup. Do not reuse these observed values as prospective or independent evidence.",
+  "retest": "A corrected registration is recorded as fixture 02. Do not execute the corrected candidate until its independent preregistration review and exact-head PR CI pass.",
+  "claimBoundary": [
+    "This was an attempted synthetic software invariant only; it establishes no crop accuracy, biological maturity, measured transplant state, independent reference agreement, or prediction.",
+    "A-04 and overall 02A remain UNVERIFIED."
+  ],
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false
+}

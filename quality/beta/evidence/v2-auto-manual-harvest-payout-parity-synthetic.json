@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "id": "V2-AUTO-MANUAL-HARVEST-PAYOUT-PARITY-SYNTHETIC-01",
+  "preparedDate": "2026-10-28",
+  "status": "Preregistered; independent S2 tolerance review approved; implementation and execution not started.",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-07",
+    "requirement": "Synthetic software parity for automatic and manual harvest payout under the same frozen model inputs, with harvest mass and replay invariants; A-07 overall remains UNVERIFIED."
+  },
+  "classification": "paired synthetic crop-model-v2 management-mode software regression; not a crop or model-accuracy benchmark",
+  "comparisonType": "Within-version software invariant comparing automatic and single-manual harvest modes; not a model-candidate, reference-model, measured-output, calibration, or holdout comparison.",
+  "inputFixtureReferences": [
+    {
+      "id": "V2-AUTO-DM-HARVEST-PAYOUT-SYNTHETIC-01",
+      "path": "quality/beta/evidence/model-coverage.json"
+    },
+    {
+      "id": "V2-DUPLICATE-MANUAL-HARVEST-SYNTHETIC-01",
+      "path": "quality/beta/evidence/model-coverage.json",
+      "role": "The existing two-request idempotency case remains separate; this parity fixture uses one manual request."
+    }
+  ],
+  "syntheticSetup": {
+    "testLocation": "src/lib/sim/model-inputs.test.ts, existing test titled runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified",
+    "crop": {
+      "slug": "tomato",
+      "catalogCropId": 1,
+      "cultivar": "not asserted; catalog routing only"
+    },
+    "run": {
+      "cropModelVersion": "crop-model-v2",
+      "modelInputsVersion": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "planting": {
+        "0,0": 1
+      },
+      "cropStartEvent": "transplanting",
+      "cellCount": 1,
+      "target": "floor cell",
+      "cellM": 0.25,
+      "startDate": "2026-10-01",
+      "configDayCount": 7,
+      "providedEnvironmentSeriesDays": 80
+    },
+    "frozenParameters": {
+      "soil": {
+        "awcMmPerCm": 1.7,
+        "organicMatterPct": 2.4
+      },
+      "production": {
+        "equationFamily": "LINTUL-net-RUE",
+        "rueGPerMjInterceptedPar": 2,
+        "initialDryMatterGPerM2": 0,
+        "interceptedParFraction": 0.5,
+        "harvestIndex": 0.5,
+        "evidence": "test-only synthetic reducer contract fixture"
+      },
+      "rootZone": {
+        "method": "FAO-56",
+        "effectiveRootDepthCm": 20,
+        "depletionFraction": 0.5,
+        "cropCoefficient": 1,
+        "initialStorageFraction": 0.7,
+        "evidence": "test-only synthetic reducer contract fixture"
+      },
+      "thermal": "Existing cropThermalParams entry is frozen by the test input; its crop/domain accuracy is not assessed here."
+    },
+    "dailyEnvironment": {
+      "tMinC": 20,
+      "tMaxC": 30,
+      "precipMm": 3,
+      "etoMm": 2,
+      "dliNaturalMol": 18,
+      "gddBase10C": 15,
+      "seriesStartDate": "2026-10-01",
+      "seriesLengthDays": 80,
+      "weather": "Deterministic synthetic sunnySeries; not observed or geographically resolved weather."
+    }
+  },
+  "arms": [
+    {
+      "id": "automatic",
+      "management": {
+        "autoHarvest": true,
+        "manualInterventions": []
+      },
+      "expected": {
+        "harvestedEventCount": 1,
+        "cell": "0,0",
+        "dayIndex": 62,
+        "date": "2026-12-02",
+        "yieldKg": 0.007875,
+        "totalYieldKg": 0.01,
+        "yieldKgByCrop": {
+          "1": 0.01
+        }
+      }
+    },
+    {
+      "id": "single-manual",
+      "management": {
+        "autoHarvest": false,
+        "manualInterventions": [
+          {
+            "kind": "harvest",
+            "date": "2026-12-03",
+            "cell": "0,0"
+          }
+        ]
+      },
+      "expected": {
+        "harvestedEventCount": 1,
+        "cell": "0,0",
+        "dayIndex": 63,
+        "date": "2026-12-03",
+        "yieldKg": 0.007875,
+        "totalYieldKg": 0.01,
+        "yieldKgByCrop": {
+          "1": 0.01
+        }
+      }
+    }
+  ],
+  "preManualControl": {
+    "management": {
+      "autoHarvest": false,
+      "manualInterventions": []
+    },
+    "environmentPrefix": "First 63 entries of the same frozen synthetic series, through dayIndex 62; all frozen model inputs and run configuration remain the same.",
+    "evaluationOrder": "stepDay applies dated manual harvest interventions before the per-cell growth pass. Therefore the dayIndex 63 manual harvest reads the state after dayIndex 62 and before dayIndex 63 growth; the 63-entry prefix captures that payout input.",
+    "expected": {
+      "harvestReadyDay": 62,
+      "biomassFrac": 1,
+      "dryMatterGPerM2": 252
+    },
+    "assertion": "Reuse the existing synthetic test precision: dryMatterGPerM2 toBeCloseTo(252, 8); harvestReadyDay and biomassFrac exact."
+  },
+  "expectedPairedInvariants": {
+    "eventTiming": "Automatic event at dayIndex 62 and single-manual event at the first eligible dayIndex 63; the one-day offset is intentional and event dates must not be compared as equal.",
+    "eventSelection": "Exactly one harvested event for cell 0,0 in each arm.",
+    "payout": "Each event is 0.007875 kg within the registered arithmetic bound; absolute automatic/manual payout difference is also bounded by that same value.",
+    "summaries": "Total and per-crop summaries are exactly 0.01 kg in each arm.",
+    "replay": "Repeated execution of each arm from identical frozen inputs and its exact environment series yields exactly equal events, final state, and summary."
+  },
+  "toleranceReview": {
+    "status": "Approved by independent S2 review before test implementation; registered numerical bounds are unchanged.",
+    "reviewedBy": "S2 independent preregistration validator",
+    "reviewedDate": "2026-10-28",
+    "metrics": [
+      {
+        "id": "event-yield-and-paired-difference",
+        "tolerance": "Absolute deviation and automatic/manual difference each <=1e-12 kg.",
+        "basis": "Do not widen the existing 1e-12 kg arithmetic/conversion bound already preregistered for both V2-AUTO-DM-HARVEST-PAYOUT-SYNTHETIC-01 and V2-DUPLICATE-MANUAL-HARVEST-SYNTHETIC-01. This is double-precision payout arithmetic only, not crop error."
+      },
+      {
+        "id": "pre-manual-maturity-pool",
+        "tolerance": "Existing matcher toBeCloseTo(252, 8) g DM/m2; harvestReadyDay 62 and biomassFrac 1 exact.",
+        "basis": "Reuses existing assertion precision for the same synthetic A-07 one-cell frozen run; this does not establish biological maturity or a measured dry-matter value."
+      },
+      {
+        "id": "event-timing-count-cell-and-summary",
+        "tolerance": "Exact day indices, dates, event count, cell, rounded total/per-crop summaries, and replay equality.",
+        "basis": "These are deterministic software routing and aggregation invariants."
+      }
+    ]
+  },
+  "reproduction": {
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"runs the v2 reducer with complete frozen inputs and keeps empirical accuracy qualified\"",
+    "status": "Not run; preregistration tolerances are independently approved; implementation has not started."
+  },
+  "implementationEstimate": {
+    "engineerHours": "0.5-1.0",
+    "assumptions": [
+      "Add the paired assertion and single-manual arm within the existing v2 frozen-input test.",
+      "Keep the existing duplicate-manual suppression case separate and unchanged.",
+      "Do not change production equations or create new numeric tolerances."
+    ]
+  },
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "sourceBoundary": "No new source artifact or external value is introduced. Production and root parameters are synthetic test scaffolding; the thermal input's provenance is not validated by this regression.",
+  "acceptanceBoundary": "Software evidence only. Crop accuracy, biological validity, measured-trial agreement, reference-model agreement, and predictive validity remain UNVERIFIED; A-07 and overall 02A remain UNVERIFIED."
+}

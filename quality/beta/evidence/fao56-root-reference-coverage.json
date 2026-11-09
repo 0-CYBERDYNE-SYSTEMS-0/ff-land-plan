@@ -1,0 +1,542 @@
+{
+  "schemaVersion": 1,
+  "status": "reference-only; not executable crop-model parameters; no candidate comparison authorized",
+  "source": {
+    "evidenceId": "FAO-56-1998",
+    "citation": "Allen et al. (1998), Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements, FAO Irrigation and Drainage Paper 56, Chapter 8, Table 22 and footnotes 1–2.",
+    "url": "https://www.fao.org/4/x0490e/x0490e0e.htm",
+    "retrievedDate": "2026-10-27",
+    "sourceVersion": "FAO-56 (1998), Chapter 8, Table 22; official HTML chapter page.",
+    "artifactSha256": "f7eabb739742734c411a8d31527b709fba004a943e373ed406587017b3be0e98",
+    "artifactBytes": 137909,
+    "artifactStatus": "Official Chapter 8 HTML snapshot retrieved 2026-10-27 and hashed locally; snapshot is not committed.",
+    "licenseOrReuse": "FAO publication; this file records derived numerical values and short labels only. No table text, code or substantial prose is copied."
+  },
+  "interpretation": {
+    "rootDepth": "Table 22 reports ranges of maximum effective rooting depth, not initial depth or a developmental trajectory. Its footnote says larger values apply where soil layering or other restrictions are absent; smaller values may be used for irrigation scheduling, while larger values may be used for modeling soil-water stress or rainfed conditions.",
+    "depletionFraction": "The listed p values apply at ETc approximately 5 mm/day. Preserve FAO-56 adjustment p = pTable + 0.04 × (5 − ETc), limited to 0.1…0.8. The source also says p may be reduced 5–10% for fine-textured clay or increased 5–10% for coarse-textured sand; no such texture adjustment is inferred by this reference inventory.",
+    "limitations": [
+      "Reference values do not establish a catalog-specific active default, crop root-growth trajectory, root-zone initial state, crop coefficient, or measured prediction accuracy.",
+      "All entries remain reference-only; exact/common matches do not imply that an annual crop model is appropriate for perennial crops.",
+      "No source-backed dynamic canopy, production parameter, or full crop model is inferred from this root table."
+    ],
+    "transcriptionTolerance": {
+      "rootDepthRangeEndpointM": "±0.05 m, half the displayed 0.1 m increment; transcription only.",
+      "depletionFraction": "±0.005, half the displayed 0.01 increment; transcription only."
+    }
+  },
+  "catalogCoverage": [
+    {
+      "cropId": 1,
+      "cropSlug": "tomato",
+      "status": "reference-only",
+      "sourceCropLabel": "Tomato",
+      "maximumEffectiveRootDepthRangeM": [
+        0.7,
+        1.5
+      ],
+      "depletionFractionAtEtc5MmDay": 0.4,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 2,
+      "cropSlug": "lettuce",
+      "status": "reference-only",
+      "sourceCropLabel": "Lettuce",
+      "maximumEffectiveRootDepthRangeM": [
+        0.3,
+        0.5
+      ],
+      "depletionFractionAtEtc5MmDay": 0.3,
+      "applicability": "Generic Table 22 lettuce reference; distinct from the direct-seeded Yuma field root profile."
+    },
+    {
+      "cropId": 3,
+      "cropSlug": "wheat",
+      "status": "unverified-no-direct-match",
+      "reason": "The source separates spring and winter wheat; the catalog has no season field."
+    },
+    {
+      "cropId": 4,
+      "cropSlug": "apple",
+      "status": "reference-only",
+      "sourceCropLabel": "Apples, Cherries, Pears",
+      "maximumEffectiveRootDepthRangeM": [
+        1,
+        2
+      ],
+      "depletionFractionAtEtc5MmDay": 0.5,
+      "applicability": "Table 22 explicitly groups apple with orchard trees; this annual crop model does not represent the perennial orchard lifecycle."
+    },
+    {
+      "cropId": 5,
+      "cropSlug": "basil",
+      "status": "unverified-no-direct-match",
+      "reason": "No basil entry appears in Table 22."
+    },
+    {
+      "cropId": 6,
+      "cropSlug": "pepper",
+      "status": "unverified-no-direct-match",
+      "reason": "Table 22 specifies sweet bell peppers; catalog pepper does not specify type."
+    },
+    {
+      "cropId": 7,
+      "cropSlug": "eggplant",
+      "status": "reference-only",
+      "sourceCropLabel": "Egg Plant",
+      "maximumEffectiveRootDepthRangeM": [
+        0.7,
+        1.2
+      ],
+      "depletionFractionAtEtc5MmDay": 0.45,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 8,
+      "cropSlug": "potato",
+      "status": "reference-only",
+      "sourceCropLabel": "Potato",
+      "maximumEffectiveRootDepthRangeM": [
+        0.4,
+        0.6
+      ],
+      "depletionFractionAtEtc5MmDay": 0.35,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 9,
+      "cropSlug": "carrot",
+      "status": "reference-only",
+      "sourceCropLabel": "Carrots",
+      "maximumEffectiveRootDepthRangeM": [
+        0.5,
+        1
+      ],
+      "depletionFractionAtEtc5MmDay": 0.35,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 10,
+      "cropSlug": "beet",
+      "status": "unverified-no-direct-match",
+      "reason": "Table 22 distinguishes table beet from sugar beet; the catalog does not specify which."
+    },
+    {
+      "cropId": 11,
+      "cropSlug": "radish",
+      "status": "reference-only",
+      "sourceCropLabel": "Radishes",
+      "maximumEffectiveRootDepthRangeM": [
+        0.3,
+        0.5
+      ],
+      "depletionFractionAtEtc5MmDay": 0.3,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 12,
+      "cropSlug": "onion",
+      "status": "unverified-no-direct-match",
+      "reason": "Table 22 distinguishes dry, green and seed onion; catalog onion does not specify use."
+    },
+    {
+      "cropId": 13,
+      "cropSlug": "garlic",
+      "status": "reference-only",
+      "sourceCropLabel": "Garlic",
+      "maximumEffectiveRootDepthRangeM": [
+        0.3,
+        0.5
+      ],
+      "depletionFractionAtEtc5MmDay": 0.3,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 14,
+      "cropSlug": "leek",
+      "status": "unverified-no-direct-match",
+      "reason": "No leek entry appears in Table 22."
+    },
+    {
+      "cropId": 15,
+      "cropSlug": "spinach",
+      "status": "reference-only",
+      "sourceCropLabel": "Spinach",
+      "maximumEffectiveRootDepthRangeM": [
+        0.3,
+        0.5
+      ],
+      "depletionFractionAtEtc5MmDay": 0.2,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 16,
+      "cropSlug": "arugula",
+      "status": "unverified-no-direct-match",
+      "reason": "No arugula entry appears in Table 22."
+    },
+    {
+      "cropId": 17,
+      "cropSlug": "chard",
+      "status": "unverified-no-direct-match",
+      "reason": "No chard entry appears in Table 22."
+    },
+    {
+      "cropId": 18,
+      "cropSlug": "kale",
+      "status": "unverified-no-direct-match",
+      "reason": "No kale entry appears in Table 22."
+    },
+    {
+      "cropId": 19,
+      "cropSlug": "broccoli",
+      "status": "reference-only",
+      "sourceCropLabel": "Broccoli",
+      "maximumEffectiveRootDepthRangeM": [
+        0.4,
+        0.6
+      ],
+      "depletionFractionAtEtc5MmDay": 0.45,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 20,
+      "cropSlug": "cabbage",
+      "status": "reference-only",
+      "sourceCropLabel": "Cabbage",
+      "maximumEffectiveRootDepthRangeM": [
+        0.5,
+        0.8
+      ],
+      "depletionFractionAtEtc5MmDay": 0.45,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 21,
+      "cropSlug": "cauliflower",
+      "status": "reference-only",
+      "sourceCropLabel": "Cauliflower",
+      "maximumEffectiveRootDepthRangeM": [
+        0.4,
+        0.7
+      ],
+      "depletionFractionAtEtc5MmDay": 0.45,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 22,
+      "cropSlug": "cucumber",
+      "status": "reference-only",
+      "sourceCropLabel": "Cucumber (fresh market or machine harvest)",
+      "maximumEffectiveRootDepthRangeM": [
+        0.7,
+        1.2
+      ],
+      "depletionFractionAtEtc5MmDay": 0.5,
+      "applicability": "Both Table 22 use rows have the same values; the catalog does not distinguish market use, but no parameter difference results from that distinction."
+    },
+    {
+      "cropId": 23,
+      "cropSlug": "zucchini",
+      "status": "reference-only",
+      "sourceCropLabel": "Squash, Zucchini",
+      "maximumEffectiveRootDepthRangeM": [
+        0.6,
+        1
+      ],
+      "depletionFractionAtEtc5MmDay": 0.5,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 24,
+      "cropSlug": "pumpkin",
+      "status": "reference-only",
+      "sourceCropLabel": "Pumpkin, Winter Squash",
+      "maximumEffectiveRootDepthRangeM": [
+        1,
+        1.5
+      ],
+      "depletionFractionAtEtc5MmDay": 0.35,
+      "applicability": "Catalog pumpkin is matched to the source row that explicitly names pumpkin and winter squash."
+    },
+    {
+      "cropId": 25,
+      "cropSlug": "melon",
+      "status": "unverified-no-direct-match",
+      "reason": "Table 22 separates cantaloupe, sweet melons and watermelon; catalog melon does not specify type."
+    },
+    {
+      "cropId": 26,
+      "cropSlug": "corn",
+      "status": "reference-only",
+      "sourceCropLabel": "Maize, Sweet (sweet corn)",
+      "maximumEffectiveRootDepthRangeM": [
+        0.8,
+        1.2
+      ],
+      "depletionFractionAtEtc5MmDay": 0.5,
+      "applicability": "Catalog crop is sweet corn; source match is not field corn."
+    },
+    {
+      "cropId": 27,
+      "cropSlug": "bush-bean",
+      "status": "unverified-no-direct-match",
+      "reason": "Table 22 separates green beans, dry pulses and lima beans; catalog bush bean use is not specified."
+    },
+    {
+      "cropId": 28,
+      "cropSlug": "pole-bean",
+      "status": "unverified-no-direct-match",
+      "reason": "Table 22 separates green beans, dry pulses and lima beans; catalog pole bean use is not specified."
+    },
+    {
+      "cropId": 29,
+      "cropSlug": "pea",
+      "status": "unverified-no-direct-match",
+      "reason": "Table 22 separates fresh peas from dry/seed peas; the catalog does not specify use."
+    },
+    {
+      "cropId": 30,
+      "cropSlug": "strawberry",
+      "status": "reference-only",
+      "sourceCropLabel": "Strawberries",
+      "maximumEffectiveRootDepthRangeM": [
+        0.2,
+        0.3
+      ],
+      "depletionFractionAtEtc5MmDay": 0.2,
+      "applicability": "Table 22 direct crop-name match; the source section describes perennial vegetables with winter dormancy."
+    },
+    {
+      "cropId": 31,
+      "cropSlug": "raspberry",
+      "status": "unverified-no-direct-match",
+      "reason": "The Table 22 berries row is specifically for bushes; no raspberry-specific mapping is established for the catalog crop."
+    },
+    {
+      "cropId": 32,
+      "cropSlug": "blueberry",
+      "status": "unverified-no-direct-match",
+      "reason": "The Table 22 berries row is for bushes; a catalog-specific cultivated blueberry/root-domain match is not established."
+    },
+    {
+      "cropId": 33,
+      "cropSlug": "parsley",
+      "status": "unverified-no-direct-match",
+      "reason": "No parsley entry appears in Table 22."
+    },
+    {
+      "cropId": 34,
+      "cropSlug": "cilantro",
+      "status": "unverified-no-direct-match",
+      "reason": "No cilantro entry appears in Table 22."
+    },
+    {
+      "cropId": 35,
+      "cropSlug": "dill",
+      "status": "unverified-no-direct-match",
+      "reason": "No dill entry appears in Table 22."
+    },
+    {
+      "cropId": 36,
+      "cropSlug": "thyme",
+      "status": "unverified-no-direct-match",
+      "reason": "No thyme entry appears in Table 22."
+    },
+    {
+      "cropId": 37,
+      "cropSlug": "rosemary",
+      "status": "unverified-no-direct-match",
+      "reason": "No rosemary entry appears in Table 22."
+    },
+    {
+      "cropId": 38,
+      "cropSlug": "sage",
+      "status": "unverified-no-direct-match",
+      "reason": "No sage entry appears in Table 22."
+    },
+    {
+      "cropId": 39,
+      "cropSlug": "oregano",
+      "status": "unverified-no-direct-match",
+      "reason": "No oregano entry appears in Table 22."
+    },
+    {
+      "cropId": 40,
+      "cropSlug": "chives",
+      "status": "unverified-no-direct-match",
+      "reason": "No chives entry appears in Table 22."
+    },
+    {
+      "cropId": 41,
+      "cropSlug": "mint",
+      "status": "reference-only",
+      "sourceCropLabel": "Mint",
+      "maximumEffectiveRootDepthRangeM": [
+        0.4,
+        0.8
+      ],
+      "depletionFractionAtEtc5MmDay": 0.4,
+      "applicability": "Table 22 direct crop-name match; the source section describes perennial vegetables with winter dormancy."
+    },
+    {
+      "cropId": 42,
+      "cropSlug": "marigold",
+      "status": "unverified-no-direct-match",
+      "reason": "No marigold entry appears in Table 22."
+    },
+    {
+      "cropId": 43,
+      "cropSlug": "nasturtium",
+      "status": "unverified-no-direct-match",
+      "reason": "No nasturtium entry appears in Table 22."
+    },
+    {
+      "cropId": 44,
+      "cropSlug": "sunflower",
+      "status": "reference-only",
+      "sourceCropLabel": "Sunflower",
+      "maximumEffectiveRootDepthRangeM": [
+        0.8,
+        1.5
+      ],
+      "depletionFractionAtEtc5MmDay": 0.45,
+      "applicability": "Table 22 direct crop-name match."
+    },
+    {
+      "cropId": 45,
+      "cropSlug": "borage",
+      "status": "unverified-no-direct-match",
+      "reason": "No borage entry appears in Table 22."
+    },
+    {
+      "cropId": 46,
+      "cropSlug": "crimson-clover",
+      "status": "unverified-no-direct-match",
+      "reason": "Table 22 has a berseem clover-hay row, not a directly matched crimson-clover row."
+    },
+    {
+      "cropId": 47,
+      "cropSlug": "winter-rye",
+      "status": "unverified-no-direct-match",
+      "reason": "The Table 22 rye-grass hay row is not a direct match for winter rye cereal."
+    },
+    {
+      "cropId": 48,
+      "cropSlug": "oyster-mushroom",
+      "status": "unverified-no-direct-match",
+      "reason": "Fungi do not use the crop root-zone reference table."
+    },
+    {
+      "cropId": 49,
+      "cropSlug": "button-mushroom",
+      "status": "unverified-no-direct-match",
+      "reason": "Fungi do not use the crop root-zone reference table."
+    },
+    {
+      "cropId": 50,
+      "cropSlug": "shiitake",
+      "status": "unverified-no-direct-match",
+      "reason": "Fungi do not use the crop root-zone reference table."
+    }
+  ],
+  "sourceArithmeticFixture": {
+    "id": "FAO56-EXAMPLE37-ROOT-ZONE-ARITHMETIC-REPRODUCTION-01",
+    "classification": "source arithmetic reproduction for FAO-56 method; not full reducer validation, a candidate comparison, reference-model agreement, or crop prediction validation",
+    "sourceLocation": "FAO-56 Chapter 8, Example 37, including its ten-day output table.",
+    "inputs": {
+      "crop": "full-grown tomato",
+      "soil": {
+        "fieldCapacityM3PerM3": 0.32,
+        "wiltingPointM3PerM3": 0.12,
+        "availableWaterMmPerCm": 2
+      },
+      "soilQualification": "Example 37 explicitly uses field capacity 0.32 and wilting point 0.12 m³/m³. Do not substitute the generic Table 19 silt wilting point 0.15 m³/m³.",
+      "rootDepthM": 0.8,
+      "totalAvailableWaterMm": 160,
+      "tableDepletionFractionP": 0.4,
+      "initialDepletionMm": 55,
+      "referenceEvapotranspirationMmDay": 5,
+      "cropCoefficient": 1.2,
+      "potentialCropEvapotranspirationMmDay": 6,
+      "dailyFluxes": {
+        "precipitationMm": 0,
+        "irrigationMm": 0,
+        "capillaryRiseMm": 0,
+        "runoffMm": 0
+      },
+      "dailyPAdjustmentApplied": false
+    },
+    "pTreatment": "Freeze the Example 37 stated p=0.40 for this example reproduction. Although ETc is 6 mm/day, this source example does not substitute the general Table 22 p adjustment. The separate FAO p-adjustment helper remains covered at ETc=6 by its own arithmetic test.",
+    "expectedDisplayedRows": [
+      {
+        "day": 1,
+        "ks": 1,
+        "adjustedEtMmDay": 6,
+        "endDepletionMm": 61
+      },
+      {
+        "day": 2,
+        "ks": 1,
+        "adjustedEtMmDay": 6,
+        "endDepletionMm": 67
+      },
+      {
+        "day": 3,
+        "ks": 0.97,
+        "adjustedEtMmDay": 5.8,
+        "endDepletionMm": 72.8
+      },
+      {
+        "day": 4,
+        "ks": 0.91,
+        "adjustedEtMmDay": 5.4,
+        "endDepletionMm": 78.3
+      },
+      {
+        "day": 5,
+        "ks": 0.85,
+        "adjustedEtMmDay": 5.1,
+        "endDepletionMm": 83.4
+      },
+      {
+        "day": 6,
+        "ks": 0.8,
+        "adjustedEtMmDay": 4.8,
+        "endDepletionMm": 88.2
+      },
+      {
+        "day": 7,
+        "ks": 0.75,
+        "adjustedEtMmDay": 4.5,
+        "endDepletionMm": 92.6
+      },
+      {
+        "day": 8,
+        "ks": 0.7,
+        "adjustedEtMmDay": 4.2,
+        "endDepletionMm": 96.9
+      },
+      {
+        "day": 9,
+        "ks": 0.66,
+        "adjustedEtMmDay": 3.9,
+        "endDepletionMm": 100.8
+      },
+      {
+        "day": 10,
+        "ks": 0.62,
+        "adjustedEtMmDay": 3.7,
+        "endDepletionMm": 104.5
+      }
+    ],
+    "recurrence": "Use unrounded daily root-zone water storage/depletion internally, with no daily rain, irrigation, capillary rise, runoff or drainage; compare rounded displayed outputs only.",
+    "tolerances": {
+      "endDepletionMm": { "maximumDeviation": 0.05, "unit": "mm", "basis": "Half the source displayed 0.1 mm increment; display reproduction only." },
+      "ks": { "maximumDeviation": 0.005, "unit": "fraction", "basis": "Half the source displayed 0.01 increment; display reproduction only." },
+      "adjustedEtMmDay": { "maximumDeviation": 0.05, "unit": "mm/day", "basis": "Half the source displayed 0.1 mm/day increment; display reproduction only." }
+    },
+    "candidateComparison": false
+  }
+}

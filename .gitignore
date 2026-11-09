@@ -57,3 +57,7 @@ AGENTS.local.md
 # Local working outputs — kept on disk, never committed (heavy binaries)
 dogfood-output/
 videos/
+.claude/
+
+# Generated draft marketing-demo render; keep the source project visible for review
+marketing/farmfriend-demo/out/farmfriend-demo.mp4

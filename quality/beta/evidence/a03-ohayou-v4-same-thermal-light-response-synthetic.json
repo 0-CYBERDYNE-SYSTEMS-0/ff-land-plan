@@ -1,0 +1,283 @@
+{
+  "id": "A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01",
+  "acceptanceRow": "A-03",
+  "recordType": "preregistered synthetic reducer-state software fixture",
+  "status": "preregistered; candidate not run",
+  "preparedDate": "2026-10-28",
+  "source": {
+    "evidenceId": "OHISHI-2023-HORTJ-OHAYOU",
+    "citation": "Ohishi, M., Takahashi, M., Fukuda, M., & Sato, F. (2023). Developing a Growth Model to Predict Dry Matter Production in Broccoli (Brassica oleracea L. var. italica) 'Ohayou'. Horticulture Journal, 92(1), 77–87. https://doi.org/10.2503/hortj.QH-022",
+    "url": "https://www.jstage.jst.go.jp/article/hortj/92/1/92_QH-022/_html/-char/en",
+    "sourceVersion": "2023 version of record, Horticulture Journal 92(1), pages 77–87; J-STAGE publisher HTML",
+    "retrievedDate": "2026-10-27",
+    "artifact": {
+      "type": "publisher HTML",
+      "sha256": "12ec8066769951c8ac0ccf044dd5106a24245f8c0572ba0fe2f3afd63003eda4",
+      "digestStatus": "Copied from the immutable reviewed Ohayou fixture; not rehashed during this preregistration.",
+      "localPath": null
+    },
+    "licenseOrReuseStatus": "The publisher describes the full text as free access and displays copyright with all rights reserved; no open reuse license was identified. This record stores bibliographic facts and derived parameter values only; it copies no source prose, table, figure, or code.",
+    "domain": "Broccoli cultivar 'Ohayou', Spring Control treatment. K and RUE apply only to this source domain; no equivalence to the catalog broccoli snapshot or other crops/cultivars is asserted.",
+    "sourceParameters": {
+      "extinctionCoefficientK": {
+        "value": 1.09,
+        "units": "dimensionless",
+        "treatment": "Spring Control"
+      },
+      "radiationUseEfficiency": {
+        "value": 1.16,
+        "units": "g above-ground DM per MJ intercepted total solar radiation",
+        "treatment": "Spring Control",
+        "reported95PercentConfidenceInterval": [1.04, 1.27]
+      }
+    },
+    "sourceScope": "Only the total-solar interception and RUE coefficients/equation family inform this software fixture. The central RUE value is used as a fixed coefficient; its confidence interval is not a fixture tolerance or response boundary. The paper provides no source zero-light trial, daily solar series for these cases, or low/sufficient biological light thresholds."
+  },
+  "modelDispatch": {
+    "cropModelVersion": "crop-model-v4",
+    "runModelInputs": "run-inputs-v4",
+    "parameterSetVersion": "crop-parameters-v6",
+    "equationFamily": "OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1",
+    "optInOnly": true,
+    "versionChange": "None. The case uses the existing explicit v6 equation family; it does not change ordinary run defaults or v5 semantics."
+  },
+  "design": {
+    "purpose": "Check one-step reducer production response to matched total-solar forcing while holding frozen crop/configuration, thermal forcing, all other environmental fields, and DLI exactly equal.",
+    "arms": [
+      "known zero total solar",
+      "positive synthetic total-solar level 1",
+      "positive synthetic total-solar level 2",
+      "unavailable total solar represented by explicit null, with a positive DLI decoy"
+    ],
+    "onlyAllowedInputDifference": "DailyEnvironment.solarRadiationMJm2Day; all run config, frozen crop/model inputs, thermal and other daily forcing, and dliNaturalMol values are shared exactly.",
+    "positiveLevelInterpretation": "5 and 15 MJ total solar/m²/day are relative synthetic software forcing points selected to exercise the equation at two positive inputs. They are not measured weather, source trial values, biological thresholds, or low/sufficient limits.",
+    "unknownInputInterpretation": "A JSON null solar value means unavailable. The fixed dliNaturalMol=18 mol PAR/m²/day is a synthetic decoy and must not be used as a substitute or fallback.",
+    "thermalControl": "gddAccumC, biomassFrac, floweringFrac, and stage are required to be exactly equal across all four arms because the frozen thermal inputs and daily Tmin/Tmax are identical. Maturity endpoint equality is represented by the identical biomassFrac value and its >= 1 relation; no separate maturityStatus state field is asserted.",
+    "candidateTest": {
+      "path": "src/lib/sim/ohayou-v4.integration.test.ts",
+      "testName": "holds thermal state fixed across matched total-solar inputs",
+      "command": "npx vitest run src/lib/sim/ohayou-v4.integration.test.ts -t \"holds thermal state fixed across matched total-solar inputs\"",
+      "executionStatus": "not run; this preregistration does not assert that the candidate test exists or has passed"
+    }
+  },
+  "syntheticInputs": {
+    "classification": "Synthetic software fixture only; no source weather, measured radiation, or measured crop outcome is used.",
+    "runConfig": {
+      "startDate": "2026-10-01",
+      "dayCount": 1,
+      "scenario": "baseline",
+      "tempDeltaC": 0,
+      "precipMultiplier": 1,
+      "interventions": [],
+      "autoHarvest": false,
+      "plan": {
+        "widthM": 1,
+        "heightM": 1,
+        "cellM": 1,
+        "planting": { "0,0": 19 },
+        "cropStartEvents": { "0,0": "transplanting" }
+      }
+    },
+    "cropSnapshot": {
+      "catalogCropId": 19,
+      "catalogSlug": "broccoli",
+      "lifecycle": "plant",
+      "cell": "0,0",
+      "startEvent": "transplanting",
+      "thermal": {
+        "tBaseC": 0,
+        "tUpperC": 40,
+        "gddToMaturityCdays": [1000, 1200],
+        "startEvents": ["transplanting"],
+        "accumulationStart": "Synthetic fixture transplant date; not a source start convention.",
+        "maturityEndpoint": "Synthetic endpoint not reached during this one-day software fixture.",
+        "accumulationMethod": "Synthetic daily thermal clock; no source method is asserted.",
+        "sourceCitation": "Synthetic software fixture only; no crop thermal evidence is asserted.",
+        "sourceUrl": "test-only:a03-ohayou-v4-same-thermal-light-response-synthetic"
+      }
+    },
+    "frozenProductionInputs": {
+      "equationFamily": "OHAYOU-SPRING-CONTROL-TOTAL-SOLAR-RUE-V1",
+      "sourceKTotalSolar": 1.09,
+      "sourceRUEGPerMjInterceptedTotalSolar": 1.16,
+      "laiMapping": {
+        "classification": "synthetic software-test assumption",
+        "specificLeafAreaM2PerKg": 10,
+        "leafStemPartitionParameterM2PerKg": 0,
+        "timing": "Compute LAI once from beginning-of-day canopy dry matter."
+      },
+      "initialPools": {
+        "canopyDryMatterGPerM2": 10,
+        "harvestableDryMatterGPerM2": 5,
+        "totalAboveGroundDryMatterGPerM2": 15,
+        "classification": "synthetic initial state; not source-derived"
+      },
+      "dailyAllocation": {
+        "canopyShare": 0.6,
+        "harvestableShare": 0.4,
+        "classification": "synthetic software assumption",
+        "constraint": "Shares sum to 1 and partition each daily gain once; do not apply a second harvest-index multiplier."
+      },
+      "stressFactor": 1,
+      "stressIsolation": "Synthetic multiplier set to 1 to isolate the light equation; not a stress-response prediction."
+    },
+    "soil": {
+      "awcMmPerCm": 1.5,
+      "organicMatterPct": 5,
+      "sourceStatus": "unknown; synthetic numerical fixture values",
+      "initialNitrogenPoolKgHa": 1200,
+      "seasonalNitrogenNeedKgHa": 180,
+      "nitrogenStress": 0,
+      "purpose": "Synthetic high-pool stress isolation only; no soil-fertility claim."
+    },
+    "rootZone": {
+      "method": "FAO-56 frozen v4 input shape; synthetic isolation values only",
+      "effectiveRootDepthCm": 20,
+      "depletionFraction": 0.5,
+      "cropCoefficient": 1,
+      "initialStorageFraction": 1,
+      "initialStorageMm": 30,
+      "totalAvailableWaterMm": 30,
+      "rootDevelopment": "none",
+      "waterStress": 0,
+      "purpose": "ETo, precipitation and irrigation are zero so this input keeps water stress at zero; root-zone response is not evaluated."
+    },
+    "dailyEnvironment": {
+      "classification": "synthetic software forcing; not Ohayou source weather or measured total solar radiation",
+      "date": "2026-10-01",
+      "sharedValues": {
+        "tMinC": 15,
+        "tMaxC": 20,
+        "precipMm": 0,
+        "etoMm": 0,
+        "gddBase10C": 7.5,
+        "irrigationMm": 0,
+        "runoffMm": 0,
+        "rootZoneWaterStressCoefficient": 1,
+        "dliNaturalMol": 18
+      },
+      "fieldUnits": {
+        "solarRadiationMJm2Day": "MJ total solar radiation/m²/day",
+        "dliNaturalMol": "mol PAR/m²/day; distinct optional input that this equation family must not use as a fallback"
+      },
+      "scenarioSolarRadiationMJm2Day": {
+        "knownZero": 0,
+        "positiveSyntheticLevel1": 5,
+        "positiveSyntheticLevel2": 15,
+        "unavailableExplicitNull": null
+      },
+      "equalityRule": "Each arm uses the same single date, sharedValues, RunConfig, crop snapshot, and frozen production/soil/root-zone inputs. Its sole differing input is the solar value above."
+    }
+  },
+  "equations": {
+    "leafAreaIndex": "LAI = (beginning canopy DM g/m² / 1000) × synthetic SLA / (1 + synthetic leaf-stem partition parameter × beginning canopy DM g/m² / 1000).",
+    "interceptedSolarFraction": "f = 1 - exp(-K × LAI).",
+    "interceptedSolarRadiation": "I = known solarRadiationMJm2Day × f.",
+    "dailyDryMatterGain": "G = RUE × I × frozen synthetic stress factor.",
+    "poolUpdate": "C1 = C0 + 0.6 × G; H1 = H0 + 0.4 × G; total1 = C1 + H1.",
+    "unavailableSolar": "For null total solar, production is unavailable, daily intercepted radiation/gain are null, and both pools hold; DLI is not a fallback.",
+    "arithmetic": "Unrounded double-precision arithmetic; values below were calculated directly from this recurrence without executing the candidate reducer or test."
+  },
+  "expected": {
+    "sharedBeginningState": {
+      "canopyDryMatterGPerM2": 10,
+      "harvestableDryMatterGPerM2": 5,
+      "leafAreaIndexM2PerM2": 0.1,
+      "interceptedSolarFraction": 0.10326958250176455
+    },
+    "cases": [
+      {
+        "id": "knownZero",
+        "solarRadiationMJm2Day": 0,
+        "interceptedSolarRadiationMJm2Day": 0,
+        "dailyDryMatterGainGPerM2Day": 0,
+        "endingCanopyDryMatterGPerM2": 10,
+        "endingHarvestableDryMatterGPerM2": 5,
+        "endingTotalAboveGroundDryMatterGPerM2": 15,
+        "productionStatus": "calculated"
+      },
+      {
+        "id": "positiveSyntheticLevel1",
+        "solarRadiationMJm2Day": 5,
+        "interceptedSolarRadiationMJm2Day": 0.5163479125088227,
+        "dailyDryMatterGainGPerM2Day": 0.5989635785102343,
+        "endingCanopyDryMatterGPerM2": 10.35937814710614,
+        "endingHarvestableDryMatterGPerM2": 5.239585431404094,
+        "endingTotalAboveGroundDryMatterGPerM2": 15.598963578510233,
+        "productionStatus": "calculated"
+      },
+      {
+        "id": "positiveSyntheticLevel2",
+        "solarRadiationMJm2Day": 15,
+        "interceptedSolarRadiationMJm2Day": 1.549043737526468,
+        "dailyDryMatterGainGPerM2Day": 1.7968907355307029,
+        "endingCanopyDryMatterGPerM2": 11.078134441318422,
+        "endingHarvestableDryMatterGPerM2": 5.718756294212281,
+        "endingTotalAboveGroundDryMatterGPerM2": 16.796890735530702,
+        "productionStatus": "calculated"
+      },
+      {
+        "id": "unavailableNullWithDliDecoy",
+        "solarRadiationMJm2Day": null,
+        "dliNaturalMol": 18,
+        "interceptedSolarRadiationMJm2Day": null,
+        "dailyDryMatterGainGPerM2Day": null,
+        "endingCanopyDryMatterGPerM2": 10,
+        "endingHarvestableDryMatterGPerM2": 5,
+        "endingTotalAboveGroundDryMatterGPerM2": 15,
+        "productionStatus": "unavailable",
+        "qualificationReason": "Crop 19: Daily total solar radiation is missing or non-finite."
+      }
+    ],
+    "crossCaseAssertions": {
+      "onlySolarInputDiffers": "Exact equality for all shared RunConfig, frozen crop/model, thermal, soil, root-zone, non-solar environment, and DLI inputs.",
+      "thermalState": "gddAccumC, biomassFrac, floweringFrac, and stage exactly equal across all four reducer outputs; maturity endpoint equality is represented by biomassFrac >= 1, with equality following from identical biomassFrac. No separate maturityStatus field is asserted.",
+      "productionDirection": "Known zero has exactly zero gain and unchanged pools; positive level 2 gain is greater than positive level 1 gain, which is greater than zero; unavailable solar is not substituted from the shared DLI decoy and leaves pools unchanged.",
+      "poolClosure": "Ending total dry matter equals ending canopy plus ending harvestable pools; the sum of the two pool increments equals the one daily gain within the registered arithmetic bound."
+    }
+  },
+  "tolerances": {
+    "leafAreaIndex": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": "m²/m²",
+      "rationale": "One-step double-precision evaluation of the frozen synthetic DM-to-LAI equation only."
+    },
+    "interceptedSolarFraction": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": "dimensionless",
+      "rationale": "One-step double-precision evaluation of 1-exp(-K×LAI) only."
+    },
+    "interceptedSolarRadiation": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": "MJ total solar radiation/m²/day",
+      "rationale": "One multiplication of the frozen synthetic solar input and intercepted fraction only."
+    },
+    "dailyDryMatterGain": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": "g DM/m²/day",
+      "rationale": "One RUE multiplication and frozen stress multiplier only."
+    },
+    "poolState": {
+      "maximumAbsoluteDeviation": 1e-12,
+      "units": "g DM/m²",
+      "rationale": "One-step additions using the frozen synthetic allocation shares only."
+    },
+    "dailyPoolClosure": {
+      "maximumAbsoluteResidual": 1e-12,
+      "units": "g DM/m²/day",
+      "residual": "canopy increment + harvestable increment - daily gain",
+      "rationale": "One-step floating-point conservation arithmetic only."
+    },
+    "exactChecks": "Model/input versions, all shared input equality, scenario solar values, known-zero calculated status, null-unavailable status, DLI non-fallback, production direction, thermal-state equality, and pool identity are structural checks. No tolerance represents biological or crop-model error."
+  },
+  "missingInputsAndLimits": [
+    "No source-derived daily solar forcing, zero-light observation, low/sufficient biological light threshold, or measured light-response outcome is available for this case.",
+    "The catalog broccoli snapshot is not established as cultivar Ohayou or Spring Control.",
+    "The LAI mapping, initial pools, organ allocation, thermal profile/target, soil/root-zone, stress multiplier, and all daily environment values other than equation coefficients are synthetic.",
+    "Documented reserve behavior, defensible biological light limits, source-supported crop thermal/root/stress/allocation behavior, and a measured or independent reference comparison remain untested.",
+    "Fungal lifecycle and production remain a separate A-03 requirement and are not covered by this fixture."
+  ],
+  "evidenceBoundary": "Synthetic reducer-state software behavior only. This record does not assert crop validity, source-model agreement, measured evidence, prediction, calibration, independent holdout, biological thresholds, or completion of A-03.",
+  "candidateComparison": false,
+  "measuredOutputComparison": false
+}

@@ -6,6 +6,74 @@
 > the current checkout, use `package.json` and `README.md` as the source of truth.
 > Current priorities and open gaps: see [`ROADMAP.md`](ROADMAP.md).
 
+## Current pause checkpoint — 2026-10-28
+
+Development is paused. The app is locally runnable for exploratory plan and
+simulation workflows; this is not a qualified full-simulator beta and does not
+imply deployment.
+
+- **Integration checkout:** `/Users/scrimwiggins/Dev/ff-land-plan-beta-integration`,
+  branch `integration/beta-readiness-main-20261027`, HEAD
+  `18d54f4548ee5e12837479d3aba583b66b7388d8`. Draft PR [#82](https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/pull/82)
+  is open to `main` at base `59a93ee6ee26e98b728f84420bba7750f04ab5fe`.
+- **Uncommitted A-05 preregistration files:** `implementation-notes.md`,
+  `quality/beta/02A-MODEL-DECISION.md`,
+  `quality/beta/evidence/model-coverage.json`, and
+  `quality/beta/evidence/fao56-v2-yuma-lettuce-root-drydown-production-synthetic.json`.
+  Fixture `FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01` records
+  initial-water arms 0.25 and 1.0. Its worker-calculated setup digest
+  `e19501fa67e5cb8346da44475799fdaf7308d7a364eaadc9c2c8fd03f289c68c` is not
+  independently verified. S3’s hand calculation used an earlier 0.5 versus 1.0
+  arm and is stale; review the registered 0.25 arm before candidate execution.
+  The source PDF hash was independently verified; study data are available on
+  request and are not included. No A-05 candidate test, commit, push, or candidate
+  PR CI has occurred. Treat this as a draft pending independent review of the
+  actual 0.25/1.0 setup and digest, then preregistration commit and exact-head PR
+  CI; candidate execution remains prohibited until those gates pass. A-05 and
+  overall 02A remain **UNVERIFIED**.
+- **Local app probe (not a verified workflow):** from the integration checkout,
+  run `npm run dev` (run `npm ci` first only if dependencies are absent), then
+  open the documented map route `http://localhost:5173/#/farms/1/map`. Use the
+  app's navigation to probe Simulations run/save/reopen/seek/replay, then probe
+  Blueprint and World playback/comparison. Do not assume those navigation steps
+  or actions work: record any missing step as a product gap. This probe does not
+  qualify the simulator or imply deployment.
+- **Resume sequence:** prioritize one independent grow end to end: probe plan
+  setup → run → save/reopen/replay → Blueprint/3D playback, and unblock missing
+  steps. Treat each link as unverified until observed; record gaps. Then have the
+  actual A-05 0.25/1.0 preregistration independently reviewed, commit the
+  preregistration/docs, and pass exact-head PR CI before its candidate test.
+  Finish all 02A acceptance before advancing through
+  `02A → 02B → 02C → 02D → 02E → BETA-02 integration → 03 → 04 → 05`.
+  Prefer thin end-to-end slices; avoid isolated evidence work unless it closes a
+  specific acceptance blocker.
+- **Binding full-simulator scope:** all nine worlds—open field, garden beds, glass
+  greenhouse, hoophouse, cold frame, grow tent, grow room, vertical-farm
+  warehouse, and container farm; species defaults and supported sourced
+  cultivars with uncertainty and measured-confidence boundaries; independent
+  runs and coordinated site runs with shared resources; crop/date, equipment,
+  and management experiments before and during growth, with immutable scenarios
+  and dated events; harvest and resource consequences; Blueprint setup and
+  interactive 3D playback/comparison; single and multiple seasons, rotations,
+  repeat harvests, and perennials; and manual, generic CSV, and explicitly
+  synthetic observation input. Do not narrow this to a planner-only release.
+- **Separate root worktree:** `/Users/scrimwiggins/Dev/ff-land-plan`, branch
+  `feat/beta-readiness`, HEAD `820281142fd8fa85cd157cdbd8167b39fab8dbdb`, one
+  commit ahead, with untracked `marketing/farmfriend-demo/`. Preserve it and
+  keep marketing captures out of release inputs.
+- **Herdr handoff:** use `HERDR_ENV=1`; current workspace is `wS` (`ff-land-plan`).
+  p2 `a04-candidate-worker` and p4 `a04-candidate-validator` are done and ready
+  for input. Their pane headings identify GPT-6 Luna max; those model names come
+  from pane headings, not workspace inventory. Rebrief fully with
+  `herdr agent prompt`; keep validators read-only. p3 `a04-auth-blocked`, p6
+  `a04-contract-reader`, and p7 `a04-source-validator` are idle; their pane
+  transcripts show logout/token-refresh warnings, so recheck authentication
+  before assigning. Collaboration fallback
+  `/root/a04_source_provenance_validator` passed its source audit and is on
+  standby.
+  Inventory with `herdr status`, `herdr workspace list`, and `herdr agent list`
+  after confirming `HERDR_ENV=1`.
+
 ## Open-source quickstart
 
 Requires Node.js 20 or newer.
@@ -349,8 +417,9 @@ Deliverable: undo/redo history visualization as translucent ghost overlays.
   pickers, Spacing + Companions overlay toggles, history/export/settings.
 - `CropPalette.tsx` / `AssetPalette.tsx` — palettes with search + recently-used
   rings (`ff-pro:recent-crops` / `ff-pro:recent-assets`).
-- `TemplatesCard.tsx` (+ data in `src/data/templates.ts`) — four starter plans;
-  apply = confirm → one `replacePlan(..., {save:true})` → one undo entry.
+- `TemplatesCard.tsx` (+ data in `src/data/templates.ts`) — profile-compatible
+  floor, bench, hydro and rack starters for all nine world archetypes; applying
+  replaces crop, ground, growing-space and equipment content in one undo entry.
 - `SelectionPanel.tsx`, `StatsPanel.tsx`, `PairingsPanel.tsx` — presentational;
   rail order: Templates → CropPalette → AssetPalette → Selection → Stats →
   Pairings.

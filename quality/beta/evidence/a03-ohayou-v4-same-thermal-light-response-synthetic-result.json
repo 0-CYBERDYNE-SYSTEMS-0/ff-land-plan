@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "id": "A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01-RESULT",
+  "recordedDate": "2026-10-28",
+  "preregistration": {
+    "id": "A03-OHAYOU-V4-SAME-THERMAL-LIGHT-RESPONSE-SYNTHETIC-01",
+    "path": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json",
+    "checkpointSha": "25ec1eb54c932fbf45fd20a5cfb9b389a95f8408",
+    "immutable": true,
+    "exactHeadCi": {
+      "pr": 82,
+      "runId": "40708604034",
+      "headSha": "25ec1eb54c932fbf45fd20a5cfb9b389a95f8408",
+      "result": "success",
+      "checks": [
+        { "name": "test + typecheck + build", "result": "passed" },
+        { "name": "Playwright production Pages-path smoke", "result": "passed" },
+        { "name": "secret + private-file scan", "result": "passed" },
+        { "name": "GitGuardian Security Checks", "result": "passed" }
+      ]
+    }
+  },
+  "candidate": {
+    "sha": "29f378443f37802c826dd7b6868721105af56eec",
+    "scope": "Test-only change in src/lib/sim/ohayou-v4.integration.test.ts; production equations, preregistered inputs, and tolerances were unchanged.",
+    "test": {
+      "title": "holds thermal state fixed across matched total-solar inputs",
+      "command": "npx vitest run src/lib/sim/ohayou-v4.integration.test.ts -t \"holds thermal state fixed across matched total-solar inputs\"",
+      "workerResult": { "result": "passed", "passed": 1, "skipped": 4, "durationMs": 127 },
+      "independentValidatorResult": { "result": "passed", "passed": 1, "skipped": 4, "durationMs": 162 }
+    },
+    "exactHeadCi": {
+      "pr": 82,
+      "runId": "40713005198",
+      "headSha": "29f378443f37802c826dd7b6868721105af56eec",
+      "result": "success",
+      "checks": [
+        { "name": "test + typecheck + build", "result": "passed", "duration": "1m7s" },
+        { "name": "Playwright production Pages-path smoke", "result": "passed", "reportedDuration": "3m37s" },
+        { "name": "secret + private-file scan", "result": "passed", "duration": "24s" },
+        { "name": "GitGuardian Security Checks", "result": "passed", "duration": "45s" }
+      ]
+    },
+    "localGates": {
+      "focusedTest": "passed",
+      "fullVitest": { "result": "passed", "files": 48, "tests": 262 },
+      "typecheck": "passed",
+      "builds": { "standard": "passed", "demo": "passed", "pages": "passed", "separateBetaProfile": "not configured" },
+      "privateFileGuard": { "result": "passed", "trackedFiles": 539 },
+      "duplicateKeySafeJsonParse": "passed for the preregistration and model-coverage manifest; result-record parse checked before commit",
+      "diffCheck": "passed",
+      "productionPagesE2e": { "result": "passed", "journeys": "3/3", "reportedDuration": "3m48s" }
+    }
+  },
+  "registeredAssertions": {
+    "fixture": "quality/beta/evidence/a03-ohayou-v4-same-thermal-light-response-synthetic.json",
+    "scenarioInputsBoundToRegistration": "The test sources solar values from syntheticInputs.dailyEnvironment.scenarioSolarRadiationMJm2Day and asserts the four case IDs and values exactly match expected.cases before stepping.",
+    "observedAssertions": [
+      "Known zero solar produced zero DM gain and unchanged canopy/harvestable pools without the registered unavailable-solar qualification.",
+      "Both positive synthetic solar arms matched preregistered interception, DM-gain, and pool expectations within the frozen one-step 1e-12 arithmetic bounds; the higher input produced the higher gain.",
+      "Explicit null solar remained unavailable despite DLI=18, preserved both pools, and emitted the registered missing-solar qualification.",
+      "All four arms had exactly equal gddAccumC, biomassFrac, floweringFrac, and stage; maturity endpoint equality was represented through biomassFrac >= 1.",
+      "Frozen production inputs, all shared daily environment fields, DLI, and total-pool closure were checked."
+    ],
+    "assertionsPassedWithinRegisteredTolerances": true,
+    "actualNumericOutputsSeparatelySerialized": false,
+    "tolerancesChangedAfterExecution": false
+  },
+  "review": {
+    "preregistration": "Independent Herdr Luna validator approved after reconciling the thermal-field assertion; preregistered values and tolerances were not changed.",
+    "candidateTest": "Separate Herdr Luna validator independently reviewed the final test, reran the focused command, and approved; earlier false-pass and input-binding findings were closed before the code commit.",
+    "executionRecord": "Lead-created from the immutable preregistration, test results, local gate outputs, and exact-head PR CI results."
+  },
+  "workerEstimate": {
+    "estimateEngineerHours": "2-3",
+    "assumptions": [
+      "Reuse the existing v6 fixture builder and reducer helpers.",
+      "Keep the implementation in the existing Ohayou integration test with no production equation changes."
+    ],
+    "observedImplementationTime": "Approximately four minutes for the initial test patch, plus about 72 seconds for two review-driven assertion/type-narrowing corrections; independent review, lead gates, and CI excluded."
+  },
+  "sourceProvenance": {
+    "record": "See the immutable preregistration source section and the OHISHI-2023-HORTJ-OHAYOU entry in quality/beta/evidence/model-coverage.json.",
+    "domain": "Ohayou Spring Control K and RUE only; this software fixture is not source-model reproduction or cultivar validation."
+  },
+  "acceptance": {
+    "row": "A-03",
+    "status": "PASS for this bounded synthetic reducer-state software subcase only; A-03 overall remains UNVERIFIED.",
+    "candidateComparison": false,
+    "measuredOutputComparison": false,
+    "independentReferenceModelComparison": false,
+    "measuredHoldoutValidation": false,
+    "overall02A": "UNVERIFIED"
+  },
+  "evidenceBoundary": "This result records only deterministic synthetic reducer software behavior against the immutable one-step preregistration. It does not establish biological light thresholds, documented reserve behavior, Ohayou cultivar equivalence, crop accuracy, measured or independent-reference agreement, prediction, or fungal lifecycle support. No measured output or external candidate comparison was run."
+}

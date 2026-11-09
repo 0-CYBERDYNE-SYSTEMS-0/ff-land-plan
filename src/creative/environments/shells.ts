@@ -1,12 +1,12 @@
 /**
- * Parametric environment shells — one maker per enclosed plan surface.
+ * Parametric environment shells — one maker per enclosed growing-world shell type.
  * Meters in (1 voxel = 10 cm internally), centered at origin in XZ, ground
  * plane y = 0. Dollhouse discipline: the default camera looks from the +X/+Z
  * corner, so the FAR walls (-X, -Z) carry the material and the near faces are
  * glass, open or omitted. Greenhouse + hoophouse get translucent glazing
- * roofs; tent / indoor / warehouse stay open-topped (the warehouse reads
- * "hall" via 4 m far walls + truss beams + duct columns + hanging glow
- * strips — never a solid ceiling).
+ * roofs; cold frames get a shallow glazed lid; tent / indoor / warehouse /
+ * container stay open-topped (the warehouse reads "hall" via 4 m far walls +
+ * truss beams — never a solid ceiling).
  *
  * Ownership: every call returns freshly built meshes (no cached templates, no
  * InstancedMesh) because the runtime disposeShell() traverses and disposes
@@ -17,7 +17,7 @@
 import * as THREE from 'three';
 import { PALETTE, Voxel, group, mixColor, rng } from '@/creative/voxel';
 import { C, plankTone, weighted } from '../structures/shared';
-import { T, cylShell, ductX, glowMesh, paneMesh, solidMesh } from './kit';
+import { T, paneMesh, solidMesh } from './kit';
 
 export interface ShellSpec {
   /** plan canvas width in meters (X extent). */
@@ -36,14 +36,12 @@ function shellVoxels(spec: ShellSpec): { wV: number; dV: number } {
 }
 
 // ---------------------------------------------------------------------------
-// Grow tent — 2.0 m black canvas box, open-topped, zipper + roof duct stubs +
-// hanging carbon filter + warm LED glow (A6).
+// Grow tent — 2.0 m black canvas enclosure, open-topped with zipper access (A6).
 // ---------------------------------------------------------------------------
 
 export function makeTentShell(spec: ShellSpec): THREE.Object3D {
   const rand = rng(5101);
   const solid: Voxel[] = [];
-  const glow: Voxel[] = [];
   const { wV, dV } = shellVoxels(spec);
   const hx = wV / 2;
   const hz = dV / 2;
@@ -77,32 +75,13 @@ export function makeTentShell(spec: ShellSpec): THREE.Object3D {
         s: 2.0, color: iz % 3 === 0 ? T.mylarSeam : T.mylar,
       });
 
-  // open top: partial lid bands at the far corner only (duct stubs live here)
+  // open top: partial lid bands at the far corner only
   for (let ix = 0; ix < wV / st; ix++)
     for (let iz = 0; iz < 2; iz++)
       solid.push({ x: -hx + (ix + 0.5) * st, y: H + 1, z: -hz + (iz + 0.5) * st, s: st * 1.06, color: canvas(H) });
   for (let iz = 2; iz < (dV * 0.5) / st; iz++)
     for (let ix = 0; ix < 1; ix++)
       solid.push({ x: -hx + (ix + 0.5) * st, y: H + 1, z: -hz + (iz + 0.5) * st, s: st * 1.06, color: canvas(H) });
-
-  // roof duct stubs exiting the lid band (+ cowl rings)
-  cylShell(solid, -hx + 5.5, -hz + 2.2, 20.4, 24, 1.5, (_y, a) => (Math.cos(a) > 0.3 ? PALETTE.metal : PALETTE.metalDark), 1);
-  solid.push({ x: -hx + 5.5, y: 24.5, z: -hz + 2.2, s: 1.9, color: PALETTE.metalDark });
-  cylShell(solid, -hx + 2.2, -hz + 8, 20.4, 22.8, 1.1, () => PALETTE.metalDark, 1);
-
-  // hanging carbon filter cylinder inside the back corner, strapped to the lid
-  ductX(solid, -hx + 4.6, -hx + 10.4, 16.5, -hz + 3.6, 1.7, (_x, i) => (i % 3 === 0 ? PALETTE.charcoal : PALETTE.metalDark), 1.25);
-  for (const sx of [-hx + 5.6, -hx + 9.4])
-    for (let y = 17.6; y <= 20.6; y += 0.7)
-      solid.push({ x: sx, y, z: -hz + 3.6, s: 0.3, color: PALETTE.black });
-
-  // warm LED glow bar hanging mid-tent (unlit bright read, never a light)
-  let gi = 0;
-  for (let z = -hz + 4; z <= hz - 4; z += 2.5, gi++)
-    glow.push({ x: -hx * 0.35, y: 14.5, z, s: 1.5, color: gi % 2 === 0 ? T.glowWarmHot : T.glowWarm });
-  for (const hz2 of [-hz + 5, hz - 5])
-    for (let y = 15.2; y <= 19.8; y += 0.7)
-      solid.push({ x: -hx * 0.35, y, z: hz2, s: 0.3, color: PALETTE.metalDark });
 
   // zipper track up the near-right corner + slider; peeled door flap outside
   for (let y = 1; y <= 19; y += 0.8)
@@ -133,18 +112,17 @@ export function makeTentShell(spec: ShellSpec): THREE.Object3D {
     for (let y = 1; y <= 20; y += 1)
       solid.push({ x: px, y, z: pz, s: 0.72, color: Math.round(y) % 4 === 0 ? PALETTE.metalDark : PALETTE.metal });
 
-  return group([solidMesh(solid), glowMesh(glow)]);
+  return group([solidMesh(solid)]);
 }
 
 // ---------------------------------------------------------------------------
-// Indoor grow room — 2.6 m painted far walls, mylar panels, blackout door
-// curtain with a glowing seam, wire-shelf hint (A7). Open-topped.
+// Indoor grow room — 2.6 m painted far walls, mylar panels and blackout door.
+// Open-topped; shelves and grow equipment are separate placed assets.
 // ---------------------------------------------------------------------------
 
 export function makeIndoorShell(spec: ShellSpec): THREE.Object3D {
   const rand = rng(5201);
   const solid: Voxel[] = [];
-  const glow: Voxel[] = [];
   const { wV, dV } = shellVoxels(spec);
   const hx = wV / 2;
   const hz = dV / 2;
@@ -194,7 +172,7 @@ export function makeIndoorShell(spec: ShellSpec): THREE.Object3D {
   }
   if (wV >= 30) mylarPanel('z', hx * 0.35);
 
-  // blackout door curtain on the back wall with a leaking glow seam
+  // blackout door curtain on the back wall
   const cx = Math.min(hx - 9, hx * 0.55);
   for (let a = 0; a < 3; a++)
     for (let b = 0; b < 11; b++)
@@ -204,40 +182,7 @@ export function makeIndoorShell(spec: ShellSpec): THREE.Object3D {
       });
   for (let x = cx - 1; x <= cx + 7; x += 1.4)
     solid.push({ x, y: 23.6, z: -hz + st / 2 - 0.7, s: 1.2, color: PALETTE.metalDark });
-  for (let y = 2; y <= 22; y += 1.4)
-    glow.push({ x: cx + 3, y, z: -hz - 0.15, s: 0.6, color: T.glowWarm });
-
-  // wire shelving hint along the left wall: slats, brackets, trays, LED strip
-  if (dV >= 34) {
-    for (let z = -hz + 7; z <= -hz + 19; z += 1.4)
-      solid.push({ x: -hx + 3.6, y: 12, z, s: 1.15, color: PALETTE.metal });
-    for (const bz of [-hz + 7, -hz + 13, -hz + 19]) {
-      solid.push({ x: -hx + 1.6, y: 11, z: bz, s: 0.8, color: PALETTE.metalDark });
-      solid.push({ x: -hx + 2.6, y: 11.5, z: bz, s: 0.7, color: PALETTE.ironDark });
-    }
-    for (const tz of [-hz + 9.5, -hz + 15.5]) {
-      for (let a = 0; a < 5; a++)
-        for (let b = 0; b < 3; b++)
-          solid.push({ x: -hx + 3.6 + b * 1.0 - 1, y: 12.55, z: tz + a * 1.1 - 2.2, s: 1.0, color: T.trayWhite });
-      for (let a = 0; a < 4; a++)
-        if (rand() < 0.85)
-          solid.push({
-            x: -hx + 3.6 + (rand() < 0.5 ? -0.6 : 0.6), y: 13.2, z: tz + a * 1.3 - 2,
-            s: 0.7, color: rand() < 0.5 ? PALETTE.leafLight : PALETTE.leafYoung,
-          });
-    }
-    for (let z = -hz + 8; z <= -hz + 18; z += 2.2)
-      glow.push({ x: -hx + 3.6, y: 11.35, z, s: 1.2, color: T.glowWarm });
-  }
-
-  // timer box + dangling cord on the back wall
-  solid.push({ x: -hx * 0.35, y: 15.5, z: -hz + 1.6, s: 2.4, color: PALETTE.charcoal });
-  solid.push({ x: -hx * 0.35, y: 15.5, z: -hz + 2.9, s: 1.2, color: T.screenGlow });
-  solid.push({ x: -hx * 0.35, y: 15.1, z: -hz + 2.9, s: 0.4, color: T.ledGreen });
-  for (let y = 14; y >= 2; y -= 1.1)
-    solid.push({ x: -hx * 0.35, y, z: -hz + 1.9, s: 0.26, color: PALETTE.black });
-
-  return group([solidMesh(solid), glowMesh(glow)]);
+  return group([solidMesh(solid)]);
 }
 
 // ---------------------------------------------------------------------------
@@ -249,7 +194,6 @@ export function makeGreenhouseShell(spec: ShellSpec): THREE.Object3D {
   const rand = rng(5301);
   const solid: Voxel[] = [];
   const glass: Voxel[] = [];
-  const screen: Voxel[] = [];
   const { wV, dV } = shellVoxels(spec);
   const hx = wV / 2;
   const hz = dV / 2;
@@ -361,14 +305,6 @@ export function makeGreenhouseShell(spec: ShellSpec): THREE.Object3D {
       const yr = Math.round(roofY(st * 2) * 2) / 2;
       solid.push({ x: st * 2, y: yr + 0.2, z: pz, s: 0.55, color: PALETTE.metal });
     }
-  // vent rack motor box on the ridge above the forward vent
-  solid.push({ x: st * 2, y: ridge + 1.1, z: -hz + dV * 0.28, s: 1.6, color: PALETTE.metalDark });
-
-  // thermal-screen hint: a taut pale second ceiling half-drawn over the far side
-  for (let x = -hx + 3; x <= -hx * 0.12; x += 4)
-    for (let z = -hz + 3; z <= hz * 0.15; z += 4)
-      screen.push({ x, y: 17.5, z, s: 4.15, color: T.screenCloth });
-
   // dutch door on the near gable: white frame, solid lower panel, glazed top
   const doorTop = Math.min(21, ridge - 4);
   for (let y = 2.5; y <= 11; y += 1.2)
@@ -392,8 +328,52 @@ export function makeGreenhouseShell(spec: ShellSpec): THREE.Object3D {
   return group([
     solidMesh(solid),
     paneMesh(glass, 0.35, PALETTE.glass),
-    paneMesh(screen, 0.5, T.screenCloth),
   ]);
+}
+
+// ---------------------------------------------------------------------------
+// Cold frame — low timber body with a glazed, pitched lid. The shell stays
+// shallow so the protected-bed archetype reads differently from a glasshouse.
+// ---------------------------------------------------------------------------
+
+export function makeColdFrameShell(spec: ShellSpec): THREE.Object3D {
+  const solid: Voxel[] = [];
+  const glass: Voxel[] = [];
+  const wV = Math.max(10, Math.round(spec.widthM * 10));
+  const dV = Math.max(10, Math.round(spec.depthM * 10));
+  const hx = wV / 2;
+  const hz = dV / 2;
+  const wallH = 4;
+  const lidHigh = 9;
+  const st = 1.8;
+  const wood = mixColor(PALETTE.wood, PALETTE.woodDark, 0.25);
+  const woodCap = mixColor(wood, PALETTE.cream, 0.12);
+
+  // Timber base, broken into blocks so the low structure has a clear scale.
+  for (let x = -hx + 1; x < hx; x += st)
+    for (let y = 0.8; y <= wallH; y += st)
+      for (const z of [-hz + 0.45, hz - 0.45])
+        solid.push({ x, y, z, s: st, color: y >= wallH - 1 ? woodCap : wood });
+  for (let z = -hz + 1; z < hz; z += st)
+    for (let y = 0.8; y <= wallH; y += st)
+      for (const x of [-hx + 0.45, hx - 0.45])
+        solid.push({ x, y, z, s: st, color: y >= wallH - 1 ? woodCap : wood });
+
+  // Angled glazed lid: transparent panels follow the side rails from the low
+  // front edge to the higher rear hinge line.
+  const lidY = (x: number): number => wallH + 1.5 + ((x + hx) / Math.max(1, wV)) * 3.5;
+  for (let x = -hx + st / 2; x <= hx - st / 2; x += st)
+    for (let z = -hz + st / 2; z <= hz - st / 2; z += st)
+      glass.push({ x, y: lidY(x), z, s: st * 1.04, color: T.glassPane });
+  for (let z = -hz + 0.5; z <= hz - 0.5; z += 2.5) {
+    for (let x = -hx; x <= hx; x += 2.5)
+      solid.push({ x, y: lidY(x) + 0.8, z, s: 0.9, color: PALETTE.metalDark });
+  }
+  for (let y = wallH - 0.2; y <= lidHigh; y += 1.5)
+    solid.push({ x: -hx + 0.3, y, z: 0, s: 0.75, color: PALETTE.metal });
+  solid.push({ x: hx - 0.3, y: wallH + 0.5, z: hz - 0.7, s: 0.7, color: PALETTE.metalDark });
+
+  return group([solidMesh(solid), paneMesh(glass, 0.28, T.glassPane)]);
 }
 
 // ---------------------------------------------------------------------------
@@ -522,15 +502,13 @@ export function makeHoophouseShell(spec: ShellSpec): THREE.Object3D {
 }
 
 // ---------------------------------------------------------------------------
-// Warehouse vertical farm — 4.0 m dark far walls, roof trusses + duct columns
-// + hanging glow strips at wall height (never a solid ceiling), coarse
-// glowing rack row along the far wall, dashed floor tape, HVAC column (A9).
+// Warehouse enclosure — 4.0 m dark far walls, roof trusses and skylights.
+// Lighting, HVAC and grow racks are separate placed assets (A9).
 // ---------------------------------------------------------------------------
 
 export function makeWarehouseShell(spec: ShellSpec): THREE.Object3D {
   const rand = rng(5501);
   const solid: Voxel[] = [];
-  const glow: Voxel[] = [];
   const skylight: Voxel[] = [];
   const { wV, dV } = shellVoxels(spec);
   const hx = wV / 2;
@@ -576,66 +554,6 @@ export function makeWarehouseShell(spec: ShellSpec): THREE.Object3D {
         solid.push({ x: px, y, z, s: 1.5, color: PALETTE.iron }); // king posts
   }
 
-  // hanging glow strips at wall height (unlit bright bars down the lanes)
-  const lanes = [-hx * 0.55, 0, hx * 0.55].filter((lx) => Math.abs(lx) < hx - 4);
-  let li = 0;
-  for (const lx of lanes) {
-    for (let z = -hz + 5; z <= hz - 5; z += 3)
-      glow.push({ x: lx, y: 36.5, z, s: 1.6, color: (li + Math.round(z / 3)) % 3 === 1 ? T.glowWarmHot : T.glowWarm });
-    for (let z = -hz + 10; z <= hz - 10; z += 14)
-      for (let y = 37.2; y <= 38.2; y += 0.8)
-        solid.push({ x: lx, y, z, s: 0.35, color: PALETTE.metalDark });
-    li++;
-  }
-
-  // vertical duct columns along the far wall
-  for (const cz of [-hz + dV * 0.28, hz - dV * 0.3]) {
-    cylShell(solid, -hx + 4, cz, 0.5, 36, 1.9, (y) => (Math.floor(y / 6) % 2 === 0 ? T.ductLight : PALETTE.metal), 1.4);
-    solid.push({ x: -hx + 4, y: 37, z: cz, s: 2.3, color: PALETTE.metalDark });
-  }
-
-  // HVAC column near the far corner: louvered box + top fan + status light
-  const hcx = -hx + 7.5;
-  const hcz = -hz + 7.5;
-  for (let y = 1.3; y <= 28; y += 2.2)
-    for (let dx = -3.5; dx <= 3.5; dx += 2.2)
-      for (let dz = -3.5; dz <= 3.5; dz += 2.2) {
-        if (dx > -3 && dx < 3 && dz > -3 && dz < 3 && y < 27) continue;
-        solid.push({ x: hcx + dx, y, z: hcz + dz, s: 2.25, color: rand() < 0.08 ? T.panelSeam : T.panelDark });
-      }
-  for (let y = 6; y <= 24; y += 5)
-    for (let d = -3.2; d <= 3.2; d += 1.5) {
-      solid.push({ x: hcx + d, y, z: hcz + 3.9, s: 1.4, color: T.panelSeam });
-      solid.push({ x: hcx + 3.9, y, z: hcz + d, s: 1.4, color: T.panelSeam });
-    }
-  for (let a = 0; a < 12; a++) {
-    const ang = (a / 12) * Math.PI * 2;
-    solid.push({ x: hcx + Math.cos(ang) * 2.6, y: 29.4, z: hcz + Math.sin(ang) * 2.6, s: 1.15, color: T.panelSeam });
-  }
-  solid.push({ x: hcx, y: 29.6, z: hcz, s: 1.6, color: PALETTE.metalDark });
-  glow.push({ x: hcx + 3.2, y: 26.5, z: hcz + 3.9, s: 0.6, color: T.ledGreen });
-
-  // coarse glowing multi-tier rack row along the far (-Z) wall
-  const rackL = dV - 12;
-  const rackX0 = -rackL / 2;
-  for (const ty of [5, 11, 17, 23]) {
-    for (let x = rackX0; x <= rackX0 + rackL; x += 2)
-      for (let z = -hz + 3; z <= -hz + 8; z += 2)
-        solid.push({ x, y: ty, z, s: 2.05, color: rand() < 0.15 ? PALETTE.metalDark : mixColor(PALETTE.metal, PALETTE.metalDark, 0.3) });
-    for (let x = rackX0 + 1; x <= rackX0 + rackL - 1; x += 2.5)
-      glow.push({ x, y: ty + 1.9, z: -hz + 5.5, s: 1.3, color: Math.round(x / 2.5) % 2 === 0 ? T.glowWarmHot : T.glowWarm });
-    for (let x = rackX0; x <= rackX0 + rackL; x += 2)
-      if (rand() < 0.72)
-        solid.push({
-          x, y: ty + 1.1, z: -hz + 5.5, s: 1.5,
-          color: weighted([[PALETTE.leaf, 0.5], [PALETTE.leafLight, 0.3], [PALETTE.leafDark, 0.2]], rand()),
-        });
-  }
-  for (let x = rackX0; x <= rackX0 + rackL; x += 12)
-    for (const pz of [-hz + 3.5, -hz + 7.5])
-      for (let y = 0.5; y <= 24; y += 1.4)
-        solid.push({ x, y, z: pz, s: 1.35, color: y % 4 < 1.4 ? PALETTE.metalDark : PALETTE.iron });
-
   // dashed floor tape lines marking the aisle
   for (const lx of [-hx * 0.28, hx * 0.42]) {
     if (Math.abs(lx) > hx - 4) continue;
@@ -651,7 +569,7 @@ export function makeWarehouseShell(spec: ShellSpec): THREE.Object3D {
       skylight.push({ x, y: 38, z, s: skyS, color: T.glassPane });
 
   // roll-up door on the far (-X) wall: slat curtain between proud guide
-  // tracks, bottom seal + wall-parked operator box with a status LED
+  // tracks and bottom seal
   const doorW = Math.max(6, Math.min(18, Math.round(dV * 0.26)));
   const doorTop = 24;
   for (let y = 3.5; y <= doorTop; y += 2)
@@ -662,17 +580,14 @@ export function makeWarehouseShell(spec: ShellSpec): THREE.Object3D {
   for (const gz of [-doorW / 2 - 0.6, doorW / 2 + 0.6])
     for (let y = 2; y <= doorTop + 2.5; y += 1.7)
       solid.push({ x: -hx + 2.7, y, z: gz, s: 1.05, color: PALETTE.metalDark });
-  solid.push({ x: -hx + 2.9, y: doorTop + 4.5, z: 0, s: 1.6, color: T.panelDark }); // operator
-  glow.push({ x: -hx + 3.4, y: doorTop + 4.5, z: 1.8, s: 0.5, color: T.ledGreen });
-
-  return group([solidMesh(solid), glowMesh(glow), paneMesh(skylight, 0.25, PALETTE.glass)]);
+  return group([solidMesh(solid), paneMesh(skylight, 0.25, PALETTE.glass)]);
 }
 
 // ---------------------------------------------------------------------------
-// Shipping container shell (diorama support) — corrugated ISO box cut away
+// Container-farm shell — corrugated ISO box cut away
 // dollhouse-style on the near faces: solid far end + far wall, near end open
 // with one swung door leaf, near wall reduced to base/roof bands. Corner
-// castings, fork pockets, rooftop condenser stack + cable umbilical (A10).
+// castings and fork pockets are integral shell details (A10).
 // ---------------------------------------------------------------------------
 
 export function makeContainerShell(spec: ShellSpec): THREE.Object3D {
@@ -711,10 +626,10 @@ export function makeContainerShell(spec: ShellSpec): THREE.Object3D {
     }
   for (const rx2 of [-hx + 6, -hx + 12, hx - 12, hx - 6])
     for (let y = 1; y <= H - 1; y += 1.6)
-      solid.push({ x: rx2, y, z: -hz - 0.6, s: 0.8, color: mixColor(PALETTE.metal, PALETTE.metalDark, 0.4) });
+      solid.push({ x: rx2, y, z: -hz - 0.3, s: 0.8, color: mixColor(PALETTE.metal, PALETTE.metalDark, 0.4) });
   for (const rx2 of [-hx + 6, -hx + 12, hx - 12, hx - 6]) {
-    solid.push({ x: rx2, y: 3.5, z: -hz - 1.1, s: 1.0, color: PALETTE.ironDark });
-    solid.push({ x: rx2, y: H - 3.5, z: -hz - 1.1, s: 1.0, color: PALETTE.ironDark });
+    solid.push({ x: rx2, y: 3.5, z: -hz - 0.3, s: 1.0, color: PALETTE.ironDark });
+    solid.push({ x: rx2, y: H - 3.5, z: -hz - 0.3, s: 1.0, color: PALETTE.ironDark });
   }
 
   // near (+X) long wall cut away: keep a base band, a roof band and a corner
@@ -732,7 +647,7 @@ export function makeContainerShell(spec: ShellSpec): THREE.Object3D {
       corrug(hx - st / 2, (iy + 0.5) * st, z, ix % 2 === 0); // far corner return
     }
 
-  // near (+Z) end: door frame + one leaf swung open flat along the +X side
+  // near (+Z) end: door frame + one leaf swung open inward along the +X side
   for (const dx of [-hx + 1.2, hx - 1.2])
     for (let y = 0.6; y <= H; y += 1.5)
       solid.push({ x: dx, y, z: hz - 1.2, s: 1.7, color: mixColor(T.rustDark, PALETTE.black, 0.1) });
@@ -740,16 +655,16 @@ export function makeContainerShell(spec: ShellSpec): THREE.Object3D {
     solid.push({ x, y: H + 0.4, z: hz - 1.2, s: 1.8, color: mixColor(T.rustDark, PALETTE.black, 0.1) });
   for (let iz = 0; iz < 10 / st; iz++)
     for (let iy = 0; iy < H / st; iy++) {
-      const z = hz + 1.2 + (iz + 0.5) * st;
+      const x = hx - 1.2 - (iz + 0.5) * st;
       const y = (iy + 0.5) * st;
-      corrug(hx + 1.2 + (iz + 0.5) * st - st / 2, y, z, iz % 2 === 0); // swung leaf along +X
+      corrug(x, y, hz - 1.2, iz % 2 === 0);
     }
 
   // roof rim + corrugated roof strip along the far edge
   for (let ix = 0; ix < wV / st; ix++)
     for (let iz = 0; iz < dV / st; iz++) {
-      const x = -hx + (ix + 0.5) * st;
-      const z = -hz + (iz + 0.5) * st;
+      const x = Math.max(-hx + 0.8, Math.min(hx - 0.8, -hx + (ix + 0.5) * st));
+      const z = Math.max(-hz + 0.8, Math.min(hz - 0.8, -hz + (iz + 0.5) * st));
       const edge = iz < 2 || ix < 2 || ix >= wV / st - 2;
       if (!edge) continue;
       solid.push({ x, y: H + 1, z, s: st * 1.06, color: mixColor(T.rustDark, PALETTE.black, 0.15) });
@@ -758,30 +673,15 @@ export function makeContainerShell(spec: ShellSpec): THREE.Object3D {
   // corner castings at all four corners (top + bottom), slightly proud
   for (const [px, pz] of [[-hx, -hz], [hx, -hz], [-hx, hz], [hx, hz]] as Array<[number, number]>)
     for (const py of [1.5, H - 1.5]) {
-      solid.push({ x: px, y: py, z: pz, s: 3.1, color: mixColor(T.rustDark, PALETTE.black, 0.25) });
-      solid.push({ x: px, y: py, z: pz + (pz < 0 ? -1.1 : 1.1), s: 1.6, color: PALETTE.black });
+      solid.push({ x: px, y: py, z: pz, s: 1.8, color: mixColor(T.rustDark, PALETTE.black, 0.25) });
+      solid.push({ x: px, y: py, z: pz + (pz < 0 ? -0.2 : 0.2), s: 0.9, color: PALETTE.black });
     }
 
   // forklift pockets in the base rail of the far end
   for (const fx of [-hx + wV * 0.28, -hx + wV * 0.62])
-    for (let z = -hz - 0.4; z <= -hz + 2.4; z += 1.6)
+    for (let z = -hz; z <= -hz + 2.4; z += 1.6)
       for (let y = 1.2; y <= 3.4; y += 1.6)
         solid.push({ x: fx, y, z, s: 1.5, color: PALETTE.black });
-
-  // rooftop condenser stack + cable umbilical down to a junction box
-  for (let y = H + 2; y <= H + 5.5; y += 1.8)
-    for (let dx = -4; dx <= 4; dx += 2.2)
-      for (let dz = -2.6; dz <= 2.6; dz += 2.2) {
-        if (Math.abs(dx) < 3 && Math.abs(dz) < 2 && y < H + 5) continue;
-        solid.push({ x: -hx + 8 + dx, y, z: -hz + 6 + dz, s: 2.2, color: T.panelDark });
-      }
-  for (let a = 0; a < 10; a++) {
-    const ang = (a / 10) * Math.PI * 2;
-    solid.push({ x: -hx + 8 + Math.cos(ang) * 2.2, y: H + 6.2, z: -hz + 6 + Math.sin(ang) * 2.2, s: 1.1, color: T.panelSeam });
-  }
-  for (let y = H + 1; y >= 4; y -= 1.6)
-    solid.push({ x: -hx - 0.8, y, z: -hz + 6, s: 0.5, color: PALETTE.black });
-  solid.push({ x: -hx - 0.8, y: 3, z: -hz + 6, s: 2.2, color: PALETTE.charcoal });
 
   return group([solidMesh(solid)]);
 }

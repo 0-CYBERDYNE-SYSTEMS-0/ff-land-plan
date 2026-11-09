@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "id": "A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01-RESULT",
+  "recordedDate": "2026-10-28",
+  "preregistration": {
+    "id": "A02-TOMATO-THERMAL-LOCATION-WINDOW-SYNTHETIC-01",
+    "path": "quality/beta/evidence/a02-tomato-thermal-location-window-synthetic.json",
+    "checkpointSha": "140b7aa2b88c77c942da2a0fb627e2b57c755f01",
+    "immutable": true,
+    "exactHeadCi": {
+      "pr": 82,
+      "runId": "40696641450",
+      "headSha": "140b7aa2b88c77c942da2a0fb627e2b57c755f01",
+      "result": "success",
+      "checks": [
+        { "name": "test + typecheck + build", "result": "passed" },
+        { "name": "Playwright production Pages-path smoke", "result": "passed" },
+        { "name": "secret + private-file scan", "result": "passed" },
+        { "name": "GitGuardian Security Checks", "result": "passed" }
+      ]
+    }
+  },
+  "candidate": {
+    "sha": "c3412132bf4aee7cb54ff9d856edf43e6736ec82",
+    "scope": "Test-only change in src/lib/sim/crop-model-v2.test.ts; no production code or frozen fixture changes.",
+    "test": {
+      "title": "runs frozen tomato thermal state across synthetic locations and horizons",
+      "command": "npx vitest run src/lib/sim/crop-model-v2.test.ts -t \"runs frozen tomato thermal state across synthetic locations and horizons\"",
+      "result": "passed",
+      "passed": 1,
+      "skipped": 16,
+      "durationMs": 130
+    },
+    "exactHeadCi": {
+      "pr": 82,
+      "runId": "40699895074",
+      "headSha": "c3412132bf4aee7cb54ff9d856edf43e6736ec82",
+      "result": "success",
+      "checks": [
+        { "name": "test + typecheck + build", "result": "passed", "duration": "39s" },
+        { "name": "Playwright production Pages-path smoke", "result": "passed", "reportedDuration": "6m37s" },
+        { "name": "secret + private-file scan", "result": "passed", "duration": "20s" },
+        { "name": "GitGuardian Security Checks", "result": "passed", "duration": "13s" }
+      ]
+    },
+    "localGates": {
+      "focusedTest": "passed",
+      "fullVitest": { "result": "passed", "files": 48, "tests": 261 },
+      "typecheck": "passed",
+      "builds": { "standard": "passed", "demo": "passed", "pages": "passed" },
+      "privateFileGuard": { "result": "passed", "trackedFiles": 537 },
+      "duplicateKeySafeJsonParse": "passed",
+      "diffCheck": "passed",
+      "productionPagesE2e": { "result": "passed", "journeys": "3/3" }
+    },
+    "preCandidateCorrections": [
+      "Added basePlan.updatedAt from the frozen start date to satisfy PlanState metadata.",
+      "Omitted SoilProfile.source so the frozen soil records the registered unknown provenance."
+    ]
+  },
+  "registeredAssertions": {
+    "fixedTargetCdays": [1024, 1117],
+    "tolerances": {
+      "gddAccumCMaximumAbsoluteDeviation": 1e-10,
+      "gddAccumCUnit": "°C·day",
+      "biomassFracMaximumAbsoluteDeviation": 1e-12,
+      "biomassFracUnit": "dimensionless",
+      "targetRange": "Exact structural equality"
+    },
+    "weatherCases": [
+      {
+        "locationTag": "synthetic-location-a",
+        "window": "cold",
+        "dailyTMinTMaxC": [4, 12],
+        "day5": { "gddAccumC": 8.4939512772653, "biomassFrac": 0.007604253605429991 },
+        "day10": { "gddAccumC": 16.9879025545306, "biomassFrac": 0.015208507210859982 },
+        "assertions": "passed within registered bounds"
+      },
+      {
+        "locationTag": "synthetic-location-a",
+        "window": "warm",
+        "dailyTMinTMaxC": [18, 30],
+        "day5": { "gddAccumC": 84, "biomassFrac": 0.07520143240823635 },
+        "day10": { "gddAccumC": 168, "biomassFrac": 0.1504028648164727 },
+        "assertions": "passed within registered bounds"
+      },
+      {
+        "locationTag": "synthetic-location-b",
+        "window": "cold",
+        "dailyTMinTMaxC": [2, 10],
+        "day5": { "gddAccumC": 3.65488567670975, "biomassFrac": 0.0032720552163918977 },
+        "day10": { "gddAccumC": 7.3097713534195, "biomassFrac": 0.0065441104327837955 },
+        "assertions": "passed within registered bounds"
+      },
+      {
+        "locationTag": "synthetic-location-b",
+        "window": "warm",
+        "dailyTMinTMaxC": [20, 32],
+        "day5": { "gddAccumC": 94, "biomassFrac": 0.08415398388540735 },
+        "day10": { "gddAccumC": 188, "biomassFrac": 0.1683079677708147 },
+        "assertions": "passed within registered bounds"
+      }
+    ],
+    "samePrefixHorizonControl": {
+      "result": "passed for all four cases",
+      "shortDays": 5,
+      "longDays": 10,
+      "sharedPrefixDays": 5,
+      "assertions": "day-5 gddAccumC and biomassFrac matched between the short run and the identical prefix of the long run within registered bounds; frozen target range remained exact"
+    },
+    "meanDailyGddCIndependenceControl": {
+      "series": "synthetic-location-a warm, ten days of 18/30°C",
+      "onlyChangedField": "RunConfig.meanDailyGddC",
+      "pairedValues": [0, 14],
+      "expectedBoth": {
+        "targetRangeCdays": [1024, 1117],
+        "day5": { "gddAccumC": 84, "biomassFrac": 0.07520143240823635 },
+        "day10": { "gddAccumC": 168, "biomassFrac": 0.1504028648164727 }
+      },
+      "result": "passed within registered bounds; this establishes independence only for the v2 target range and thermal progress fields"
+    },
+    "actualNumericOutputsSeparatelySerialized": false
+  },
+  "review": {
+    "preregistrationAndCandidateTest": "S2 independently reviewed and approved",
+    "executionRecord": "S2 independently reviewed and approved"
+  },
+  "sourceProvenance": {
+    "citation": "Andrews et al., Oregon State University Extension EM 9305, Tomato, Table 6",
+    "url": "https://extension.oregonstate.edu/catalog/em-9305-vegetable-degree-day-models-introduction-farmers-gardeners",
+    "retrievedDate": "2026-10-28",
+    "artifactSha256": "6b8b1968750692bafa698f9435ef415cdce4dbaf9512604208a8a9de0522c396",
+    "licenseOrReuse": "Copyright © Oregon State University; no dataset license stated; no source prose or code copied.",
+    "domain": "The source reports a four-cultivar range and mainly irrigated Willamette Valley trials; transfer to other climates may reduce accuracy."
+  },
+  "acceptance": {
+    "row": "A-02",
+    "status": "PASS for the bounded synthetic reducer-state software contract only; crop/domain/empirical acceptance remains UNVERIFIED.",
+    "candidateComparison": false,
+    "measuredOutputComparison": false,
+    "overall02A": "UNVERIFIED"
+  },
+  "evidenceBoundary": "This result records deterministic crop-model-v2 reducer-state behavior against explicit synthetic forcing and neutral synthetic production/root-zone support inputs. It does not establish cultivar accuracy, biological validity, transfer across climates, measured/reference agreement, prediction, or crop validity. No geographic coordinates, observed weather, cultivar mapping, independent reference outcome, or measured outcome were used."
+}

@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import * as THREE from 'three';
 
 import { bresenhamCells, type PlanEditor } from '@/components/designer/usePlanEditor';
-import type { PlanState } from '@/types';
+import type { Environment, GrowingTargetRef, PlanState } from '@/types';
 import { cellKey, planCols, planRows } from '@/lib/plan';
 
 interface RaycastResult {
@@ -39,6 +39,8 @@ export function use3DEditor(
   const dragRef = useRef<{
     kind: 'paint' | 'rect' | 'line' | null;
     before: PlanState | null;
+    beforeEnvironment?: Environment | null;
+    targetBefore?: GrowingTargetRef;
     changed: boolean;
     startX: number;
     startY: number;
@@ -59,7 +61,15 @@ export function use3DEditor(
 
     sharedRaycaster.setFromCamera(sharedNDC.set(ndcX, ndcY), camera);
 
-    // Virtual ground plane at y=0 for raycasting. The shared hit point would
+    const activeTarget = editor.activeTarget;
+    const selectedLevel = activeTarget.kind === 'growing-level'
+      ? editor.environment?.layout?.growingSpaces.find((space) => space.id === activeTarget.growingSpaceId)
+        ?.levels.find((level) => level.id === activeTarget.levelId)
+      : undefined;
+    const elevationM = selectedLevel?.elevationM ?? 0;
+    sharedGroundPlane.constant = -elevationM;
+
+    // Virtual target plane at the selected growing elevation. The shared hit point would
     // hold a stale cell after a miss (parallel/away ray), so the null return
     // is authoritative.
     if (!sharedRaycaster.ray.intersectPlane(sharedGroundPlane, sharedHitPoint)) return null;
@@ -76,7 +86,7 @@ export function use3DEditor(
     if (x < 0 || y < 0 || x >= cols || y >= rows) return null;
 
     return { x, y, key: cellKey(x, y) };
-  }, [planRef]);
+  }, [planRef, editor.activeTarget, editor.environment]);
 
   const rectPreviewColor = () =>
     editor.rectMode === 'asset' && activeAsset ? activeAsset.colorHex : editor.activeCrop?.colorHex ?? '#22c55e';
@@ -103,10 +113,12 @@ export function use3DEditor(
 
     // Clone every mutated map — sharing plantedAt would let post-snapshot
     // stamp/erase mutations leak into the undo baseline.
-    const before = { ...plan, planting: { ...plan.planting }, ground: { ...plan.ground }, plantedAt: { ...plan.plantedAt } };
+    const before = structuredClone(plan);
     dragRef.current = {
       kind: tool === 'rect' ? 'rect' : tool === 'line' ? 'line' : 'paint',
       before,
+      beforeEnvironment: editor.environment ? structuredClone(editor.environment) : null,
+      targetBefore: editor.activeTarget,
       changed: false,
       startX: cell.x,
       startY: cell.y,
@@ -137,7 +149,7 @@ export function use3DEditor(
       applyBrushAt(cell.x, cell.y);
       dragRef.current.changed = true;
     }
-  }, [planRef, tool, activeAsset, setSelectedKey, setRectPreview, editor.rectMode, editor.activeCrop, applyBrushAt, applyFillAt, pickAt, getCellFromRaycast]);
+  }, [planRef, tool, activeAsset, setSelectedKey, setRectPreview, editor.rectMode, editor.activeCrop, editor.environment, editor.activeTarget, applyBrushAt, applyFillAt, pickAt, getCellFromRaycast]);
 
   const handlePointerMove = useCallback((camera: THREE.Camera, scene: THREE.Scene, ndcX: number, ndcY: number) => {
     const drag = dragRef.current;
@@ -207,11 +219,16 @@ export function use3DEditor(
     }
 
     if (drag.changed && drag.before && plan) {
-      replacePlan({ ...plan, planting: { ...plan.planting }, ground: { ...plan.ground } }, { save: true, recordHistory: drag.before });
+      if (editor.featureEnabled && drag.beforeEnvironment && editor.dragRef.current.environmentChanged) {
+        void editor.commitExternalEnvironmentMutation(drag.beforeEnvironment, drag.targetBefore ?? { kind: 'floor' }).catch(() => undefined);
+      } else {
+        replacePlan(structuredClone(plan), { save: true, recordHistory: drag.before });
+      }
+      editor.dragRef.current.environmentChanged = false;
     }
 
     dragRef.current = { kind: null, before: null, changed: false, startX: 0, startY: 0, lastX: 0, lastY: 0 };
-  }, [planRef, applyRect, applyLineCells, replacePlan, setRectPreview, getCellFromRaycast]);
+  }, [planRef, applyRect, applyLineCells, replacePlan, setRectPreview, getCellFromRaycast, editor.featureEnabled, editor.commitExternalEnvironmentMutation, editor.dragRef]);
 
   // Pointer left the canvas entirely — drop the hover readout and highlight.
   const handlePointerLeave = useCallback(() => {

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { LayoutTemplate } from 'lucide-react';
-import { toast } from 'sonner';
 
 import {
   AlertDialog,
@@ -16,87 +15,35 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { templates, type GardenTemplate } from '@/data/templates';
-import { parseKey, planCols, planRows } from '@/lib/plan';
-import type { PlanState } from '@/types';
+import { ARCHETYPE_FOR_SURFACE, archetypes, planningProfiles } from '@/creative/archetypes';
 import type { PlanEditor } from './usePlanEditor';
 
 const templateCellCount = (tpl: GardenTemplate): number =>
-  new Set([...Object.keys(tpl.ground), ...Object.keys(tpl.planting)]).size;
+  new Set([...Object.keys(tpl.ground), ...Object.keys(tpl.planting)]).size +
+  (tpl.targets ?? []).reduce((count, target) => count + Object.keys(target.planting).length, 0);
 
 export function TemplatesCard({ editor }: { editor: PlanEditor }) {
   const [pending, setPending] = useState<GardenTemplate | null>(null);
+  const archetypeId = editor.archetype ?? ARCHETYPE_FOR_SURFACE[editor.surface];
+  const profile = editor.planningProfile ?? planningProfiles[archetypes[archetypeId].planningProfile];
+  const availableTemplates = templates.filter((tpl) => profile.compatibleTemplates.includes(tpl.id) &&
+    tpl.archetypes.includes(archetypeId) &&
+    (archetypes[archetypeId].tierPlanningAvailable || !(tpl.growingSpaces ?? []).some((space) => space.kind === 'rack' && space.levels.length > 1)) &&
+    (editor.scope.kind !== 'legacy' || !(tpl.growingSpaces?.length || tpl.instances?.length || tpl.targets?.length)));
 
   const requestApply = (tpl: GardenTemplate) => {
     const plan = editor.planRef.current;
     const isEmpty =
       !plan ||
-      (Object.keys(plan.planting).length === 0 && Object.keys(plan.ground).length === 0);
-    if (isEmpty) applyTemplate(tpl);
+      (Object.keys(plan.planting).length === 0 && Object.keys(plan.ground).length === 0 &&
+        Object.keys(plan.targets ?? {}).length === 0 && (editor.environment?.instances?.length ?? 0) === 0 &&
+        (editor.environment?.layout?.growingSpaces.length ?? 0) === 0);
+    if (isEmpty) void applyTemplate(tpl);
     else setPending(tpl);
   };
 
-  // Single seam crossing: ONE replacePlan call carries the prior plan as the
-  // history snapshot (one undo entry restores it) and `save: true` routes the
-  // write through the standard autosave debounce. Never touches planRef.
-  const applyTemplate = (tpl: GardenTemplate) => {
-    const plan = editor.planRef.current;
-    if (!plan) return;
-    const before: PlanState = {
-      ...plan,
-      planting: { ...plan.planting },
-      ground: { ...plan.ground },
-      ...(plan.plantedAt ? { plantedAt: { ...plan.plantedAt } } : {}),
-    };
-    // Resolve crop NAME -> catalog id at apply time; custom crops and catalog
-    // edits can never invalidate the data file. Unknown names are skipped.
-    const nameToId = new Map(editor.crops.map((crop) => [crop.name.toLowerCase(), crop.id]));
-    // Enclosed templates carry their own canvas (surface + dims): bounds are
-    // checked against the INCOMING canvas, not the current one.
-    const widthM = tpl.widthM ?? plan.widthM;
-    const heightM = tpl.heightM ?? plan.heightM;
-    const cols = planCols({ ...plan, widthM });
-    const rows = planRows({ ...plan, heightM });
-    const inBounds = (key: string) => {
-      const [x, y] = parseKey(key);
-      return x >= 0 && y >= 0 && x < cols && y < rows;
-    };
-    const plantedAtIso = new Date().toISOString();
-    const planting: Record<string, number> = {};
-    const ground: Record<string, string> = {};
-    const plantedAt: Record<string, string> = {};
-    let skippedCrops = 0;
-    for (const [key, slug] of Object.entries(tpl.ground)) {
-      if (!inBounds(key)) continue;
-      ground[key] = slug;
-    }
-    for (const [key, cropName] of Object.entries(tpl.planting)) {
-      if (!inBounds(key)) continue;
-      const id = nameToId.get(cropName.toLowerCase());
-      if (id === undefined) {
-        skippedCrops += 1;
-        continue;
-      }
-      planting[key] = id;
-      const daysAgo = tpl.plantedAtDaysAgo?.[cropName] ?? 0;
-      plantedAt[key] = daysAgo > 0 ? new Date(Date.now() - daysAgo * 86_400_000).toISOString() : plantedAtIso;
-    }
-    const next: PlanState = {
-      ...plan,
-      widthM,
-      heightM,
-      ...(tpl.surface ? { surface: tpl.surface } : {}),
-      planting,
-      ground,
-      plantedAt,
-      updatedAt: new Date().toISOString(),
-    };
-    editor.replacePlan(next, { save: true, recordHistory: before });
-    setPending(null);
-    toast.success(
-      skippedCrops > 0
-        ? `Applied “${tpl.name}” · ${skippedCrops} unknown crop${skippedCrops === 1 ? '' : 's'} skipped`
-        : `Applied “${tpl.name}”`,
-    );
+  const applyTemplate = async (tpl: GardenTemplate) => {
+    if (await editor.applyTemplate(tpl)) setPending(null);
   };
 
   return (
@@ -107,11 +54,14 @@ export function TemplatesCard({ editor }: { editor: PlanEditor }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {templates.map((tpl) => (
+        {availableTemplates.length === 0 && (
+          <p className="text-xs text-muted-foreground">No floor starter is available for this profile yet.</p>
+        )}
+        {availableTemplates.map((tpl) => (
           <div key={tpl.id} className="rounded-md border border-border p-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 text-sm font-medium">{tpl.name}</div>
-              <Badge variant="secondary">{templateCellCount(tpl)} cells</Badge>
+              <Badge variant="secondary">{templateCellCount(tpl)} {templateCellCount(tpl) === 1 ? 'cell' : 'cells'}</Badge>
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">{tpl.description}</p>
             <Button
@@ -130,13 +80,13 @@ export function TemplatesCard({ editor }: { editor: PlanEditor }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Replace your current plan with “{pending?.name}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              Your plan already has content — applying this template replaces its planting and
-              ground layout. Undo (Ctrl/Cmd+Z) restores the previous plan.
+              Your plan already has content — applying this template replaces its crops, ground,
+              growing spaces and equipment. Undo (Ctrl/Cmd+Z) restores the previous plan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => pending && applyTemplate(pending)}>
+            <AlertDialogAction onClick={() => { if (pending) void applyTemplate(pending); }}>
               Apply template
             </AlertDialogAction>
           </AlertDialogFooter>

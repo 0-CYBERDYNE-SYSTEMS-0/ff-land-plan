@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "V2-TARGET-CELL-EFFECTIVE-COUNT-HARVEST-MASS-SYNTHETIC-01-RESULT",
+  "recordedDate": "2026-10-28",
+  "acceptanceContract": {
+    "path": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md",
+    "row": "A-07",
+    "scope": "FAIL for the first local candidate against its registered full-summary replay requirement; overall A-07 and 02A remain UNVERIFIED.",
+    "preregistration": "quality/beta/evidence/v2-target-cell-effective-count-harvest-mass-synthetic.json"
+  },
+  "preregistrationCheckpoint": {
+    "commitSha": "84278906321f4bc3b16f38ffbe00ded78f801289",
+    "prCommit": 82,
+    "ciRunId": "40739015786",
+    "ciHeadSha": "84278906321f4bc3b16f38ffbe00ded78f801289",
+    "ciResult": "passed for the preregistration commit only; it does not contain the local candidate test diff.",
+    "checks": {
+      "test + typecheck + build": "passed",
+      "Playwright production Pages-path smoke": "passed, 3 tests in 2.9m",
+      "secret + private-file scan": "passed",
+      "GitGuardian Security Checks": "passed as a separate PR-level check"
+    }
+  },
+  "candidateAttempt": {
+    "status": "Uncommitted local working-tree test diff; no code SHA and no exact-head candidate CI.",
+    "file": "src/lib/sim/model-inputs.test.ts",
+    "diffSha256": "3a64c556a2eacbfebc1203f9f30ccf4533853a1fea43c598715c88df6304d403",
+    "scope": "One-day manually seeded crop-model-v2 state with one selected elevated cell and a same-coordinate floor sibling. No production code was changed."
+  },
+  "focusedTest": {
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"reconciles v2 effective plant count with target-scoped area harvest mass\"",
+    "result": "passed: 1 passed, 33 skipped",
+    "note": "The focused test passed its count, routing, payout and local replay assertions; that did not satisfy the registered RunSummary replay metric."
+  },
+  "independentReview": {
+    "reviewer": "S2 independent code reviewer",
+    "decision": "FAIL",
+    "finding": "The registered same-input replay requires equal events, final state and summary. stepDay returns DayStats rather than RunSummary; the candidate could not compare the registered full summary. The reviewer reran the focused test successfully but rejected the candidate against the preregistration.",
+    "correctionAttempt": "S1 removed the DayStats comparison rather than presenting it as a summary substitute. The focused test still passed, but the registered RunSummary criterion remained unmet and no second code-review approval was issued."
+  },
+  "apiFinding": {
+    "reviewer": "S3 inspect-only API scout",
+    "finding": "stepDay accepts a seeded SimState but returns DayStats; simulateRun returns SimulateResult with RunSummary but initializes its own state through createRun. No existing API produces RunSummary from an arbitrary seeded SimState.",
+    "decision": "Do not add a production API solely for this test. Use a separately preregistered full-run fixture that obtains RunSummary from simulateRun."
+  },
+  "registeredAssertions": {
+    "spacingDerivedEffectiveCount": "Passed for one effective modeled plant using the frozen synthetic 25 cm by 25 cm spacing; not an observed physical count.",
+    "targetRoutingAndFloorIsolation": "Passed for the target event and same-coordinate floor sibling in the focused local candidate.",
+    "areaBasedPayout": "Passed at 0.003125 kg within the registered <=1e-12 kg arithmetic/conversion bound.",
+    "fullSummaryReplay": "Not satisfied; no RunSummary replay equality was available from the one-day seeded-state API."
+  },
+  "acceptance": {
+    "candidateStatus": "FAIL against this preregistered fixture because a required summary-replay assertion was not satisfied; no simulator behavior failure is inferred.",
+    "a07Status": "UNVERIFIED",
+    "overall02aStatus": "UNVERIFIED",
+    "candidateComparison": false,
+    "measuredOutputComparison": false,
+    "independentReferenceModelComparison": false,
+    "measuredHoldoutValidation": false
+  },
+  "evidenceBoundary": "The focused test result is recorded as a rejected local candidate, not an accepted A-07 result. The preregistration tolerances and metrics were not changed. No code SHA or CI is claimed for the local diff. No physical plant count, per-plant allocation, crop accuracy, measured/reference agreement or predictive validity is established."
+}

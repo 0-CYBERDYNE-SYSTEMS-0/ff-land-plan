@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "A04-V3-TRANSPLANT-MISSING-ESTABLISHMENT-FAIL-CLOSED-SYNTHETIC-01",
+  "classification": "synthetic crop-model-v3 fail-closed software regression; not a crop benchmark",
+  "preregistration": "quality/beta/evidence/a04-v3-transplant-missing-establishment-fail-closed-synthetic.json",
+  "registeredCodeSha": "4a2ba4382587272ba27f8e43c9a4934d6a8bea6e",
+  "registeredDocumentationCommit": {
+    "sha": "be0123300ebfedc262645ad429e31f3d5103f4ee",
+    "exactHeadCiRun": 40774282313,
+    "status": "PASS; all four checks passed, including production Pages-path smoke 3/3, before candidate execution."
+  },
+  "syntheticSetupSha256": "4b3633f17c758b5fa6f3bb9b3b5cd2c01c30488e8b77f1fc5058973d4ffcdf5a",
+  "candidateCode": {
+    "commit": "472c2514a2b3b9ff4dca03a44fa92cccdd5fc28d",
+    "changedFiles": [
+      "src/lib/sim/model-inputs.test.ts"
+    ],
+    "productionCodeChanged": false
+  },
+  "priorInvalidSourceAttempt": {
+    "status": "UNACCEPTED",
+    "summary": "The earlier focused attempt explicitly supplied source: unknown, which typecheck rejected. Its runtime pass is excluded from this result."
+  },
+  "execution": {
+    "status": "PASS for the preregistered bounded synthetic software subcase.",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"fails closed when a v3 transplanted cell lacks frozen establishment state\"",
+    "worker": {
+      "role": "S1 implementation worker",
+      "result": "1 passed, 35 skipped; 36 tests total."
+    },
+    "independentCandidateReview": {
+      "reviewer": "S3",
+      "status": "PASS"
+    },
+    "registeredAssertions": {
+      "frozenModelIdentity": "crop-model-v3/run-inputs-v3/crop-parameters-v4",
+      "frozenCropIds": [
+        1
+      ],
+      "frozenParameterCropIds": [
+        1
+      ],
+      "frozenSoil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "source": "unknown"
+      },
+      "establishmentByCell": {},
+      "support": {
+        "status": "unsupported",
+        "canReplay": false,
+        "preserveStoredSummary": true,
+        "preserveStoredSummaryMeaning": "Policy flag only; actual stored-summary retention is not tested."
+      },
+      "supportReasonsContainExactStrings": [
+        "Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0.",
+        "Frozen v2 soil AWC provenance is unknown."
+      ],
+      "replayRunToDay": {
+        "throws": "UnsupportedRunReplayError",
+        "reasonsContainExactStrings": [
+          "Crop 1: frozen per-cell emergence/transplant initial state is missing for 0,0.",
+          "Frozen v2 soil AWC provenance is unknown."
+        ]
+      },
+      "fullReasonsArrayCompared": false,
+      "numericModelOutputCompared": false
+    }
+  },
+  "localVerification": {
+    "focusedTest": "PASS; 1 passed / 35 skipped.",
+    "npmTest": "PASS; 48 test files / 266 tests.",
+    "typecheck": "PASS; npm run typecheck.",
+    "standardBuild": "PASS; npm run build.",
+    "demoBuild": "PASS; npm run build:demo.",
+    "pagesBuild": "PASS; npm run build:pages.",
+    "privateFileGuard": "PASS; npm run check:private; 550 tracked files.",
+    "duplicateSafeJsonParse": "PASS.",
+    "whitespace": "PASS; git diff --check.",
+    "productionBrowserSmoke": {
+      "status": "PASS; npm run test:e2e; 3/3 in 3.4m.",
+      "journeys": [
+        "Production build boots under the GitHub Pages project base path",
+        "Unsupported environment-v2 run opens under Pages and retains its stored summary",
+        "Unsupported v4 crop lifecycle is explained in World and retains its stored summary"
+      ]
+    },
+    "warnings": "Vite config-loader and large-chunk advisories were warnings; builds passed."
+  },
+  "exactHeadPrCi": {
+    "pr": 82,
+    "runId": 40776046948,
+    "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40776046948",
+    "headSha": "472c2514a2b3b9ff4dca03a44fa92cccdd5fc28d",
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "test + typecheck + build",
+        "status": "PASS",
+        "duration": "41s"
+      },
+      {
+        "name": "Playwright production Pages-path smoke",
+        "status": "PASS",
+        "tests": "3 passed / 3 total",
+        "jobDuration": "5m53s"
+      },
+      {
+        "name": "secret + private-file scan",
+        "status": "PASS",
+        "duration": "17s"
+      }
+    ]
+  },
+  "independentReview": {
+    "S3": {
+      "status": "PASS",
+      "scope": "Independent candidate review of the preregistered synthetic software assertions."
+    },
+    "S2": {
+      "status": "unavailable",
+      "reason": "The S2 pane could not execute its audit because Codex reported a token refresh failure after logout/account switch."
+    }
+  },
+  "limits": [
+    "PASS is limited to this synthetic fail-closed software subcase; A-04 and overall 02A remain UNVERIFIED.",
+    "No measured transplant state, nursery mass, nursery growth, or biological establishment behavior is represented.",
+    "No crop accuracy, biological validity, independent reference agreement, or prediction is established.",
+    "preserveStoredSummary is a policy flag only; actual stored-summary retention is not tested.",
+    "No numerical tolerance is applicable because the test compares structural fields and reason strings only.",
+    "Source-backed transplant mass/nursery development and intermediate-stage mapping remain open A-04 work."
+  ],
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "independentReferenceModelComparison": false,
+  "measuredHoldoutValidation": false
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cropLibrary } from '@/data/crops';
-import { simulateRun } from './engine';
+import { createRun, simulateRun, stepDay } from './engine';
+import type { EquipmentTerms } from './equipment';
 import type { DailyEnvironment, RunConfig } from './types';
 
 const CELL_KEYS = Array.from({ length: 100 }, (_, i) => `${i % 10},${Math.floor(i / 10)}`);
@@ -80,4 +81,80 @@ describe('spacing-based harvest yield', () => {
       });
     }
   }
+
+  it('floors separate soil and instance-hydro planting areas independently', () => {
+    const tomato = cropLibrary.find((item) => item.slug === 'tomato')!;
+    const crop = { ...tomato, spacingCm: 30, rowSpacingCm: 30, yieldKgPerPlant: 1 };
+    const basePlan = {
+      farmId: 1,
+      widthM: 0.5,
+      heightM: 0.25,
+      cellM: 0.25,
+      allowOutsideBeds: true,
+      ground: {},
+      planting: { '0,0': crop.id, '1,0': crop.id },
+      updatedAt: '2026-05-01',
+    };
+    const emptyTerms: EquipmentTerms = {
+      ppfdUmol: 0,
+      lightingW: 0,
+      photoperiodH: 0,
+      achBoost: 0,
+      mixing: 0,
+      heatingKw: 0,
+      coolingKw: 0,
+      coolingElectricalKw: 0,
+      dehumLpd: 0,
+      dehumDerateBelowRh: 50,
+      co2TargetPpm: null,
+      co2KgDay: 0,
+      tiers: 1,
+      soilless: false,
+      waterStoreL: 0,
+      nursery: false,
+    };
+    const makeConfig = (soillessCells: string[]): RunConfig => ({
+      farmId: 1,
+      basePlan,
+      startDate: '2026-05-01',
+      dayCount: 1,
+      seed: 1,
+      scenario: 'baseline',
+      tempDeltaC: 0,
+      precipMultiplier: 1,
+      interventions: ['0,0', '1,0'].map((cell) => ({ kind: 'harvest', date: '2026-05-01', cell })),
+      autoHarvest: false,
+      assetPhysics: {
+        model: 'assets-v1',
+        room: emptyTerms,
+        targets: {},
+        soillessCells: { floor: soillessCells },
+        hydroRequiredCells: {},
+      },
+    });
+    const harvestYield = (soillessCells: string[]) => {
+      const runConfig = makeConfig(soillessCells);
+      const created = createRun(runConfig, { crops: [crop] });
+      const mature = {
+        ...created,
+        cells: Object.fromEntries(Object.entries(created.cells).map(([key, cell]) => [key, { ...cell, biomassFrac: 0.8 }])),
+      };
+      const result = stepDay(mature, {
+        date: '2026-05-01',
+        tMinC: 20,
+        tMaxC: 24,
+        precipMm: 0,
+        etoMm: 0,
+        gddBase10C: 7,
+        provenance: PROVENANCE,
+      }, runConfig, { crops: [crop] });
+      return result.events
+        .filter((event) => event.kind === 'harvested')
+        .reduce((sum, event) => sum + (event.data?.yieldKg ?? 0), 0);
+    };
+
+    expect(harvestYield([])).toBe(1);
+    expect(harvestYield(['0,0'])).toBe(0);
+    expect(harvestYield(['0,0', '1,0'])).toBe(1);
+  });
 });

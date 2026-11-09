@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "id": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01-RESULT",
+  "preregistrationId": "V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01",
+  "status": "focused synthetic software candidate and local gates passed; exact-head PR CI passed",
+  "classification": "This result records only deterministic v3 target-routing and payout behavior for the frozen synthetic fixture. It is not crop-accuracy, natural harvest-date, measured-trial, reference-model, or predictive evidence.",
+  "candidateExecution": {
+    "date": "2026-10-27",
+    "command": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"auto-harvests v3 floor and elevated targets once at the frozen maturity endpoint and replays exactly\"",
+    "result": "1 passed; 28 skipped by the focused name filter",
+    "durationMs": 171,
+    "fullSuiteOrBuildRun": false
+  },
+  "verification": {
+    "localGates": {
+      "unitSuite": "PASS: npm test, 47 test files / 253 tests",
+      "typecheck": "PASS",
+      "builds": "PASS: standard, demo, and Pages profiles",
+      "privateFileGuard": "PASS: 529 tracked files",
+      "jsonParsingAndWhitespace": "PASS",
+      "productionPagesJourneys": {
+        "status": "PASS: 3/3",
+        "journeys": [
+          "production build boots under the GitHub Pages project base path",
+          "unsupported environment-v2 run opens under Pages and retains its stored summary",
+          "unsupported v4 crop lifecycle is explained in World and retains its stored summary"
+        ]
+      }
+    },
+    "exactHeadCI": {
+      "status": "PASS",
+      "pullRequest": 82,
+      "sha": "22cd5f586a762a3e2560c3504b8e043ab01ef9ad",
+      "runId": "40646657273",
+      "runUrl": "https://github.com/0-CYBERDYNE-SYSTEMS-0/ff-land-plan/actions/runs/40646657273",
+      "contexts": [
+        { "name": "test + typecheck + build", "status": "PASS", "duration": "31s" },
+        { "name": "Playwright production Pages-path smoke", "status": "PASS", "journeys": "3/3", "duration": "3m48s" },
+        { "name": "secret + private-file scan", "status": "PASS", "duration": "15s" },
+        { "name": "GitGuardian Security Checks", "status": "PASS", "duration": "2s" }
+      ]
+    }
+  },
+  "modelIdentities": {
+    "climate": "standard open-field crop-model-v3",
+    "cropModelVersion": "crop-model-v3",
+    "runInputsVersion": "run-inputs-v3",
+    "parameterSetVersion": "crop-parameters-v4",
+    "ordinaryNewRunDefaultChanged": false
+  },
+  "effectiveCropIdentity": {
+    "id": 1,
+    "slug": "tomato",
+    "name": "Tomato",
+    "matchesCompletePreregisteredCatalogCropSnapshot": true,
+    "comparisonExcludesOnlyEvidenceMetadataField": "source"
+  },
+  "effectiveThermalInputs": {
+    "tBaseC": 7.2,
+    "tUpperC": 33.3,
+    "gddToMaturityCdays": [1024, 1117],
+    "startEvents": ["transplanting"],
+    "accumulationStart": "Transplanting at 3–5 true leaves",
+    "maturityEndpoint": "First ripe harvest (four or more fruits show ripe color)",
+    "accumulationMethod": "Single sine with horizontal cutoff; OSU Table 6"
+  },
+  "frozenSyntheticInputs": {
+    "soil": {
+      "awcMmPerCm": 1.5,
+      "organicMatterPct": 2.4,
+      "source": "unknown"
+    },
+    "cellM": 0.4,
+    "floorCell": "0,0",
+    "elevatedTarget": {
+      "kind": "growing-level",
+      "growingSpaceId": "space-a",
+      "levelId": "high"
+    },
+    "elevatedLocalCells": ["0,0", "1,0", "2,0", "3,0", "4,0", "5,0"],
+    "initialAboveGroundDryMatterGPerM2PerCell": 12,
+    "harvestIndex": 0.5,
+    "payoutFormulaKgPerCell": "12 g DM/m² × 0.4² m²/cell × 0.5 harvest index / 1000 g/kg"
+  },
+  "maturityEndpoint": {
+    "derivedFrom": "first no-auto-harvest reducer tick where all seven registered target-qualified cells have biomassFrac 1",
+    "dayIndex": 62,
+    "date": "2026-12-02",
+    "followingEnvironmentDay": {
+      "dayIndex": 63,
+      "date": "2026-12-03"
+    }
+  },
+  "harvestedEventProjection": [
+    {
+      "kind": "harvested",
+      "cell": "0,0",
+      "dayIndex": 62,
+      "date": "2026-12-02",
+      "data": { "yieldKg": 0.0009600000000000001 }
+    },
+    {
+      "kind": "harvested",
+      "cell": "level/space-a/high|0,0",
+      "target": { "kind": "growing-level", "growingSpaceId": "space-a", "levelId": "high" },
+      "dayIndex": 62,
+      "date": "2026-12-02",
+      "data": { "yieldKg": 0.0009600000000000001 }
+    },
+    {
+      "kind": "harvested",
+      "cell": "level/space-a/high|1,0",
+      "target": { "kind": "growing-level", "growingSpaceId": "space-a", "levelId": "high" },
+      "dayIndex": 62,
+      "date": "2026-12-02",
+      "data": { "yieldKg": 0.0009600000000000001 }
+    },
+    {
+      "kind": "harvested",
+      "cell": "level/space-a/high|2,0",
+      "target": { "kind": "growing-level", "growingSpaceId": "space-a", "levelId": "high" },
+      "dayIndex": 62,
+      "date": "2026-12-02",
+      "data": { "yieldKg": 0.0009600000000000001 }
+    },
+    {
+      "kind": "harvested",
+      "cell": "level/space-a/high|3,0",
+      "target": { "kind": "growing-level", "growingSpaceId": "space-a", "levelId": "high" },
+      "dayIndex": 62,
+      "date": "2026-12-02",
+      "data": { "yieldKg": 0.0009600000000000001 }
+    },
+    {
+      "kind": "harvested",
+      "cell": "level/space-a/high|4,0",
+      "target": { "kind": "growing-level", "growingSpaceId": "space-a", "levelId": "high" },
+      "dayIndex": 62,
+      "date": "2026-12-02",
+      "data": { "yieldKg": 0.0009600000000000001 }
+    },
+    {
+      "kind": "harvested",
+      "cell": "level/space-a/high|5,0",
+      "target": { "kind": "growing-level", "growingSpaceId": "space-a", "levelId": "high" },
+      "dayIndex": 62,
+      "date": "2026-12-02",
+      "data": { "yieldKg": 0.0009600000000000001 }
+    }
+  ],
+  "targetPayloadContract": {
+    "floorEventTargetField": "omitted",
+    "elevatedEventTarget": { "kind": "growing-level", "growingSpaceId": "space-a", "levelId": "high" }
+  },
+  "payout": {
+    "eventCount": 7,
+    "uniqueEventKeyCount": 7,
+    "eventKeys": [
+      "0,0",
+      "level/space-a/high|0,0",
+      "level/space-a/high|1,0",
+      "level/space-a/high|2,0",
+      "level/space-a/high|3,0",
+      "level/space-a/high|4,0",
+      "level/space-a/high|5,0"
+    ],
+    "expectedKgPerCell": 0.00096,
+    "actualKgPerCell": 0.0009600000000000001,
+    "expectedUnroundedTotalKg": 0.00672,
+    "actualSumOfRecordedEventYieldsKg": 0.00672,
+    "actualSumOfRecordedEventYieldsPrecision17": "0.0067200000000000003",
+    "absoluteDeviationKg": 0,
+    "absoluteDeviationPrecision17": "0.0000000000000000",
+    "perCellAbsoluteDeviationKg": 1.0842021724855044e-19,
+    "maximumAbsoluteArithmeticDeviationKg": 1e-12
+  },
+  "summary": {
+    "daysSimulated": 64,
+    "totalYieldKg": 0.01,
+    "yieldKgByCrop": { "1": 0.01 },
+    "harvestReadyDay": 62,
+    "matureCells": 7,
+    "cellCount": 7,
+    "eventCounts": { "outbreak": 4, "harvested": 7, "stage": 7, "harvest-ready": 7 },
+    "yieldBasis": "dry-matter"
+  },
+  "nextDayHarvestEventCount": 0,
+  "finalCellState": [
+    { "cellKey": "0,0", "biomassFrac": 1, "readyAtDay": 62, "harvested": true },
+    { "cellKey": "level/space-a/high|0,0", "biomassFrac": 1, "readyAtDay": 62, "harvested": true },
+    { "cellKey": "level/space-a/high|1,0", "biomassFrac": 1, "readyAtDay": 62, "harvested": true },
+    { "cellKey": "level/space-a/high|2,0", "biomassFrac": 1, "readyAtDay": 62, "harvested": true },
+    { "cellKey": "level/space-a/high|3,0", "biomassFrac": 1, "readyAtDay": 62, "harvested": true },
+    { "cellKey": "level/space-a/high|4,0", "biomassFrac": 1, "readyAtDay": 62, "harvested": true },
+    { "cellKey": "level/space-a/high|5,0", "biomassFrac": 1, "readyAtDay": 62, "harvested": true }
+  ],
+  "replay": {
+    "eventsEqual": true,
+    "finalStateEqual": true,
+    "summaryEqual": true,
+    "scope": "same frozen RunConfig and environment series; run-level deterministic replay only"
+  },
+  "evidenceLimits": [
+    "Synthetic software behavior only; no crop accuracy, natural maturity-date, measured, reference-agreement, or prediction claim.",
+    "The registered 1e-12 kg bound applies only to the frozen payout arithmetic.",
+    "The focused candidate command runs one case only; full local gates and exact-head CI are recorded separately under verification.",
+    "Passing synthetic software checks does not establish biological validity, model accuracy, measured/reference agreement, or predictive validity."
+  ]
+}

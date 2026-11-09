@@ -11,25 +11,29 @@
 // simStateRef is the source of truth for rendering between commits.
 //
 // Determinism: replay folds stepDay over record.envSeries + record.config
-// ONLY — no live fetches inside the tick loop. The soil/crops SimRunCtx is
-// loaded once per startRun (fetchSoilProfile + apiFetch.listCrops are both
-// cached and never throw) so the replay matches the summary computed at
-// createSimRun time byte-for-byte.
+// ONLY — no live fetches inside the tick loop. New records carry their
+// model-driving soil and crop inputs. Historical records without complete
+// frozen inputs are shown as unsupported and their stored summaries survive.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import type { Crop } from '@/types';
-import { apiFetch } from '@/lib/api';
-import { fetchSoilProfile } from '@/lib/soil';
+import type { Crop, EnvironmentLayout, GrowingTargetRef, ObservationMetric } from '@/types';
+import { growingTargetKey } from '@/lib/growingTargets';
 import {
   bucketCapacityMm,
   createRun,
   gddRequiredC,
   isoDayNumber,
   isoFromDayNumber,
+  replayRunToDay,
+  replayStateCache,
   soilWaterParams,
   stepDay,
 } from '@/lib/sim';
+import { canonicalizeObservations } from '@/lib/sim/observations';
+import { dailyThermalUnits } from '@/lib/sim/crop-model-v2';
+import { effectiveEnvironmentForSurface } from '@/lib/sim/drivers';
+import { inspectRunModelSupport, type RunModelSupport } from '@/lib/sim/model-inputs';
 import type {
   DailyEnvironment,
   EnvSourceTag,
@@ -59,8 +63,15 @@ export interface SimRunTimeline {
     mm?: number;
     /** fertilize amount, kg/ha N. */
     nKgHa?: number;
+    /** refill-water amount, litres. */
+    litres?: number;
+    /** Missing target is the historical floor target. */
+    target?: GrowingTargetRef;
+    targetKey: string;
+    targetLabel: string;
+    allTargets?: boolean;
   }[];
-  events: { day: number; kind: string }[];
+  events: { day: number; kind: string; message: string; metric?: ObservationMetric; innovation?: number }[];
 }
 
 /** Result of authoring one intervention on the ACTIVE run. The RunInspector
@@ -82,8 +93,11 @@ export interface RunProgressRow {
   id: number;
   name: string;
   label?: string;
+  targetKey: string;
+  targetLabel: string;
   plantedAt: string;
   stage: number;
+  stageAvailable: boolean;
   pct: number;
   stress: number;
 }
@@ -92,24 +106,27 @@ export interface RunProgressRow {
  * carries its number and — where it traces to weather — its source tag. */
 export interface CellDiagnosticRow {
   cropId: number;
+  targetKey: string;
+  targetLabel: string;
   plantedAt: string;
   cropName: string;
+  gddLabel: string;
   gddAccumC: number;
   gddRequiredC: number;
-  moistureFrac: number;
-  awcMmPerCm: number;
-  rootDepthCm: number;
-  awcCapMm: number;
-  bucketMm: number;
+  moistureFrac: number | null;
+  awcMmPerCm: number | null;
+  rootDepthCm: number | null;
+  awcCapMm: number | null;
+  bucketMm: number | null;
   nitrogenKgHa: number;
   stress: { water: number; heat: number; cold: number; nitrogen: number };
-  todayGddC: number;
-  todayEtMm: number;
-  todayTMinC: number;
-  todayTMaxC: number;
+  todayGddC: number | null;
+  todayEtMm: number | null;
+  todayTMinC: number | null;
+  todayTMaxC: number | null;
   cropMinTempC: number;
   cropMaxTempC: number;
-  sources: { temp: EnvSourceTag; precip: EnvSourceTag; eto: EnvSourceTag };
+  sources: { temp: EnvSourceTag | null; precip: EnvSourceTag | null; eto: EnvSourceTag | null };
 }
 
 /** Notable-event sink: fired once per stepped sim day with that day's events
@@ -131,6 +148,7 @@ export interface SimRunController {
   /** Soil + crops context used for the replay (null until loaded). */
   ctx: SimRunCtx | null;
   timeline: SimRunTimeline | null;
+  modelSupport: RunModelSupport | null;
   /** THE render-path source of truth — read this from rAF/effects, not state. */
   simStateRef: RefObject<SimState | null>;
   startRun: (record: RunRecord) => void;
@@ -205,9 +223,13 @@ export function runDayEnv(record: RunRecord, dayIndex: number): DailyEnvironment
 
 interface CellAgg {
   cropId: number;
+  target: GrowingTargetRef;
+  targetKey: string;
+  targetLabel: string;
   plantedAtDay: number;
   biomass: number;
   stage: number;
+  stageAvailable: boolean;
   stressWater: number;
   stressHeat: number;
   stressCold: number;
@@ -215,17 +237,55 @@ interface CellAgg {
   moistureSum: number;
   nitrogenSum: number;
   gddAccum: number;
+  sourceThermal: number;
+  sourceThermalActiveCount: number;
+  rootZoneWaterSum: number;
+  rootZoneCapacitySum: number;
+  rootZoneDepthSum: number;
+  rootZoneAwcSum: number;
+  rootZoneCellCount: number;
   count: number;
 }
 
-function aggregateCells(state: SimState): CellAgg[] {
+function targetLabelFor(target: GrowingTargetRef, layout?: EnvironmentLayout): string {
+  if (target.kind === 'floor') return 'Floor';
+  const space = layout?.growingSpaces.find((entry) => entry.id === target.growingSpaceId);
+  const level = space?.levels.find((entry) => entry.id === target.levelId);
+  return `${space?.label ?? `Growing space ${target.growingSpaceId}`} · ${level?.label ?? `Level ${target.levelId}`}`;
+}
+
+function aggregateCells(state: SimState, layout?: EnvironmentLayout, config?: RunRecord['config']): CellAgg[] {
   const groups = new Map<string, CellAgg>();
   for (const cell of Object.values(state.cells)) {
-    const key = `${cell.cropId}|${cell.plantedAtDay}`;
+    const target = cell.target ?? { kind: 'floor' as const };
+    const targetKey = growingTargetKey(target);
+    const targetLabel = targetLabelFor(target, layout);
+    const key = `${cell.cropId}|${cell.plantedAtDay}|${targetKey}`;
+    const inputs = config?.modelInputs;
+    const modelParameters = inputs?.model === 'run-inputs-v2' || inputs?.model === 'run-inputs-v3' || inputs?.model === 'run-inputs-v4'
+      ? inputs.cropParameters.find((parameter) => parameter.cropId === cell.cropId)
+      : undefined;
+    const awcMmPerCm = inputs?.model === 'run-inputs-v2' || inputs?.model === 'run-inputs-v3' || inputs?.model === 'run-inputs-v4'
+      ? inputs.soil?.awcMmPerCm
+      : undefined;
+    const rootDepthCm = cell.rootZoneDepthCm
+      ?? (modelParameters?.rootZone?.rootDevelopment
+        ? undefined
+        : modelParameters?.rootZone?.effectiveRootDepthCm);
+    const hasRootZone = typeof awcMmPerCm === 'number' && Number.isFinite(awcMmPerCm) && awcMmPerCm > 0
+      && typeof rootDepthCm === 'number' && Number.isFinite(rootDepthCm) && rootDepthCm > 0;
+    const rootZoneCapacityMm = hasRootZone ? awcMmPerCm * rootDepthCm : 0;
+    const rootZoneWaterMm = hasRootZone
+      ? (typeof cell.rootZoneWaterMm === 'number' && Number.isFinite(cell.rootZoneWaterMm)
+          ? cell.rootZoneWaterMm
+          : cell.moistureFrac * rootZoneCapacityMm)
+      : 0;
+    const sourceThermalActive = state.dayIndex - 1 >= cell.plantedAtDay && !cell.dead && cell.biomassFrac < 1;
     const g = groups.get(key);
     if (g) {
       g.biomass = Math.max(g.biomass, cell.biomassFrac);
       g.stage = Math.max(g.stage, cell.stage);
+      g.stageAvailable = g.stageAvailable && cell.stageEstimateAvailable !== false;
       g.stressWater = Math.max(g.stressWater, cell.stress.water);
       g.stressHeat = Math.max(g.stressHeat, cell.stress.heat);
       g.stressCold = Math.max(g.stressCold, cell.stress.cold);
@@ -233,13 +293,26 @@ function aggregateCells(state: SimState): CellAgg[] {
       g.moistureSum += cell.moistureFrac;
       g.nitrogenSum += cell.nitrogenKgHa;
       g.gddAccum = Math.max(g.gddAccum, cell.gddAccumC);
+      g.sourceThermal = Math.max(g.sourceThermal, cell.sourceThermalCdays ?? 0);
+      if (sourceThermalActive) g.sourceThermalActiveCount++;
+      if (hasRootZone) {
+        g.rootZoneWaterSum += rootZoneWaterMm;
+        g.rootZoneCapacitySum += rootZoneCapacityMm;
+        g.rootZoneDepthSum += rootDepthCm as number;
+        g.rootZoneAwcSum += awcMmPerCm as number;
+        g.rootZoneCellCount++;
+      }
       g.count++;
     } else {
       groups.set(key, {
         cropId: cell.cropId,
+        target,
+        targetKey,
+        targetLabel,
         plantedAtDay: cell.plantedAtDay,
         biomass: cell.biomassFrac,
         stage: cell.stage,
+        stageAvailable: cell.stageEstimateAvailable !== false,
         stressWater: cell.stress.water,
         stressHeat: cell.stress.heat,
         stressCold: cell.stress.cold,
@@ -247,6 +320,13 @@ function aggregateCells(state: SimState): CellAgg[] {
         moistureSum: cell.moistureFrac,
         nitrogenSum: cell.nitrogenKgHa,
         gddAccum: cell.gddAccumC,
+        sourceThermal: cell.sourceThermalCdays ?? 0,
+        sourceThermalActiveCount: sourceThermalActive ? 1 : 0,
+        rootZoneWaterSum: hasRootZone ? rootZoneWaterMm : 0,
+        rootZoneCapacitySum: hasRootZone ? rootZoneCapacityMm : 0,
+        rootZoneDepthSum: hasRootZone ? rootDepthCm as number : 0,
+        rootZoneAwcSum: hasRootZone ? awcMmPerCm as number : 0,
+        rootZoneCellCount: hasRootZone ? 1 : 0,
         count: 1,
       });
     }
@@ -260,10 +340,11 @@ export function buildRunProgressRows(
   state: SimState,
   startDate: string,
   cropById: Map<number, Crop>,
+  layout?: EnvironmentLayout,
 ): RunProgressRow[] {
   const start = isoDayNumber(startDate);
   const rows: RunProgressRow[] = [];
-  for (const g of aggregateCells(state)) {
+  for (const g of aggregateCells(state, layout)) {
     const crop = cropById.get(g.cropId);
     if (!crop) continue;
     const plantedAt = isoFromDayNumber(start + g.plantedAtDay);
@@ -272,17 +353,20 @@ export function buildRunProgressRows(
     rows.push({
       id: g.cropId,
       name: crop.name,
+      targetKey: g.targetKey,
+      targetLabel: g.targetLabel,
       label: Number.isFinite(d.getTime())
-        ? `${crop.name} · ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-        : crop.name,
+        ? `${crop.name} · ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${g.targetLabel}`
+        : `${crop.name} · ${g.targetLabel}`,
       plantedAt,
       stage: g.stage,
+      stageAvailable: g.stageAvailable,
       pct: Math.round(g.biomass * 100),
       stress: Math.round(stress * 100) / 100,
     });
   }
   return rows.sort(
-    (a, b) => a.name.localeCompare(b.name) || a.plantedAt.localeCompare(b.plantedAt),
+    (a, b) => a.name.localeCompare(b.name) || a.plantedAt.localeCompare(b.plantedAt) || a.targetKey.localeCompare(b.targetKey),
   );
 }
 
@@ -296,23 +380,61 @@ export function buildCellDiagnostics(
 ): CellDiagnosticRow[] {
   const params = soilWaterParams(soil?.awcMmPerCm);
   const capacity = bucketCapacityMm(params);
-  const env = dayEnv ?? record.envSeries[0] ?? null;
+  const sourceThermalModel = record.config.cropModelVersion === 'crop-model-v3' || record.config.cropModelVersion === 'crop-model-v4';
+  const env = sourceThermalModel
+    ? state.dayIndex > 0 ? dayEnv : null
+    : dayEnv ?? record.envSeries[0] ?? null;
   const start = isoDayNumber(record.config.startDate);
+  const thermalEnv = sourceThermalModel && state.dayIndex === 0
+    ? null
+    : state.climate
+    ? { tMinC: state.climate.tMinC, tMaxC: state.climate.tMaxC }
+    : env
+      ? effectiveEnvironmentForSurface(env, state.surface)
+      : null;
   const rows: CellDiagnosticRow[] = [];
-  for (const g of aggregateCells(state)) {
+  for (const g of aggregateCells(state, record.config.environment?.layout, record.config)) {
     const crop = cropById.get(g.cropId);
     if (!crop) continue;
+    const thermal = record.config.modelInputs?.model === 'run-inputs-v3' || record.config.modelInputs?.model === 'run-inputs-v4'
+      ? record.config.modelInputs.cropParameters.find((parameter) => parameter.cropId === g.cropId)?.thermal
+      : undefined;
+    const sourceThermalToday = !sourceThermalModel
+      ? env?.gddBase10C ?? 0
+      : g.sourceThermalActiveCount === 0
+        ? 0
+        : g.sourceThermalActiveCount !== g.count || !thermal || !thermalEnv
+          ? null
+          : dailyThermalUnits(thermalEnv.tMinC, thermalEnv.tMaxC, thermal);
+    const hasFrozenRootZone = g.rootZoneCellCount === g.count && g.rootZoneCellCount > 0;
+    const frozenRootModel = record.config.cropModelVersion === 'crop-model-v2'
+      || record.config.cropModelVersion === 'crop-model-v3'
+      || record.config.cropModelVersion === 'crop-model-v4';
+    const hasRootDiagnostics = hasFrozenRootZone || !frozenRootModel;
+    const rootDepthCm = hasFrozenRootZone ? g.rootZoneDepthSum / g.rootZoneCellCount : hasRootDiagnostics ? params.rootDepthCm : null;
+    const awcMmPerCm = hasFrozenRootZone ? g.rootZoneAwcSum / g.rootZoneCellCount : hasRootDiagnostics ? params.awcMmPerCm : null;
+    const awcCapMm = hasFrozenRootZone ? g.rootZoneCapacitySum / g.rootZoneCellCount : hasRootDiagnostics ? capacity : null;
+    const bucketMm = hasFrozenRootZone
+      ? g.rootZoneWaterSum / g.rootZoneCellCount
+      : hasRootDiagnostics ? (g.count > 0 ? g.moistureSum / g.count : 0) * capacity : null;
+    const moistureFrac = bucketMm !== null && awcCapMm !== null && awcCapMm > 0
+      ? bucketMm / awcCapMm
+      : hasRootDiagnostics && g.count > 0 ? g.moistureSum / g.count : null;
+    const temperatures = sourceThermalModel ? thermalEnv ?? env : env;
     rows.push({
       cropId: g.cropId,
+      targetKey: g.targetKey,
+      targetLabel: g.targetLabel,
       plantedAt: isoFromDayNumber(start + g.plantedAtDay),
       cropName: crop.name,
-      gddAccumC: g.gddAccum,
-      gddRequiredC: gddRequiredC(crop, record.config.meanDailyGddC),
-      moistureFrac: g.count > 0 ? g.moistureSum / g.count : 0,
-      awcMmPerCm: params.awcMmPerCm,
-      rootDepthCm: params.rootDepthCm,
-      awcCapMm: capacity,
-      bucketMm: (g.count > 0 ? g.moistureSum / g.count : 0) * capacity,
+      gddLabel: sourceThermalModel ? 'Source thermal' : 'GDD',
+      gddAccumC: sourceThermalModel ? g.sourceThermal : g.gddAccum,
+      gddRequiredC: thermal?.gddToMaturityCdays[1] ?? gddRequiredC(crop, record.config.meanDailyGddC),
+      moistureFrac,
+      awcMmPerCm,
+      rootDepthCm,
+      awcCapMm,
+      bucketMm,
       nitrogenKgHa: Math.round((g.count > 0 ? g.nitrogenSum / g.count : 0) * 10) / 10,
       stress: {
         water: g.stressWater,
@@ -320,21 +442,21 @@ export function buildCellDiagnostics(
         cold: g.stressCold,
         nitrogen: g.stressNitrogen,
       },
-      todayGddC: env?.gddBase10C ?? 0,
-      todayEtMm: env?.etoMm ?? 0,
-      todayTMinC: env?.tMinC ?? 0,
-      todayTMaxC: env?.tMaxC ?? 0,
+      todayGddC: sourceThermalToday,
+      todayEtMm: env?.etoMm ?? null,
+      todayTMinC: temperatures?.tMinC ?? null,
+      todayTMaxC: temperatures?.tMaxC ?? null,
       cropMinTempC: crop.minTempC,
       cropMaxTempC: crop.maxTempC,
       sources: {
-        temp: env?.provenance.tMaxC ?? 'default',
-        precip: env?.provenance.precipMm ?? 'default',
-        eto: env?.provenance.etoMm ?? 'default',
+        temp: state.climate?.provenance.source ?? env?.provenance.tMaxC ?? null,
+        precip: env?.provenance.precipMm ?? null,
+        eto: env?.provenance.etoMm ?? null,
       },
     });
   }
   return rows.sort(
-    (a, b) => a.cropName.localeCompare(b.cropName) || a.plantedAt.localeCompare(b.plantedAt),
+    (a, b) => a.cropName.localeCompare(b.cropName) || a.plantedAt.localeCompare(b.plantedAt) || a.targetKey.localeCompare(b.targetKey),
   );
 }
 
@@ -364,6 +486,7 @@ export function useSimRun(opts: {
   const [tickVersion, setTickVersion] = useState(0);
   const [ctx, setCtx] = useState<SimRunCtx | null>(null);
   const [timeline, setTimeline] = useState<SimRunTimeline | null>(null);
+  const [modelSupport, setModelSupport] = useState<RunModelSupport | null>(null);
   // Session-only divergence marker: the amended config lives in memory, the
   // stored RunRecord is never rewritten by authoring (see applyIntervention).
   const [unsavedChanges, setUnsavedChanges] = useState(false);
@@ -408,10 +531,7 @@ export function useSimRun(opts: {
     if (!g) return;
     const runCtx = ctxRef.current ?? {};
     const n = Math.min(Math.max(0, Math.round(targetDay)), g.envSeries.length);
-    let st = createRun(g.config, runCtx);
-    for (let i = 0; i < n; i++) {
-      st = stepDay(st, g.envSeries[i]!, g.config, runCtx).state;
-    }
+    const st = replayRunToDay(g, n, runCtx);
     ghostStateRef.current = st;
     setGhostVersion((v) => v + 1);
   }, []);
@@ -424,9 +544,10 @@ export function useSimRun(opts: {
     if (!rec || !st) return false;
     const env = rec.envSeries[dayIndexRef.current];
     if (!env) return false;
-    const { state, events } = stepDay(st, env, rec.config, ctxRef.current ?? {});
+    const { state, events } = stepDay(st, env, rec.config, ctxRef.current ?? {}, rec.observations ?? []);
     simStateRef.current = state;
     dayIndexRef.current = state.dayIndex;
+    replayStateCache.set(rec.id, state.dayIndex, state);
     // Ghost lockstep (Phase 4): each primary sim-day ALSO steps the ghost one
     // day through its own config × envSeries — exactly one extra pure stepDay
     // (a season is ~ms, a day is sub-ms ⇒ real-time even at max speed). The
@@ -438,7 +559,9 @@ export function useSimRun(opts: {
       const gst = ghostStateRef.current;
       if (gst && gst.dayIndex < g.envSeries.length) {
         const genv = g.envSeries[gst.dayIndex]!;
-        ghostStateRef.current = stepDay(gst, genv, g.config, ctxRef.current ?? {}).state;
+        const nextGhostState = stepDay(gst, genv, g.config, ctxRef.current ?? {}, g.observations ?? []).state;
+        ghostStateRef.current = nextGhostState;
+        replayStateCache.set(g.id, nextGhostState.dayIndex, nextGhostState);
       }
     }
     if (events.length > 0) onEventsRef.current?.(events, state);
@@ -494,10 +617,7 @@ export function useSimRun(opts: {
       if (!rec) return;
       const runCtx = ctxRef.current ?? {};
       const n = Math.min(Math.max(0, Math.round(targetDay)), rec.envSeries.length);
-      let st = createRun(rec.config, runCtx);
-      for (let i = 0; i < n; i++) {
-        st = stepDay(st, rec.envSeries[i]!, rec.config, runCtx).state;
-      }
+      const st = replayRunToDay(rec, n, runCtx);
       simStateRef.current = st;
       dayIndexRef.current = st.dayIndex;
       accumRef.current = 0;
@@ -512,36 +632,41 @@ export function useSimRun(opts: {
   );
 
   const startRun = useCallback(
-    (rec: RunRecord) => {
+    (input: RunRecord) => {
+      const rec = input.observations === undefined
+        ? input
+        : { ...input, observations: canonicalizeObservations(input.observations) };
       stopTicking();
       loadIdRef.current += 1;
       const loadId = loadIdRef.current;
+      const support = inspectRunModelSupport(rec.config);
+      replayStateCache.invalidateRun(rec.id);
       recordRef.current = rec;
       setRecord(rec);
+      setModelSupport(support);
       // A new primary invalidates any ghost comparison (Phase 4): a ghost
       // always belongs to the run it was loaded against. ?ffrun+?ffghost
       // re-load the ghost right after this via loadGhost.
       ghostRecordRef.current = null;
       ghostStateRef.current = null;
       setGhostRecord(null);
-      setEnded(false);
+      setEnded(!support.canReplay);
       setUnsavedChanges(false);
       simStateRef.current = null;
       dayIndexRef.current = 0;
       pendingSeekRef.current = null;
+      ctxRef.current = null;
+      setCtx(null);
       setTimeline(null);
       setDayIndex(0);
       maybeCommit(true);
-      // Replay context (soil AWC/OM + full crop list incl. custom crops) —
-      // the SAME inputs createSimRun used, so the fold matches its summary.
-      // Both calls are cached-forever + never-throw.
-      void Promise.all([
-        fetchSoilProfile(
-          rec.config.lat ?? farmCoordsRef.current?.lat ?? 0,
-          rec.config.lng ?? farmCoordsRef.current?.lng ?? 0,
-        ),
-        apiFetch.listCrops(),
-      ]).then(([soil, crops]) => {
+      if (!support.canReplay) return;
+      // Replay only from the run's frozen inputs. The support check above
+      // rejects records that would need today's live catalog/context.
+      const modelInputs = rec.config.modelInputs;
+      if (!modelInputs) return;
+      const contextPromise = Promise.resolve({ soil: modelInputs.soil, crops: modelInputs.crops });
+      void contextPromise.then(({ soil, crops }) => {
         if (loadId !== loadIdRef.current) return; // superseded by stop/start
         const runCtx: SimRunCtx = { soil, crops };
         ctxRef.current = runCtx;
@@ -610,22 +735,43 @@ export function useSimRun(opts: {
   const applyIntervention = useCallback((iv: Intervention): ApplyInterventionResult => {
     const rec = recordRef.current;
     if (!rec) return { ok: false, error: 'No active run.' };
+    const support = inspectRunModelSupport(rec.config);
+    if (!support.canReplay) {
+      return {
+        ok: false,
+        error: support.model === 'crop-model-v2' || support.model === 'crop-model-v3' || support.model === 'crop-model-v4'
+          ? `This run has no supported ${support.model === 'crop-model-v2' ? 'v2' : support.model === 'crop-model-v3' ? 'v3' : 'v4'} daily reducer. ${support.reasons.join(' ')}`
+          : 'This run’s model inputs are unsupported; its stored summary is preserved.',
+      };
+    }
     if (iv.kind === 'weather') {
       return {
         ok: false,
         error: 'Weather overrides are baked into this run’s environment series and cannot be authored here.',
       };
     }
-    if (iv.kind !== 'irrigate' && iv.kind !== 'fertilize') {
-      return { ok: false, error: 'Only irrigate and fertilize interventions can be authored here.' };
+    if (iv.kind !== 'irrigate' && iv.kind !== 'fertilize' && iv.kind !== 'refill-water') {
+      return { ok: false, error: 'Only watering, fertilizing, and store-refill interventions can be authored here.' };
     }
-    const amount = iv.kind === 'irrigate' ? iv.mm : iv.nKgHa;
+    if (iv.kind === 'refill-water' && (rec.config.assetPhysics?.room.waterStoreL ?? 0) <= 0) {
+      return { ok: false, error: 'This run has no placed water store to refill.' };
+    }
+    const target = 'target' in iv ? iv.target : undefined;
+    if (target?.kind === 'growing-level') {
+      const targetExists = rec.config.environment?.layout?.growingSpaces.some((space) =>
+        space.id === target.growingSpaceId && space.levels.some((level) => level.id === target.levelId),
+      );
+      if (!targetExists) return { ok: false, error: 'Choose a growing level that exists in this run.' };
+    }
+    const amount = iv.kind === 'irrigate' ? iv.mm : iv.kind === 'fertilize' ? iv.nKgHa : iv.litres;
     if (!Number.isFinite(amount) || amount <= 0) {
       return {
         ok: false,
         error: iv.kind === 'irrigate'
           ? 'Irrigation needs a positive mm amount.'
-          : 'Fertilizing needs a positive kg/ha N amount.',
+          : iv.kind === 'fertilize'
+            ? 'Fertilizing needs a positive kg/ha N amount.'
+            : 'A water-store refill needs a positive litre amount.',
       };
     }
     const runCtx = ctxRef.current;
@@ -647,6 +793,7 @@ export function useSimRun(opts: {
     // byte-identically (stable sort keeps same-day insertion order fixed).
     const amended: RunRecord = {
       ...rec,
+      ensembleCache: undefined,
       config: {
         ...rec.config,
         interventions: [...rec.config.interventions, iv].sort(
@@ -655,6 +802,7 @@ export function useSimRun(opts: {
       },
     };
     const targetDay = dayIndexRef.current;
+    replayStateCache.invalidateRun(rec.id);
     recordRef.current = amended;
     setRecord(amended);
     setUnsavedChanges(true);
@@ -674,9 +822,13 @@ export function useSimRun(opts: {
    * The ghost keeps its OWN config and envSeries forever — primary
    * interventions never leak into it — and shares only the transport. */
   const loadGhost = useCallback(
-    (g: RunRecord) => {
+    (inputGhost: RunRecord) => {
+      const g = inputGhost.observations === undefined
+        ? inputGhost
+        : { ...inputGhost, observations: canonicalizeObservations(inputGhost.observations) };
       const rec = recordRef.current;
       if (!rec) return; // ghosts exist only against an active primary run
+      if (!inspectRunModelSupport(g.config).canReplay) return;
       if (g.farmId !== rec.farmId) return; // a comparison crosses runs, not farms
       if (g.id === rec.id) return; // a run cannot be its own ghost
       ghostRecordRef.current = g;
@@ -708,6 +860,7 @@ export function useSimRun(opts: {
     dayIndexRef.current = 0;
     pendingSeekRef.current = null;
     setRecord(null);
+    setModelSupport(null);
     setCtx(null);
     setTimeline(null);
     setGhostRecord(null);
@@ -737,6 +890,7 @@ export function useSimRun(opts: {
       tickVersion,
       ctx,
       timeline,
+      modelSupport,
       simStateRef,
       startRun,
       play,
@@ -753,7 +907,7 @@ export function useSimRun(opts: {
       loadGhost,
       clearGhost,
     }),
-    [record, dayIndex, playing, speed, ended, tickVersion, ctx, timeline, startRun, play, pause, setSpeed, seekDay, stopRun, applyIntervention, unsavedChanges, ghostRecord, ghostVersion, loadGhost, clearGhost],
+    [record, dayIndex, playing, speed, ended, tickVersion, ctx, timeline, modelSupport, startRun, play, pause, setSpeed, seekDay, stopRun, applyIntervention, unsavedChanges, ghostRecord, ghostVersion, loadGhost, clearGhost],
   );
 }
 
@@ -766,22 +920,35 @@ function buildTimeline(rec: RunRecord, ctx: SimRunCtx): SimRunTimeline {
   for (const iv of rec.config.interventions) {
     const iso = ivDateOf(iv);
     const day = isoDayNumber(iso) - start;
+    const target = 'target' in iv ? iv.target ?? { kind: 'floor' as const } : { kind: 'floor' as const };
     interventions.push({
       day: Math.min(days, Math.max(0, day)),
       kind: iv.kind,
       date: iso,
+      ...('target' in iv && iv.target ? { target: iv.target } : {}),
+      targetKey: growingTargetKey(target),
+      targetLabel: targetLabelFor(target, rec.config.environment?.layout),
+      ...('allTargets' in iv && iv.allTargets ? { allTargets: true } : {}),
       ...(iv.kind === 'irrigate' ? { mm: iv.mm } : {}),
       ...(iv.kind === 'fertilize' ? { nKgHa: iv.nKgHa } : {}),
+      ...(iv.kind === 'refill-water' ? { litres: iv.litres } : {}),
     });
   }
   interventions.sort((a, b) => a.day - b.day);
 
-  const events: { day: number; kind: string }[] = [];
+  const events: SimRunTimeline['events'] = [];
   let st = createRun(rec.config, ctx);
   for (let i = 0; i < days; i++) {
-    const res = stepDay(st, rec.envSeries[i]!, rec.config, ctx);
+    const res = stepDay(st, rec.envSeries[i]!, rec.config, ctx, rec.observations ?? []);
     st = res.state;
-    for (const ev of res.events) events.push({ day: ev.dayIndex, kind: ev.kind });
+    for (const ev of res.events) {
+      events.push({
+        day: ev.dayIndex,
+        kind: ev.kind,
+        message: ev.message,
+        ...(ev.kind === 'assimilated' ? { metric: ev.data.metric, innovation: ev.data.innovation } : {}),
+      });
+    }
   }
   // dayIndex here is always overridden by the live controller value at the
   // call site ({...timeline, dayIndex}); 0 keeps the initial shape honest.
