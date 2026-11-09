@@ -1,0 +1,1399 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+  "title": "integrates the Yuma direct-sown lettuce root profile with dry-down-limited production",
+  "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-05",
+  "preparedDate": "2026-10-28",
+  "status": "preregistered draft; independent review and exact-head PR CI pending; candidate execution prohibited",
+  "baselineCodeHead": "18d54f4548ee5e12837479d3aba583b66b7388d8",
+  "canonicalization": "SHA-256 of UTF-8 JSON for syntheticSetup using Python json.dumps(ensure_ascii=False, sort_keys=True, separators=(\",\", \":\")).",
+  "setupDigest": "e19501fa67e5cb8346da44475799fdaf7308d7a364eaadc9c2c8fd03f289c68c",
+  "source": {
+    "evidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024",
+    "sourceId": "FRENCH-2024-IRRIGSCI-42-1245",
+    "citation": "French, A.N., Sanchez, C.A., Hunsaker, D.J. et al. (2024), Lettuce evapotranspiration and crop coefficients using eddy covariance and remote sensing observations, Irrigation Science 42, 1245–1272.",
+    "artifact": {
+      "url": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+      "sha256": "fb1782843cf2612f0ebaebfc25555b425f3289b3246689a1e1e4738921af8f5a",
+      "bytes": 3072155,
+      "retrievedDate": "2026-10-28",
+      "license": "CC BY 4.0",
+      "localPath": null,
+      "dataAvailability": "Publisher states study data are available on request; data are not included."
+    },
+    "useLimit": "French et al. is used only for direct-sown Yuma rootDevelopment method/parameters listed below. No Yuma weather, soil, ET, water-balance trajectory, effective-depth cap, or cultivar-specific production value is reproduced."
+  },
+  "modelDispatch": {
+    "cropModelVersion": "crop-model-v2",
+    "runInputsVersion": "run-inputs-v2",
+    "parameterSetVersion": "crop-parameters-v3",
+    "climate": "standard open-field reducer",
+    "ordinaryNewRunDefault": "v1 unchanged"
+  },
+  "syntheticSetup": {
+    "runConfig": {
+      "farmId": 1,
+      "cropModelVersion": "crop-model-v2",
+      "basePlan": {
+        "farmId": 1,
+        "widthM": 0.25,
+        "heightM": 0.25,
+        "cellM": 0.25,
+        "allowOutsideBeds": false,
+        "ground": {},
+        "planting": {
+          "0,0": 2
+        },
+        "plantedAt": {
+          "0,0": "2026-10-01"
+        },
+        "updatedAt": "2026-10-01"
+      },
+      "startDate": "2026-10-01",
+      "dayCount": 21,
+      "seed": 1,
+      "scenario": "baseline",
+      "tempDeltaC": 0,
+      "precipMultiplier": 1,
+      "interventions": [],
+      "cropStartEvents": {
+        "0,0": "direct-sowing"
+      },
+      "autoHarvest": false
+    },
+    "cropSnapshot": {
+      "catalogCropId": 2,
+      "slug": "lettuce",
+      "name": "Lettuce",
+      "scientificName": "Lactuca sativa",
+      "catalogCategory": "vegetable",
+      "cultivar": "not asserted",
+      "completeCatalogObjectPin": {
+        "sourcePath": "src/data/crops.ts#cropLibrary[id=2]",
+        "baselineCodeHead": "18d54f4548ee5e12837479d3aba583b66b7388d8",
+        "pinMeaning": "The complete catalog crop object is frozen literally above and is tied to the source entry at the immutable baseline code head."
+      },
+      "catalogEntry": {
+        "id": 2,
+        "slug": "lettuce",
+        "name": "Lettuce",
+        "scientificName": "Lactuca sativa",
+        "category": "vegetable",
+        "family": "Asteraceae",
+        "growthDays": 50,
+        "spacingCm": 25,
+        "rowSpacingCm": 30,
+        "sowDepthCm": 0.5,
+        "frostTolerance": "half-hardy",
+        "sowIndoorsWeeksBeforeLastFrost": 4,
+        "transplantWeeksAfterLastFrost": -2,
+        "directSowStartWeeks": -4,
+        "directSowEndWeeks": 16,
+        "harvestWindowDays": 21,
+        "yieldKgPerPlant": 0.4,
+        "waterNeedMmDay": 3.2,
+        "nitrogenNeed": "medium",
+        "sunRequirement": "partial",
+        "minTempC": 4,
+        "maxTempC": 24,
+        "yieldTonHa": 22,
+        "colorHex": "#7DC900",
+        "emoji": "🥬",
+        "companions": [
+          "carrot",
+          "radish",
+          "strawberry",
+          "onion",
+          "chives"
+        ],
+        "antagonists": [],
+        "description": "Cool-season green; succession-sow every 2 weeks, shade in summer."
+      }
+    },
+    "modelInputs": {
+      "model": "run-inputs-v2",
+      "parameterSetVersion": "crop-parameters-v3",
+      "soil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4,
+        "source": "unknown"
+      },
+      "armSpecificOnly": "rootZone.initialStorageFraction: dry=0.25; wet-control=1.0",
+      "defaultNewRunModel": "v1 unchanged",
+      "cropSnapshot": {
+        "id": 2,
+        "slug": "lettuce",
+        "name": "Lettuce",
+        "scientificName": "Lactuca sativa",
+        "category": "vegetable",
+        "family": "Asteraceae",
+        "growthDays": 50,
+        "spacingCm": 25,
+        "rowSpacingCm": 30,
+        "sowDepthCm": 0.5,
+        "frostTolerance": "half-hardy",
+        "sowIndoorsWeeksBeforeLastFrost": 4,
+        "transplantWeeksAfterLastFrost": -2,
+        "directSowStartWeeks": -4,
+        "directSowEndWeeks": 16,
+        "harvestWindowDays": 21,
+        "yieldKgPerPlant": 0.4,
+        "waterNeedMmDay": 3.2,
+        "nitrogenNeed": "medium",
+        "sunRequirement": "partial",
+        "minTempC": 4,
+        "maxTempC": 24,
+        "yieldTonHa": 22,
+        "colorHex": "#7DC900",
+        "emoji": "🥬",
+        "companions": [
+          "carrot",
+          "radish",
+          "strawberry",
+          "onion",
+          "chives"
+        ],
+        "antagonists": [],
+        "description": "Cool-season green; succession-sow every 2 weeks, shade in summer."
+      },
+      "soilClassification": "AWC and organic matter are synthetic software inputs; no measured soil or site profile.",
+      "sharedCropParametersExceptWaterTreatment": {
+        "cropId": 2,
+        "thermal": {
+          "tBaseC": 0,
+          "tUpperC": 35,
+          "gddToMaturityCdays": [
+            1000,
+            1200
+          ],
+          "startEvents": [
+            "direct-sowing"
+          ],
+          "accumulationStart": "Direct-sowing; synthetic thermal scaffold only",
+          "maturityEndpoint": "Synthetic thermal target; no crop maturity claim",
+          "accumulationMethod": "Single sine with horizontal cutoff; synthetic thermal scaffold",
+          "sourceCitation": "Synthetic software fixture; no source thermal profile claimed.",
+          "sourceUrl": "synthetic:a05-yuma-lettuce-thermal-scaffold"
+        },
+        "production": {
+          "equationFamily": "LINTUL-net-RUE",
+          "rueGPerMjInterceptedPar": 2,
+          "initialDryMatterGPerM2": 0,
+          "interceptedParFraction": 0.5,
+          "harvestIndex": 0.5,
+          "status": "qualified",
+          "missing": [],
+          "limitations": [
+            "RUE, initial dry matter, intercepted PAR fraction, harvest index, and production path are synthetic software inputs; no source-backed production claim."
+          ],
+          "evidence": {
+            "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+            "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+            "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+            "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+          }
+        },
+        "rootZone": {
+          "method": "FAO-56",
+          "effectiveRootDepthCm": 30,
+          "depletionFraction": 0.5,
+          "cropCoefficient": 1,
+          "initialStorageFraction": "arm-specific only",
+          "rootDevelopment": {
+            "methodVersion": "thermal-linear-root-depth-v1",
+            "storageExpansionMethod": "uniform-initial-awc-fraction-v1",
+            "startEvent": "direct-sowing",
+            "initialRootDepthCm": 12,
+            "growthStartsAfterCdays": 200,
+            "growthMmPerCday": 1.2,
+            "thermalBaseC": 4.5,
+            "thermalUpperC": 28,
+            "thermalAccumulationMethod": "Single sine with horizontal cutoff",
+            "evidence": {
+              "evidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024",
+              "sourceCitation": "French, A.N., Sanchez, C.A., Hunsaker, D.J. et al. (2024), Lettuce evapotranspiration and crop coefficients using eddy covariance and remote sensing observations, Irrigation Science 42, 1245–1272.",
+              "sourceUrl": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+              "validDomain": "Direct-seeded Yuma field iceberg/romaine root-profile method; source measurements and water-balance context are not reproduced by this software fixture."
+            }
+          },
+          "limitations": [
+            "AWC, 30 cm effective-depth cap, p=0.5, Kc=1, and initial storage are synthetic software inputs; the 30 cm cap and p value are not from the French study.",
+            "The source-derived Yuma root-development values are used only as frozen software parameters; this fixture does not reproduce Yuma field conditions or validate a crop trajectory.",
+            "Root-expansion water is initialized at the frozen initial available-water fraction under the single-bucket boundary assumption."
+          ],
+          "status": "qualified",
+          "missing": [],
+          "evidence": {
+            "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+            "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+            "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+            "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+          }
+        },
+        "lifecycle": "plant"
+      },
+      "freezeRunModelInputsV2SourceSoil": {
+        "awcMmPerCm": 1.5,
+        "organicMatterPct": 2.4
+      }
+    },
+    "arms": [
+      {
+        "arm": "dry",
+        "waterTreatment": "Synthetic low initial available-water fraction",
+        "onlyChangedFrozenInput": "cropParameters[0].rootZone.initialStorageFraction",
+        "initialStorageFraction": 0.25,
+        "initialAvailableWaterMm": 4.5,
+        "frozenModelInputs": {
+          "model": "run-inputs-v2",
+          "parameterSetVersion": "crop-parameters-v3",
+          "soil": {
+            "awcMmPerCm": 1.5,
+            "organicMatterPct": 2.4,
+            "source": "unknown"
+          },
+          "crops": [
+            {
+              "id": 2,
+              "slug": "lettuce",
+              "name": "Lettuce",
+              "scientificName": "Lactuca sativa",
+              "category": "vegetable",
+              "family": "Asteraceae",
+              "growthDays": 50,
+              "spacingCm": 25,
+              "rowSpacingCm": 30,
+              "sowDepthCm": 0.5,
+              "frostTolerance": "half-hardy",
+              "sowIndoorsWeeksBeforeLastFrost": 4,
+              "transplantWeeksAfterLastFrost": -2,
+              "directSowStartWeeks": -4,
+              "directSowEndWeeks": 16,
+              "harvestWindowDays": 21,
+              "yieldKgPerPlant": 0.4,
+              "waterNeedMmDay": 3.2,
+              "nitrogenNeed": "medium",
+              "sunRequirement": "partial",
+              "minTempC": 4,
+              "maxTempC": 24,
+              "yieldTonHa": 22,
+              "colorHex": "#7DC900",
+              "emoji": "🥬",
+              "companions": [
+                "carrot",
+                "radish",
+                "strawberry",
+                "onion",
+                "chives"
+              ],
+              "antagonists": [],
+              "description": "Cool-season green; succession-sow every 2 weeks, shade in summer."
+            }
+          ],
+          "cropParameters": [
+            {
+              "cropId": 2,
+              "thermal": {
+                "tBaseC": 0,
+                "tUpperC": 35,
+                "gddToMaturityCdays": [
+                  1000,
+                  1200
+                ],
+                "startEvents": [
+                  "direct-sowing"
+                ],
+                "accumulationStart": "Direct-sowing; synthetic thermal scaffold only",
+                "maturityEndpoint": "Synthetic thermal target; no crop maturity claim",
+                "accumulationMethod": "Single sine with horizontal cutoff; synthetic thermal scaffold",
+                "sourceCitation": "Synthetic software fixture; no source thermal profile claimed.",
+                "sourceUrl": "synthetic:a05-yuma-lettuce-thermal-scaffold"
+              },
+              "production": {
+                "equationFamily": "LINTUL-net-RUE",
+                "rueGPerMjInterceptedPar": 2,
+                "initialDryMatterGPerM2": 0,
+                "interceptedParFraction": 0.5,
+                "harvestIndex": 0.5,
+                "status": "qualified",
+                "missing": [],
+                "limitations": [
+                  "RUE, initial dry matter, intercepted PAR fraction, harvest index, and production path are synthetic software inputs; no source-backed production claim."
+                ],
+                "evidence": {
+                  "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+                  "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+                  "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+                  "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+                }
+              },
+              "rootZone": {
+                "method": "FAO-56",
+                "effectiveRootDepthCm": 30,
+                "depletionFraction": 0.5,
+                "cropCoefficient": 1,
+                "initialStorageFraction": 0.25,
+                "rootDevelopment": {
+                  "methodVersion": "thermal-linear-root-depth-v1",
+                  "storageExpansionMethod": "uniform-initial-awc-fraction-v1",
+                  "startEvent": "direct-sowing",
+                  "initialRootDepthCm": 12,
+                  "growthStartsAfterCdays": 200,
+                  "growthMmPerCday": 1.2,
+                  "thermalBaseC": 4.5,
+                  "thermalUpperC": 28,
+                  "thermalAccumulationMethod": "Single sine with horizontal cutoff",
+                  "evidence": {
+                    "evidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024",
+                    "sourceCitation": "French, A.N., Sanchez, C.A., Hunsaker, D.J. et al. (2024), Lettuce evapotranspiration and crop coefficients using eddy covariance and remote sensing observations, Irrigation Science 42, 1245–1272.",
+                    "sourceUrl": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+                    "validDomain": "Direct-seeded Yuma field iceberg/romaine root-profile method; source measurements and water-balance context are not reproduced by this software fixture."
+                  }
+                },
+                "limitations": [
+                  "AWC, 30 cm effective-depth cap, p=0.5, Kc=1, and initial storage are synthetic software inputs; the 30 cm cap and p value are not from the French study.",
+                  "The source-derived Yuma root-development values are used only as frozen software parameters; this fixture does not reproduce Yuma field conditions or validate a crop trajectory.",
+                  "Root-expansion water is initialized at the frozen initial available-water fraction under the single-bucket boundary assumption."
+                ],
+                "status": "qualified",
+                "missing": [],
+                "evidence": {
+                  "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+                  "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+                  "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+                  "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+                }
+              },
+              "lifecycle": "plant"
+            }
+          ]
+        },
+        "freezeRunModelInputsV2Source": {
+          "soil": {
+            "awcMmPerCm": 1.5,
+            "organicMatterPct": 2.4
+          },
+          "crops": [
+            {
+              "id": 2,
+              "slug": "lettuce",
+              "name": "Lettuce",
+              "scientificName": "Lactuca sativa",
+              "category": "vegetable",
+              "family": "Asteraceae",
+              "growthDays": 50,
+              "spacingCm": 25,
+              "rowSpacingCm": 30,
+              "sowDepthCm": 0.5,
+              "frostTolerance": "half-hardy",
+              "sowIndoorsWeeksBeforeLastFrost": 4,
+              "transplantWeeksAfterLastFrost": -2,
+              "directSowStartWeeks": -4,
+              "directSowEndWeeks": 16,
+              "harvestWindowDays": 21,
+              "yieldKgPerPlant": 0.4,
+              "waterNeedMmDay": 3.2,
+              "nitrogenNeed": "medium",
+              "sunRequirement": "partial",
+              "minTempC": 4,
+              "maxTempC": 24,
+              "yieldTonHa": 22,
+              "colorHex": "#7DC900",
+              "emoji": "🥬",
+              "companions": [
+                "carrot",
+                "radish",
+                "strawberry",
+                "onion",
+                "chives"
+              ],
+              "antagonists": [],
+              "description": "Cool-season green; succession-sow every 2 weeks, shade in summer."
+            }
+          ],
+          "cropParametersV2": [
+            {
+              "cropId": 2,
+              "thermal": {
+                "tBaseC": 0,
+                "tUpperC": 35,
+                "gddToMaturityCdays": [
+                  1000,
+                  1200
+                ],
+                "startEvents": [
+                  "direct-sowing"
+                ],
+                "accumulationStart": "Direct-sowing; synthetic thermal scaffold only",
+                "maturityEndpoint": "Synthetic thermal target; no crop maturity claim",
+                "accumulationMethod": "Single sine with horizontal cutoff; synthetic thermal scaffold",
+                "sourceCitation": "Synthetic software fixture; no source thermal profile claimed.",
+                "sourceUrl": "synthetic:a05-yuma-lettuce-thermal-scaffold"
+              },
+              "production": {
+                "equationFamily": "LINTUL-net-RUE",
+                "rueGPerMjInterceptedPar": 2,
+                "initialDryMatterGPerM2": 0,
+                "interceptedParFraction": 0.5,
+                "harvestIndex": 0.5,
+                "status": "qualified",
+                "missing": [],
+                "limitations": [
+                  "RUE, initial dry matter, intercepted PAR fraction, harvest index, and production path are synthetic software inputs; no source-backed production claim."
+                ],
+                "evidence": {
+                  "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+                  "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+                  "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+                  "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+                }
+              },
+              "rootZone": {
+                "method": "FAO-56",
+                "effectiveRootDepthCm": 30,
+                "depletionFraction": 0.5,
+                "cropCoefficient": 1,
+                "initialStorageFraction": 0.25,
+                "rootDevelopment": {
+                  "methodVersion": "thermal-linear-root-depth-v1",
+                  "storageExpansionMethod": "uniform-initial-awc-fraction-v1",
+                  "startEvent": "direct-sowing",
+                  "initialRootDepthCm": 12,
+                  "growthStartsAfterCdays": 200,
+                  "growthMmPerCday": 1.2,
+                  "thermalBaseC": 4.5,
+                  "thermalUpperC": 28,
+                  "thermalAccumulationMethod": "Single sine with horizontal cutoff",
+                  "evidence": {
+                    "evidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024",
+                    "sourceCitation": "French, A.N., Sanchez, C.A., Hunsaker, D.J. et al. (2024), Lettuce evapotranspiration and crop coefficients using eddy covariance and remote sensing observations, Irrigation Science 42, 1245–1272.",
+                    "sourceUrl": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+                    "validDomain": "Direct-seeded Yuma field iceberg/romaine root-profile method; source measurements and water-balance context are not reproduced by this software fixture."
+                  }
+                },
+                "limitations": [
+                  "AWC, 30 cm effective-depth cap, p=0.5, Kc=1, and initial storage are synthetic software inputs; the 30 cm cap and p value are not from the French study.",
+                  "The source-derived Yuma root-development values are used only as frozen software parameters; this fixture does not reproduce Yuma field conditions or validate a crop trajectory.",
+                  "Root-expansion water is initialized at the frozen initial available-water fraction under the single-bucket boundary assumption."
+                ],
+                "status": "qualified",
+                "missing": [],
+                "evidence": {
+                  "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+                  "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+                  "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+                  "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+                }
+              },
+              "lifecycle": "plant"
+            }
+          ]
+        }
+      },
+      {
+        "arm": "wet-control",
+        "waterTreatment": "Synthetic full initial available-water fraction",
+        "onlyChangedFrozenInput": "cropParameters[0].rootZone.initialStorageFraction",
+        "initialStorageFraction": 1,
+        "initialAvailableWaterMm": 18.0,
+        "frozenModelInputs": {
+          "model": "run-inputs-v2",
+          "parameterSetVersion": "crop-parameters-v3",
+          "soil": {
+            "awcMmPerCm": 1.5,
+            "organicMatterPct": 2.4,
+            "source": "unknown"
+          },
+          "crops": [
+            {
+              "id": 2,
+              "slug": "lettuce",
+              "name": "Lettuce",
+              "scientificName": "Lactuca sativa",
+              "category": "vegetable",
+              "family": "Asteraceae",
+              "growthDays": 50,
+              "spacingCm": 25,
+              "rowSpacingCm": 30,
+              "sowDepthCm": 0.5,
+              "frostTolerance": "half-hardy",
+              "sowIndoorsWeeksBeforeLastFrost": 4,
+              "transplantWeeksAfterLastFrost": -2,
+              "directSowStartWeeks": -4,
+              "directSowEndWeeks": 16,
+              "harvestWindowDays": 21,
+              "yieldKgPerPlant": 0.4,
+              "waterNeedMmDay": 3.2,
+              "nitrogenNeed": "medium",
+              "sunRequirement": "partial",
+              "minTempC": 4,
+              "maxTempC": 24,
+              "yieldTonHa": 22,
+              "colorHex": "#7DC900",
+              "emoji": "🥬",
+              "companions": [
+                "carrot",
+                "radish",
+                "strawberry",
+                "onion",
+                "chives"
+              ],
+              "antagonists": [],
+              "description": "Cool-season green; succession-sow every 2 weeks, shade in summer."
+            }
+          ],
+          "cropParameters": [
+            {
+              "cropId": 2,
+              "thermal": {
+                "tBaseC": 0,
+                "tUpperC": 35,
+                "gddToMaturityCdays": [
+                  1000,
+                  1200
+                ],
+                "startEvents": [
+                  "direct-sowing"
+                ],
+                "accumulationStart": "Direct-sowing; synthetic thermal scaffold only",
+                "maturityEndpoint": "Synthetic thermal target; no crop maturity claim",
+                "accumulationMethod": "Single sine with horizontal cutoff; synthetic thermal scaffold",
+                "sourceCitation": "Synthetic software fixture; no source thermal profile claimed.",
+                "sourceUrl": "synthetic:a05-yuma-lettuce-thermal-scaffold"
+              },
+              "production": {
+                "equationFamily": "LINTUL-net-RUE",
+                "rueGPerMjInterceptedPar": 2,
+                "initialDryMatterGPerM2": 0,
+                "interceptedParFraction": 0.5,
+                "harvestIndex": 0.5,
+                "status": "qualified",
+                "missing": [],
+                "limitations": [
+                  "RUE, initial dry matter, intercepted PAR fraction, harvest index, and production path are synthetic software inputs; no source-backed production claim."
+                ],
+                "evidence": {
+                  "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+                  "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+                  "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+                  "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+                }
+              },
+              "rootZone": {
+                "method": "FAO-56",
+                "effectiveRootDepthCm": 30,
+                "depletionFraction": 0.5,
+                "cropCoefficient": 1,
+                "initialStorageFraction": 1,
+                "rootDevelopment": {
+                  "methodVersion": "thermal-linear-root-depth-v1",
+                  "storageExpansionMethod": "uniform-initial-awc-fraction-v1",
+                  "startEvent": "direct-sowing",
+                  "initialRootDepthCm": 12,
+                  "growthStartsAfterCdays": 200,
+                  "growthMmPerCday": 1.2,
+                  "thermalBaseC": 4.5,
+                  "thermalUpperC": 28,
+                  "thermalAccumulationMethod": "Single sine with horizontal cutoff",
+                  "evidence": {
+                    "evidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024",
+                    "sourceCitation": "French, A.N., Sanchez, C.A., Hunsaker, D.J. et al. (2024), Lettuce evapotranspiration and crop coefficients using eddy covariance and remote sensing observations, Irrigation Science 42, 1245–1272.",
+                    "sourceUrl": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+                    "validDomain": "Direct-seeded Yuma field iceberg/romaine root-profile method; source measurements and water-balance context are not reproduced by this software fixture."
+                  }
+                },
+                "limitations": [
+                  "AWC, 30 cm effective-depth cap, p=0.5, Kc=1, and initial storage are synthetic software inputs; the 30 cm cap and p value are not from the French study.",
+                  "The source-derived Yuma root-development values are used only as frozen software parameters; this fixture does not reproduce Yuma field conditions or validate a crop trajectory.",
+                  "Root-expansion water is initialized at the frozen initial available-water fraction under the single-bucket boundary assumption."
+                ],
+                "status": "qualified",
+                "missing": [],
+                "evidence": {
+                  "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+                  "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+                  "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+                  "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+                }
+              },
+              "lifecycle": "plant"
+            }
+          ]
+        },
+        "freezeRunModelInputsV2Source": {
+          "soil": {
+            "awcMmPerCm": 1.5,
+            "organicMatterPct": 2.4
+          },
+          "crops": [
+            {
+              "id": 2,
+              "slug": "lettuce",
+              "name": "Lettuce",
+              "scientificName": "Lactuca sativa",
+              "category": "vegetable",
+              "family": "Asteraceae",
+              "growthDays": 50,
+              "spacingCm": 25,
+              "rowSpacingCm": 30,
+              "sowDepthCm": 0.5,
+              "frostTolerance": "half-hardy",
+              "sowIndoorsWeeksBeforeLastFrost": 4,
+              "transplantWeeksAfterLastFrost": -2,
+              "directSowStartWeeks": -4,
+              "directSowEndWeeks": 16,
+              "harvestWindowDays": 21,
+              "yieldKgPerPlant": 0.4,
+              "waterNeedMmDay": 3.2,
+              "nitrogenNeed": "medium",
+              "sunRequirement": "partial",
+              "minTempC": 4,
+              "maxTempC": 24,
+              "yieldTonHa": 22,
+              "colorHex": "#7DC900",
+              "emoji": "🥬",
+              "companions": [
+                "carrot",
+                "radish",
+                "strawberry",
+                "onion",
+                "chives"
+              ],
+              "antagonists": [],
+              "description": "Cool-season green; succession-sow every 2 weeks, shade in summer."
+            }
+          ],
+          "cropParametersV2": [
+            {
+              "cropId": 2,
+              "thermal": {
+                "tBaseC": 0,
+                "tUpperC": 35,
+                "gddToMaturityCdays": [
+                  1000,
+                  1200
+                ],
+                "startEvents": [
+                  "direct-sowing"
+                ],
+                "accumulationStart": "Direct-sowing; synthetic thermal scaffold only",
+                "maturityEndpoint": "Synthetic thermal target; no crop maturity claim",
+                "accumulationMethod": "Single sine with horizontal cutoff; synthetic thermal scaffold",
+                "sourceCitation": "Synthetic software fixture; no source thermal profile claimed.",
+                "sourceUrl": "synthetic:a05-yuma-lettuce-thermal-scaffold"
+              },
+              "production": {
+                "equationFamily": "LINTUL-net-RUE",
+                "rueGPerMjInterceptedPar": 2,
+                "initialDryMatterGPerM2": 0,
+                "interceptedParFraction": 0.5,
+                "harvestIndex": 0.5,
+                "status": "qualified",
+                "missing": [],
+                "limitations": [
+                  "RUE, initial dry matter, intercepted PAR fraction, harvest index, and production path are synthetic software inputs; no source-backed production claim."
+                ],
+                "evidence": {
+                  "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+                  "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+                  "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+                  "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+                }
+              },
+              "rootZone": {
+                "method": "FAO-56",
+                "effectiveRootDepthCm": 30,
+                "depletionFraction": 0.5,
+                "cropCoefficient": 1,
+                "initialStorageFraction": 1,
+                "rootDevelopment": {
+                  "methodVersion": "thermal-linear-root-depth-v1",
+                  "storageExpansionMethod": "uniform-initial-awc-fraction-v1",
+                  "startEvent": "direct-sowing",
+                  "initialRootDepthCm": 12,
+                  "growthStartsAfterCdays": 200,
+                  "growthMmPerCday": 1.2,
+                  "thermalBaseC": 4.5,
+                  "thermalUpperC": 28,
+                  "thermalAccumulationMethod": "Single sine with horizontal cutoff",
+                  "evidence": {
+                    "evidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024",
+                    "sourceCitation": "French, A.N., Sanchez, C.A., Hunsaker, D.J. et al. (2024), Lettuce evapotranspiration and crop coefficients using eddy covariance and remote sensing observations, Irrigation Science 42, 1245–1272.",
+                    "sourceUrl": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+                    "validDomain": "Direct-seeded Yuma field iceberg/romaine root-profile method; source measurements and water-balance context are not reproduced by this software fixture."
+                  }
+                },
+                "limitations": [
+                  "AWC, 30 cm effective-depth cap, p=0.5, Kc=1, and initial storage are synthetic software inputs; the 30 cm cap and p value are not from the French study.",
+                  "The source-derived Yuma root-development values are used only as frozen software parameters; this fixture does not reproduce Yuma field conditions or validate a crop trajectory.",
+                  "Root-expansion water is initialized at the frozen initial available-water fraction under the single-bucket boundary assumption."
+                ],
+                "status": "qualified",
+                "missing": [],
+                "evidence": {
+                  "evidenceId": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+                  "sourceCitation": "Synthetic software fixture; no external production, soil, thermal, or root-capacity measurement.",
+                  "sourceUrl": "synthetic:a05-yuma-lettuce-root-drydown",
+                  "validDomain": "One-cell synthetic crop-model-v2 software regression only."
+                }
+              },
+              "lifecycle": "plant"
+            }
+          ]
+        }
+      }
+    ],
+    "dailyWeather": [
+      {
+        "date": "2026-10-01",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-02",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-03",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-04",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-05",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-06",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-07",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-08",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-09",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-10",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-11",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-12",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-13",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-14",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-15",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-16",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-17",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-18",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-19",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-20",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      },
+      {
+        "date": "2026-10-21",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "precipMm": 0,
+        "etoMm": 0.5,
+        "dliNaturalMol": 18,
+        "gddBase10C": 5,
+        "provenance": {
+          "tMinC": "default",
+          "tMaxC": "default",
+          "precipMm": "default",
+          "etoMm": "default",
+          "dliNaturalMol": "default"
+        },
+        "classification": "synthetic fixed software forcing; provenance tags are runtime labels, not observed weather"
+      }
+    ],
+    "rootThermalAndDepthTable": [
+      {
+        "date": "2026-10-01",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 10.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-02",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 21.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-03",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 31.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-04",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 42.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-05",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 52.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-06",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 63.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-07",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 73.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-08",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 84.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-09",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 94.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-10",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 105.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-11",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 115.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-12",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 126.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-13",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 136.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-14",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 147.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-15",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 157.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-16",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 168.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-17",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 178.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-18",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 189.0,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-19",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 199.5,
+        "expectedRootDepthCm": 12,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-20",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 210.0,
+        "expectedRootDepthCm": 13.2,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      },
+      {
+        "date": "2026-10-21",
+        "tMinC": 14,
+        "tMaxC": 16,
+        "sourceRootThermalCdays": 10.5,
+        "cumulativeSourceRootThermalCdays": 220.5,
+        "expectedRootDepthCm": 14.46,
+        "handDerivation": "Both extrema lie between 4.5 C and 28 C; mean temperature is 15 C, so one tick is 15 - 4.5 = 10.5 C-days. Root depth is max(12, 12 + max(0, cumulative - 200) * 1.2 / 10), capped at the synthetic 30 cm."
+      }
+    ],
+    "derivedRootCapacity": {
+      "awcMmPerCm": 1.5,
+      "tawMmDays1To19": 18,
+      "tawMmDay20": 19.8,
+      "tawMmDay21": 21.69,
+      "rootGrowthStorageMm": {
+        "dry": {
+          "day20": 0.45,
+          "day21": 0.4725
+        },
+        "wetControl": {
+          "day20": 1.8,
+          "day21": 1.89
+        }
+      },
+      "derivation": "TAW = AWC * root depth. Root-growth inflow = AWC * daily root-depth increase * arm initialStorageFraction."
+    },
+    "onlyArmDifference": "The rootZone.initialStorageFraction field (0.25 versus 1.0); all RunConfig fields, catalog crop, crop parameters, soil, weather, and management fields are otherwise identical.",
+    "climateRoute": "standard open-field crop-model-v2; no environment-v2 inputs",
+    "sourceArtifact": {
+      "url": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+      "sha256": "fb1782843cf2612f0ebaebfc25555b425f3289b3246689a1e1e4738921af8f5a",
+      "bytes": 3072155,
+      "retrievedDate": "2026-10-28",
+      "license": "CC BY 4.0",
+      "localPath": null,
+      "dataAvailability": "Publisher states study data are available on request; data are not included.",
+      "evidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024"
+    }
+  },
+  "sourceRootDevelopment": {
+    "methodVersion": "thermal-linear-root-depth-v1",
+    "storageExpansionMethod": "uniform-initial-awc-fraction-v1",
+    "startEvent": "direct-sowing",
+    "initialRootDepthCm": 12,
+    "growthStartsAfterCdays": 200,
+    "growthMmPerCday": 1.2,
+    "thermalBaseC": 4.5,
+    "thermalUpperC": 28,
+    "thermalAccumulationMethod": "Single sine with horizontal cutoff",
+    "sourceEvidenceId": "LETTUCE-YUMA-ROOT-PROFILE-2024"
+  },
+  "syntheticOnlyParameters": {
+    "soil": "AWC 1.5 mm/cm, organic matter 2.4%, provenance unknown; synthetic only.",
+    "rootZone": "30 cm effective-depth cap, p=0.5, Kc=1, and initial storage treatment fractions 0.25/1.0; synthetic only. The source-inferred 90 cm cap and source p=0.40 are not used.",
+    "thermal": "Synthetic base 0 C, upper 35 C, maturity target [1000, 1200] C-days, direct-sowing event, and endpoint scaffold.",
+    "production": "Synthetic LINTUL-net-RUE: RUE 2 g DM/MJ intercepted PAR, intercepted fraction 0.5, harvest index 0.5, initial above-ground DM 0 g/m2.",
+    "weather": "All 21 daily rows are synthetic fixed forcing and are not observed Yuma or greenhouse data."
+  },
+  "expected": {
+    "rootClock": "All 21 daily source-root thermal values equal 10.5 C-days; cumulative values and root depths are frozen in syntheticSetup.rootThermalAndDepthTable.",
+    "rootGrowthAndCapacity": "Depth remains 12 cm through day 19, is 13.2 cm on day 20, and 14.46 cm on day 21. TAW is 18 mm through day 19, 19.8 mm day 20, and 21.69 mm day 21. Root-growth storage inflows are frozen per arm in syntheticSetup.derivedRootCapacity.",
+    "waterBounds": "For each arm/day, 0 <= root water <= AWC * current root depth; actual uptake <= potential transpiration and available water; root-growth storage inflow is nonnegative.",
+    "waterStress": "Dry arm starts below readily available water and has water-stress coefficient <1 on day 1; the wet-control remains at coefficient 1 on all 21 days. This follows from the synthetic inputs and FAO-56 recurrence, not from source observations.",
+    "waterBalance": "For every cell-day, beginning storage + precipitation + irrigation + capillary rise + root-growth storage - runoff - deep drainage - actual transpiration - ending storage = residual; absolute residual is bounded by the registered tolerance.",
+    "production": "Both arms remain alive and unharvested; wet-control production is positive and dry-arm final above-ground dry matter is strictly lower than wet-control because only initial water treatment changes and dry-arm water stress is active.",
+    "deterministicReplay": "Two simulations per arm with identical frozen RunConfig/model inputs/weather must have exact equality for events, finalState and summary."
+  },
+  "toleranceReview": {
+    "status": "pending independent review; candidate execution prohibited",
+    "numericTolerances": {
+      "dailyAndCumulativeSourceRootThermalCdays": {
+        "maximumAbsoluteDeviation": 1e-12,
+        "units": "C-days",
+        "rationale": "Numerical-only tolerance for at most 21 deterministic additions of a hand-derived 10.5 C-day term; exact registered inputs and date sequence are structural checks."
+      },
+      "rootDepthCm": {
+        "maximumAbsoluteDeviation": 1e-12,
+        "units": "cm",
+        "rationale": "Numerical-only tolerance for the registered affine root-depth equation and mm-to-cm conversion over 21 ticks; source transcription precision is not the test tolerance."
+      },
+      "rootGrowthStorageMm": {
+        "maximumAbsoluteDeviation": 1e-12,
+        "units": "mm/cell-day",
+        "rationale": "Numerical-only tolerance for multiplying the frozen AWC, exact derived root-depth increment, and frozen storage fraction."
+      },
+      "dailyWaterBalanceResidualMm": {
+        "maximumAbsoluteDeviation": 1e-09,
+        "units": "mm/cell-day",
+        "rationale": "Numerical-only allowance for double-precision cancellation across the registered water-balance additions/subtractions (each term remains below 22 mm); no agronomic or measurement error is included."
+      }
+    },
+    "structuralChecks": "Input identities, arm difference, dates, expected stress-state categories, nonnegative/bounded storage, alive/unharvested state, production direction, and same-input replay are exact or inequality checks; no tolerance is applied."
+  },
+  "acceptanceChecks": [
+    "Assert crop-model-v2/run-inputs-v2/crop-parameters-v3 and that ordinary new runs remain v1.",
+    "Assert the complete one-cell frozen crop identity, RunConfig, soil, thermal/production/root parameter records, weather rows, and management inputs from the canonical setup.",
+    "Assert the dry and wet-control frozen model inputs are identical except rootZone.initialStorageFraction (0.25 versus 1.0).",
+    "Assert the hand-derived daily source-root thermal sequence, cumulative clock, expected root depth, root-growth storage, and TAW values.",
+    "Assert water storage bounds, uptake cap, daily balance residual, dry-arm day-1 water stress, and no wet-control water stress.",
+    "Assert both arms remain alive/unharvested, wet-control production is positive, and dry-arm final DM is strictly less than wet-control.",
+    "Repeat each same-input arm and compare events, finalState and summary exactly."
+  ],
+  "testTitle": "integrates the Yuma direct-sown lettuce root profile with dry-down-limited production",
+  "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates the Yuma direct-sown lettuce root profile with dry-down-limited production\"",
+  "candidateResult": "quality/beta/evidence/fao56-v2-yuma-lettuce-root-drydown-production-synthetic-result.json",
+  "owner": "A05 crop-model candidate worker; S2 independent input/arithmetic reviewer; S3 independent reducer reviewer; lead integration",
+  "workerEstimate": "1–2 engineer-hours for the preregistered focused candidate using the existing v2 reducer and Yuma root reference; preregistration/source artifact update is estimated at 1–2 hours. Independent reviews and exact-head PR CI are excluded.",
+  "claimBoundary": "Synthetic software behavior only for one direct-sown lettuce catalog identity and a Yuma-derived rootDevelopment parameter set. Not measured or predictive crop production, soil accuracy, root-depth validation, source-output/reference agreement, cultivar validation, or complete A-05/02A acceptance. A-05 and overall 02A remain UNVERIFIED.",
+  "candidateExecution": false,
+  "candidateComparison": false,
+  "measuredOutputComparison": false,
+  "referenceModelAgreement": false
+}

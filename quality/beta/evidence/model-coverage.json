@@ -21,6 +21,8 @@
     "selectedSoilWaterMethod": "FAO-56 root-zone balance within explicitly supported soil domain",
     "noFrameworkCodeCopied": true,
     "rootZoneReferenceCoverage": "quality/beta/evidence/fao56-root-reference-coverage.json",
+    "a05YumaLettuceRootDrydownPreregisteredFixture": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+    "a05YumaLettuceRootDrydownPreregistration": "quality/beta/evidence/fao56-v2-yuma-lettuce-root-drydown-production-synthetic.json",
     "cropProductionReferenceCoverage": "quality/beta/evidence/water-sa-2018-vegetable-parameter-references.json",
     "dynamicCanopyEngineFixture": "quality/beta/evidence/water-sa-2018-dynamic-canopy-engine-fixture.json",
     "environmentV2TranspirationFixture": "quality/beta/evidence/fao56-environment-v2-transpiration-coupling.json",
@@ -189,15 +191,17 @@
     {
       "id": "FRENCH-2024-IRRIGSCI-42-1245",
       "citation": "French, A.N., Sanchez, C.A., Hunsaker, D.J. et al. (2024), Lettuce evapotranspiration and crop coefficients using eddy covariance and remote sensing observations, Irrigation Science 42, 1245–1272.",
-      "url": "https://doi.org/10.1007/s00271-024-00921-x",
-      "retrievedDate": "2026-10-27",
+      "url": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+      "doi": "https://doi.org/10.1007/s00271-024-00921-x",
+      "retrievedDate": "2026-10-28",
       "artifact": {
-        "type": "open-access version-of-record HTML",
-        "sha256": null,
+        "type": "official publisher PDF",
+        "sha256": "fb1782843cf2612f0ebaebfc25555b425f3289b3246689a1e1e4738921af8f5a",
+        "bytes": 3072155,
         "localPath": null,
-        "status": "full text and version metadata accessed on the publisher page; direct binary retrieval was blocked in this environment, so no artifact digest was captured"
+        "status": "retrieved and hashed 2026-10-28; publisher data are available on request and are not included"
       },
-      "licenseOrReuse": "Creative Commons Attribution 4.0 International, as stated on the publisher page; only derived parameter values are recorded.",
+      "licenseOrReuse": "Creative Commons Attribution 4.0 International (CC BY 4.0); only attributed derived parameter values are recorded. Publisher data are available on request and are not included.",
       "sourceVersion": "Version of record published 2024-04-01; DOI 10.1007/s00271-024-00921-x"
     },
     {
@@ -528,11 +532,13 @@
         "The direct-seeded initial depth and GDD lag do not establish a transplant root profile.",
         "The study reports its data are available from the corresponding author on reasonable request; daily source files are not included here."
       ],
-      "sourceUrl": "https://doi.org/10.1007/s00271-024-00921-x",
+      "sourceUrl": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
       "sourceVersion": "Version of record published 2024-04-01",
-      "sourceRetrievedDate": "2026-10-27",
-      "sourceArtifactSha256": null,
-      "sourceLicenseOrReuse": "CC BY 4.0 according to publisher; only derived parameter values are recorded."
+      "sourceRetrievedDate": "2026-10-28",
+      "sourceArtifactUrl": "https://link.springer.com/content/pdf/10.1007/s00271-024-00921-x.pdf",
+      "sourceArtifactSha256": "fb1782843cf2612f0ebaebfc25555b425f3289b3246689a1e1e4738921af8f5a",
+      "sourceArtifactBytes": 3072155,
+      "sourceLicenseOrReuse": "Creative Commons Attribution 4.0 International (CC BY 4.0); publisher data are available on request and are not included."
     },
     {
       "id": "THERMAL-CABBAGE-STORAGE-MATURITY",
@@ -2845,6 +2851,38 @@
       "status": "PASS for bounded synthetic event-label fail-closed software behavior; exact-head candidate PR CI PASS (run 40804981716). No biological, accuracy, cultivar, maturity, source-agreement, holdout or prediction claim; A-04 and overall 02A remain UNVERIFIED.",
       "candidateCodeSha": "ff57192a93038384ce693d2320a1ad496879a96a",
       "candidateExactHeadCiRun": 40804981716
+    },
+    {
+      "id": "FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01",
+      "classification": "preregistered synthetic crop-model-v2 Yuma root-profile and water-limited production software fixture; not a crop benchmark",
+      "acceptanceContract": "quality/beta/SPEC-02A-CROP-MODEL-EVIDENCE.md, row A-05",
+      "preregistration": "quality/beta/evidence/fao56-v2-yuma-lettuce-root-drydown-production-synthetic.json",
+      "resultRecord": "quality/beta/evidence/fao56-v2-yuma-lettuce-root-drydown-production-synthetic-result.json",
+      "setupDigest": "e19501fa67e5cb8346da44475799fdaf7308d7a364eaadc9c2c8fd03f289c68c",
+      "baselineCodeHead": "18d54f4548ee5e12837479d3aba583b66b7388d8",
+      "inputFixtureReferences": [
+        "src/lib/sim/model-inputs.test.ts#config and #lettuceSourceParameterFixture",
+        "src/data/cropModelV2LettuceReferences.ts#lettuceYumaRootProfileReference",
+        "quality/beta/evidence/model-coverage.json#LETTUCE-YUMA-ROOT-PROFILE-2024",
+        "src/data/crops.ts#cropLibrary[id=2], pinned by baselineCodeHead"
+      ],
+      "modelVersion": "crop-model-v2/run-inputs-v2/crop-parameters-v3",
+      "syntheticInputs": "One direct-sown lettuce cell, 2026-10-01 through 2026-10-21, standard open-field route; complete lettuce catalog object is frozen in the preregistration. The dry and wet-control runs differ only in rootZone.initialStorageFraction (0.25 versus 1.0). Soil, capacity/depletion/Kc, thermal scaffold, production parameters, weather, and management are synthetic. French et al. is used only for the direct-sown Yuma rootDevelopment method and its 12 cm/200 C-day/1.2 mm per C-day/4.5 C/28 C fields; the inferred 90 cm cap and source p=0.40 are not used.",
+      "expected": "21 hand-derived root-clock ticks of 10.5 C-days; root depth remains 12 cm through day 19, then 13.2 cm and 14.46 cm on days 20 and 21. TAW is 18 mm through day 19, then 19.8 and 21.69 mm. Dry arm has water stress from day 1; wet-control remains unstressed. Both remain alive and unharvested; dry-arm final DM is below wet-control; storage is bounded and each daily water balance closes; same-input replay is exact.",
+      "tolerance": "Absolute arithmetic bounds: source root clock/cumulative clock <=1e-12 C-day; root depth <=1e-12 cm; root-growth storage <=1e-12 mm; per-cell-day water-balance residual <=1e-9 mm. Bounds cover deterministic double-precision arithmetic only. Inputs/state classifications, stress categories, storage bounds, production direction and replay are structural/inequality checks.",
+      "reproduction": "npx vitest run src/lib/sim/model-inputs.test.ts -t \"integrates the Yuma direct-sown lettuce root profile with dry-down-limited production\"",
+      "acceptance": {
+        "row": "A-05",
+        "status": "preregistered; independent review and exact-head PR CI pending; candidate execution prohibited; A-05 and overall 02A remain UNVERIFIED",
+        "owner": "A05 crop-model candidate worker; S2 independent input/arithmetic reviewer; S3 independent reducer reviewer; lead integration",
+        "claimBoundary": "Synthetic software behavior only; no measured/predictive crop production, soil accuracy, root-depth validation, source-output/reference agreement, cultivar validation, or complete A-05/02A acceptance."
+      },
+      "candidateExecution": false,
+      "candidateComparison": false,
+      "measuredOutputComparison": false,
+      "independentReferenceModelComparison": false,
+      "measuredHoldoutValidation": false,
+      "status": "Candidate not executed; frozen registration awaits independent review and exact-head PR CI. A-05 and 02A remain UNVERIFIED."
     }
   ],
   "coverageSummary": {

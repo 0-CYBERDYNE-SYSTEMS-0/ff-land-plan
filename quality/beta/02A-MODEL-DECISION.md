@@ -253,6 +253,19 @@ Candidate code/evidence SHA `f7b7c37974c7ca655352cc2c18223b5da5d0ee4b` passed ex
 Evidence fixture: quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01.json
 Candidate result: quality/beta/evidence/fao56-v2-same-day-drainage-et-synthetic-rerun-01-result.json
 
+## A-05 synthetic v2 Yuma lettuce root-profile dry-down preregistration — 2026-10-28
+
+`FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01` freezes a one-cell, direct-sown lettuce crop-model-v2/run-inputs-v2/crop-parameters-v3 fixture for 21 synthetic days. The complete lettuce catalog object is pinned in the fixture and to baseline code tree `18d54f4548ee5e12837479d3aba583b66b7388d8`; ordinary new-run dispatch remains v1. The two runs differ only in the frozen `rootZone.initialStorageFraction` (dry 0.25; wet control 1.0). Soil, capacity, depletion fraction, Kc, thermal scaffold, production parameters, weather and management are otherwise identical and synthetic.
+
+French et al. (2024) is used only for direct-sown Yuma `rootDevelopment`: 12 cm initial depth, 200 C-day lag, 1.2 mm/C-day growth, 4.5 C base, 28 C upper, and single-sine horizontal cutoff. Its official publisher PDF is recorded in the manifest (SHA-256 `fb1782843cf2612f0ebaebfc25555b425f3289b3246689a1e1e4738921af8f5a`, 3,072,155 bytes, retrieved 2026-10-28, CC BY 4.0); publisher data are available on request and are not included. The source-inferred 90 cm cap and p=0.40 are not used. The synthetic 30 cm cap, p=0.5, AWC, Kc, production parameters and fixed weather are not source values.
+
+The frozen daily root forcing is 14/16 C, yielding 10.5 source C-days each tick independently of `gddBase10C`; cumulative root clock is 199.5 C-days through day 19, 210 on day 20, and 220.5 on day 21. The hand-derived depth oracle is 12 cm through day 19, then 13.2 and 14.46 cm; corresponding TAW is 18, 19.8 and 21.69 mm. Preregistered checks require bounded storage/uptake, nonnegative root-growth inflow, per-cell-day residual ≤1e-9 mm, dry-arm water stress from day 1, no wet-control water stress, alive/unharvested states, lower final synthetic DM in the dry arm, and exact same-input events/finalState/summary replay. Arithmetic bounds are ≤1e-12 C-day, ≤1e-12 cm, and ≤1e-12 mm for root clock/depth/expansion; they cover double-precision arithmetic only. The residual bound covers water-balance cancellation across terms below 22 mm, not physical error.
+
+The canonical `syntheticSetup` SHA-256 is `e19501fa67e5cb8346da44475799fdaf7308d7a364eaadc9c2c8fd03f289c68c`. Independent preregistration review and exact-head PR CI are pending, and candidate execution is prohibited until both pass. No candidate output was run or used to choose values. This is a preregistered synthetic software invariant only: no measured or predictive crop production, soil accuracy, root-depth validation, source-output/reference agreement, cultivar validation, or complete A-05 acceptance is claimed. A-05 and overall 02A remain UNVERIFIED.
+
+Evidence fixture: quality/beta/evidence/fao56-v2-yuma-lettuce-root-drydown-production-synthetic.json
+Candidate result (not yet created): quality/beta/evidence/fao56-v2-yuma-lettuce-root-drydown-production-synthetic-result.json
+
 ## A-07 synthetic v3 mixed-target automatic-harvest candidate — 2026-10-27
 
 `V3-AUTO-HARVEST-MIXED-TARGET-SYNTHETIC-01` freezes six elevated tomato cells plus a floor cell at the same local coordinate `0,0`. The floor key is `0,0`; the elevated keys are `level/space-a/high|0,0` through `level/space-a/high|5,0`. All seven use the same frozen crop-model-v3/run-inputs-v3/crop-parameters-v4 inputs and synthetic transplant establishment state. The synthetic soil source tag is unknown. OSU EM 9305 thermal values only define the source-thermal reducer endpoint; cultivar equivalence and biological maturity timing are not claimed.
