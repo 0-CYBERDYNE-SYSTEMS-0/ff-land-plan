@@ -103,6 +103,36 @@ function makePondCenter(seed: number): THREE.Object3D {
       }
     }
 
+  // surface overlay on the top layer only: a shore band, ripple rings thrown
+  // out by one stone plop (broken by a fixed gap pattern), depth-dark patches
+  const LIGHT = mixColor(PALETTE.waterLight, PALETTE.white, 0.35);
+  const PLOP = [3.5, 5.5];
+  const RINGS = [1.58, 2.55, 3.54];
+  const PATCHES: Array<[number, number]> = [[1, 2], [6, 1], [7, 6], [2, 8]];
+  for (const v of vx) {
+    if (v.y !== 3) continue;
+    const d = Math.hypot(v.x - PLOP[0], v.z - PLOP[1]);
+    if (d < 0.75 || RINGS.some((r) => Math.abs(d - r) < 0.5 && (v.x + v.z) % 5 !== 0)) v.color = LIGHT;
+    else if (PATCHES.some(([px, pz]) => Math.abs(v.x - px) + Math.abs(v.z - pz) <= 1))
+      v.color = mixColor(v.color, DEEP_WATER, 0.5);
+    else if (v.x === 0 || v.x === 9 || v.z === 0 || v.z === 9) v.color = mixColor(v.color, SHALLOW_WATER, 0.5);
+  }
+
+  // proud glints catching the light, a few reeds and a notched lily pad in one corner
+  for (let i = 0; i < 6; i++)
+    vx.push({ x: 1 + Math.floor(rand() * 8), y: 3.3, z: 1 + Math.floor(rand() * 8), s: 0.5, color: LIGHT });
+  for (const [rx, rz, h] of [[8, 1, 4], [8, 2, 3], [7, 1, 3]] as Array<[number, number, number]>) {
+    for (let k = 0; k < h; k++)
+      vx.push({ x: rx, y: 3.65 + k * 0.3, z: rz, s: 0.28, color: k === h - 1 ? PALETTE.leafDark : PALETTE.stem });
+    const top = 3.65 + (h - 1) * 0.3 + 0.14;
+    vx.push({ x: rx, y: top + 0.17, z: rz, s: 0.32, color: mixColor(PALETTE.mulch, PALETTE.wood, 0.45) });
+  }
+  for (const [dx, dz] of [[-0.5, 0], [0.5, 0], [0, -0.5], [0, 0.5], [-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3]] as Array<[number, number]>)
+    vx.push({
+      x: 7.4 + dx, y: 3.6, z: 3.2 + dz, s: 0.3,
+      color: weighted([[PALETTE.leaf, 0.6], [PALETTE.leafDark, 0.4]], rand()),
+    });
+
   const water = solidMesh(vx);
   const plate = makeShimmerPlate(9.72, 9.72, 5, 5);
   const specks = makeSpecks(rand, 9, 0.8, 9.2);

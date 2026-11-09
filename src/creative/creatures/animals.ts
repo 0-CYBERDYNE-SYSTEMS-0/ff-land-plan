@@ -22,23 +22,41 @@ function legVoxels(xSign: number, tall: number): Voxel[] {
   const v: Voxel[] = [];
   const orange = PALETTE.chickenOrange;
   const dark = mixColor(PALETTE.chickenOrange, PALETTE.black, 0.35);
-  // shin + foot + toe
-  put(v, xSign * 0.8, 0.7 + tall * 0.5, 0, orange, 0.55);
-  if (tall > 1) put(v, xSign * 0.8, 1.5 + tall * 0.25, 0.05, orange, 0.6);
-  put(v, xSign * 0.8, 0.32, 0.12, orange, 0.62);
-  put(v, xSign * 0.8, 0.24, 0.68, dark, 0.42); // toe claw nub
+  // slim orange shank rising into the belly, three-toe foot splayed forward
+  for (let y = 0.9; y <= 1.9 + tall * 0.35; y += 0.5) put(v, xSign * 0.9, y, 0, orange, 0.5);
+  put(v, xSign * 0.9, 0.35, 0.2, orange, 0.62); // foot pad
+  put(v, xSign * 0.9, 0.35, 1.2, orange, 0.5); // front toe
+  put(v, xSign * 0.9, 0.35, -0.7, orange, 0.5); // back toe
+  put(v, xSign * 0.9, 0.3, 1.9, dark, 0.4); // toe claw nub
   return v;
 }
 
 function wingVoxels(xSign: number, buffTip: boolean): Voxel[] {
   const v: Voxel[] = [];
-  const base = PALETTE.chickenWhite;
-  for (let z = -2; z <= 1; z++) {
-    const yTop = z === 1 ? 4 : 2;
-    for (let y = yTop; y <= 4; y++) {
-      const tip = buffTip && z === -2;
-      put(v, xSign * 2.45, y, z, tip ? mixColor(base, PALETTE.chickenOrange, 0.35) : base, 1.0);
-    }
+  // wing plate a step darker than the body, feathers graded across its width
+  const plate = mixColor(PALETTE.chickenWhite, PALETTE.gravel, 0.22);
+  const tones = [mixColor(plate, PALETTE.black, 0.12), plate, mixColor(plate, PALETTE.white, 0.25)];
+  // stepped trailing edge: the back feather drops lowest, one tone per feather
+  for (let z = -2; z <= 2; z++) {
+    const back = z === -2;
+    const yBottom = back ? 3 : 2;
+    const yTop = back ? 4 : 5;
+    const tone = back && buffTip ? mixColor(plate, PALETTE.chickenOrange, 0.35) : tones[(z + 2) % 3];
+    for (let y = yBottom; y <= yTop; y++) put(v, xSign * 2.6, y, z, tone, 0.9);
+  }
+  return v;
+}
+
+/** Hen wing plate: three stepped white feathers, the shadowed ones cool grey. */
+function henWingVoxels(xSign: number): Voxel[] {
+  const v: Voxel[] = [];
+  const shadowFeather = mixColor(PALETTE.chickenWhite, PALETTE.stone, 0.25);
+  const tones = [shadowFeather, PALETTE.chickenWhite, PALETTE.white];
+  for (let z = -2; z <= 2; z++) {
+    const back = z === -2;
+    const yBottom = back ? 3 : 2;
+    const yTop = back ? 4 : 5;
+    for (let y = yBottom; y <= yTop; y++) put(v, xSign * 2.6, y, z, tones[(z + 2) % 3], 0.9);
   }
   return v;
 }
@@ -46,54 +64,46 @@ function wingVoxels(xSign: number, buffTip: boolean): Voxel[] {
 export function buildHen(): THREE.Group {
   const root = new THREE.Group();
   root.name = 'hen';
-  const rand = rng(11);
   const white = PALETTE.chickenWhite;
+  // clean 3-value white: white top, a small cream breast highlight, cool grey underside shadow
+  const coolGrey = mixColor(PALETTE.chickenWhite, PALETTE.stone, 0.35);
 
-  // -- body: plump oval, chest forward, back rising into the tail root
+  // -- body: plump oval with rounded corners and a small breast highlight at the front
   const bodyVox: Voxel[] = [];
-  fill(bodyVox, -1, 1, -2, 1, 1, 2, white);
-  for (let y = 2; y <= 3; y++)
+  for (let y = 2; y <= 5; y++)
     for (let x = -2; x <= 2; x++)
       for (let z = -3; z <= 3; z++) {
         if (Math.abs(x) === 2 && Math.abs(z) === 3) continue;
-        put(bodyVox, x, y, z, rand() > 0.88 ? mixColor(white, PALETTE.cream, 0.5) : white);
+        if (y === 5 && (Math.abs(x) === 2 || Math.abs(z) === 3)) continue;
+        const breast = z === 3 && y >= 3 && y <= 4 && Math.abs(x) <= 1;
+        put(bodyVox, x, y, z, breast ? PALETTE.cream : y === 2 ? coolGrey : white);
       }
-  for (let x = -2; x <= 2; x++)
-    for (let z = -2; z <= 2; z++) {
-      if (Math.abs(x) === 2 && Math.abs(z) === 2) continue;
-      put(bodyVox, x, 4, z, white);
-    }
-  for (let x = -1; x <= 1; x++) for (let z = -3; z <= 0; z++) put(bodyVox, x, 5, z, white);
-  // chest keel slightly proud at the front
-  mirr((s) => put(bodyVox, s * 1.2, 2.5, 3.15, white, 0.9));
-
   const body = part('body', bodyVox, 0, 3, 0);
   root.add(body);
 
-  // -- head: cube on a short neck, comb + wattle + beak placed with intent.
-  // Skull kept two units tall — a full three-unit cube reads bull-necked.
+  // -- head: narrow neck steps up and forward into a separate skull
   const headVox: Voxel[] = [];
-  fill(headVox, -1, 4.6, 2, 1, 5.6, 3, white); // neck bridge, overlapping body AND skull
-  fill(headVox, -1, 6, 2, 1, 7, 4, white);
-  put(headVox, 0, 6.85, 4.72, PALETTE.chickenOrange, 0.82); // beak
-  put(headVox, 0, 5.9, 4.55, PALETTE.chickenRed, 0.55); // wattle
-  // serrated comb: three teeth, middle tallest — rooted in the skull top
-  put(headVox, 0, 7.66, 2.45, PALETTE.chickenRed, 0.66);
-  put(headVox, 0, 7.95, 3.25, PALETTE.chickenRed, 0.86);
-  put(headVox, 0, 7.66, 4.05, PALETTE.chickenRed, 0.6);
-  // eyes: black on white, set just above the beak line
-  mirr((s) => put(headVox, s * 1.33, 6.6, 3.35, PALETTE.black, 0.52));
+  fill(headVox, -1, 4, 2, 1, 6, 3, white); // neck rising from the breast
+  fill(headVox, -1, 6, 3, 1, 8, 5, white); // skull, set forward of the neck
+  put(headVox, 0, 6.9, 5.8, PALETTE.chickenOrange, 0.8); // beak
+  put(headVox, 0, 6.9, 6.5, mixColor(PALETTE.chickenOrange, PALETTE.black, 0.2), 0.5); // beak tip
+  put(headVox, 0, 5.5, 5.3, PALETTE.chickenRed, 0.6); // wattle under the beak
+  // serrated comb: three teeth, middle tallest, rooted in the skull top
+  put(headVox, 0, 8.6, 3.6, PALETTE.chickenRed, 0.62);
+  put(headVox, 0, 8.95, 4.3, PALETTE.chickenRed, 0.86);
+  put(headVox, 0, 8.6, 5.0, PALETTE.chickenRed, 0.6);
+  // eyes: black, proud on the skull sides
+  mirr((s) => put(headVox, s * 1.5, 7.2, 4.2, PALETTE.black, 0.5));
 
   const head = part('head', headVox, 0, 5.8, 2.4);
   root.add(head);
 
   // -- tail: upright fan of short feathers
   const tailVox: Voxel[] = [];
-  const buff = mixColor(PALETTE.chickenWhite, PALETTE.chickenOrange, 0.3);
   const strand = (x: number, top: number): void => {
     const steps = Math.round(top);
     for (let i = 0; i <= steps; i++)
-      put(tailVox, x * (1 + i * 0.06), 5.3 + i * 0.85, -2.75 - i * 0.34, i === steps ? buff : PALETTE.chickenWhite, 0.82 - i * 0.04);
+      put(tailVox, x * (1 + i * 0.06), 5.3 + i * 0.85, -2.75 - i * 0.34, white, 0.82 - i * 0.04);
   };
   strand(0, 2.4);
   strand(0.75, 1.7);
@@ -104,8 +114,8 @@ export function buildHen(): THREE.Group {
   root.add(tail);
 
   // -- wings + legs
-  const wingL = part('wingL', wingVoxels(1, true), 2.0, 3, 0);
-  const wingR = part('wingR', wingVoxels(-1, true), -2.0, 3, 0);
+  const wingL = part('wingL', henWingVoxels(1), 2.0, 3, 0);
+  const wingR = part('wingR', henWingVoxels(-1), -2.0, 3, 0);
   const legL = part('legL', legVoxels(1, 1), 0.8, 1.4, 0);
   const legR = part('legR', legVoxels(-1, 1), -0.8, 1.4, 0);
   root.add(wingL, wingR, legL, legR);
@@ -176,15 +186,15 @@ export function buildRooster(): THREE.Group {
     put(headVox, s * 0.72, 9.7, 1.7, hackle, 0.78);
   });
   put(headVox, 0, 10.0, 1.65, hackle, 0.78);
-  // beak + wattle
+  // beak + bigger wattle
   put(headVox, 0, 10.1, 4.75, PALETTE.chickenOrange, 0.9);
-  put(headVox, 0, 9.1, 4.6, PALETTE.chickenRed, 0.62);
-  put(headVox, 0, 8.55, 4.35, PALETTE.chickenRed, 0.5);
-  // tall serrated comb (4 teeth) rooted in the skull top
-  put(headVox, 0, 12.72, 2.2, PALETTE.chickenRed, 0.62);
-  put(headVox, 0, 13.08, 2.9, PALETTE.chickenRed, 0.8);
-  put(headVox, 0, 13.32, 3.6, PALETTE.chickenRed, 0.9);
-  put(headVox, 0, 12.98, 4.25, PALETTE.chickenRed, 0.62);
+  put(headVox, 0, 9.0, 4.6, PALETTE.chickenRed, 0.9);
+  put(headVox, 0, 8.4, 4.35, PALETTE.chickenRed, 0.8);
+  // tall serrated comb (4 teeth, larger) rooted in the skull top
+  put(headVox, 0, 12.72, 2.2, PALETTE.chickenRed, 0.8);
+  put(headVox, 0, 13.08, 2.9, PALETTE.chickenRed, 1.0);
+  put(headVox, 0, 13.32, 3.6, PALETTE.chickenRed, 1.12);
+  put(headVox, 0, 12.98, 4.25, PALETTE.chickenRed, 0.8);
   // fierce little brows over the eyes
   mirr((s) => {
     put(headVox, s * 1.36, 10.85, 3.3, PALETTE.black, 0.52);
@@ -193,27 +203,31 @@ export function buildRooster(): THREE.Group {
   const head = part('head', headVox, 0, 8.8, 2.4);
   root.add(head);
 
-  // -- iconic sickle tail: broad plumes fanning up-and-back, green sheen.
-  // Each feather gets its OWN arc (outer ones sweep lower + further back)
-  // so the silhouette fans in profile instead of merging into one column.
+  // -- sickle tail: three long feathers, each a quadratic arc that lifts off the
+  // rump, peaks behind the body and curls down. Dark teal sheen with a lighter
+  // rim along the upper (outer) curve, so each one reads as a feather, not a spike.
   const tailVox: Voxel[] = [];
   const rndT = rng(29);
-  for (let k = -3; k <= 3; k++) {
-    const len = 7.5 - Math.abs(k) * 1.05;
-    const rise = 1.02 - Math.abs(k) * 0.16; // per-step climb
-    const back = 0.26 + Math.abs(k) * 0.17; // per-step rearward sweep
-    for (let i = 0; i <= len; i += 0.75) {
-      const tip = i / len;
-      const sheen = mixColor(PALETTE.charcoal, PALETTE.leaf, 0.22 + rndT() * 0.16);
-      const c = tip > 0.82 ? mixColor(sheen, PALETTE.leafLight, 0.35) : sheen;
-      put(
-        tailVox,
-        k * 0.62 + k * 0.1 * tip,
-        8.0 + rise * i,
-        -3.1 - back * i - tip * tip * 0.9,
-        c,
-        Math.max(0.78, 1.35 - tip * 0.6),
-      );
+  const sheen = mixColor(PALETTE.charcoal, PALETTE.leafDark, 0.55);
+  const teal = mixColor(sheen, PALETTE.water, 0.22);
+  const rim = mixColor(PALETTE.leafLight, PALETTE.water, 0.3);
+  // [x, root y, root z, control y, control z, tip y, tip z]
+  const feathers: Array<[number, number, number, number, number, number, number]> = [
+    [-1.3, 7.6, -3.2, 13.6, -7.4, 8.4, -12.2],
+    [0, 7.8, -3.4, 15.0, -8.6, 9.6, -14.2],
+    [1.3, 7.6, -3.2, 13.0, -6.6, 7.4, -10.2],
+  ];
+  for (const [fx, y0, z0, y1, z1, y2, z2] of feathers) {
+    for (let i = 0; i <= 12; i++) {
+      const s = i / 12;
+      const a = (1 - s) * (1 - s);
+      const b = 2 * (1 - s) * s;
+      const c = s * s;
+      const y = a * y0 + b * y1 + c * y2;
+      const z = a * z0 + b * z1 + c * z2;
+      const size = Math.max(0.7, 1.3 - s * 0.6);
+      put(tailVox, fx, y, z, mixColor(sheen, teal, rndT()), size);
+      if (s > 0.2 && s < 0.95) put(tailVox, fx, y + size * 0.5, z, rim, 0.45);
     }
   }
   // short white covert feathers layering the fan's base into the body
@@ -650,7 +664,9 @@ export function buildDuck(): THREE.Group {
   root.name = 'duck';
   const white = PALETTE.duckWhite;
   const bill = PALETTE.duckBill;
-  const wingEdge = mixColor(PALETTE.duckWhite, PALETTE.gravel, 0.45);
+  // darker wing panel with a deeper tip edge
+  const wingPanel = mixColor(PALETTE.duckWhite, PALETTE.gravel, 0.42);
+  const wingEdge = mixColor(wingPanel, PALETTE.black, 0.15);
 
   // -- horizontal body with keeled tail rising at the rear
   const bodyVox: Voxel[] = [];
@@ -668,33 +684,32 @@ export function buildDuck(): THREE.Group {
   const body = part('body', bodyVox, 0, 4, 0);
   root.add(body);
 
-  // -- neck-forward head, broad two-part bill
+  // -- short upright neck, wide head, broad flat bill wider than the skull
   const headVox: Voxel[] = [];
   fill(headVox, -1, 6, 2, 1, 9, 4, white); // neck
-  fill(headVox, -1, 9, 2, 1, 11, 5, white); // head
-  fill(headVox, -0.7, 11.5, 2.6, 0.7, 11.9, 4.4, white); // crown round-over
-  fill(headVox, -1.2, 9.9, 5.0, 1.2, 10.65, 7.0, bill); // broad upper bill
-  put(headVox, 0, 10.3, 7.3, mixColor(bill, PALETTE.black, 0.3), 0.55); // bill nail
+  fill(headVox, -1, 9, 3, 1, 11, 6, white); // head
+  fill(headVox, -2, 10, 6, 2, 10, 8, bill); // broad flat upper bill
+  put(headVox, 0, 10, 8.6, mixColor(bill, PALETTE.black, 0.3), 0.55); // bill nail
   mirr((s) => {
-    put(headVox, s * 1.32, 10.55, 4.15, PALETTE.black, 0.5); // eyes
-    put(headVox, s * 0.55, 10.8, 6.0, mixColor(bill, PALETTE.black, 0.2), 0.26); // nostrils
+    put(headVox, s * 1.5, 10.3, 4.6, PALETTE.black, 0.5); // eyes
+    put(headVox, s * 0.55, 10.6, 7.6, mixColor(bill, PALETTE.black, 0.2), 0.26); // nostrils
   });
   const head = part('head', headVox, 0, 8.5, 3);
   root.add(head);
 
   // lower bill as its own part so it can quack open (head-local coords)
   const jawVox: Voxel[] = [];
-  fill(jawVox, -1.15, 0.5, 1.6, 1.15, 0.95, 3.5, mixColor(bill, PALETTE.black, 0.18));
-  const jaw = part('jaw', jawVox, 0, 0.9, 1.6);
+  fill(jawVox, -2, 0.5, 3, 2, 0.5, 5, mixColor(bill, PALETTE.black, 0.18));
+  const jaw = part('jaw', jawVox, 0, 0.5, 3);
   head.add(jaw);
 
-  // -- folded wings with grey tips
+  // -- folded wings: darker panel, grey-tipped back feathers
   const wingMake = (s: number, nm: string): THREE.Group => {
     const v: Voxel[] = [];
     for (let z = -3; z <= 1; z++)
       for (let y = 3; y <= 5; y++) {
         if (y === 3 && z === 1) continue;
-        put(v, s * 2.5, y, z, z <= -2 ? wingEdge : white, 1.0);
+        put(v, s * 2.5, y, z, z <= -2 ? wingEdge : wingPanel, 1.0);
       }
     return part(nm, v, s * 2.0, 4, -1);
   };
@@ -702,12 +717,13 @@ export function buildDuck(): THREE.Group {
   const wingR = wingMake(-1, 'wingR');
   root.add(wingL, wingR);
 
-  // -- short orange legs, webbed feet (shin reaches up into the belly)
+  // -- short orange legs, webbed feet fanned forward
   const legMake = (s: number, nm: string): THREE.Group => {
     const v: Voxel[] = [];
     put(v, s * 1.1, 1.2, 0, bill, 0.7);
     put(v, s * 1.1, 0.3, 0.25, bill, 0.95);
-    put(v, s * 1.1, 0.22, 0.95, mixColor(bill, PALETTE.black, 0.25), 0.48);
+    for (const fx of [0.5, 1.1, 1.7]) put(v, s * fx, 0.2, 1.0, bill, 0.5); // webbed toe fan
+    put(v, s * 1.1, 0.22, 1.7, mixColor(bill, PALETTE.black, 0.25), 0.48);
     return part(nm, v, s * 1.1, 1.6, 0);
   };
   const legL = legMake(1, 'legL');

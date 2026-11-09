@@ -8,10 +8,10 @@
  * brassica = TALL + LUMPY (thick stalk lifting a beaded floret crown on leaf
  * wings). The two must be nameable from silhouette alone, palette or no.
  */
-import { PALETTE, Voxel, rng } from '@/creative/voxel';
+import { PALETTE, Voxel, mixColor, rng } from '@/creative/voxel';
 import {
   CropPalette, foliage, shade, put, vline, soilPad, finishPlant,
-  sproutLoop, blade, blob, flowerDot,
+  sproutLoop, blade, blob,
 } from './shared';
 
 /* ------------------------------------------------------------------ */
@@ -128,7 +128,7 @@ export const BRASSICA_PAL: CropPalette = {
   light: 0x7ba36a,
   stem: 0x5f8a52,
   accent: PALETTE.flowerYellow,
-  fruit: 0x86bd6a,    // floret green — clearly paler than wrapper leaves
+  fruit: mixColor(PALETTE.leafDark, PALETTE.water, 0.4), // dark blue-green floret head
   unripe: 0x9cc878,
 };
 
@@ -175,31 +175,28 @@ export function makeBrassica(stage: number, pal: CropPalette = BRASSICA_PAL): Re
   }
 
   // s4/s5 — broccoli. Silhouette language: TALL + LUMPY. A thick stalk
-  // lifts a domed crown of clustered floret beads well above the leaf
-  // skirt, with leaf wings riding the stalk. Smooth ground-hugging globes
-  // belong to leafy-head; never trade.
-  const H = stage === 4 ? 3 : 4;
+  // lifts a dark blue-green floret crown clear above a narrow leaf skirt,
+  // with leaves arching out from under the crown. Smooth ground-hugging
+  // globes belong to leafy-head; never trade.
+  const H = stage === 4 ? 4 : 5;
   // thick tapering stalk (static — it carries the crown)
   vline(stat, 0, 0, 0, 0, H, 0, pal.stem);
   vline(stat, 1, 0, 0, 1, H - 1, 0, shade(pal.stem, pal.dark, 0.16));
   vline(stat, -1, 0, 0, -1, H - 1, 0, shade(pal.stem, pal.dark, 0.16));
   vline(stat, 0, 0, 1, 0, H - 1, 1, shade(pal.stem, pal.dark, 0.22));
   vline(stat, 0, 0, -1, 0, H - 1, -1, shade(pal.stem, pal.dark, 0.22));
-  // leaf skirt arches out from the stalk base and slumps back to the soil
-  for (let i = 0; i < 6; i++) {
-    const [dx, dz] = DIRS8[i];
-    blade(sway, 0, 0.7, 0, dx, dz, 3, 3, 0.36, 0.09, i % 2 ? f : shade(f, pal.dark, 0.2), vein, edge, 70 + i * 6);
-  }
-  // leaf wings ride the stalk, tips reaching well above the skirt
-  const wingY = stage === 5 ? H - 1.7 : H - 1.2;
-  [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(([dx, dz], i) => {
-    blade(sway, 0, wingY + (i % 2) * 0.5, 0, dx, dz, stage === 5 ? 3 : 2, 2, 0.6, 0.02,
-      i % 2 ? f : shade(f, pal.dark, 0.15), vein, edge, 92 + i * 7);
+  // low leaf skirt: narrow blades lifting off the soil, then slumping back
+  DIRS8.slice(0, 4).forEach(([dx, dz], i) => {
+    blade(sway, 0, 0.7, 0, dx, dz, 3, 2, 0.3, 0.06, i % 2 ? f : shade(f, pal.dark, 0.2), vein, edge, 70 + i * 6);
   });
-  // beaded crown: central dome ringed by clustered floret bumps — bumps
-  // stay SEPARATE (air between them at s5) so the silhouette reads lumpy
-  const domeR = stage === 5 ? 1.55 : 1.35;
-  const domeY = H + domeR * 0.8;
+  // mid wings arch outward from under the crown, tips falling back toward it
+  DIRS8.slice(0, 4).forEach(([dx, dz], i) => {
+    blade(sway, 0, H - 2, 0, dx, dz, 3, 2, 0.8, 0.16, i % 2 ? shade(f, pal.dark, 0.15) : f, vein, edge, 92 + i * 7);
+  });
+  // floret crown: dark blue-green dome lifted on the stalk, ringed by
+  // separate floret beads (air between them) so the top reads lumpy
+  const domeR = stage === 5 ? 1.9 : 1.5;
+  const domeY = H + 1.9;
   blob(sway, 0, domeY, 0, domeR, domeR * 0.75, domeR, pal.fruit, shade(pal.fruit, pal.dark, 0.26), { seed: 33 });
   const nBeads = stage === 5 ? 7 : 6;
   const beadRing = stage === 5 ? domeR + 0.45 : domeR - 0.1;
@@ -276,41 +273,25 @@ export function makeGreensOpen(stage: number, pal: CropPalette = GREENS_PAL): Re
   }
 
   if (stage === 5) {
-    // HARVEST ROSETTE — maximum spread with an unmistakable pick-me crown:
-    // outer leaves arch wide and droop at the tips (harvest-ready curl), the
-    // inner crown rises bright and glossy toward pal.fruit, and a bud-index
-    // knob (pal.fruit dithered pal.accent — clover's red bloom, borage's
-    // blue, chard's magenta) flags readiness from across the field.
-    for (let i = 0; i < 8; i++) {
-      const [dx, dz] = DIRS8[i];
-      const diag = dx !== 0 && dz !== 0;
-      const ox = Math.round(dx * 1.1), oz = Math.round(dz * 1.1);
-      // long splayed petiole, then a wide blade that curls down at the tip
-      vline(sway, 0, 0.45, 0, ox, 1.05, oz, petiole);
-      blade(sway, ox, 1.05, oz, dx, dz, diag ? 5 : 6, 3, 0.55, 0.09,
-        i % 4 === 3 ? shade(f, pal.dark, 0.25) : f, vein, edge, 50 + i * 5);
-    }
-    // bright glossy crown leaves pulled toward the harvest tone
-    const crownBase = shade(f, pal.fruit, 0.35);
-    const crownVein = shade(pal.fruit, 0xffffff, 0.3);
-    const crownEdge = shade(pal.fruit, pal.dark, 0.22);
-    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dz], i) => {
-      vline(sway, 0, 0.45, 0, Math.round(dx * 0.5), 1.45, Math.round(dz * 0.5), petiole);
-      blade(sway, Math.round(dx * 0.5), 1.45, Math.round(dz * 0.5), dx, dz, 2, 2, 0.5, 0.02,
-        crownBase, crownVein, crownEdge, 95 + i * 6);
+    // HARVEST FOUNTAIN — no head at all. Six colored petioles fan out of the
+    // crown at different heights and reaches; each blade arches up, then
+    // droops at the tip, so the rosette stays open and airy (never a ball).
+    // [dx, dz, reach, petioleTop, len, arcA, arcB]
+    const fan: Array<[number, number, number, number, number, number, number]> = [
+      [1, 0, 1, 1.8, 6, 1.0, 0.1],
+      [-1, 0, 1, 1.2, 6, 0.6, 0.08],
+      [0, 1, 1, 2.8, 5, 0.8, 0.12],
+      [0, -1, 1, 1.5, 6, 0.7, 0.1],
+      [-1, 0, 2, 3.4, 4, 0.7, 0.14],
+      [0, -1, 0, 3.6, 4, 0.6, 0.12],
+    ];
+    fan.forEach(([dx, dz, reach, h, len, arcA, arcB], i) => {
+      const ox = dx * reach, oz = dz * reach;
+      vline(sway, 0, 0.45, 0, ox, h, oz, petiole);
+      blade(sway, ox, h, oz, dx, dz, len, 2, arcA, arcB,
+        i % 3 === 2 ? shade(f, pal.dark, 0.25) : f, vein, edge, 50 + i * 5);
     });
-    put(sway, 0, 1.6, 0, pal.fruit, 0.8); // glossy heart
-    // bud-index standard: a bud crown lifted a full voxel of air CLEAR above
-    // the leaf cluster on a thin colored pedicel (reads as a flag on a pole,
-    // never as another leaf head) — pal.fruit body speckled pal.accent plus
-    // an accent dot ring; the unmistakable ready signal, palette-driven only
-    vline(sway, 0, 1.8, 0, 0, 3.5, 0, petiole);
-    blob(sway, 0, 4.15, 0, 0.85, 0.7, 0.85, pal.fruit, pal.accent, { seed: 61 });
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + 0.3;
-      flowerDot(sway, Math.cos(a) * 1.0, 4.95, Math.sin(a) * 1.0, pal.accent, 0.65);
-    }
-    put(sway, 0, 5.1, 0, shade(pal.fruit, 0xffffff, 0.35), 0.55);
+    put(sway, 0, 0.9, 0, shade(f, pal.light, 0.4), 0.75); // crown heart
     return finishPlant(stat, sway);
   }
 

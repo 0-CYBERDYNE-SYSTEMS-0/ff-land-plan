@@ -8,12 +8,68 @@
  */
 import * as THREE from 'three';
 import { PALETTE, Voxel, group, mixColor, rng } from '@/creative/voxel';
-import { paneMesh, solidMesh } from './shared';
-import { makeCo2Tank, makeDehumidifier, makeDwcRaft, makeFishTank } from '../environments/interior';
+import { C, paneMesh, solidMesh } from './shared';
+import { makeCo2Tank, makeDehumidifier, makeDwcRaft } from '../environments/interior';
 
-/** Round fish tank, 1.2 m dia × ~1 m — royal blue with central drain. */
+/**
+ * Round fish tank, 1.2 m dia × ~1 m — faceted glass ring on a four-leg stand.
+ * Rim ring breaks the box silhouette; translucent water ring + surface disc,
+ * centre drain, koi silhouettes, aeration bubbles, inlet drop and outlet pump.
+ */
 export function makeFishTankAsset(): THREE.Object3D {
-  return makeFishTank({ diaM: 1.2 });
+  const R = 6;
+  const SEG = 32;
+  const solid: Voxel[] = [];
+  const glass: Voxel[] = [];
+  const water: Voxel[] = [];
+  // faceted circle of cubes at radius r (adjacent cubes overlap → no gaps)
+  const ring = (out: Voxel[], r: number, y: number, s: number, color: number): void => {
+    for (let i = 0; i < SEG; i++) {
+      const a = (i / SEG) * Math.PI * 2;
+      out.push({ x: Math.cos(a) * r, y, z: Math.sin(a) * r, s, color });
+    }
+  };
+
+  // four-leg stand + plate under the tank floor
+  for (const lx of [-3, 3]) for (const lz of [-3, 3]) for (let y = 0; y <= 2; y++)
+    solid.push({ x: lx, y, z: lz, color: C.postWood });
+  for (let x = -R; x <= R; x++) for (let z = -R; z <= R; z++)
+    if (x * x + z * z <= R * R) solid.push({ x, y: 3, z, color: C.plankWeathered });
+
+  // centre drain standpipe + outlet pipe under the plate to a pump box
+  for (let y = 4; y <= 9; y++) solid.push({ x: 0, y, z: 0, s: 0.8, color: PALETTE.metalDark });
+  for (let x = 0; x <= R + 2; x++) solid.push({ x, y: 2, z: 0, s: 0.7, color: C.pipeBlack });
+  solid.push({ x: R + 3, y: 2, z: 0, s: 1.6, color: PALETTE.charcoal });
+
+  // inlet: feed pipe through the back-left wall, dropping down the wall to the stand
+  for (let x = -R - 3; x <= -R; x++) solid.push({ x, y: 9, z: 2, s: 0.7, color: C.pipeBlack });
+  for (let y = 2; y <= 8; y++) solid.push({ x: -R - 3, y, z: 2, s: 0.7, color: C.pipeBlack });
+
+  // glass walls, translucent water inside them, rim ring on top
+  for (let y = 4; y <= 12; y++) ring(glass, R, y, 1.2, PALETTE.glass);
+  for (let y = 4; y <= 10; y++) ring(water, R - 1, y, 1.0, PALETTE.water);
+  ring(solid, R + 0.2, 13, 1.2, PALETTE.ironDark);
+
+  // water surface plane, just inside the rim
+  for (let x = -R + 1; x <= R - 1; x++) for (let z = -R + 1; z <= R - 1; z++)
+    if (x * x + z * z <= (R - 1) * (R - 1)) solid.push({ x, y: 11, z, color: PALETTE.waterLight });
+
+  // aeration ring: air-stone bubbles rising in three staggered layers
+  for (let layer = 0; layer < 3; layer++)
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + layer * 0.3;
+      solid.push({ x: Math.cos(a) * 3.4, y: 4.6 + layer * 1.6, z: Math.sin(a) * 3.4, s: 0.4, color: PALETTE.white });
+    }
+
+  // two koi silhouettes swimming in the upper water
+  const koi = PALETTE.flowerOrange;
+  const koiTail = mixColor(PALETTE.flowerOrange, PALETTE.black, 0.2);
+  for (const x of [1, 2, 3]) solid.push({ x, y: 9, z: -2, s: 0.85, color: koi });
+  solid.push({ x: 0, y: 9, z: -2, s: 0.7, color: koiTail });
+  for (const z of [2, 3, 4]) solid.push({ x: -2.5, y: 9.4, z, s: 0.85, color: koi });
+  solid.push({ x: -2.5, y: 9.4, z: 1, s: 0.7, color: koiTail });
+
+  return group([solidMesh(solid), paneMesh(glass, 0.3, PALETTE.glass), paneMesh(water, 0.45, PALETTE.water)]);
 }
 
 /** DWC hydro raft — 2.4 × 1.2 m raft pond with lettuce holes + bubbles. */
