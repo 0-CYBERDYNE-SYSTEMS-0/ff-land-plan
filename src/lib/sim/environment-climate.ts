@@ -302,7 +302,9 @@ export function environmentDay(
   const dehumidifierRate = rhMaxPct > derateBelowRh
     ? clamp((rhBeforeDehumidification - derateBelowRh) / (rhMaxPct - derateBelowRh), 0, 1)
     : 0;
-  indoorAbsoluteHumidity = Math.max(0, indoorAbsoluteHumidity - dehumidifierLpd * dehumidifierRate * 1000 / volumeM3);
+  // Removal occurs throughout the day, so incoming air also replaces some of
+  // the moisture removed. Use the same retention factor as transpiration.
+  indoorAbsoluteHumidity = Math.max(0, indoorAbsoluteHumidity - dehumidifierLpd * dehumidifierRate * 1000 / volumeM3 * transpirationRetention);
   const rhPct = clamp(indoorAbsoluteHumidity / Math.max(0.01, saturationHumidity) * 100, 0, 100);
   const vpdKPa = Math.max(0, saturationVaporPressureKPa(tMeanC) * (1 - rhPct / 100));
 

@@ -606,7 +606,7 @@ export function equipmentTermsFor(plan: PlanState, ar: EnvironmentArchetype): Eq
 | asset | physics | basis |
 |---|---|---|
 | `grow-light` (0.5×0.25 m bar) | 40 W, 2.6 µmol/J, 18 h | 104 µmol/s over ~0.5 m² ≈ 208 µmol/m²/s → 13.5 mol/m²/day |
-| `clip-fan` | `achBoost 0.5`, `mixing 0.25` | approximation, documented |
+| `clip-fan` | `achBoost 0`, `mixing 0.25` | circulation does not exchange air with outdoors |
 | `hvac-unit` | heat 2.0 kW, cool 2.5 kW, 1.0 kW electrical | splits sized for ≤20 m² |
 | `dehumidifier` | 20 L/day at ≥80 % RH, linear derate to 0 at 50 % | consumer unit class |
 | `co2-tank` | target 1000 ppm, 2 kg/day | 1 kg ≈ 0.55 kg CO2 per m³·% |

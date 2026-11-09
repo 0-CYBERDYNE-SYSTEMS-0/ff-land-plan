@@ -2481,3 +2481,10 @@ snapshots changed, and no application implementation is claimed by this revision
 - Registered `FAO56-V2-YUMA-LETTUCE-ROOT-DRYDOWN-PRODUCTION-SYNTHETIC-01` at `quality/beta/evidence/fao56-v2-yuma-lettuce-root-drydown-production-synthetic.json`, setup SHA-256 `e19501fa67e5cb8346da44475799fdaf7308d7a364eaadc9c2c8fd03f289c68c`. It freezes a direct-sown crop-model-v2 lettuce run with 21 synthetic weather rows and paired dry/wet-control initial storage fractions 0.25/1.0; no other frozen input differs. French et al. is used only for the Yuma rootDevelopment values. Soil, capacity/p/Kc, thermal and production values, weather, and root-expansion storage assumptions are synthetic.
 - The manifest now records the official Springer PDF URL, SHA-256 `fb1782843cf2612f0ebaebfc25555b425f3289b3246689a1e1e4738921af8f5a`, 3,072,155 bytes, retrieval date 2026-10-28, CC BY 4.0, and `localPath: null`; the article’s daily data are available on request and are not included. The inferred source 90 cm cap and p=0.40 are not used.
 - Root-clock/depth/expansion tolerances are arithmetic-only (1e-12 C-day/cm/mm); the daily balance residual bound is 1e-9 mm for double-precision arithmetic. Candidate execution is prohibited pending independent registration review and exact-head PR CI. No test, candidate run, or candidate result exists; A-05 and overall 02A remain UNVERIFIED. Estimate: 1–2 engineer-hours for preregistration/evidence and 1–2 for the focused candidate, assuming the existing v2 reducer accepts the frozen inputs; independent review and CI are excluded.
+
+### Indoor climate correction
+
+Clip fans now contribute mixing without adding outdoor air exchange. Dehumidifier
+removal is attenuated by the daily air-exchange retention factor, matching the
+constant-rate moisture source approximation. This remains an approximate daily
+model, not a time-resolved humidity controller or dehumidifier heat model.

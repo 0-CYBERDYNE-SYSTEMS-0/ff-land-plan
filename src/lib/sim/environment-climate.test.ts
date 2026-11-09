@@ -281,6 +281,15 @@ describe('growing-world climate prototype', () => {
     expect(highVent.rhPct).toBeLessThan(lowVent.rhPct);
   });
 
+  it('accounts for air exchange while a dehumidifier runs', () => {
+    const tent = makeEnvironment(1, { archetype: 'grow-tent' }, 'env:1:1');
+    const weather = outdoor({ tMinC: 20, tMaxC: 20, rhPct: 80, precipMm: 0 });
+    const baseline = environmentDay(tent, weather, noGear);
+    const dried = environmentDay(tent, weather, { ...noGear, dehumLpd: 0.1 });
+    expect(dried.rhPct).toBeGreaterThan(0);
+    expect(dried.rhPct).toBeLessThan(baseline.rhPct);
+  });
+
   it('condenses supersaturated vapour and applies the installed dehumidifier RH curve', () => {
     const tent = makeEnvironment(1, { archetype: 'grow-tent' }, 'env:1:1');
     const humidDay = environmentDay(
