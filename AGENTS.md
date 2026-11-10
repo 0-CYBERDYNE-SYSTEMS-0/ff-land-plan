@@ -148,11 +148,15 @@ engine: golden snapshots for baseline/drought/greenhouse/cold-window on
 synthetic weather, a cold-window finiteness test, and a spacing-yield test.
 Any retuning must update `__snapshots__/` as a deliberate, reviewed diff
 (`npx vitest run -u`). Yield is `yieldKgPerPlant × plantsForArea` spread over
-occupied cells and rounded only in aggregate. `src/data/cropThermalParams.ts`
-is a cited Tbase/GDD reference table that the sim does **not** consume yet
-(`gddRequiredC` is still catalog days × mean GDD; see ROADMAP #52). Sim mode
-(planning/what-if) exists; twin mode (observations correcting model state) is
-planned, not built — see ROADMAP "Sim mode and twin mode".
+occupied cells and rounded only in aggregate. Newer versioned crop models use
+frozen, source-backed thermal parameters; the legacy model retains its original
+GDD approximation. Observation assimilation and scorecards exist with model-
+specific limits. Consult `model-inputs.ts` and tests for supported combinations.
+Never change existing versioned replay behavior in place: introduce a new
+version and regression-test old persisted runs before changing climate physics.
+The dehumidifier exchange calculation remains a known limitation; PR #85 is a
+draft containing only a clip-fan catalog correction. Generic CSV observations
+are supported; vendor polling and a Growlink adapter are not implemented.
 
 Layout invariants of PlotDesigner (don't regress): page root `xl:h-full` flex
 column; canvas card `flex min-h-0 flex-col` absorbing toolbar wrap; below xl

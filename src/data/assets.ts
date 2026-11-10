@@ -85,7 +85,7 @@ export const assetLibrary: GardenAsset[] = [
     slug: 'clip-fan', label: 'Clip Fan', category: 'equipment',
     defaultWM: 0.3, defaultHM: 0.3, colorHex: '#9AA2A8', pattern: 'dots',
     emoji: '🌀', plantable: false,
-    physics: { kind: 'fan', achBoost: 0.5, mixing: 0.25 },
+    physics: { kind: 'fan', achBoost: 0, mixing: 0.25 },
     surfaces: ['tent', 'indoor', 'greenhouse', 'warehouse'],
     description: 'Airflow fan — keeps canopy moving and mold away.',
   },

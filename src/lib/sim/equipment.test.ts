@@ -178,7 +178,7 @@ describe('equipmentTermsFor', () => {
     });
     const zeroVent = equipmentTermsFor(plan(), { ...archetypes['grow-room'], achInfiltration: 0 }, { instances: equipment });
 
-    expect(terms.achBoost).toBeCloseTo(0.9, 6);
+    expect(terms.achBoost).toBe(0);
     expect(terms.mixing).toBe(1);
     expect(terms.heatingKw).toBe(4);
     expect(terms.coolingKw).toBe(5);
