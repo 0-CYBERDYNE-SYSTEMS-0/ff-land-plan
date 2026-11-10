@@ -2484,7 +2484,5 @@ snapshots changed, and no application implementation is claimed by this revision
 
 ### Indoor climate correction
 
-Clip fans now contribute mixing without adding outdoor air exchange. Dehumidifier
-removal is attenuated by the daily air-exchange retention factor, matching the
-constant-rate moisture source approximation. This remains an approximate daily
-model, not a time-resolved humidity controller or dehumidifier heat model.
+Clip fans now contribute mixing without adding outdoor air exchange. The existing
+dehumidifier approximation is unchanged to preserve versioned simulation replay.
