@@ -6,7 +6,7 @@ sync with `AGENTS.md` (which has the fuller version).
 
 ## Project
 
-FarmFriend Voxel Digital Twin — a React 18 + TypeScript + Vite SPA for farm
+FarmFriend Voxel Digital Twin — a React 19 + TypeScript + Vite SPA for farm
 planning (voxel crop map, weather, sensors, simulations) with a procedural
 voxel 3D world. The directory is `ff-land-plan` but the package name is
 `ff-voxel-twin`; both refer to this project.
@@ -16,6 +16,7 @@ voxel 3D world. The directory is `ff-land-plan` but the package name is
 ```bash
 npm run dev            # Vite dev server on http://localhost:5173
 npm test               # Vitest unit tests
+npm run test:e2e       # Playwright production Pages-path smoke
 npm run build          # tsc -b && vite build → dist/
 npm run preview        # serve the production build on port 4173
 npm run typecheck      # tsc --noEmit — the primary verification gate
@@ -39,8 +40,8 @@ Caveats:
 ## CI
 
 `.github/workflows/ci.yml` runs on every PR/push to `main`: tests+typecheck+build
-and gitleaks + `check-private-files.mjs` (no screenshot job — run appshot
-locally when needed). `guard-main.yml` turns red for any non-merge commit on
+the Playwright production Pages-path smoke, and gitleaks +
+`check-private-files.mjs`. Run appshot locally for additional route checks. `guard-main.yml` turns red for any non-merge commit on
 `main` without a PR — land ALL changes via PRs. `v*` tags trigger
 `release.yml`.
 
@@ -91,11 +92,15 @@ engine: golden snapshots for baseline/drought/greenhouse/cold-window on
 synthetic weather, a cold-window finiteness test, and a spacing-yield test.
 Any retuning must update `__snapshots__/` as a deliberate, reviewed diff
 (`npx vitest run -u`). Yield is `yieldKgPerPlant × plantsForArea` spread over
-occupied cells and rounded only in aggregate. `src/data/cropThermalParams.ts`
-is a cited Tbase/GDD reference table that the sim does **not** consume yet
-(`gddRequiredC` is still catalog days × mean GDD; see ROADMAP #52). Sim mode
-(planning/what-if) exists; twin mode (observations correcting model state) is
-planned, not built — see ROADMAP "Sim mode and twin mode".
+occupied cells and rounded only in aggregate. Newer versioned crop models use
+frozen, source-backed thermal parameters; the legacy model retains its original
+GDD approximation. Observation assimilation and scorecards exist with model-
+specific limits. Consult `model-inputs.ts` and tests for supported combinations.
+Never change existing versioned replay behavior in place: introduce a new
+version and regression-test old persisted runs before changing climate physics.
+The dehumidifier exchange calculation remains a known limitation; PR #85 is a
+draft containing only a clip-fan catalog correction. Generic CSV observations
+are supported; vendor polling and a Growlink adapter are not implemented.
 
 **Plan surfaces**: `outdoor | greenhouse | hoophouse | tent | indoor |
 warehouse` (`PlanSurface`, per canvas via Settings drawer). Enclosed surfaces
@@ -115,7 +120,7 @@ sizing effect keyed on `isLoading`.
 3. Soil moisture m³/m³ → % via ×200 in `weather.ts`.
 4. Keep `renderPlan.ts` free of remote `drawImage` (export taint).
 5. Custom crop ids start at 1000; plans persist ids in localStorage.
-6. React 18 (not 19) — why R3F is off the table.
+6. World3D uses vanilla three.js; preserve its existing lifecycle and adapters.
 7. Query params go BEFORE the hash; params inside the hash break wouter
    (NotFound). Seed ships farms 1–9 (`src/data/seed.ts`; 8 = hoophouse,
    9 = warehouse), but a browser with an older localStorage store may lack
