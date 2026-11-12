@@ -12,6 +12,7 @@ export interface Engine {
   dispose: () => void;
   resize: (width: number, height: number) => void;
   setBounds: (options: { minDistance?: number; maxDistance?: number; maxPolarAngle?: number }) => void;
+  setClip: (options: { near?: number; far?: number }) => void;
   setTargetBounds: (bounds: { minX: number; maxX: number; minZ: number; maxZ: number } | null) => void;
   resetView: (opts?: { distance?: number }) => void;
 }
@@ -148,6 +149,22 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
     targetBounds = bounds;
   }
 
+  // Near/far clip planes. Enclosed environments pull the near plane in (10 cm
+  // voxels read up close) while far stays past the 200 m sky dome, so sky,
+  // clouds and moon never get clipped.
+  function setClip(options: { near?: number; far?: number }) {
+    let changed = false;
+    if (options.near !== undefined && options.near !== camera.near) {
+      camera.near = options.near;
+      changed = true;
+    }
+    if (options.far !== undefined && options.far !== camera.far) {
+      camera.far = options.far;
+      changed = true;
+    }
+    if (changed) camera.updateProjectionMatrix();
+  }
+
   // Escape hatch when the camera ends up inside geometry: restore the default
   // isometric framing around the world origin.
   function resetView(opts?: { distance?: number }) {
@@ -184,6 +201,7 @@ export function createEngine(canvas: HTMLCanvasElement, theme: 'light' | 'dark')
     dispose,
     resize,
     setBounds,
+    setClip,
     setTargetBounds,
     resetView,
   };

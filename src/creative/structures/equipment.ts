@@ -66,15 +66,74 @@ export function makeGrowLight(): THREE.Object3D {
 }
 
 // ---------------------------------------------------------------------------
+// Grow light — compact tier mount for growing-level decks. Same LED extrusion
+// as the floor stand, but on short deck standoffs: the bar lives inside a
+// ~0.45 m tier gap instead of a 0.87 m floor stand crossing the shelf above.
+// The floor stand (makeGrowLight) stays the showcase / floor-mount form.
+// ---------------------------------------------------------------------------
+
+export function makeGrowLightTierMount(): THREE.Object3D {
+  const rand = rng(6102);
+  const solid: Voxel[] = [];
+
+  // two short deck standoffs: flat pads resting on the shelf + slim uprights
+  for (const px of [0.3, 12.7]) {
+    for (const fz of [-2, 2])
+      solid.push({ x: px, y: 0.45, z: fz, s: 0.9, color: PALETTE.metalDark });
+    for (let y = 1; y <= 2.2; y += 0.5)
+      solid.push({ x: px, y, z: 0, s: 0.55, color: rand() < 0.25 ? PALETTE.ironDark : PALETTE.metal });
+    solid.push({ x: px, y: 2.55, z: 0, s: 0.8, color: PALETTE.metalDark });
+  }
+
+  // slender extrusion: two charcoal rails + dark spine, LED strip underneath
+  for (let x = 0; x <= 13; x++) {
+    for (const z of [-2, 2])
+      solid.push({ x, y: 2.8, z, s: 0.95, color: rand() < 0.2 ? HOUSING_DARK : HOUSING });
+    solid.push({ x, y: 2.8, z: 0, s: 0.7, color: HOUSING_DARK });
+    // bright emissive-LOOKING underside strip (vertex colors only)
+    solid.push({ x, y: 2.25, z: 0, s: 0.85, color: x % 4 === 2 ? LED_HOT : LED_GLOW });
+    // glow slivers proud under the rails so the lit face reads from the side
+    for (const z of [-2.4, 2.4])
+      solid.push({ x, y: 2.3, z, s: 0.5, color: x % 4 === 2 ? LED_HOT : LED_GLOW });
+  }
+  // end caps close the extrusion
+  for (const x of [-0.12, 13.12])
+    for (const z of [-2, 0, 2])
+      solid.push({ x, y: 2.8, z, s: 0.9, color: HOUSING_DARK });
+
+  // tiny driver box on top of the bar
+  solid.push({ x: 6.5, y: 3.45, z: 0, s: 1.25, color: HOUSING });
+
+  return solidMesh(solid);
+}
+
+// ---------------------------------------------------------------------------
 // Plant rack — open vertical shelving unit on castors
 // ---------------------------------------------------------------------------
 
-export function makePlantRack(tierCount = 3, showSeedlings = true): THREE.Object3D {
+/**
+ * @param tierCount      Legacy ladder count (decks at 0.2 + 0.45i m).
+ * @param showSeedlings  Showcase nursery trays; planner racks stay empty.
+ * @param levelElevationsM  Saved GrowingSpaceLevel elevations in metres —
+ *   decks are authored exactly there (arbitrary/nonuniform values allowed).
+ * @param bayWidthM      Real-world bay width; long stretched bays get
+ *   intermediate uprights so a 9 m container rack does not span unsupported.
+ */
+export function makePlantRack(
+  tierCount = 3,
+  showSeedlings = true,
+  levelElevationsM?: number[],
+  bayWidthM?: number,
+): THREE.Object3D {
   const rand = rng(6201);
   const solid: Voxel[] = [];
   const X1 = 8; // x: 0..8 → 0.9 m
   const Z1 = 5; // z: 0..5 → 0.6 m
-  const levels = Array.from({ length: Math.max(1, Math.min(8, Math.floor(tierCount))) }, (_, index) => 2 + index * 4.5);
+  // Saved levels are metres; one voxel is 10 cm. The tier-count ladder
+  // (2 + 4.5i voxels) stays the default so the old signature keeps its shape.
+  const levels = levelElevationsM && levelElevationsM.length > 0
+    ? levelElevationsM.slice(0, 8).map((elevationM) => elevationM / 0.1)
+    : Array.from({ length: Math.max(1, Math.min(8, Math.floor(tierCount))) }, (_, index) => 2 + index * 4.5);
   const postTop = levels[levels.length - 1]! + 4.5;
 
   // castors + slim metal corner posts (clean single tone, joint bands darker)
@@ -84,6 +143,21 @@ export function makePlantRack(tierCount = 3, showSeedlings = true): THREE.Object
     for (let y = 1; y <= postTop; y++)
       solid.push({ x: px, y, z: pz, s: 0.7, color: y % 4 === 0 ? PALETTE.metalDark : PALETTE.iron });
     solid.push({ x: px, y: postTop + 0.6, z: pz, s: 0.8, color: PALETTE.metal }); // top cap
+  }
+
+  // Intermediate uprights for long stretched bays: the template stretches
+  // with the instance, so evenly spaced supports keep real-world spans at
+  // ~1.6 m on a 9 m container rack instead of one unsupported 9 m shelf.
+  if (bayWidthM !== undefined && bayWidthM > 2) {
+    const spans = Math.ceil(bayWidthM / 2);
+    for (let k = 1; k < spans; k++) {
+      const px = (X1 * k) / spans;
+      for (const pz of [0, Z1]) {
+        solid.push({ x: px, y: 0.62, z: pz, s: 0.55, color: PALETTE.black });
+        for (let y = 1; y <= postTop; y++)
+          solid.push({ x: px, y, z: pz, s: 0.7, color: y % 4 === 0 ? PALETTE.metalDark : PALETTE.iron });
+      }
+    }
   }
 
   // Each saved GrowingSpaceLevel has matching shelf geometry at its elevation.
@@ -126,7 +200,7 @@ export function makePlantRack(tierCount = 3, showSeedlings = true): THREE.Object
 // Hydro channel — NFT segment that tiles into sloped rows
 // ---------------------------------------------------------------------------
 
-export function makeHydroChannel(): THREE.Object3D {
+export function makeHydroChannel(showPlants = true): THREE.Object3D {
   const rand = rng(6301);
   const solid: Voxel[] = [];
   const LEN = 10; // x: 0..10 → 1.1 m segment
@@ -158,10 +232,13 @@ export function makeHydroChannel(): THREE.Object3D {
       solid.push({ x: lx, y, z: 0, s: 0.6, color: rand() < 0.3 ? PALETTE.ironDark : PALETTE.iron });
   }
 
-  // round plant holes at regular intervals — a lettuce in every one
+  // round plant holes at regular intervals — a lettuce in every one;
+  // planner rendering passes showPlants=false so crops only come from
+  // saved growing-level targets, never baked decoration
   for (let x = 1; x <= LEN - 1; x += 2) {
     const t = yTop(x);
     solid.push({ x, y: t + 0.08, z: 0, s: 0.6, color: GRILLE_DARK });
+    if (!showPlants) continue;
     solid.push({ x, y: t + 0.45, z: 0, s: 0.55, color: x % 4 === 1 ? PALETTE.leafLight : PALETTE.leaf });
     solid.push({ x, y: t + 0.8, z: 0, s: 0.36, color: PALETTE.leaf });
   }
@@ -277,7 +354,7 @@ export function makeHvacUnit(): THREE.Object3D {
 // Grow bench — greenhouse potting bench, galvanized top + slatted shelf
 // ---------------------------------------------------------------------------
 
-export function makeGrowBench(): THREE.Object3D {
+export function makeGrowBench(showPlants = true): THREE.Object3D {
   const rand = rng(6601);
   const solid: Voxel[] = [];
   const X1 = 11; // x: 0..11 → 1.2 m
@@ -317,20 +394,24 @@ export function makeGrowBench(): THREE.Object3D {
       solid.push({ x, y: 2, z, s: 0.94, color: plankTone(rand, C.plankWeathered, PALETTE.woodDark, PALETTE.plank) });
     }
 
-  // a couple of small pots on the shelf, one with a seedling up
-  for (const [px, pz] of [[3, 2], [8, 4]] as Array<[number, number]>) {
-    solid.push({ x: px, y: 2.85, z: pz, s: 1.05, color: PALETTE.terracotta });
-    solid.push({ x: px, y: 3.45, z: pz, s: 0.8, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.2) });
-    solid.push({ x: px, y: 3.66, z: pz, s: 0.55, color: PALETTE.soilDark });
-  }
-  solid.push({ x: 8, y: 3.98, z: 4, s: 0.4, color: PALETTE.sprout });
+  // pots, seed tray and cuttings are showcase decoration; planner rendering
+  // passes showPlants=false so crops only come from saved planting
+  if (showPlants) {
+    // a couple of small pots on the shelf, one with a seedling up
+    for (const [px, pz] of [[3, 2], [8, 4]] as Array<[number, number]>) {
+      solid.push({ x: px, y: 2.85, z: pz, s: 1.05, color: PALETTE.terracotta });
+      solid.push({ x: px, y: 3.45, z: pz, s: 0.8, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.2) });
+      solid.push({ x: px, y: 3.66, z: pz, s: 0.55, color: PALETTE.soilDark });
+    }
+    solid.push({ x: 8, y: 3.98, z: 4, s: 0.4, color: PALETTE.sprout });
 
-  // work in progress on the deck: seed tray with cuttings + a spare pot
-  solid.push({ x: 2.2, y: 6.55, z: 2.6, s: 1.35, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.3) });
-  for (const [dx, dz] of [[-0.35, -0.3], [0.4, -0.35], [0.1, 0.4]] as Array<[number, number]>)
-    solid.push({ x: 2.2 + dx, y: 7.05, z: 2.6 + dz, s: 0.4, color: rand() < 0.5 ? PALETTE.leafLight : PALETTE.leaf });
-  solid.push({ x: 9.4, y: 6.7, z: 1.6, s: 0.85, color: PALETTE.terracotta });
-  solid.push({ x: 9.4, y: 7.2, z: 1.6, s: 0.6, color: PALETTE.soilDark });
+    // work in progress on the deck: seed tray with cuttings + a spare pot
+    solid.push({ x: 2.2, y: 6.55, z: 2.6, s: 1.35, color: mixColor(PALETTE.terracotta, PALETTE.black, 0.3) });
+    for (const [dx, dz] of [[-0.35, -0.3], [0.4, -0.35], [0.1, 0.4]] as Array<[number, number]>)
+      solid.push({ x: 2.2 + dx, y: 7.05, z: 2.6 + dz, s: 0.4, color: rand() < 0.5 ? PALETTE.leafLight : PALETTE.leaf });
+    solid.push({ x: 9.4, y: 6.7, z: 1.6, s: 0.85, color: PALETTE.terracotta });
+    solid.push({ x: 9.4, y: 7.2, z: 1.6, s: 0.6, color: PALETTE.soilDark });
+  }
 
   return solidMesh(solid);
 }

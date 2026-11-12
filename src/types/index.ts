@@ -359,7 +359,7 @@ export interface GrowingTargetPlan {
 
 export type EnvironmentAssetMount =
   | { kind: 'floor' }
-  | { kind: 'environment' }
+  | { kind: 'environment'; /** Deliberate mount height above the floor, in metres. */ elevationM?: number }
   | { kind: 'growing-level'; growingSpaceId: string; levelId: string };
 
 export interface EnvironmentAssetInstance {

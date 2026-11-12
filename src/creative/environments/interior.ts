@@ -145,10 +145,12 @@ export function makeRackRow({ wM = 2.4, tiers = 4, glow = 'warm', canopy = true 
 
 // ---------------------------------------------------------------------------
 // DWC raft pond — liner rim, water plane, floating white rafts with lettuce
-// holes, bubble streams (#19, Cornell raft dims)
+// holes, bubble streams (#19, Cornell raft dims). `showPlants` (default true)
+// toggles the decorative lettuce in the net pots; planner renders pass false
+// so visible crops only come from saved plan planting.
 // ---------------------------------------------------------------------------
 
-export function makeDwcRaft({ wM = 2.4, dM = 1.2 }: { wM?: number; dM?: number } = {}): THREE.Object3D {
+export function makeDwcRaft({ wM = 2.4, dM = 1.2, showPlants = true }: { wM?: number; dM?: number; showPlants?: boolean } = {}): THREE.Object3D {
   const rand = rng(6401);
   const solid: Voxel[] = [];
   const W = Math.max(14, Math.round(wM * 10));
@@ -186,10 +188,11 @@ export function makeDwcRaft({ wM = 2.4, dM = 1.2 }: { wM?: number; dM?: number }
           const hx2 = rx + 0.6 + ix * 1.15;
           const hz2 = rz + 0.6 + iz * 1.15 + 0.5;
           solid.push({ x: hx2, y: 2.5, z: hz2, s: 0.7, color: PALETTE.soilDark }); // net pot
-          solid.push({
-            x: hx2, y: 3.0, z: hz2, s: 0.95,
-            color: weighted([[PALETTE.leafLight, 0.45], [PALETTE.leaf, 0.4], [PALETTE.leafYoung, 0.15]], rand()),
-          });
+          if (showPlants)
+            solid.push({
+              x: hx2, y: 3.0, z: hz2, s: 0.95,
+              color: weighted([[PALETTE.leafLight, 0.45], [PALETTE.leaf, 0.4], [PALETTE.leafYoung, 0.15]], rand()),
+            });
         }
     }
   // bubble streams roiling at the open-water corners (aerated ponds)

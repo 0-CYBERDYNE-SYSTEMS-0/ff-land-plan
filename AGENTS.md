@@ -1,8 +1,9 @@
 # AGENTS.md
 
 This file provides guidance to AI coding agents (Codex / Claude Code / ZCode)
-when working with code in this repository. Last refreshed 2026-09-25 against
-`112eda9`.
+when working with code in this repository. Last refreshed 2026-11-11 against
+`8202811` plus the uncommitted environment-readiness work on
+`feat/beta-readiness`.
 
 ## Project
 
@@ -43,8 +44,13 @@ Caveats:
 
 - No linter configured; `npm run typecheck` is the gate. TS strict +
   `noUnusedLocals`/`noUnusedParameters`: an unused import fails the build.
-- `npm test` runs the Vitest unit suite. Verification = tests + typecheck +
-  build; use the headless screenshot harness below for UI smoke checks.
+- `npm test` runs the Vitest unit suite (41 files / 227 tests as of
+  2026-11-11). Verification = tests + typecheck +
+  build; use the headless screenshot harness below for UI smoke checks. With
+  no Chrome bundle installed, set `FF_CHROME_BIN` to Playwright's
+  `chrome-headless-shell`, and pass `--vt <ms>` on SPA routes: with `--vt 0`
+  the DOM dump can land before boot, so `--expect`/`--gate` fail on a page that
+  renders fine.
 - Headless smoke: start the dev server, then
   `node tools/appshot.mjs "<url>" <out.png> [WxH] [--gate] [--expect "<text>"]`
   (~40 s/shot; Chrome is killed on a timeout BY DESIGN after the page settles —
@@ -61,6 +67,18 @@ Caveats:
   `FF_SHOT_TIMEOUT_MS`). DEV `?ffvis2d=drought|baseline[&ffvis2dDay=N]` loads
   a real sim run into the Blueprint (with a `#ff-plan-channels` DOM probe) for
   headless gates.
+- World-view gates need a real WebGL Chrome, not `chrome-headless-shell` (it
+  draws blank canvases) and not `appshot` (it captures before a hash-routed SPA
+  boots). Point `FF_CHROME_BIN` at Playwright's full
+  `chromium-<rev>/chrome-mac-arm64/"Google Chrome for Testing".app/Contents/
+  MacOS/Google Chrome for Testing`, drive it over CDP (navigate, wait a real
+  delay, read the DEV `#ff-world-framing` probe + the Perf HUD text, then
+  `Page.captureScreenshot`), and call
+  `Emulation.setFocusEmulationEnabled` + `Page.bringToFront` before
+  `Input.dispatchMouseEvent`/`Input.dispatchKeyEvent`: without them Chrome
+  refuses pointer lock, and the Fly/Walk modes exit the moment a lock request
+  fails. A synthetic `.click()` is not a user gesture — dispatch real input.
+  (`appshot` itself cannot synthesize trusted events.)
 
 ## Architecture
 
@@ -108,14 +126,18 @@ Frontends consuming those seams:
    archetypes × 6 growth stages covering ALL catalog crops via
    `crops/map.ts`), structures (33), creatures/tools/atmosphere (20),
    environments (9 indoor-farm dioramas + the parametric surface-shell kit
-   `environments/shells.ts` consumed by `src/three/shell.ts`). Built on
+   `environments/shells.ts` consumed by `src/three/shell.ts`; makers build the
+   requested footprint from `ShellSpec {widthM, depthM, heightM?}`, and the
+   adapter caches one shell keyed `archetype|widthM|depthM|heightKey` where
+   `heightKey` comes from the saved `layout.usableHeightM`). Built on
    `src/creative/voxel.ts` (palette, baked face shading, seeded PRNG — same
    seed ⇒ identical rebuilds; NEVER use `Math.random` there). Consumed by thin
    adapters: `src/three/plants.ts` (InstancedMesh per crop+stage,
    `makeCropFor(name, stage)`), `ground.ts` (tile builders by ground slug),
    `structures.ts` (one instance per contiguous region at size derived from
-   `assetLibrary` records; linear items per-cell), `shell.ts` (per-surface
-   enclosure shells, module-cached by `(surface,widthM,heightM)`), `animals.ts`
+   `assetLibrary` records; linear items per-cell), `shell.ts` (per-archetype
+   enclosure shells, module-cached by `archetype|widthM|depthM|heightKey`),
+   `animals.ts`
    (coop→hens+rooster, beehive→bees, pond→ducks, barn→cow+pig+sheep, planted
    cells→butterflies), `dressing.ts` (tool props near sheds/taps/bed edges).
    One voxel = 10 cm world scale. Preview surface: `showcase.html`
@@ -124,6 +146,30 @@ Frontends consuming those seams:
    (`PlanSurface`, per-canvas via Settings drawer); enclosed surfaces swap
    shell/floor/ambient and shelter the sim (see `quality/MISSION-ENVIRONMENTS.md`
    + `quality/RESEARCH-CEA-ENVIRONMENTS.md`).
+   Environment readiness (2026-11-11): equipment mounts carry explicit
+   `elevationM` (`ENV_MOUNT_DEFAULT_ELEVATION_M` in `three/structures.ts`),
+   racks render real saved level elevations and pin scaleY, and
+   `src/lib/environmentPhysics.ts` exports the pure
+   `auditEnvironmentGeometry(environment)` check (shown as "Layout readiness"
+   in the Growing systems panel) for footprint bounds, space overlap, instance
+   collisions, mount resolution, level clearance vs `usableHeightM` and access
+   records. Run it after moving spaces, targets, levels or equipment. Shell
+   access openings are still authored per maker, not derived from saved
+   `layout.access`.
+   Interior-first navigation (2026-11-11): `src/three/cameraFrame.ts` decides
+   between the exterior dollhouse fit and an `interiorFrame` (stand inside at
+   `interiorEyeHeightM`, look down the long axis) for the enclosed surfaces,
+   and supplies matching `cameraLimits` (5 cm near plane) and `interiorBounds`
+   (navigation rectangle + ceiling). `World3D` consumes that through
+   `resolveWorldFraming` / `worldNavBounds` (re-applied only when the framing
+   identity key changes) and `three/flight.ts` exposes `fly` and an eye-height
+   `walk` mode, both clamped to the interior rect and floor/ceiling band.
+   `three/ground.ts` bakes each tile with `cullVoxelFaces` (drops faces hidden
+   inside a tile; `floorOnly` also drops the interior floors' below-grade
+   skirt) because the ground layer is ~95% of a world's triangles — 3.4-3.9×
+   fewer after the cull. That cull assumes no camera ever gets below a room's
+   floor plane (polar <= 88 deg, fly clamped to the interior band); revisit it
+   before adding free-look below grade.
 4. **Ops views**: Dashboard/Calendar/Weather/Simulations/Monitoring pages
    (TanStack Query v5, Wouter hash routing, shadcn-style local UI primitives).
 
@@ -161,3 +207,4 @@ canvas is `h-[60dvh]` with panels on page scroll; canvas sizing effect keyed on
 - `quality/ASSETS.md` + `quality/QUALITY_BAR.md` — asset inventory and the
   builder↔critic quality bar ("best Minecraft farm build" standard).
 - `implementation-notes.md` — incremental decisions ledger; keep appending.
+- `ROADMAP.md` — current priorities and open gaps beyond this milestone log.

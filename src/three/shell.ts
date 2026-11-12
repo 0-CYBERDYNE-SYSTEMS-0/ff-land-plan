@@ -12,7 +12,8 @@
  *
  * MODULE-SCOPE CACHE (red-team): the World3D planVersion effect calls
  * buildShell on EVERY brush dab, and a shell is a ~10k-voxel merged geometry.
- * One cached shell keyed (surface, widthM, heightM): a cache hit whose root is
+ * One cached shell keyed (surface archetype, widthM, depthM, usableHeightM):
+ * a cache hit whose root is
  * already attached to the scene is a no-op (callers need not pre-dispose); a
  * key change (or a surface with no shell) frees the old root and builds fresh.
  * disposeShell only DETACHES the cache-owned root — any shell the cache no
@@ -40,6 +41,15 @@ export interface ShellGroup {
   archetype: ArchetypeId;
 }
 
+/**
+ * Optional build context. `usableHeightM` is the saved environment layout
+ * height (environment.layout.usableHeightM); shells built from it match the
+ * planning/climate record instead of the fixed construction defaults.
+ */
+export interface ShellBuildContext {
+  usableHeightM?: number;
+}
+
 const SHELL_MAKERS: Partial<Record<EnvironmentArchetype['shell'], (spec: ShellSpec) => THREE.Object3D>> = {
   greenhouse: makeGreenhouseShell,
   hoophouse: makeHoophouseShell,
@@ -59,8 +69,14 @@ interface CachedShell {
 
 let cachedShell: CachedShell | null = null;
 
-function shellKey(archetype: ArchetypeId, widthM: number, depthM: number): string {
-  return `${archetype}|${widthM}|${depthM}`;
+function shellKey(archetype: ArchetypeId, widthM: number, depthM: number, usableHeightM?: number): string {
+  // Heights round to the makers' 10 cm voxel resolution; non-finite or
+  // non-positive values collapse to the default-height key (the makers
+  // ignore them, so both build identical geometry).
+  const heightKey = typeof usableHeightM === 'number' && Number.isFinite(usableHeightM) && usableHeightM > 0
+    ? Math.round(usableHeightM * 10) / 10
+    : 'default';
+  return `${archetype}|${widthM}|${depthM}|${heightKey}`;
 }
 
 function hasOwn(object: object, key: PropertyKey): boolean {
@@ -88,7 +104,12 @@ function freeGroup(group: ShellGroup): void {
   for (const m of mats) m.dispose();
 }
 
-export function buildShell(plan: PlanState, scene: THREE.Scene, targetArchetype?: ArchetypeId | null): ShellGroup | null {
+export function buildShell(
+  plan: PlanState,
+  scene: THREE.Scene,
+  targetArchetype?: ArchetypeId | null,
+  context?: ShellBuildContext,
+): ShellGroup | null {
   const surface = plan.surface ?? 'outdoor';
   const archetype = targetArchetype && hasOwn(archetypes, targetArchetype)
     ? targetArchetype
@@ -107,7 +128,7 @@ export function buildShell(plan: PlanState, scene: THREE.Scene, targetArchetype?
     return null;
   }
 
-  const key = shellKey(archetype, plan.widthM, plan.heightM);
+  const key = shellKey(archetype, plan.widthM, plan.heightM, context?.usableHeightM);
   if (cachedShell && cachedShell.key === key) {
     // Idempotent: an already-attached root returns immediately (no re-add), so
     // callers can buildShell on every plan change without pre-disposing.
@@ -129,7 +150,7 @@ export function buildShell(plan: PlanState, scene: THREE.Scene, targetArchetype?
   const root = new THREE.Group();
   root.name = `shell:${archetype}`;
   root.scale.setScalar(0.1);
-  root.add(maker({ widthM: plan.widthM, depthM: plan.heightM }));
+  root.add(maker({ widthM: plan.widthM, depthM: plan.heightM, heightM: context?.usableHeightM }));
   scene.add(root);
 
   const group: ShellGroup = {

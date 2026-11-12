@@ -5,10 +5,11 @@ import { cropLibrary } from '@/data/crops';
 import { seedPlans } from '@/data/seed';
 import { templates } from '@/data/templates';
 import { environmentForTemplate } from '@/lib/template-plan';
+import { auditEnvironmentGeometry } from '@/lib/environmentPhysics';
 import { growingTargetKey, planForTarget } from '@/lib/growingTargets';
 import { makeEnvironment, normalizeEnvironment } from '@/lib/environment-model';
-import { missingUpdatedDemoWorlds, seedDemoSites } from './demoWorlds';
-import type { Environment, PlanState } from '@/types';
+import { groundRectangles, missingUpdatedDemoWorlds, seedDemoSites, updatedDemoWorlds, WAREHOUSE_RAFT } from './demoWorlds';
+import type { Environment, GrowingSpace, PlanState } from '@/types';
 
 function targetCropCount(plan: PlanState): number {
   return Object.values(plan.targets ?? {}).reduce((count, target) => count + Object.keys(target.planting).length, 0);
@@ -119,13 +120,59 @@ describe('versioned demo environments', () => {
     const warehouse = seedDemoSites()[9]!.environments[0]!;
     expect(cropCounts(warehouse.plan)).toEqual(cropCounts(seedPlans[9]!));
     expect(Object.keys(warehouse.plan.planting)).toHaveLength(0);
-    expect(warehouse.layout!.growingSpaces.filter((space) => space.kind === 'rack')).toHaveLength(15);
-    expect(warehouse.layout!.growingSpaces.filter((space) => space.kind === 'rack').every((space) => space.levels.length === 4)).toBe(true);
+    // Every contiguous rack run in the seed plan becomes one rack space.
+    const rackRuns = groundRectangles(seedPlans[9]!, 'plant-rack');
+    const rackSpaces = warehouse.layout!.growingSpaces.filter((space) => space.kind === 'rack');
+    expect(rackSpaces).toHaveLength(rackRuns.length);
+    expect(rackSpaces.every((space) => space.levels.length === 4)).toBe(true);
     expect(new Set(Object.values(warehouse.plan.targets!).map((target) => target.levelId).filter((id) => id.endsWith('level:1') || id.endsWith('level:3')).map((id) => id.split(':').at(-1))).size).toBe(2);
-    expect(warehouse.layout!.growingSpaces.find((space) => space.kind === 'hydro')).toMatchObject({ x: 7, y: 3.25, widthM: 2.4 });
-    expect(Object.values(warehouse.plan.targets ?? {}).some((target) => target.planting['28,13'] !== undefined)).toBe(true);
+    expect(warehouse.layout!.growingSpaces.find((space) => space.kind === 'hydro')).toMatchObject({
+      x: WAREHOUSE_RAFT.x,
+      y: WAREHOUSE_RAFT.y,
+      widthM: WAREHOUSE_RAFT.widthM,
+    });
+    const raftKey = `${Math.round(WAREHOUSE_RAFT.x / 0.25)},${Math.round(WAREHOUSE_RAFT.y / 0.25)}`;
+    expect(Object.values(warehouse.plan.targets ?? {}).some((target) => target.planting[raftKey] !== undefined)).toBe(true);
     expect(warehouse.instances!.filter((instance) => instance.slug === 'grow-light').length).toBeGreaterThan(0);
     expect(new Set(warehouse.instances!.map((instance) => instance.id)).size).toBe(warehouse.instances!.length);
+  });
+
+  it('saves every planted demo level at its fixture\'s real support-surface elevation', () => {
+    // Support surfaces: rack decks on the rack ladder, grow-bench deck top
+    // (voxel 6 → 0.6 m), NFT channel top band mid-slope (~0.3 m), DWC raft
+    // board top (0.22 m) and grade for in-ground beds.
+    const RACK_LADDER_M = [0.2, 0.65, 1.1, 1.55];
+    const supportFor = (environment: Environment, space: GrowingSpace): number[] => {
+      if (space.kind === 'rack') return RACK_LADDER_M;
+      if (space.kind === 'bench') return [0.6];
+      if (space.kind === 'bed') return [0];
+      const isRaft = (environment.instances ?? []).some((instance) => instance.slug === 'hydro-raft' && overlaps(space, instance));
+      return [isRaft ? 0.22 : 0.3];
+    };
+    const sites = seedDemoSites();
+    for (const farmId of [5, 6, 7, 8, 9]) {
+      for (const environment of sites[farmId]!.environments) {
+        for (const space of environment.layout?.growingSpaces ?? []) {
+          const plantedLevelIds = new Set(Object.values(environment.plan.targets ?? {})
+            .filter((target) => target.growingSpaceId === space.id && Object.keys(target.planting).length > 0)
+            .map((target) => target.levelId));
+          const support = supportFor(environment, space);
+          for (const level of space.levels) {
+            if (!plantedLevelIds.has(level.id)) continue;
+            expect(support, `${environment.id}/${space.label} level ${level.label}`).toContain(level.elevationM);
+          }
+        }
+      }
+    }
+    // Starter templates plant benches at the same deck-top surface.
+    for (const template of templates) {
+      for (const space of template.growingSpaces ?? []) {
+        for (const level of space.levels) {
+          if (space.kind === 'bench') expect(level.elevationM, `${template.id} bench top`).toBe(0.6);
+          if (space.kind === 'rack') expect(RACK_LADDER_M, `${template.id} rack levels`).toContain(level.elevationM);
+        }
+      }
+    }
   });
 
   it('attaches the garden, greenhouse and cold frame to the backyard while preserving the old plot', () => {
@@ -206,5 +253,47 @@ describe('versioned demo environments', () => {
     expect(planForTarget(saved.plan, ref).planting).toEqual(saved.plan.targets![key]!.planting);
     expect(saved.instances!.some((instance) => instance.slug === 'grow-light' && instance.mount.kind === 'growing-level' &&
       instance.mount.growingSpaceId === ref.growingSpaceId && instance.mount.levelId === ref.levelId)).toBe(true);
+  });
+});
+
+describe('demo environment geometry readiness', () => {
+  const enclosedEnvironments = new Map<string, Environment>();
+  for (const environments of Object.values(updatedDemoWorlds)) {
+    for (const environment of environments) {
+      if (archetypes[environment.archetype].kind !== 'open') enclosedEnvironments.set(environment.id, environment);
+    }
+  }
+  for (const site of Object.values(seedDemoSites())) {
+    for (const environment of site.environments) {
+      if (archetypes[environment.archetype].kind !== 'open') enclosedEnvironments.set(environment.id, environment);
+    }
+  }
+
+  it('audits every enclosed demo environment with zero error-severity issues', () => {
+    expect(enclosedEnvironments.size, 'enclosed demo environments audited').toBeGreaterThan(0);
+    for (const [id, environment] of enclosedEnvironments) {
+      const issues = auditEnvironmentGeometry(environment);
+      expect(issues.filter((issue) => issue.severity === 'error'), id).toEqual([]);
+    }
+  });
+
+  it('keeps the relocated hoophouse water tap on a clear in-footprint floor cell', () => {
+    const hoophouse = enclosedEnvironments.get('demo:v3:8:base')!;
+    const tap = hoophouse.instances!.find((instance) => instance.slug === 'water-tap' && instance.mount.kind === 'floor');
+    expect(tap).toBeDefined();
+    expect(tap!.x).toBeGreaterThanOrEqual(0);
+    expect(tap!.y).toBeGreaterThanOrEqual(0);
+    expect(tap!.x + tap!.widthM).toBeLessThanOrEqual(hoophouse.widthM);
+    expect(tap!.y + tap!.depthM).toBeLessThanOrEqual(hoophouse.heightM);
+  });
+
+  it('keeps the relocated warehouse nursery tray on a clear in-footprint floor cell', () => {
+    const warehouse = enclosedEnvironments.get('demo:v3:9:warehouse-tiered')!;
+    const tray = warehouse.instances!.find((instance) => instance.slug === 'seedling-tray' && instance.mount.kind === 'floor');
+    expect(tray).toBeDefined();
+    expect(tray!.x).toBeGreaterThanOrEqual(0);
+    expect(tray!.y).toBeGreaterThanOrEqual(0);
+    expect(tray!.x + tray!.widthM).toBeLessThanOrEqual(warehouse.widthM);
+    expect(tray!.y + tray!.depthM).toBeLessThanOrEqual(warehouse.heightM);
   });
 });

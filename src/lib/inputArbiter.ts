@@ -2,7 +2,7 @@
 // so a single input-mode flag is authoritative. Whatever captures input
 // (e.g. flight) must reset the mode to 'default' on teardown.
 
-export type InputMode = 'default' | 'flight';
+export type InputMode = 'default' | 'flight' | 'walk';
 
 let current: InputMode = 'default';
 

@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository. Last refreshed 2026-09-30 against `7a7640d` — kept in
-sync with `AGENTS.md` (which has the fuller version).
+code in this repository. Last refreshed 2026-11-11 against `8202811` plus the
+uncommitted environment-readiness work — kept in sync with `AGENTS.md` (which
+has the fuller version).
 
 ## Project
 
@@ -26,7 +27,8 @@ Caveats:
 
 - No linter configured; `npm run typecheck` is the gate. TS strict +
   `noUnusedLocals`/`noUnusedParameters`: an unused import fails the build.
-- `npm test` runs the Vitest unit suite. Verification = tests + typecheck +
+- `npm test` runs the Vitest unit suite (41 files / 227 tests as of
+  2026-11-11). Verification = tests + typecheck +
   build; use the headless screenshot harness for UI smoke checks:
   `node tools/appshot.mjs "<url>" <out.png>
   [WxH] [--gate] [--expect "<text>"] [--vt <ms>]` (~40 s/shot; Chrome killed
@@ -35,6 +37,10 @@ Caveats:
   caught by the DEV-only boot probe (`src/dev/bootProbe.ts`); always pair it
   with `--expect` (CI uses `"25 cm cells"`) so a NotFound page can't pass.
   Showcase pages have no boot probe — assert `--expect "showcase-ready"`.
+  With no Chrome bundle installed, point `FF_CHROME_BIN` at Playwright's
+  `chrome-headless-shell`, and pass `--vt <ms>` on SPA routes: with `--vt 0`
+  several routes serialize the DOM before boot, so `--expect` fails on a page
+  that renders fine.
 
 ## CI
 
@@ -102,6 +108,21 @@ warehouse` (`PlanSurface`, per canvas via Settings drawer). Enclosed surfaces
 swap shell/floor/ambient and shelter the sim — see
 `quality/MISSION-ENVIRONMENTS.md`.
 
+**Environment readiness** (2026-11-11): nine archetypes
+(`src/creative/archetypes.ts`) drive shells, spaces and equipment through
+`src/three/{shell,structures,plants}.ts`. Shell makers take an additive
+`ShellSpec.heightM`, and `src/three/shell.ts` caches one shell keyed
+`archetype|widthM|depthM|heightKey` where `heightKey` comes from the saved
+`layout.usableHeightM`; an absent height keeps the old defaults. Environment
+mounts carry an explicit `elevationM` (`ENV_MOUNT_DEFAULT_ELEVATION_M`), racks
+render their real saved level elevations, and `SUPPORT_ELEVATIONS_M` pins the
+support ladders. The pure `auditEnvironmentGeometry` in
+`src/lib/environmentPhysics.ts` is the readiness check (surfaced as "Layout
+readiness" in the Growing systems panel): run it after moving a growing space,
+target, level, mount or access record. Shells own no lights — glow reads are
+unlit `MeshBasicMaterial`. Access openings are still authored per maker, not
+derived from saved `layout.access`.
+
 Layout invariants of PlotDesigner (don't regress): `xl:h-full` flex column;
 canvas card absorbs toolbar wrap; below-xl `h-[60dvh]` + page scroll;
 sizing effect keyed on `isLoading`.
@@ -125,10 +146,16 @@ sizing effect keyed on `isLoading`.
    `--vt`, `--vt 0` = real-time dump, override via `FF_SHOT_TIMEOUT_MS`).
    DEV `?ffvis2d=drought|baseline[&ffvis2dDay=N]` loads a real sim run into
    the Blueprint for headless gates.
+9. Environment geometry has a pure audit: `auditEnvironmentGeometry`
+   (`src/lib/environmentPhysics.ts`, panel "Layout readiness") — run it after
+   moving a growing space, level, mount or access record. Shell height comes
+   from saved `layout.usableHeightM`, and `three/shell.ts` caches one shell
+   keyed `archetype|widthM|depthM|heightKey`.
 
 ## Related docs
 
 `HANDOFF.md` (status/code map/traps) · `README.md` (endpoints + backend swap)
 · `SPEC.md` · `quality/SPEC-*.md` + `quality/MISSION-*.md` (contracts +
 verification logs) · `quality/ASSETS.md` · `quality/QUALITY_BAR.md` ·
-`implementation-notes.md` (decisions ledger — keep appending).
+`implementation-notes.md` (decisions ledger — keep appending) ·
+`ROADMAP.md` (priorities and open gaps).

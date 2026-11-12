@@ -2,12 +2,25 @@ import * as THREE from 'three';
 import type { Engine } from './engine';
 import { setInputMode } from '@/lib/inputArbiter';
 
+export type FlightMode = 'fly' | 'walk';
+
 export interface FlightCamera {
   active: boolean;
+  mode: FlightMode;
   update: (dt: number) => void;
-  activate: () => void;
+  activate: (mode?: FlightMode) => void;
   deactivate: () => void;
   dispose: () => void;
+}
+
+export interface FlightCameraOptions {
+  onEnd?: () => void;
+  /** Live camera bounds (re-read every frame so plan/farm changes clamp). */
+  getBounds?: () => { minX: number; maxX: number; minZ: number; maxZ: number };
+  /** Interior ceiling cap in metres; null/absent keeps the open-sky limits. */
+  getCeilingM?: () => number | null;
+  /** Standing eye height for walk mode (metres). */
+  getEyeHeightM?: () => number;
 }
 
 interface FlightState {
@@ -20,14 +33,38 @@ interface FlightState {
   position: THREE.Vector3;
 }
 
+export const WALK_SPEED = 2.6;   // m/s — a brisk indoor walk
+export const WALK_SPRINT = 5.5;  // m/s — shift
+const FLY_FLOOR_ALT = 1.5;
+const OPEN_SKY_CEILING = 100;
+const INTERIOR_FLY_FLOOR = 0.35;
+
+const UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * One camera-controls escape hatch with two navigation modes:
+ *
+ * - `fly`  — the original WASD drone (throttle, altitude, roll). Inside an
+ *   enclosed shell its bounds/ceiling come from `getBounds`/`getCeilingM`, so
+ *   a drone cannot leave the environment it belongs to.
+ * - `walk` — an eye-height first-person walk: mouse look, W/S forward/back,
+ *   A/D strafe, shift to hurry, movement locked to the ground plane and the
+ *   camera height pinned to the environment's standing eye height. This is the
+ *   interior navigation mode for greenhouse/hoophouse/tent/room/warehouse
+ *   worlds.
+ *
+ * Pointer lock, key capture, pre-flight orbit restore and the Esc exit path are
+ * shared by both modes.
+ */
 export function createFlightCamera(
   engine: Engine,
-  onEnd?: () => void,
-  getBounds?: () => { minX: number; maxX: number; minZ: number; maxZ: number },
+  options: FlightCameraOptions = {},
 ): FlightCamera {
-  let camera = engine.camera;
+  const { onEnd, getBounds, getCeilingM, getEyeHeightM } = options;
+  const camera = engine.camera;
   const canvas = engine.canvas;
   let active = false;
+  let mode: FlightMode = 'fly';
 
   // Pre-flight orbit state so exit restores exactly where the camera was.
   let savedCamera: {
@@ -87,7 +124,7 @@ export function createFlightCamera(
     }
   }
 
-  function activate() {
+  function activate(nextMode: FlightMode = 'fly') {
     if (active) return;
 
     // Save pre-flight orbit state BEFORE switching modes, so deactivate can
@@ -99,19 +136,28 @@ export function createFlightCamera(
       polar: engine.controls.polarAngle,
       distance: engine.controls.distance,
     };
-    setInputMode('flight');
+    setInputMode(nextMode === 'walk' ? 'walk' : 'flight');
 
     active = true;
+    mode = nextMode;
 
-    // Reset flight orientation from current camera
+    // Reset flight orientation from current camera. The yaw is the angle that
+    // reproduces this look direction from `-Z` rotated about +Y, so entering a
+    // nav mode never spins the view around.
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
-    state.yaw = Math.atan2(forward.x, forward.z);
+    state.yaw = Math.atan2(-forward.x, -forward.z);
     state.position.copy(camera.position);
     state.altitude = camera.position.y;
-    state.speed = 5;
-    state.pitch = -0.1;
+    state.speed = nextMode === 'walk' ? WALK_SPEED : 5;
+    state.pitch = nextMode === 'walk' ? 0 : -0.1;
     state.roll = 0;
+
+    if (nextMode === 'walk') {
+      // Drop straight to standing height — a walk starts on the floor, not
+      // wherever the orbit camera happened to be hovering.
+      state.position.y = getEyeHeightM?.() ?? 1.65;
+    }
 
     // Disable orbit controls
     engine.controls.enabled = false;
@@ -165,52 +211,79 @@ export function createFlightCamera(
     if (!active) return;
 
     const dtClamped = Math.min(dt, 0.1); // prevent huge jumps
+    const walking = mode === 'walk';
 
     // Mouse look
     state.yaw -= mouseX * mouseSensitivity;
     state.pitch -= mouseY * mouseSensitivity;
-    state.pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, state.pitch));
+    const pitchLimit = walking ? Math.PI / 3.2 : Math.PI / 3;
+    state.pitch = Math.max(-pitchLimit, Math.min(pitchLimit, state.pitch));
     mouseX = 0;
     mouseY = 0;
 
     // Auto-level roll
     state.roll *= 0.9;
 
-    // Rudder (Q/E)
-    if (keys.has('q')) state.roll += 0.02;
-    if (keys.has('e')) state.roll -= 0.02;
+    // Rudder (Q/E) — flight only; a walker never banks.
+    if (!walking) {
+      if (keys.has('q')) state.roll += 0.02;
+      if (keys.has('e')) state.roll -= 0.02;
+    }
 
-    // Throttle (min 0 — full stop must be possible)
-    if (keys.has('w') || keys.has('arrowup')) state.speed += dtClamped * 8;
-    if (keys.has('s') || keys.has('arrowdown')) state.speed -= dtClamped * 8;
-    state.speed = Math.max(0, Math.min(30, state.speed));
+    // Throttle (min 0 — full stop must be possible). Walk mode has no
+    // throttle: W/S are direct movement (see below).
+    if (!walking) {
+      if (keys.has('w') || keys.has('arrowup')) state.speed += dtClamped * 8;
+      if (keys.has('s') || keys.has('arrowdown')) state.speed -= dtClamped * 8;
+      state.speed = Math.max(0, Math.min(30, state.speed));
 
-    // Pitch from up/down
-    if (keys.has('arrowup') && !keys.has('w')) state.pitch -= dtClamped * 0.5;
-    if (keys.has('arrowdown')&& !keys.has('s')) state.pitch += dtClamped * 0.5;
+      // Pitch from up/down
+      if (keys.has('arrowup') && !keys.has('w')) state.pitch -= dtClamped * 0.5;
+      if (keys.has('arrowdown') && !keys.has('s')) state.pitch += dtClamped * 0.5;
 
-    // Yaw from left/right
-    if (keys.has('arrowleft') || keys.has('a')) state.yaw -= dtClamped * 0.8;
-    if (keys.has('arrowright')|| keys.has('d')) state.yaw += dtClamped * 0.8;
+      // Yaw from left/right
+      if (keys.has('arrowleft') || keys.has('a')) state.yaw -= dtClamped * 0.8;
+      if (keys.has('arrowright') || keys.has('d')) state.yaw += dtClamped * 0.8;
+    } else {
+      // Arrows still turn; the mouse is the primary look control.
+      if (keys.has('arrowleft')) state.yaw -= dtClamped * 0.9;
+      if (keys.has('arrowright')) state.yaw += dtClamped * 0.9;
+    }
 
     // Build rotation from pitch/yaw/roll
     const pitchQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), state.pitch);
-    const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), state.yaw);
+    const yawQ = new THREE.Quaternion().setFromAxisAngle(UP, state.yaw);
     const rollQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), state.roll);
     const rotation = new THREE.Quaternion().multiplyQuaternions(yawQ, pitchQ).multiply(rollQ);
 
     camera.quaternion.copy(rotation);
 
-    // Move forward. Dead zone below 0.05 m/s: a stopped drone must not creep
-    // by float error. Altitude (Space/Shift) still applies while stopped.
-    if (state.speed >= 0.05) {
+    if (walking) {
+      // Ground-plane movement: pitch tilts the view, never the walk vector.
+      const forward = new THREE.Vector3(-Math.sin(state.yaw), 0, -Math.cos(state.yaw));
+      const right = new THREE.Vector3(Math.cos(state.yaw), 0, -Math.sin(state.yaw));
+      let ahead = 0;
+      let side = 0;
+      if (keys.has('w') || keys.has('arrowup')) ahead += 1;
+      if (keys.has('s') || keys.has('arrowdown')) ahead -= 1;
+      if (keys.has('d')) side += 1;
+      if (keys.has('a')) side -= 1;
+      if (ahead !== 0 || side !== 0) {
+        const speed = keys.has('shift') || keys.has('control') ? WALK_SPRINT : WALK_SPEED;
+        const step = speed * dtClamped;
+        state.position.addScaledVector(forward, ahead * step);
+        state.position.addScaledVector(right, side * step);
+      }
+    } else if (state.speed >= 0.05) {
+      // Move forward. Dead zone below 0.05 m/s: a stopped drone must not creep
+      // by float error. Altitude (Space/Shift) still applies while stopped.
       const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(rotation);
       const movement = forward.multiplyScalar(state.speed * dtClamped);
 
       state.position.add(movement);
     }
 
-    // Clamp into the live plan bounds (getter, not a snapshot — the bounds
+    // Clamp into the live bounds (getter, not a snapshot — the bounds
     // can change while a flight is in progress).
     const bounds = getBounds?.();
     if (bounds) {
@@ -218,12 +291,20 @@ export function createFlightCamera(
       state.position.z = Math.min(bounds.maxZ, Math.max(bounds.minZ, state.position.z));
     }
 
-    // Altitude limits
-    state.position.y = Math.max(1.5, Math.min(100, state.position.y));
-    // Pitch up/down affects altitude slightly
-    state.position.y += (keys.has(' ') ? 1 : 0) * dtClamped * 8;
-    state.position.y += (keys.has('shift') || keys.has('control') ? -1 : 0) * dtClamped * 8;
-    state.position.y = Math.max(1.5, Math.min(100, state.position.y));
+    // Altitude limits. Inside an enclosed environment the shell ceiling caps a
+    // drone so it cannot rise through the roof, and a walk stays pinned to the
+    // environment's standing eye height.
+    const ceiling = getCeilingM?.() ?? null;
+    const minAlt = ceiling !== null ? INTERIOR_FLY_FLOOR : FLY_FLOOR_ALT;
+    const maxAlt = ceiling !== null ? Math.max(minAlt + 0.2, ceiling) : OPEN_SKY_CEILING;
+    if (walking) {
+      state.position.y = getEyeHeightM?.() ?? 1.65;
+    } else {
+      // Pitch up/down affects altitude slightly
+      state.position.y += (keys.has(' ') ? 1 : 0) * dtClamped * 8;
+      state.position.y += (keys.has('shift') || keys.has('control') ? -1 : 0) * dtClamped * 8;
+    }
+    state.position.y = Math.max(minAlt, Math.min(maxAlt, state.position.y));
 
     camera.position.copy(state.position);
   }
@@ -232,7 +313,15 @@ export function createFlightCamera(
     deactivate();
   }
 
-  // Live getter: `active` is a closure flag, and a plain property would
-  // snapshot `false` forever, freezing out the rAF gating and the exit button.
-  return { get active() { return active; }, update, activate, deactivate, dispose };
+  // Live getters: `active`/`mode` are closure state, and plain properties would
+  // snapshot their construction-time values forever, freezing out the rAF
+  // gating and the exit button.
+  return {
+    get active() { return active; },
+    get mode() { return mode; },
+    update,
+    activate,
+    deactivate,
+    dispose,
+  };
 }

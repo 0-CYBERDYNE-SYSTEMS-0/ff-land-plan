@@ -150,7 +150,8 @@ const greenhouseBench = (id: string, label: string, x: number, y: number, crop: 
     y,
     widthM: 3,
     depthM: 0.75,
-    levels: [{ id: `${id}:bench-top`, label: 'Bench top', elevationM: 0.58 }],
+    // Grow-bench deck top: voxel 6 → 0.6 m, the actual crop support surface.
+    levels: [{ id: `${id}:bench-top`, label: 'Bench top', elevationM: 0.6 }],
   };
   const level = space.levels[0]!;
   const lightCount = Math.ceil((space.widthM * space.depthM) / 0.5);
@@ -350,9 +351,9 @@ export const templates: GardenTemplate[] = [
     },
     plantedAtDaysAgo: { Pepper: 28, Basil: 21 },
     instances: [
-      { id: 'tent:light:1', slug: 'grow-light', x: 1.75, y: 1.25, widthM: 0.5, depthM: 0.25, mount: { kind: 'environment' } },
-      { id: 'tent:light:2', slug: 'grow-light', x: 2.75, y: 1.25, widthM: 0.5, depthM: 0.25, mount: { kind: 'environment' } },
-      { id: 'tent:fan:1', slug: 'clip-fan', x: 3.75, y: 2, widthM: 0.3, depthM: 0.3, mount: { kind: 'environment' } },
+      { id: 'tent:light:1', slug: 'grow-light', x: 1.75, y: 1.25, widthM: 0.5, depthM: 0.25, mount: { kind: 'environment', elevationM: 1.5 } },
+      { id: 'tent:light:2', slug: 'grow-light', x: 2.75, y: 1.25, widthM: 0.5, depthM: 0.25, mount: { kind: 'environment', elevationM: 1.5 } },
+      { id: 'tent:fan:1', slug: 'clip-fan', x: 3.75, y: 2, widthM: 0.3, depthM: 0.3, mount: { kind: 'environment', elevationM: 1.2 } },
     ],
   },
   {
@@ -383,10 +384,10 @@ export const templates: GardenTemplate[] = [
     growingSpaces: warehouseRacks.map(({ space }) => space),
     instances: [
       ...warehouseRacks.flatMap(({ instances }) => instances),
-      { id: 'warehouse:fan:west', slug: 'clip-fan', x: 0.25, y: 1.5, widthM: 0.3, depthM: 0.3, mount: { kind: 'environment' } },
-      { id: 'warehouse:fan:east', slug: 'clip-fan', x: 11.25, y: 3.5, widthM: 0.3, depthM: 0.3, mount: { kind: 'environment' } },
-      { id: 'warehouse:hvac:west', slug: 'hvac-unit', x: 0, y: 8.75, widthM: 1, depthM: 0.4, mount: { kind: 'environment' } },
-      { id: 'warehouse:hvac:east', slug: 'hvac-unit', x: 10.75, y: 8.75, widthM: 1, depthM: 0.4, mount: { kind: 'environment' } },
+      { id: 'warehouse:fan:west', slug: 'clip-fan', x: 0.25, y: 1.5, widthM: 0.3, depthM: 0.3, mount: { kind: 'environment', elevationM: 1.5 } },
+      { id: 'warehouse:fan:east', slug: 'clip-fan', x: 11.25, y: 3.5, widthM: 0.3, depthM: 0.3, mount: { kind: 'environment', elevationM: 1.5 } },
+      { id: 'warehouse:hvac:west', slug: 'hvac-unit', x: 0, y: 8.75, widthM: 1, depthM: 0.4, mount: { kind: 'environment', elevationM: 1.8 } },
+      { id: 'warehouse:hvac:east', slug: 'hvac-unit', x: 10.75, y: 8.75, widthM: 1, depthM: 0.4, mount: { kind: 'environment', elevationM: 1.8 } },
       { id: 'warehouse:co2', slug: 'co2-tank', x: 11.25, y: 0, widthM: 0.5, depthM: 0.5, mount: { kind: 'floor' } },
       { id: 'warehouse:nursery', slug: 'seedling-tray', x: 11, y: 7.5, widthM: 0.6, depthM: 0.3, mount: { kind: 'floor' } },
     ],
@@ -404,8 +405,8 @@ export const templates: GardenTemplate[] = [
     growingSpaces: [containerRack.space],
     instances: [
       ...containerRack.instances,
-      { id: 'container:co2', slug: 'co2-tank', x: 10.75, y: 0, widthM: 0.5, depthM: 0.5, mount: { kind: 'environment' } },
-      { id: 'container:hvac', slug: 'hvac-unit', x: 10.25, y: 1.6, widthM: 1, depthM: 0.4, mount: { kind: 'environment' } },
+      { id: 'container:co2', slug: 'co2-tank', x: 10.75, y: 0, widthM: 0.5, depthM: 0.5, mount: { kind: 'environment', elevationM: 0 } },
+      { id: 'container:hvac', slug: 'hvac-unit', x: 10.25, y: 1.6, widthM: 1, depthM: 0.4, mount: { kind: 'environment', elevationM: 1.5 } },
     ],
     targets: containerRack.targets,
   },

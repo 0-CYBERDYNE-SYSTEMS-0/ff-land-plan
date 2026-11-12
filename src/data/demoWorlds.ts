@@ -9,8 +9,6 @@ import { ARCHETYPE_FOR_SURFACE } from '@/creative/archetypes';
 import { seedPlans } from '@/data/seed';
 
 const DEMO_PREFIX = 'demo:v3';
-const RACK_ROWS = [2, 6, 10, 14, 18, 22, 26, 30];
-const RACK_SOURCES = [2, 10, 18, 26, 34];
 const RACK_GROUND_ASSETS = new Set([
   'plant-rack', 'grow-light', 'clip-fan', 'hvac-unit', 'co2-tank', 'seedling-tray',
   'hydro-raft', 'crate-stack',
@@ -25,6 +23,19 @@ const EQUIPMENT_ASSETS = new Set([
   'grow-light', 'clip-fan', 'hvac-unit', 'co2-tank', 'seedling-tray', 'hydro-raft',
   'crate-stack', 'water-tap', 'ibc-tote', 'signpost', 'irrigation-line',
 ]);
+
+/**
+ * Saved level elevations are the actual crop support surfaces of the fixture
+ * that renders the space: rack decks on the rack ladder, the grow-bench deck
+ * top (voxel 6 → 0.6 m), the NFT channel top band mid-slope (~0.3 m of its
+ * 0.26–0.33 m run) and grade for in-ground beds.
+ */
+const SUPPORT_ELEVATIONS_M: Record<GrowingSpace['kind'], number[]> = {
+  rack: [0.2, 0.65, 1.1, 1.55],
+  bench: [0.6],
+  hydro: [0.3],
+  bed: [0],
+};
 
 function cleanPlan(plan: PlanState): PlanState {
   const next = structuredClone(plan);
@@ -53,7 +64,12 @@ function seededEnvironment(
   return { ...environment, plan };
 }
 
-function groundRectangles(plan: PlanState, slug: string) {
+/**
+ * Group the ground cells of one slug into contiguous rectangles (top-left,
+ * size and member cells). Exported so tests can derive layout expectations from
+ * the shipped plan instead of hard-coding coordinates.
+ */
+export function groundRectangles(plan: PlanState, slug: string) {
   const remaining = new Set(Object.entries(plan.ground).filter(([, value]) => value === slug).map(([key]) => key));
   const rectangles: Array<{ cells: string[]; x: number; y: number; width: number; height: number }> = [];
   while (remaining.size > 0) {
@@ -97,7 +113,7 @@ function enrichSeededEnvironment(farmId: number, environment: Environment, sourc
     const kind = SPACE_ASSETS[slug]!;
     const id = `${DEMO_PREFIX}:${farmId}:space:${slug}:${++spaceIndex}`;
     const rack = kind === 'rack';
-    const levels = (rack ? [0.2, 0.65, 1.1, 1.55] : [0.15]).map((elevationM, index) => ({
+    const levels = SUPPORT_ELEVATIONS_M[kind].map((elevationM, index) => ({
       id: `${id}:level:${index + 1}`,
       label: rack ? `Level ${index + 1}` : kind === 'bench' ? 'Bench top' : kind === 'hydro' ? 'Channel' : 'Bed',
       elevationM,
@@ -218,115 +234,142 @@ function addInstance(
   instances.push({ id, slug, x, y, widthM, depthM, mount });
 }
 
+/**
+ * The relocated DWC raft: one clear aisle stall in the first bay, sized to the
+ * seeded raft crop block. Kept as data so the demo test can assert against it.
+ */
+export const WAREHOUSE_RAFT = {
+  x: 7,
+  y: 3,
+  widthM: 2.4,
+  depthM: 1.2,
+  levelElevationM: 0.22,
+  cropColumns: 4,
+} as const;
+
+/**
+ * The vertical-farm hall: every contiguous rack run painted in the seed plan
+ * becomes a rack growing space, and the clear gap between the two runs of a row
+ * becomes the hall's aisle reservation. Spaces therefore follow the shipped
+ * layout at any canvas size (3 x 2 bays = 36 x 20 m) instead of being pinned to
+ * one 12 m hall, and no seeded crop is dropped.
+ */
 function tieredWarehouse(): Environment {
   const farmId = 9;
   const source = seedPlans[farmId]!;
   const plan = cleanPlan(source);
-  const sourceCrops = Object.entries(source.planting)
-    .filter(([key]) => RACK_SOURCES.some((row) => {
-      const y = Number(key.slice(key.indexOf(',') + 1));
-      return y === row || y === row + 1;
-    }))
-    .sort(([a], [b]) => {
-      const [ax, ay] = a.split(',').map(Number);
-      const [bx, by] = b.split(',').map(Number);
-      return ay! - by! || ax! - bx!;
-    })
-    .map(([key, cropId]) => ({ cropId, plantedAt: source.plantedAt?.[key] }));
-  const raftCrops = Object.entries(source.planting)
-    .filter(([key]) => !RACK_SOURCES.some((row) => {
-      const y = Number(key.slice(key.indexOf(',') + 1));
-      return y === row || y === row + 1;
-    }))
-    .sort(([a], [b]) => {
-      const [ax, ay] = a.split(',').map(Number);
-      const [bx, by] = b.split(',').map(Number);
-      return ay! - by! || ax! - bx!;
-    })
-    .map(([key, cropId]) => ({ cropId, plantedAt: source.plantedAt?.[key] }));
+  const cellM = plan.cellM;
 
-  for (const [key, slug] of Object.entries(plan.ground)) {
-    if (RACK_GROUND_ASSETS.has(slug)) delete plan.ground[key];
-  }
-  for (const key of Object.keys(plan.planting)) delete plan.planting[key];
-  delete plan.plantedAt;
-
-  const spaces: NonNullable<Environment['layout']>['growingSpaces'] = [];
+  const rackRects = groundRectangles(plan, 'plant-rack');
+  const spaces: GrowingSpace[] = [];
   const targets: NonNullable<PlanState['targets']> = {};
   const instances: EnvironmentAssetInstance[] = [];
-  let sourceIndex = 0;
+  const rackCellKeys = new Set<string>();
+  const reservations: NonNullable<Environment['layout']>['reservations'] = [];
+  let instanceIndex = 0;
 
-  for (const [rowIndex, row] of RACK_ROWS.entries()) {
-    for (const [side, x0, x1] of [['west', 5, 18], ['east', 28, 45]] as const) {
-      // The east bay at row 14 stays clear for the raft's 1.2 m end aisle.
-      if (side === 'east' && row === 14) continue;
-      const spaceId = `${DEMO_PREFIX}:9:rack:${rowIndex + 1}:${side}`;
-      const cellM = 0.25;
-      const widthM = (x1 - x0 + 1) * cellM;
-      const depthM = 0.5;
-      const levels = [
-        { id: `${spaceId}:level:1`, label: 'Level 1', elevationM: 0.2 },
-        { id: `${spaceId}:level:2`, label: 'Level 2', elevationM: 0.65 },
-        { id: `${spaceId}:level:3`, label: 'Level 3', elevationM: 1.1 },
-        { id: `${spaceId}:level:4`, label: 'Level 4', elevationM: 1.55 },
-      ];
-      const space = {
-        id: spaceId,
-        label: `${side === 'west' ? 'West' : 'East'} rack ${rowIndex + 1}`,
-        kind: 'rack' as const,
-        x: x0 * cellM,
-        y: row * cellM,
-        widthM,
-        depthM,
-        levels,
-      };
-      spaces.push(space);
-      addInstance(instances, `${spaceId}:equipment`, 'plant-rack', space.x, space.y, widthM, depthM, { kind: 'floor' });
-      for (const level of levels) {
-        const lightsPerLevel = Math.ceil((widthM * depthM) / 0.5);
-        const segmentWidthM = widthM / lightsPerLevel;
-        for (let lightIndex = 0; lightIndex < lightsPerLevel; lightIndex += 1) {
-          addInstance(
-            instances,
-            `${spaceId}:led:${level.id}:${lightIndex + 1}`,
-            'grow-light',
-            space.x + lightIndex * segmentWidthM,
-            space.y,
-            segmentWidthM,
-            depthM,
-            { kind: 'growing-level', growingSpaceId: spaceId, levelId: level.id },
-          );
-        }
-      }
-
-      const targetLevel = levels[rowIndex % 2 === 0 ? 0 : 2]!;
-      const targetKey = growingTargetKey({ kind: 'growing-level', growingSpaceId: spaceId, levelId: targetLevel.id });
-      const planting: Record<string, number> = {};
-      const plantedAt: Record<string, string> = {};
-      for (let y = row; y <= row + 1; y++) {
-        for (let x = x0; x <= x1 && sourceIndex < sourceCrops.length; x++) {
-          const sourceCrop = sourceCrops[sourceIndex++]!;
-          const cellKey = `${x},${y}`;
-          planting[cellKey] = sourceCrop.cropId;
-          if (sourceCrop.plantedAt) plantedAt[cellKey] = sourceCrop.plantedAt;
-        }
-      }
-      if (Object.keys(planting).length > 0) {
-        targets[targetKey] = {
-          growingSpaceId: spaceId,
-          levelId: targetLevel.id,
-          planting,
-          ...(Object.keys(plantedAt).length > 0 ? { plantedAt } : {}),
-        };
+  rackRects.forEach((rect, rectIndex) => {
+    for (const key of rect.cells) rackCellKeys.add(key);
+    const id = `${DEMO_PREFIX}:9:rack:${rectIndex + 1}`;
+    const levels = SUPPORT_ELEVATIONS_M.rack.map((elevationM, index) => ({
+      id: `${id}:level:${index + 1}`,
+      label: `Level ${index + 1}`,
+      elevationM,
+    }));
+    // Alternating target levels keep the runs visually distinct, as before.
+    const targetLevel = levels[rectIndex % 2 === 0 ? 0 : 2]!;
+    const space: GrowingSpace = {
+      id,
+      label: `Rack run ${rectIndex + 1}`,
+      kind: 'rack',
+      x: rect.x * cellM,
+      y: rect.y * cellM,
+      widthM: rect.width * cellM,
+      depthM: rect.height * cellM,
+      levels,
+    };
+    spaces.push(space);
+    addInstance(instances, `${id}:equipment`, 'plant-rack', space.x, space.y, space.widthM, space.depthM, { kind: 'floor' });
+    for (const level of levels) {
+      const lightsPerLevel = Math.ceil((space.widthM * space.depthM) / 0.5);
+      const segmentWidthM = space.widthM / lightsPerLevel;
+      for (let lightIndex = 0; lightIndex < lightsPerLevel; lightIndex += 1) {
+        addInstance(
+          instances,
+          `${id}:led:${level.id}:${lightIndex + 1}`,
+          'grow-light',
+          space.x + lightIndex * segmentWidthM,
+          space.y,
+          segmentWidthM,
+          space.depthM,
+          { kind: 'growing-level', growingSpaceId: id, levelId: level.id },
+        );
       }
     }
+
+    // Every seeded crop on this run moves onto its target level.
+    const planting: Record<string, number> = {};
+    const plantedAt: Record<string, string> = {};
+    for (const key of rect.cells) {
+      const cropId = plan.planting[key];
+      if (cropId === undefined) continue;
+      planting[key] = cropId;
+      const at = plan.plantedAt?.[key];
+      if (at) plantedAt[key] = at;
+    }
+    if (Object.keys(planting).length > 0) {
+      targets[growingTargetKey({ kind: 'growing-level', growingSpaceId: id, levelId: targetLevel.id })] = {
+        growingSpaceId: id,
+        levelId: targetLevel.id,
+        planting,
+        ...(Object.keys(plantedAt).length > 0 ? { plantedAt } : {}),
+      };
+    }
+  });
+
+  // The gap between the two rack runs of a row is the walkway down that row.
+  const runsByRow = new Map<number, typeof rackRects>();
+  for (const rect of rackRects) {
+    const row = runsByRow.get(rect.y);
+    if (row) row.push(rect);
+    else runsByRow.set(rect.y, [rect]);
   }
+  for (const [y, runs] of runsByRow) {
+    const sorted = [...runs].sort((a, b) => a.x - b.x);
+    for (let index = 0; index + 1 < sorted.length; index += 2) {
+      const left = sorted[index]!;
+      const right = sorted[index + 1]!;
+      const gapCells = right.x - (left.x + left.width);
+      if (gapCells <= 0) continue;
+      reservations.push({
+        id: `${DEMO_PREFIX}:9:aisle:${y}:${index / 2 + 1}`,
+        kind: 'aisle',
+        x: (left.x + left.width) * cellM,
+        y: y * cellM,
+        widthM: gapCells * cellM,
+        depthM: left.height * cellM,
+      });
+    }
+  }
+
+  // Everything that was not on a rack row is the seeded raft bed; it moves onto
+  // the relocated DWC raft in the first bay.
   const raftSpaceId = `${DEMO_PREFIX}:9:hydro-raft`;
   const raftLevelId = `${raftSpaceId}:level:1`;
+  const raftCrops = Object.entries(plan.planting)
+    .filter(([key]) => !rackCellKeys.has(key))
+    .map(([key, cropId]) => ({ key, cropId, plantedAt: plan.plantedAt?.[key] }))
+    .sort((a, b) => {
+      const [ax, ay] = a.key.split(',').map(Number);
+      const [bx, by] = b.key.split(',').map(Number);
+      return ay! - by! || ax! - bx!;
+    });
+  const originX = Math.round(WAREHOUSE_RAFT.x / cellM);
+  const originY = Math.round(WAREHOUSE_RAFT.y / cellM);
   const raftPlanting: Record<string, number> = {};
   const raftPlantedAt: Record<string, string> = {};
   raftCrops.forEach((entry, index) => {
-    const key = `${28 + (index % 4)},${13 + Math.floor(index / 4)}`;
+    const key = `${originX + (index % WAREHOUSE_RAFT.cropColumns)},${originY + Math.floor(index / WAREHOUSE_RAFT.cropColumns)}`;
     raftPlanting[key] = entry.cropId;
     if (entry.plantedAt) raftPlantedAt[key] = entry.plantedAt;
   });
@@ -338,15 +381,18 @@ function tieredWarehouse(): Environment {
       ...(Object.keys(raftPlantedAt).length > 0 ? { plantedAt: raftPlantedAt } : {}),
     };
   }
+
   const raftSpace: GrowingSpace = {
     id: raftSpaceId,
     label: 'Deep-water raft',
     kind: 'hydro',
-    x: 7,
-    y: 3.25,
-    widthM: 2.4,
-    depthM: 1.2,
-    levels: [{ id: raftLevelId, label: 'Raft surface', elevationM: 0.15 }],
+    x: WAREHOUSE_RAFT.x,
+    y: WAREHOUSE_RAFT.y,
+    widthM: WAREHOUSE_RAFT.widthM,
+    depthM: WAREHOUSE_RAFT.depthM,
+    // Raft boards float at 0.22 m — crops root through the board top, not
+    // the pond liner below it.
+    levels: [{ id: raftLevelId, label: 'Raft surface', elevationM: WAREHOUSE_RAFT.levelElevationM }],
   };
   const raftLightCount = Math.ceil((raftSpace.widthM * raftSpace.depthM) / 0.5);
   const raftLightWidth = raftSpace.widthM / raftLightCount;
@@ -362,18 +408,36 @@ function tieredWarehouse(): Environment {
       { kind: 'growing-level', growingSpaceId: raftSpaceId, levelId: raftLevelId },
     );
   }
-  plan.targets = targets;
-
-  // Wall and service equipment use stable mounts; the hydro raft sits in a
-  // clear end aisle between two rack rows.
-  addInstance(instances, `${DEMO_PREFIX}:9:fan:west`, 'clip-fan', 0.25, 1.5, 0.3, 0.3, { kind: 'environment' });
-  addInstance(instances, `${DEMO_PREFIX}:9:fan:east`, 'clip-fan', 11.25, 3.5, 0.3, 0.3, { kind: 'environment' });
-  addInstance(instances, `${DEMO_PREFIX}:9:hvac:west`, 'hvac-unit', 0, 9.25, 1, 0.4, { kind: 'environment' });
-  addInstance(instances, `${DEMO_PREFIX}:9:hvac:east`, 'hvac-unit', 10.75, 9.25, 1, 0.4, { kind: 'environment' });
-  addInstance(instances, `${DEMO_PREFIX}:9:co2`, 'co2-tank', 11.25, 0, 0.5, 0.5, { kind: 'environment' });
-  addInstance(instances, `${DEMO_PREFIX}:9:nursery`, 'seedling-tray', 11, 7.5, 0.6, 0.3, { kind: 'floor' });
-  addInstance(instances, `${DEMO_PREFIX}:9:crates`, 'crate-stack', 11.25, 8.25, 0.5, 0.5, { kind: 'floor' });
   addInstance(instances, `${DEMO_PREFIX}:9:raft`, 'hydro-raft', raftSpace.x, raftSpace.y, raftSpace.widthM, raftSpace.depthM, { kind: 'floor' });
+
+  // Wall and service equipment derived from the painted equipment rectangles:
+  // fans, HVAC and CO2 keep their mounts (environment) and floors stay floors.
+  const environmentMounted = new Set(['clip-fan', 'hvac-unit', 'co2-tank', 'signpost']);
+  for (const slug of EQUIPMENT_ASSETS) {
+    if (slug === 'grow-light') continue; // per-level lights, built above
+    if (slug === 'hydro-raft') continue; // the relocated raft, built above
+    for (const rect of groundRectangles(plan, slug)) {
+      addInstance(
+        instances,
+        `${DEMO_PREFIX}:9:instance:${slug}:${++instanceIndex}`,
+        slug,
+        rect.x * cellM,
+        rect.y * cellM,
+        rect.width * cellM,
+        rect.height * cellM,
+        { kind: environmentMounted.has(slug) ? 'environment' : 'floor' },
+      );
+    }
+  }
+
+  // The plan itself becomes an empty hall floor: ground equipment and crops
+  // live on growing levels now.
+  for (const [key, slug] of Object.entries(plan.ground)) {
+    if (RACK_GROUND_ASSETS.has(slug)) delete plan.ground[key];
+  }
+  for (const key of Object.keys(plan.planting)) delete plan.planting[key];
+  delete plan.plantedAt;
+  plan.targets = targets;
 
   const environment = makeEnvironment(farmId, {
     archetype: 'warehouse-vertical',
@@ -386,7 +450,11 @@ function tieredWarehouse(): Environment {
   return {
     ...environment,
     plan,
-    layout: { ...environment.layout!, growingSpaces: [...spaces, raftSpace] },
+    layout: {
+      ...environment.layout!,
+      growingSpaces: [...spaces, raftSpace],
+      reservations,
+    },
     instances,
   };
 }
@@ -442,9 +510,12 @@ export function seedDemoSites(): Record<number, SitePlan> {
       return placed;
     }),
   ]);
+  // Farm 9 holds the vertical-farm hall plus the container farm beside it; the
+  // container's x follows the hall's real width so a bigger hall cannot overlap.
+  const warehouse = tieredWarehouse();
   environmentsByFarm.set(9, [
-    tieredWarehouse(),
-    { ...structuredClone(farm9Updates[1]!), x: 12.25, y: 0 },
+    warehouse,
+    { ...structuredClone(farm9Updates[1]!), x: warehouse.x + warehouse.widthM + 0.25, y: 0 },
   ]);
 
   return Object.fromEntries([...environmentsByFarm].map(([farmId, environments]) => [

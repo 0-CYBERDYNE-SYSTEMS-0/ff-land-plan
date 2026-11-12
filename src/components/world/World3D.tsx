@@ -14,7 +14,7 @@ import { growingCellWorldPosition, growingTargetElevationM, growingTargetKey, pa
 import { isoDayNumber, isoFromDayNumber } from '@/lib/sim/environment';
 import { projectPlant, stageCountFor, type PlantViewParams } from '@/lib/sim/view';
 import { envToWeatherCurrent } from '@/lib/sim/runWeather';
-import { archetypes, LEGACY_SURFACE_FOR_ARCHETYPE } from '@/creative/archetypes';
+import { archetypes, ARCHETYPE_FOR_SURFACE, LEGACY_SURFACE_FOR_ARCHETYPE } from '@/creative/archetypes';
 import type { DailyEnvironment } from '@/lib/sim/types';
 import type { CellState } from '@/lib/sim/types';
 import { BEES_PER_FLOWERING_CELL, BUTTERFLIES_PER_FLOWERING_CELL, isInsectPollinated } from '@/lib/sim/ecosystem';
@@ -36,8 +36,19 @@ import { buildDressing, disposeDressing, type DressingSystem } from '@/three/dre
 import { createAudioAtmosphere, type AudioAtmosphere } from '@/three/audio';
 import { createClouds, type Clouds } from '@/three/clouds';
 import { createEngine, setEngineOrbitEnabled, type Engine } from '@/three/engine';
-import { fitCameraToBounds, worldFrameBounds } from '@/three/cameraFrame';
-import { createFlightCamera, type FlightCamera } from '@/three/flight';
+import {
+  cameraLimits,
+  fitCameraToBounds,
+  interiorBounds,
+  interiorEyeHeightM,
+  interiorFrame,
+  interiorFramingAvailable,
+  isEnclosedSurface,
+  worldFrameBounds,
+  type CameraFrame,
+  type CameraLimits,
+} from '@/three/cameraFrame';
+import { createFlightCamera, type FlightCamera, type FlightMode } from '@/three/flight';
 import { buildGhostPlants, disposeGhostPlants, type GhostBatch } from '@/three/historyViz';
 import { __padProbe, advancePlantGrowth, disposePlants, type PlantBatch, type PlantUpdateOptions, swayPlants, updatePlants } from '@/three/plants';
 import { buildGround, disposeGround, updateGround, type GroundBatch } from '@/three/ground';
@@ -416,13 +427,116 @@ function disposeGhostRunBatches(batches: GhostRunBatch[]): void {
   ghostVisualPByCell.clear(); // ghosts are gone — no carry state to preserve
 }
 
-/** The load-in view and dock Reset fit the actual floor and built shell. */
-function homeFrame(
-  plan: { widthM: number; heightM: number },
-  shell: THREE.Object3D | null,
+/** Conservative shell headroom used when no saved environment record exists. */
+const DEFAULT_INTERIOR_HEIGHT_M = 2.6;
+
+/**
+ * Interior headroom for a shell. The saved environment layout wins (it is what
+ * the shell builders honored); without one, the surface's archetype documents
+ * the height, so interior framing still tracks the real shell (a warehouse is
+ * 4 m tall, a hoophouse 3.2 m, a grow tent 2 m).
+ */
+function shellInteriorHeightM(
+  plan: { surface?: PlanSurface },
+  shell: ShellGroup | null,
+  archetype: ArchetypeId | null | undefined,
+  environment: Environment | null | undefined,
+): number {
+  const saved = environment?.layout?.usableHeightM;
+  if (typeof saved === 'number' && Number.isFinite(saved) && saved > 0) return saved;
+  const surface = shell?.surface ?? plan.surface ?? 'outdoor';
+  const id = archetype && Object.prototype.hasOwnProperty.call(archetypes, archetype)
+    ? archetype
+    : ARCHETYPE_FOR_SURFACE[surface];
+  const fallback = archetypes[id]?.defaultUsableHeightM;
+  return typeof fallback === 'number' && Number.isFinite(fallback) && fallback > 0
+    ? fallback
+    : DEFAULT_INTERIOR_HEIGHT_M;
+}
+
+interface WorldFraming {
+  frame: CameraFrame;
+  limits: CameraLimits;
+  interior: boolean;
+  /** Changes only when the framing itself would change — drives auto-reframe. */
+  key: string;
+}
+
+/**
+ * Pick the load-in framing for a world. An enclosed shell with standing room
+ * is framed from the INSIDE at eye height (the environment fills the canvas),
+ * everything else keeps the original exterior dollhouse fit. Clip planes and
+ * orbit limits ride along so they always match the framing that was chosen.
+ */
+function resolveWorldFraming(
+  plan: { widthM: number; heightM: number; surface?: PlanSurface },
+  shell: ShellGroup | null,
+  interiorHeightM: number,
   aspect: number,
-) {
-  return fitCameraToBounds(worldFrameBounds(plan.widthM, plan.heightM, shell), aspect);
+): WorldFraming {
+  const surface = shell?.surface ?? plan.surface ?? 'outdoor';
+  const exterior = fitCameraToBounds(worldFrameBounds(plan.widthM, plan.heightM, shell?.root ?? null), aspect);
+  const interiorEligible = isEnclosedSurface(surface)
+    && interiorFramingAvailable(plan.widthM, plan.heightM, interiorHeightM);
+  if (interiorEligible) {
+    const frame = interiorFrame(plan.widthM, plan.heightM, interiorHeightM);
+    return {
+      frame,
+      limits: cameraLimits(surface, frame.distance, exterior.distance),
+      interior: true,
+      key: `interior|${surface}|${plan.widthM}x${plan.heightM}x${interiorHeightM}`,
+    };
+  }
+  return {
+    frame: exterior,
+    limits: cameraLimits(surface, exterior.distance, exterior.distance),
+    interior: false,
+    key: `exterior|${surface}|${plan.widthM}x${plan.heightM}`,
+  };
+}
+
+/** Orbit-target clamp and flight/walk volume for the world being viewed. */
+interface WorldNavBounds {
+  target: { minX: number; maxX: number; minZ: number; maxZ: number };
+  flight: { minX: number; maxX: number; minZ: number; maxZ: number };
+  ceilingM: number | null;
+  eyeM: number;
+}
+
+function worldNavBounds(
+  plan: { widthM: number; heightM: number; surface?: PlanSurface },
+  shell: ShellGroup | null,
+  interiorHeightM: number,
+): WorldNavBounds {
+  const surface = shell?.surface ?? plan.surface ?? 'outdoor';
+  if (isEnclosedSurface(surface) && interiorFramingAvailable(plan.widthM, plan.heightM, interiorHeightM)) {
+    // Confine everything to the environment: no navigation over the empty
+    // ground outside a shell, and a drone cannot climb through the roof.
+    const target = interiorBounds(plan.widthM, plan.heightM, interiorHeightM, 0.3);
+    const flight = interiorBounds(plan.widthM, plan.heightM, interiorHeightM, 0.6);
+    return {
+      target: { minX: target.minX, maxX: target.maxX, minZ: target.minZ, maxZ: target.maxZ },
+      flight: { minX: flight.minX, maxX: flight.maxX, minZ: flight.minZ, maxZ: flight.maxZ },
+      ceilingM: flight.ceilingM,
+      eyeM: interiorEyeHeightM(interiorHeightM),
+    };
+  }
+  return {
+    target: {
+      minX: -(plan.widthM / 2) - 2,
+      maxX: plan.widthM / 2 + 2,
+      minZ: -(plan.heightM / 2) - 2,
+      maxZ: plan.heightM / 2 + 2,
+    },
+    flight: {
+      minX: -(plan.widthM / 2) - 10,
+      maxX: plan.widthM / 2 + 10,
+      minZ: -(plan.heightM / 2) - 10,
+      maxZ: plan.heightM / 2 + 10,
+    },
+    ceilingM: null,
+    eyeM: 1.65,
+  };
 }
 
 interface World3DProps {
@@ -460,6 +574,54 @@ function ensureBridgeProbe(): HTMLElement {
     document.body.appendChild(bridgeProbeEl);
   }
   return bridgeProbeEl;
+}
+
+/** DEV-only #ff-world-framing DOM probe: publishes the camera pose and the
+ * framing decision it came from, so a headless gate can assert the
+ * interior-first pose (camera inside the shell at eye height, confined bounds)
+ * without judging pixels. */
+let framingProbeEl: HTMLElement | null = null;
+function publishFramingProbe(info: {
+  framing: 'interior' | 'exterior';
+  surface: PlanSurface;
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+  distance: number;
+  inside: boolean;
+  eyeM: number;
+  ceilingM: number | null;
+  near: number;
+  maxDistance: number;
+}): void {
+  if (!import.meta.env.DEV) return;
+  if (!framingProbeEl) {
+    framingProbeEl = document.createElement('span');
+    framingProbeEl.id = 'ff-world-framing';
+    framingProbeEl.style.display = 'none';
+    document.body.appendChild(framingProbeEl);
+  }
+  const f = framingProbeEl;
+  const fmt = (v: THREE.Vector3) => v.toArray().map((n) => n.toFixed(2)).join(',');
+  f.setAttribute('data-framing', info.framing);
+  f.setAttribute('data-surface', info.surface);
+  f.setAttribute('data-pos', fmt(info.position));
+  f.setAttribute('data-target', fmt(info.target));
+  f.setAttribute('data-distance', info.distance.toFixed(2));
+  f.setAttribute('data-inside', info.inside ? '1' : '0');
+  f.setAttribute('data-eye', info.eyeM.toFixed(2));
+  f.setAttribute('data-ceiling', info.ceilingM === null ? 'none' : info.ceilingM.toFixed(2));
+  f.setAttribute('data-near', info.near.toFixed(3));
+  f.setAttribute('data-max-distance', info.maxDistance.toFixed(2));
+}
+
+/** DEV-only: while a nav camera owns the view the probe's pose becomes the live
+ * camera pose (and reports which nav mode owns it), so a headless walk check
+ * can follow the camera as it moves through the environment. */
+function publishNavPose(mode: FlightMode | null, position: THREE.Vector3): void {
+  if (!import.meta.env.DEV || !framingProbeEl) return;
+  framingProbeEl.setAttribute('data-nav', mode ?? 'none');
+  if (!mode) return;
+  framingProbeEl.setAttribute('data-pos', position.toArray().map((n) => n.toFixed(2)).join(','));
 }
 
 /** Weather used by the rAF loop until live data arrives (or when offline). */
@@ -590,6 +752,9 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const dressingRef = useRef<DressingSystem | null>(null);
   const tourRef = useRef<Tour | null>(null);
   const flightRef = useRef<FlightCamera | null>(null);
+  // Framing identity of the current view; a change (surface switch, canvas
+  // resize) re-applies the interior/exterior load-in frame and its limits.
+  const framingKeyRef = useRef<string | null>(null);
   const growthFXRef = useRef<GrowthFX | null>(null);
   const perfHUDRef = useRef<PerfHUD | null>(null);
   const audioRef = useRef<AudioAtmosphere | null>(null);
@@ -706,12 +871,13 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   const autoTimeRef = useRef(false);
   const audioOnRef = useRef(false);
   const [tourActive, setTourActive] = useState(false);
-  // Mirrored flight state: the live flag sits behind flightRef (mutated by the
-  // button and by Escape inside flight.ts), which alone never re-renders React.
-  const [flightActive, setFlightActive] = useState(false);
-  const flightActiveRef = useRef(false);
-  // True only for the first 5 s after flight engages (controls hint card).
-  const [flightHintVisible, setFlightHintVisible] = useState(false);
+  // Navigation camera state ('fly' drone / 'walk' eye-height interior). The
+  // live flag sits behind flightRef (mutated by the buttons and by Escape
+  // inside flight.ts), which alone never re-renders React.
+  const [navMode, setNavMode] = useState<FlightMode | null>(null);
+  const navModeRef = useRef<FlightMode | null>(null);
+  // Self-dismissing controls hint for whichever navigation mode engaged.
+  const [navHint, setNavHint] = useState<string | null>(null);
   const [tourProgress, setTourProgress] = useState(0);
   const lastTourProgressRef = useRef(0);
   const [weather, setWeather] = useState<WeatherCurrent | null>(null);
@@ -936,7 +1102,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const plan = editor.planRef.current;
     // Flight/tour own the pointer — the fixed screen point would raycast
     // whatever the sweeping camera crosses. Freeze + clear instead of tracking.
-    if (flightActiveRef.current || tourRef.current?.active) {
+    if (navModeRef.current !== null || tourRef.current?.active) {
       if (mesh) mesh.visible = false;
       setHoverInfo(null);
       return;
@@ -1002,11 +1168,11 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
   // Flight/tour starting mid-hover must drop the readout immediately, not at
   // the next pointermove (which may never come — pointer lock swallows moves).
   useEffect(() => {
-    if (flightActive || tourActive) {
+    if (navMode !== null || tourActive) {
       if (hoverMeshRef.current) hoverMeshRef.current.visible = false;
       setHoverInfo(null);
     }
-  }, [flightActive, tourActive]);
+  }, [navMode, tourActive]);
 
   // Painting tools claim left-drag/one-finger for strokes; orbit stays enabled
   // only while the select tool is active. Synced render-phase like handlersRef
@@ -1106,14 +1272,9 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     engineRef.current = engine;
     setEngineOrbitEnabled(engine, toolRef.current === 'select');
 
-    // Per-frame target clamp (flight keeps the camera over the plan; skipped
-    // while orbit controls drive). Re-applied by the plan-change effect.
-    engine.setTargetBounds({
-      minX: -(plan.widthM / 2) - 2,
-      maxX: plan.widthM / 2 + 2,
-      minZ: -(plan.heightM / 2) - 2,
-      maxZ: plan.heightM / 2 + 2,
-    });
+    // The per-frame target clamp is applied with the framing below, once the
+    // shell exists (enclosed worlds clamp to the shell interior, not the plan
+    // footprint plus margin).
 
     // Hover highlight — ONE reusable mesh; the onHoverCell callback only
     // moves/scales it (no per-move rebuild). Disposed in this effect's cleanup.
@@ -1142,8 +1303,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
 
     // Enclosure shell for non-outdoor surfaces (tent / warehouse / greenhouse).
     // A shell failure must not take the whole view down — log + go shell-less.
+    // The saved usable height drives the shell's interior height so the 3D
+    // read matches the planning/climate record.
     try {
-      shellRef.current = buildShell(plan, engine.scene, editor.archetype);
+      shellRef.current = buildShell(plan, engine.scene, editor.archetype, {
+        usableHeightM: editor.environment?.layout?.usableHeightM,
+      });
     } catch (err) {
       console.error('shell build failed', err);
       shellRef.current = null;
@@ -1173,20 +1338,41 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     // Audio
     audioRef.current = createAudioAtmosphere();
 
-    // Fit both the floor footprint and the shell's real height, including
-    // narrow container floors and small cold frames. CameraControls owns the
-    // resulting pose, so its wheel, drag, and Reset interactions stay aligned.
-    const home = homeFrame(plan, shellRef.current?.root ?? null, engine.camera.aspect);
+    // Interior-first framing for enclosed shells (greenhouse / tunnel / tent /
+    // room / warehouse): stand inside at eye height so the environment fills
+    // the canvas; everything else keeps the exterior dollhouse fit. The chosen
+    // framing's limits own clip planes + zoom range, so CameraControls' wheel,
+    // drag and Reset interactions stay aligned with it.
+    const interiorHeightM = shellInteriorHeightM(plan, shellRef.current, editor.archetype, editor.environment);
+    const framing = resolveWorldFraming(plan, shellRef.current, interiorHeightM, engine.camera.aspect);
+    framingKeyRef.current = framing.key;
+    const nav = worldNavBounds(plan, shellRef.current, interiorHeightM);
+    engine.setTargetBounds(nav.target);
+    publishFramingProbe({
+      framing: framing.interior ? 'interior' : 'exterior',
+      surface: shellRef.current?.surface ?? plan.surface ?? 'outdoor',
+      position: framing.frame.position,
+      target: framing.frame.target,
+      distance: framing.frame.distance,
+      inside: Math.abs(framing.frame.position.x) <= plan.widthM / 2
+        && Math.abs(framing.frame.position.z) <= plan.heightM / 2,
+      eyeM: nav.eyeM,
+      ceilingM: nav.ceilingM,
+      near: framing.limits.near,
+      maxDistance: framing.limits.maxDistance,
+    });
     engine.controls.setLookAt(
-      home.position.x, home.position.y, home.position.z,
-      home.target.x, home.target.y, home.target.z,
+      framing.frame.position.x, framing.frame.position.y, framing.frame.position.z,
+      framing.frame.target.x, framing.frame.target.y, framing.frame.target.z,
       false,
     );
-    // Clamp camera so it can't dive under the ground plane or fly into the void.
+    // Enclosed worlds trade the wide-open range for an interior-scale one and
+    // pull the near plane in so the 10 cm voxel grid reads up close.
+    engine.setClip({ near: framing.limits.near, far: framing.limits.far });
     engine.setBounds({
-      minDistance: 2,
-      maxDistance: home.distance * 4,
-      maxPolarAngle: THREE.MathUtils.degToRad(88),
+      minDistance: framing.limits.minDistance,
+      maxDistance: framing.limits.maxDistance,
+      maxPolarAngle: framing.limits.maxPolarAngle,
     });
     engine.controls.update(0);
 
@@ -1197,19 +1383,28 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
       unlock('tour_complete');
     });
 
-    // Flight camera — the LIVE bounds getter re-reads the plan each call so
-    // mid-flight plan changes (farm nav, resize) clamp against current dims.
-    flightRef.current = createFlightCamera(engine, () => {
-      unlock('flight_time');
-    }, () => {
-      const p = editor.planRef.current;
-      if (!p) return { minX: -50, maxX: 50, minZ: -50, maxZ: 50 };
-      return {
-        minX: -(p.widthM / 2) - 10,
-        maxX: p.widthM / 2 + 10,
-        minZ: -(p.heightM / 2) - 10,
-        maxZ: p.heightM / 2 + 10,
-      };
+    // Navigation camera (fly drone / eye-height walk) — the LIVE option getters
+    // re-read the plan and shell each call so mid-flight plan changes (farm nav,
+    // resize, surface swap) clamp against current dims and interior volume.
+    flightRef.current = createFlightCamera(engine, {
+      onEnd: () => {
+        unlock('flight_time');
+      },
+      getBounds: () => {
+        const p = editor.planRef.current;
+        if (!p) return { minX: -50, maxX: 50, minZ: -50, maxZ: 50 };
+        return worldNavBounds(p, shellRef.current, interiorHeightM).flight;
+      },
+      getCeilingM: () => {
+        const p = editor.planRef.current;
+        if (!p) return null;
+        return worldNavBounds(p, shellRef.current, interiorHeightM).ceilingM;
+      },
+      getEyeHeightM: () => {
+        const p = editor.planRef.current;
+        if (!p) return 1.65;
+        return worldNavBounds(p, shellRef.current, interiorHeightM).eyeM;
+      },
     });
 
     // Ambient light from sky
@@ -1329,7 +1524,7 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         }
       }
 
-      // Flight
+      // Navigation camera (fly or walk)
       if (flightRef.current?.active) {
         flightRef.current.update(dt);
         flightTime.current += dt;
@@ -1337,11 +1532,12 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
           unlock('flight_time');
         }
       }
-      const flightNow = flightRef.current?.active ?? false;
-      if (flightNow !== flightActiveRef.current) {
-        flightActiveRef.current = flightNow;
-        setFlightActive(flightNow);
+      const navNow = flightRef.current?.active ? flightRef.current.mode : null;
+      if (navNow !== navModeRef.current) {
+        navModeRef.current = navNow;
+        setNavMode(navNow);
       }
+      publishNavPose(navNow, engine.camera.position);
 
       // Perf HUD
       perfHUDRef.current?.update(engine.renderer, dt);
@@ -1565,23 +1761,56 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     const cropById = editor.cropById;
     if (!engine || !plan) return;
 
-    // Keep the flight target clamp in sync with the current plan dims.
-    engine.setTargetBounds({
-      minX: -(plan.widthM / 2) - 2,
-      maxX: plan.widthM / 2 + 2,
-      minZ: -(plan.heightM / 2) - 2,
-      maxZ: plan.heightM / 2 + 2,
-    });
-
     // Rebuild 3D ground blocks + enclosure shell (surface / dims may have
     // changed). buildShell is idempotent on a cache hit — no pre-dispose, so
     // brush dabs don't detach/reattach the cached shell.
     groundBatchesRef.current = updateGround(groundBatchesRef.current, plan, engine.scene, editor.archetype);
     try {
-      shellRef.current = buildShell(plan, engine.scene, editor.archetype);
+      shellRef.current = buildShell(plan, engine.scene, editor.archetype, {
+        usableHeightM: editor.environment?.layout?.usableHeightM,
+      });
     } catch (err) {
       console.error('shell build failed', err);
       shellRef.current = null;
+    }
+
+    // Keep the target clamp and navigation volume in sync with the built shell
+    // (interior for enclosed worlds, plan-plus-margin outside).
+    const interiorHeightM = shellInteriorHeightM(plan, shellRef.current, editor.archetype, editor.environment);
+    const nav = worldNavBounds(plan, shellRef.current, interiorHeightM);
+    engine.setTargetBounds(nav.target);
+
+    // A surface swap or canvas resize changes the framing identity: re-apply
+    // the interior/exterior load-in frame and its clip/zoom limits. A brush
+    // dab leaves the key unchanged, so the user's camera is never yanked.
+    const framing = resolveWorldFraming(plan, shellRef.current, interiorHeightM, engine.camera.aspect);
+    if (framingKeyRef.current !== null && framingKeyRef.current !== framing.key) {
+      framingKeyRef.current = framing.key;
+      publishFramingProbe({
+        framing: framing.interior ? 'interior' : 'exterior',
+        surface: shellRef.current?.surface ?? plan.surface ?? 'outdoor',
+        position: framing.frame.position,
+        target: framing.frame.target,
+        distance: framing.frame.distance,
+        inside: Math.abs(framing.frame.position.x) <= plan.widthM / 2
+          && Math.abs(framing.frame.position.z) <= plan.heightM / 2,
+        eyeM: nav.eyeM,
+        ceilingM: nav.ceilingM,
+        near: framing.limits.near,
+        maxDistance: framing.limits.maxDistance,
+      });
+      engine.setClip({ near: framing.limits.near, far: framing.limits.far });
+      engine.setBounds({
+        minDistance: framing.limits.minDistance,
+        maxDistance: framing.limits.maxDistance,
+        maxPolarAngle: framing.limits.maxPolarAngle,
+      });
+      engine.controls.setLookAt(
+        framing.frame.position.x, framing.frame.position.y, framing.frame.position.z,
+        framing.frame.target.x, framing.frame.target.y, framing.frame.target.z,
+        false,
+      );
+      engine.controls.update(0);
     }
 
     // Structures & plants
@@ -2028,17 +2257,19 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
     if (weather.precipMm > 0 && weather.tempC <= 2) unlock('snow_day');
   }, [weather]);
 
-  // Flight controls hint: a self-dismissing 5 s card whenever flight engages
-  // (Exit/Escape clears it immediately via the flightActive flip).
+  // Navigation controls hint: a self-dismissing 5 s card whenever fly or walk
+  // engages (Exit/Escape clears it immediately via the navMode flip).
   useEffect(() => {
-    if (!flightActive) {
-      setFlightHintVisible(false);
+    if (navMode === null) {
+      setNavHint(null);
       return;
     }
-    setFlightHintVisible(true);
-    const id = window.setTimeout(() => setFlightHintVisible(false), 5000);
+    setNavHint(navMode === 'walk'
+      ? 'Walk — W/S forward/back · A/D step sideways · mouse look · ⇧ hurry · Esc exit'
+      : 'Fly — W/S throttle (S to stop) · A/D turn · Q/E roll · Space/⇧ altitude · mouse look · Esc exit');
+    const id = window.setTimeout(() => setNavHint(null), 5000);
     return () => window.clearTimeout(id);
-  }, [flightActive]);
+  }, [navMode]);
 
   // Sync timeRef → timeOfDay state for the slider UI (throttled)
   useEffect(() => {
@@ -2262,17 +2493,40 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
 
   // Chrome dims while a showcase mode owns the view: cinema opt-in, tour, or
   // flight. Render-only — the rAF loop never reads this. Hover/focus restores.
-  const dimmed = cinema || tourActive || flightActive;
+  const dimmed = cinema || tourActive || navMode !== null;
   const dimCls = dimmed ? 'opacity-20 hover:opacity-100 focus-within:opacity-100' : 'opacity-100';
 
   const resetToHomeView = () => {
     const engine = engineRef.current;
     const plan = editor.planRef.current;
     if (!engine || !plan) return;
-    const home = homeFrame(plan, shellRef.current?.root ?? null, engine.camera.aspect);
+    const interiorHeightM = shellInteriorHeightM(plan, shellRef.current, editor.archetype, editor.environment);
+    const framing = resolveWorldFraming(plan, shellRef.current, interiorHeightM, engine.camera.aspect);
+    framingKeyRef.current = framing.key;
+    const nav = worldNavBounds(plan, shellRef.current, interiorHeightM);
+    publishFramingProbe({
+      framing: framing.interior ? 'interior' : 'exterior',
+      surface: shellRef.current?.surface ?? plan.surface ?? 'outdoor',
+      position: framing.frame.position,
+      target: framing.frame.target,
+      distance: framing.frame.distance,
+      inside: Math.abs(framing.frame.position.x) <= plan.widthM / 2
+        && Math.abs(framing.frame.position.z) <= plan.heightM / 2,
+      eyeM: nav.eyeM,
+      ceilingM: nav.ceilingM,
+      near: framing.limits.near,
+      maxDistance: framing.limits.maxDistance,
+    });
+    engine.setClip({ near: framing.limits.near, far: framing.limits.far });
+    engine.setBounds({
+      minDistance: framing.limits.minDistance,
+      maxDistance: framing.limits.maxDistance,
+      maxPolarAngle: framing.limits.maxPolarAngle,
+    });
+    engine.setTargetBounds(nav.target);
     engine.controls.setLookAt(
-      home.position.x, home.position.y, home.position.z,
-      home.target.x, home.target.y, home.target.z,
+      framing.frame.position.x, framing.frame.position.y, framing.frame.position.z,
+      framing.frame.target.x, framing.frame.target.y, framing.frame.target.z,
       false,
     );
     engine.controls.update(0);
@@ -2311,10 +2565,10 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
         </div>
       )}
 
-      {/* Flight controls hint — centered card, auto-dismissed after 5 s. */}
-      {flightHintVisible && (
+      {/* Navigation controls hint — centered card, auto-dismissed after 5 s. */}
+      {navHint && (
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background/90 px-4 py-3 text-center text-xs text-muted-foreground shadow-lg">
-          Fly — W/S throttle (S to stop) · A/D turn · Q/E roll · Space/⇧ altitude · mouse look · Esc exit
+          {navHint}
         </div>
       )}
 
@@ -2438,14 +2692,29 @@ export default function World3D({ editor, cinema = false, onToggleCinema, simRun
               if (flightRef.current?.active) {
                 flightRef.current.deactivate();
               } else {
-                flightRef.current?.activate();
+                flightRef.current?.activate('fly');
               }
             }}
-            aria-pressed={flightActive}
-            title="WASD fly-over camera (Escape exits)"
-            className={`rounded px-2 py-1 text-xs font-medium ${flightActive ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground'}`}
+            aria-pressed={navMode === 'fly'}
+            title="WASD fly-over camera, confined to this world (Escape exits)"
+            className={`rounded px-2 py-1 text-xs font-medium ${navMode === 'fly' ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground'}`}
           >
-            {flightActive ? '✈ Exit Flight' : '✈ Fly'}
+            {navMode === 'fly' ? '✈ Exit Flight' : '✈ Fly'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (flightRef.current?.active) {
+                flightRef.current.deactivate();
+              } else {
+                flightRef.current?.activate('walk');
+              }
+            }}
+            aria-pressed={navMode === 'walk'}
+            title="Eye-height interior walk — W/S/A/D, mouse look (Escape exits)"
+            className={`rounded px-2 py-1 text-xs font-medium ${navMode === 'walk' ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground'}`}
+          >
+            {navMode === 'walk' ? '🚶 Exit Walk' : '🚶 Walk'}
           </button>
           <button
             type="button"

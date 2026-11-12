@@ -37,7 +37,8 @@ function envGreenhouse(): THREE.Object3D {
   put(makeGreenhouseShell({ widthM: 4.2, depthM: 6.4 }), 0, 0, 0);
   put(I.makeBench({ wM: 3.4 }), -11.5, 0, -9, Math.PI / 2);
   put(I.makeBench({ wM: 3.4 }), 11.5, 0, -9, Math.PI / 2);
-  const by = FLOOR_Y + 8.6; // bench top ≈ 0.86 m over the floor plate
+  const by = 8.7; // benches sit at y=0: cedar slat top ≈ 0.905 m, so the crop
+  // soil pad sinks ~8.5 cm into the slats instead of hovering above them
   put(makeCropFor('Lettuce', 4), -11.5, by, -19);
   put(makeCropFor('Lettuce', 3), -11.5, by, -5);
   put(makeCropFor('Basil', 4), 11.5, by, -21);
@@ -84,18 +85,20 @@ function envGrowRoom(): THREE.Object3D {
   const { g, put } = compose();
   put(I.makeFloorPlate({ wM: 4, dM: 4, style: 'concrete' }), 0, 0, 0);
   put(makeIndoorShell({ widthM: 4, depthM: 4 }), 0, 0, 0);
-  put(I.makeFloodTable({ wM: 2.6 }), -3.5, FLOOR_Y, -11.5);
-  put(I.makeFloodTable({ wM: 2.6 }), -3.5, FLOOR_Y, 3.5);
+  // two 2.6 m flood tables fill the room with a 0.75 m walk aisle between
+  // them; service gear lives in the right-hand strip and along the far wall
+  put(I.makeFloodTable({ wM: 2.6 }), -4, FLOOR_Y, -12.2);
+  put(I.makeFloodTable({ wM: 2.6 }), -4, FLOOR_Y, 7.6);
   const ty = FLOOR_Y + 7.9; // tray floor level
-  put(makeCropFor('Lettuce', 4), -11, ty, -11.5);
-  put(makeCropFor('Lettuce', 3), -1, ty, -11.5);
-  put(makeCropFor('Lettuce', 4), 6, ty, -11.5);
-  put(makeCropFor('Basil', 4), -10, ty, 3.5);
-  put(makeCropFor('Basil', 3), 2, ty, 3.5);
+  put(makeCropFor('Lettuce', 4), -11.5, ty, -12.2);
+  put(makeCropFor('Lettuce', 3), -2, ty, -12.2);
+  put(makeCropFor('Lettuce', 4), 5.5, ty, -12.2);
+  put(makeCropFor('Basil', 4), -10.5, ty, 7.6);
+  put(makeCropFor('Basil', 3), 1.5, ty, 7.6);
   put(I.makeDuctRun({ wM: 3 }), -16, 18.5, -3, Math.PI / 2);
   put(I.makeDehumidifier(), 15, FLOOR_Y, 15);
-  put(I.makeDosingBarrels({ count: 2 }), 12, FLOOR_Y, -15.5);
-  put(I.makeControllerPanel(), -4, 13, -18);
+  put(I.makeDosingBarrels({ count: 2 }), 15.5, FLOOR_Y, -11, -Math.PI / 2);
+  put(I.makeControllerPanel(), 2, 14, -18);
   return g;
 }
 
@@ -108,7 +111,7 @@ function envGrowShelf(): THREE.Object3D {
   put(I.makeWireShelf(), -11, FLOOR_Y, 5.5, Math.PI / 2);
   put(I.makeWireShelf(), 7.5, FLOOR_Y, -8.5);
   put(makeCropFor('Basil', 2), -11, FLOOR_Y + 16.5, 5.5);
-  put(I.makeFabricPot({ size: 0.8 }), 12.5, FLOOR_Y, 7);
+  put(I.makeFabricPot({ size: 0.8 }), 11.5, FLOOR_Y, 7);
   return g;
 }
 
@@ -117,7 +120,12 @@ function envWarehouse(): THREE.Object3D {
   const { g, put } = compose();
   put(I.makeFloorPlate({ wM: 6, dM: 8, style: 'concrete' }), 0, 0, 0);
   put(makeWarehouseShell({ widthM: 6, depthM: 8 }), 0, 0, 0);
-  put(I.makeRackRow({ wM: 5.2, tiers: 4 }), -17, FLOOR_Y, 0, Math.PI / 2);
+  // three parallel glowing rack canyons with ~0.9 m aisles (A9e); the shell's
+  // baked floor tape lines (x=-8.4 / 12.6) now bound real row faces, and the
+  // open right third keeps the CO2 / climate gear clear of the racks
+  put(I.makeRackRow({ wM: 5.2, tiers: 4, glow: 'warm' }), -20.4, FLOOR_Y, 0, Math.PI / 2);
+  put(I.makeRackRow({ wM: 5.2, tiers: 4, glow: 'pink' }), -5.4, FLOOR_Y, 0, Math.PI / 2);
+  put(I.makeRackRow({ wM: 5.2, tiers: 4, glow: 'warm' }), 9.6, FLOOR_Y, 0, Math.PI / 2);
   put(I.makeCo2Tank(), 21, FLOOR_Y, -26);
   put(I.makeControllerPanel(), -27.4, 12, 6, Math.PI / 2);
   put(I.makeDehumidifier(), 23, FLOOR_Y, 29);
@@ -127,13 +135,18 @@ function envWarehouse(): THREE.Object3D {
 // --- shipping-container farm: pink-lit rack walls + dosing (A10) -----------
 function envContainerFarm(): THREE.Object3D {
   const { g, put } = compose();
-  put(I.makeFloorPlate({ wM: 2.6, dM: 6.4, style: 'concrete' }), 0, 0, 0);
-  put(makeContainerShell({ widthM: 2.6, depthM: 6.4 }), 0, 0, 0);
-  put(I.makeRackRow({ wM: 4.4, tiers: 4, glow: 'pink' }), -9.5, FLOOR_Y, -4, Math.PI / 2);
-  put(I.makeRackRow({ wM: 4.4, tiers: 4, glow: 'pink' }), 9.5, FLOOR_Y, -4, Math.PI / 2);
-  put(I.makeDosingBarrels({ count: 2 }), -5.5, FLOOR_Y, 26);
-  put(I.makeStorageTank(), 7.5, FLOOR_Y, 25.5);
-  put(I.makeControllerPanel(), 9.8, 11, 12, -Math.PI / 2);
+  // long-X footprint matching the container shell's ISO long axis (long
+  // corrugated walls at ±Z, door on the +X short end)
+  put(I.makeFloorPlate({ wM: 6.4, dM: 2.4, style: 'concrete' }), 0, 0, 0);
+  put(makeContainerShell({ widthM: 6.4, depthM: 2.4 }), 0, 0, 0);
+  // two pink rack walls run along X, backs against the ±Z long walls, with
+  // the narrow ~0.8 m aisle between their tray faces; the +X service end
+  // past the rack noses keeps dosing, water and control gear in-footprint
+  put(I.makeRackRow({ wM: 3.8, tiers: 4, glow: 'pink' }), -10.9, FLOOR_Y, -6.85);
+  put(I.makeRackRow({ wM: 3.8, tiers: 4, glow: 'pink' }), -10.9, FLOOR_Y, 6.85);
+  put(I.makeDosingBarrels({ count: 2 }), 13.5, FLOOR_Y, 0, Math.PI / 2);
+  put(I.makeStorageTank(), 26, FLOOR_Y, -6.5);
+  put(I.makeControllerPanel(), 17, 11, -10.15);
   return g;
 }
 

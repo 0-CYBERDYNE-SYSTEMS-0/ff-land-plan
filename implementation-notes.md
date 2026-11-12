@@ -1915,3 +1915,121 @@ snapshots changed, and no application implementation is claimed by this revision
   heading references, whitespace and contract coverage; `git diff --check` passed. Independent
   documentation review found no remaining actionable issue. Runtime tests were not repeated
   for this documentation-only handoff; implementation and release approval remain pending.
+
+## 2026-11-11 — Environment asset/spacing/physics readiness refinement
+
+- Parametric shell builders refined: requested footprint is honored exactly and construction
+  heights derive proportionally from it, with small-canvas support for sub-3 m plans.
+- Equipment mounting preserves physical asset scale and carries explicit mount elevations;
+  fixtures, crops and grow lights now align to real support-surface elevations (measured Box3
+  geometry, not formula mirrors).
+- Added a pure layout readiness audit (`src/lib/environmentPhysics.ts`) plus panel surfacing in
+  the Growing Systems panel; its `instance-collision` codes caught two real seeded-demo
+  geometry collisions, both fixed (farm 8 water tap, farm 9 nursery tray).
+- Diorama composition polish: warehouse rack rows in the 0.9-1.2 m aisle band, grow-room and
+  container aisles, greenhouse bench crops resting on bench tops, and the container diorama
+  reoriented to the shell's long-X axis.
+- Saved environment usable height now drives the rendered shell height via an additive
+  `heightM` shell spec and an extended shell cache key.
+- Verification: `npm test` (39 files / 203 tests pass), `npm run typecheck` clean,
+  `npm run build` clean, `git diff --check` clean. The headless screenshot visual pass was
+  NOT run for this milestone: the screenshot harness needs a Chrome binary that is not
+  present in this environment, so the visual review remains a pre-merge requirement.
+- Open items: access-opening orientation is not yet wired to saved layout access metadata;
+  `usePlanEditor` still saves interactive rack levels at `0.25 + i*0.45` while rack support
+  elevations are `[0.2, 0.65, 1.1, 1.55]`; `enrichSeededEnvironment` drops layout access,
+  reservations and `usableHeightM` for farms 5-8; `inground-bed` has no SLUG_MAP entry; crop
+  canopy spacing is not renderer-enforced; `makePlantRack` caps at 8 levels; no sim or climate
+  equations changed in this milestone.
+
+## 2026-11-11 — Interior-first worlds: bigger environments, a first-person walk, and ground scalability
+
+Request: make the World3D environment-centric — zooming into an enclosed world should feel
+like a first-person visit, flyover/navigation happens *inside* the environment, no canvas
+spent on graphics outside it, and the environments should be far larger than the old
+single-bay shells.
+
+- **Interior-first framing** (`src/three/cameraFrame.ts`): `isEnclosedSurface`,
+  `interiorFramingAvailable` (needs a >= 4 m run, >= 1.6 m width and >= 1.5 m height, so a cold
+  frame or a 1 m canvas still gets the exterior dollhouse), `interiorEyeHeightM`
+  (clamp(h x 0.6, 1.15, 1.7) held below the ceiling), `interiorFrame` (stand near one end of the
+  long axis at eye height and look across the room), `interiorBounds` (navigation rectangle
+  inset 0.35 m, ceiling = height - 0.25) and `cameraLimits` (enclosed: near 0.05, minDistance
+  0.15-0.35, maxDistance max(home x 1.1, exterior), maxPolar 88 deg; outdoor unchanged).
+  Load-in now stands inside the room instead of fitting an open-topped shell from an isometric
+  angle, which is where the old frame lost most of its canvas to sky.
+- **Clip planes became dynamic** (`Engine.setClip({near, far})`): an interior needs a 5 cm near
+  plane to walk up to a bench, while the exterior dollhouse fit still needs its deeper range.
+- **Walk camera** (`src/three/flight.ts`): `FlightMode = 'fly' | 'walk'`. Walk is ground-plane
+  movement (W/S/A/D, shift = 5.5 m/s sprint, 2.6 m/s default), pitch tilts the view but never
+  the walk vector, no throttle/roll/rudder, eye height pinned to the environment's standing
+  height, and the position clamped to the live interior rectangle + ceiling/floor band.
+- **Yaw convention fixed** (pre-existing bug the walk inherited): `activate` derived yaw with
+  `atan2(forward.x, forward.z)` while the camera is rebuilt from `-Z` rotated about +Y, so
+  entering *either* nav mode span the view 180 deg and W flew/walked backwards. Now
+  `atan2(-forward.x, -forward.z)`, with `src/three/flight.test.ts` pinning both modes.
+- **World3D wiring**: `resolveWorldFraming` (frame + limits + interior bounds + identity key),
+  `worldNavBounds` (target clamp, navigation rect, ceiling, eye height),
+  `shellInteriorHeightM` (saved `layout.usableHeightM` -> archetype default -> 2.6 m). The
+  framing identity key means a surface swap or resize re-applies the interior frame while a
+  brush dab never yanks the camera. The dock now has two nav buttons (`Fly`, `Walk`) that
+  toggle to `Exit`, and the hint text differs per mode.
+- **Bigger enclosed demo worlds** (`src/data/seed.ts`): shared bay tiling (`BAY_GRIDS`,
+  `bayCanvas`, `eachBay`) repeats each enclosed bay's motif across the canvas. Grow tent stays
+  6x5 m (5.6 m of headroom does not need more), mushroom hall 12x8 -> **24x16 m**, greenhouse
+  10x7 -> **20x14 m**, hoophouse 10x8 -> **30x16 m**, warehouse hall 12x10 -> **36x20 m**
+  (3x2 bays). Bay motifs rotate crops/greenery per bay so the repetition does not read as a
+  stamp, and farm 8 now carries a water tap per bay.
+- **Farm 9's vertical farm is derived from the shipped layout at any canvas size**
+  (`tieredWarehouse` in `src/data/demoWorlds.ts`): every contiguous `plant-rack` run becomes one
+  rack growing space with the 4-level `SUPPORT_ELEVATIONS_M.rack` ladder and per-level grow
+  lights; the clear gap between a row's two runs becomes that row's aisle reservation (a
+  profile's default single-aisle reservation only ever described one 12 m bay); non-rack crops
+  move onto the relocated DWC raft (`WAREHOUSE_RAFT`, exported for tests); equipment instances
+  derive from the `EQUIPMENT_ASSETS` rects. Seed rack runs are split by a 1 m central aisle so
+  no seeded crop is dropped and the hall reads like a real vertical farm.
+- **Ground scalability** (`src/three/ground.ts`): the ground layer was ~95% of every world's
+  triangle budget — one instanced tile per plan cell, and a tile is a 24-voxel-wide block
+  normalised into a 25 cm cell with no neighbour awareness, so a 36x20 m concrete hall drew
+  ~120 M triangles of floor. Added the lossless `cullVoxelFaces` bake: rebuild the tile from
+  its voxel grid and drop every face that borders another full-size grid voxel in the same
+  tile (decorations are never culled and never cull), plus `floorOnly` for the three interior
+  floor tiles, which keeps the surface layer and drops the below-grade skirt — an enclosed
+  world's shell stands on grade and the camera is held above the floor, so that skirt is never
+  visible. Measured per-cell: floor tiles 10,440 -> 2,712 triangles, grass 5,520 -> 1,440,
+  beds 5,100-7,056 -> 972-2,016. Per-world totals (offline probe, worst case):
+  farm 1 22.96 M -> 6.46 M, farm 5 5.29 M -> 1.58 M, farm 6 66.60 M -> 19.12 M,
+  farm 7 49.20 M -> 14.57 M, farm 8 47.90 M -> 16.79 M, farm 9 125.60 M -> 36.58 M.
+  `src/three/ground.test.ts` pins the cull's exactness (analytic face counts on synthetic
+  grids, footprint/top preservation) and per-world budgets.
+- Verification: `npm test` **41 files / 227 tests pass**, `npm run typecheck` clean,
+  `npm run build` clean. Headless CDP probes (Chrome for Testing, driven over CDP because the
+  repo's `appshot` captures before a hash-routed SPA boots): farms 5-9 all report
+  `interior|...|1` framing (eye 1.20-1.70 m, ceiling 1.75-3.75 m, near 0.05, sight lines
+  5-32 m) with zero console errors; the Perf HUD (latest) reads 60/60/60/60 FPS for farms
+  5/6/7/8 and 40 FPS for farm 9 at 1440x900 (the same machine read **19 FPS** for the old,
+  smaller 24x16 m hall before the ground cull); the walk probe drives a trusted click +
+  key events and measures farm 9 walking 7.84 m in 3 s (2.6 m/s), 25.13 m over 15 s, stopping
+  inside the footprint at x 17.4 with **0.000 m eye-height drift**, and farm 5 at 1.20 m eye
+  height held inside its 6x5 m tent. Pixel diffs of the same view before/after the ground cull
+  (identical camera, identical plan) show mean |delta| 0.01 (farm 5) and 0.08 (farm 6) against
+  the 1.03 mean |delta| measured between two separate runs of the same route (animated props
+  and live weather differ run to run), i.e. the cull is visually neutral.
+- **Visual human-eye pass still NOT performed, and cannot be in this environment**: there is no
+  vision-capable agent or reviewer available (the worker subagent reports no image support,
+  and no human is present), so the qualitative "does the interior look right" call is
+  outstanding. Evidence here is quantitative: the framing/walk DOM probes, Perf HUD triangle
+  counts, per-tile pixel statistics and the before/after pixel diffs above.
+- Open items for the next pass: (1) scale-aware tile LOD (decimating an interior floor tile
+  24x24 -> 12x12 or 6x6 voxels when a cell is only 25 cm) is the next ~3x lever if halls grow
+  again, and it is a *visible* change, so it needs eyes; (2) `floorOnly` and the walk's
+  clamp both assume no camera ever gets below the room's floor plane, which holds today
+  (polar <= 88 deg, fly mode clamped to the interior band) but is worth an assertion if
+  free-look changes; (3) walk/fly exit immediately when the browser denies pointer lock
+  (headless needed focus emulation to test) - the catch path is silent; (4) `WALK_SPEED`/
+  `WALK_SPRINT` are untuned by eye; (5) farms 5-8 still drop layout reservations, access and
+  `usableHeightM` in `enrichSeededEnvironment`; (6) the probes above ran with
+  `ENV_RECORDS_ENABLED` off, so farms 5-9 rendered their seed plans directly - the derived
+  growing spaces (growing systems, targets, mounts, level crops) were exercised by the unit
+  suite instead, and re-running the probes with environment records enabled is still worth one
+  pass.

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { apiFetch } from '@/lib/api';
 import { archetypes } from '@/creative/archetypes';
 import { fetchMonthlyDli } from '@/lib/light';
+import { auditEnvironmentGeometry } from '@/lib/environmentPhysics';
 import { equipmentTermsFor } from '@/lib/sim/equipment';
 import { effectivePhotoperiodH, environmentDay } from '@/lib/sim/environment-climate';
 import { canPlantInEnvironment, type PlanEditor } from './usePlanEditor';
@@ -339,6 +340,11 @@ function ThisRoomInspector({ editor }: { editor: PlanEditor }) {
 export function GrowingSystemsPanel({ editor }: { editor: PlanEditor }) {
   const [removeId, setRemoveId] = useState<string | null>(null);
   const environment = editor.environment;
+  const auditIssues = useMemo(() => {
+    const env = editor.environment;
+    if (!env || archetypes[env.archetype]?.kind === 'open') return [];
+    return auditEnvironmentGeometry(env);
+  }, [editor.environment]);
   if (!editor.featureEnabled || editor.scope.kind !== 'env' || !environment) return null;
 
   const plan = editor.canonicalPlanRef.current ?? environment.plan;
@@ -420,6 +426,35 @@ export function GrowingSystemsPanel({ editor }: { editor: PlanEditor }) {
                 </div>
               ))}
             </>
+          )}
+          {auditIssues.length > 0 && (
+            <div className="space-y-1" role="status">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium">Layout readiness</span>
+                <Badge
+                  variant={auditIssues.some((issue) => issue.severity === 'error') ? 'destructive' : 'outline'}
+                  className="text-[9px]"
+                >
+                  {auditIssues.length} issue{auditIssues.length === 1 ? '' : 's'}
+                </Badge>
+              </div>
+              <ul className="space-y-1">
+                {auditIssues.slice(0, 4).map((issue) => (
+                  <li
+                    key={`${issue.code}:${issue.subjectId}`}
+                    className="rounded bg-muted px-2 py-1 text-[11px] leading-snug text-muted-foreground"
+                  >
+                    <span className="font-medium text-foreground">{issue.severity === 'error' ? 'Error' : 'Warning'}</span>
+                    {' · '}
+                    {issue.message}
+                    <span className="block text-[10px]">{issue.subjectId}</span>
+                  </li>
+                ))}
+              </ul>
+              {auditIssues.length > 4 && (
+                <p className="text-[10px] text-muted-foreground">+{auditIssues.length - 4} more not shown.</p>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

@@ -273,3 +273,93 @@ showcase the warehouse open-top interior better; sheet mode clips the right
 column at default screenshot width.
 
 **Verdict: all 8 gates PASS — environments work is merge-ready.**
+
+## Gate 9 — Environment readiness refinement (2026-11-11)
+
+Method: every unit verified by headless unit probes and assertion bands sampled from real
+built geometry (THREE.Box3 of the merged voxel outputs, meters = voxels x 0.1); no formula
+mirroring, no screenshot pass. Evidence per unit:
+
+1. Shell footprint/height fidelity — footprints render exactly as requested and heights stay
+   proportional: tent 2.8 m => 2.186 m tall, indoor 4 m => 2.628 m, hoophouse 4.2x7 m =>
+   3.338 m; small canvases shrink with the footprint and large ones stay bounded.
+2. Explicit usable height — a saved `heightM` tracks the measured Box3 height for all 7 shell
+   makers within the lid/rim trim tolerance, via the additive shell spec and the extended
+   `(surface, widthM, heightM)` cache key.
+3. Aisle bands — warehouse 3 rack rows with 0.917 m aisles inside the 0.9-1.2 m spec band;
+   container farm 0.787 m aisle along the long-X axis with both rack walls backing the shell
+   walls; grow-room flood-table aisle >= 0.5 m.
+4. Support-surface alignment — greenhouse bench crops rest at 0.820 m base vs 0.905 m bench
+   top (0.085 m seat into the slats, within the 0.12 m tolerance); grow lights mount at tier
+   elevations above their racks.
+5. Readiness audit — the pure `environmentPhysics.ts` audit (codes `space-outside-footprint`,
+   `space-overlap`, `level-above-usable-height`, `instance-collision`, `access-openings-missing`,
+   ...) surfaced two real seeded-demo collisions found on first run, both fixed: farm 8 water
+   tap, farm 9 nursery tray.
+6. Rack persistence — plant racks now render saved level elevations and tier-mounted grow
+   lights instead of a fixed ladder.
+
+Verification results: `npm test` (39 files / 203 tests) PASS, `npm run typecheck` PASS,
+`npm run build` PASS, `git diff --check` PASS.
+
+Visual gate status: Gate 8's human-eye/visual pass was NOT re-run for this milestone and is
+still required before merge. The screenshot harness needs a Chrome binary that is not present
+in this environment, so no fresh PNGs were produced; the baseline screenshots at
+`$TMPDIR/ff-environment-milestone-20261111/` still need review by a multimodal reviewer or
+human against `quality/QUALITY_BAR.md` (diorama sheet, big-mode shots, farms 8/9 world view).
+
+## Gate 10 — Interior-first worlds and navigation (2026-11-11)
+
+Request: enclosed worlds should feel like being *in* them — the frame is the environment, not a
+dollhouse on a sky field — they should be much larger, and they have to stay affordable.
+
+Method: no vision-capable reviewer is available in this environment (the worker subagent
+reports no image input support and no human is present), so this gate is quantitative by
+necessity: headless Chrome driven over CDP (the repo `appshot` harness captures before a
+hash-routed SPA boots), a DEV-only `#ff-world-framing` DOM probe, the Perf HUD's triangle and
+draw counts, pixel statistics and before/after pixel diffs. Chrome for Testing is used through
+`FF_CHROME_BIN`; the Playwright `chrome-headless-shell` renders blank canvases here.
+
+Evidence per unit:
+
+1. Interior framing — farms 5/6/7/8/9 report `interior|...|inside=1` with the camera at
+   standing height (1.20 m tent, 1.56 m mushroom hall, 1.70 m greenhouse/hoophouse/warehouse),
+   ceilings 1.75/2.35/2.65/2.95/3.75 m, near plane 0.05 and sight lines of 5.1-32.1 m across
+   the room; farm 1 (outdoor) keeps the exterior dollhouse fit (`maxDistance` 119.7 m).
+2. Environment scale — enclosed footprints are now tent 6x5 m, mushroom hall 24x16 m,
+   greenhouse 20x14 m, hoophouse 30x16 m and warehouse hall 36x20 m, tiled from repeated bays
+   with per-bay crop rotation; all enclosed demo worlds audit with zero error-severity geometry
+   issues and preserve their seeded crop counts.
+3. Walk mode — a trusted click on the dock's `Walk` button plus dispatched key events walks
+   farm 9 7.84 m in 3 s (2.6 m/s), 25.13 m over 15 s, ending inside the footprint at
+   x 17.4 m with 0.000 m eye-height drift and `inside=1`; farm 5 walks its 6x5 m tent at
+   1.20 m eye height and is held inside. `src/three/flight.test.ts` pins the same behaviour
+   (direction preserved on entry, ground-plane forward, sprint, bounds and ceiling clamps).
+4. Ground scalability — a lossless voxel-face cull plus a floor-only bake for the three
+   interior floor tiles cut the ground layer 3.4-3.9x (floor tiles 10,440 -> 2,712 triangles
+   per 25 cm cell). Worst-case world totals: farm 1 22.96 -> 6.46 M, farm 5 5.29 -> 1.58 M,
+   farm 6 66.60 -> 19.12 M, farm 7 49.20 -> 14.57 M, farm 8 47.90 -> 16.79 M and farm 9
+   125.60 -> 36.58 M triangles. The same headless machine reads 60/60/60/60 FPS for farms
+   5/6/7/8 and 40 FPS for the 36x20 m farm 9 (the old 24x16 m hall read 19 FPS at 66 M
+   triangles before the cull) at 1440x900.
+5. Visual neutrality of the cull — captures of the same farm, same camera and same plan before
+   and after the cull differ by mean |delta| 0.01 (farm 5) and 0.08 (farm 6), against the 1.03
+   mean |delta| measured between two separate runs of the same route (animated props and live
+   weather differ run to run), so no visible surface was removed; `src/three/ground.test.ts`
+   additionally proves the cull analytically (a 3x3x3 block keeps exactly its 54 surface quads,
+   footprints and surface heights are preserved, and off-grid decorations are untouched).
+6. No regression elsewhere — the enclosed plans still render their crops, racks, benches,
+   hvac/fans/totes and floor texture (7.7k-17k distinct colours per capture, mean luminance
+   49-76, `maxlum` 255) and every capture run reports zero console errors or uncaught
+   exceptions.
+
+Verification results: `npm test` (41 files / 227 tests) PASS, `npm run typecheck` PASS,
+`npm run build` PASS, `git diff --check` PASS.
+
+Visual gate status: the human-eye pass is still outstanding and is now the only blocker for
+this mission — a multimodal reviewer or human must confirm the interior framing, the walk feel
+and the larger environments against `quality/QUALITY_BAR.md`. Fresh PNGs are archived at
+`$TMPDIR/ff-environment-milestone-20261111/world-interior-20261111/`: `n1.png` (outdoor farm 1,
+post-cull), `n5/n6` (enclosed farms 5/6 pre-cull) and `v5`-`v9` (post-cull), plus the capture
+harness that produced them (`capture.mjs`, `walkprobe.mjs`, `stats.py`, `diff.py`) so the
+evidence can be regenerated and re-measured.

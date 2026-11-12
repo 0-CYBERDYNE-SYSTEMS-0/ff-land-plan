@@ -16,9 +16,13 @@ export function makeFishTankAsset(): THREE.Object3D {
   return makeFishTank({ diaM: 1.2 });
 }
 
-/** DWC hydro raft — 2.4 × 1.2 m raft pond with lettuce holes + bubbles. */
-export function makeHydroRaftAsset(): THREE.Object3D {
-  return makeDwcRaft({ wM: 2.4, dM: 1.2 });
+/**
+ * DWC hydro raft — 2.4 × 1.2 m raft pond with net-pot holes + bubbles.
+ * `showPlants` (default true) keeps the decorative lettuce for showcase /
+ * diorama use; planner rendering passes false for a clean raft.
+ */
+export function makeHydroRaftAsset(showPlants = true): THREE.Object3D {
+  return makeDwcRaft({ wM: 2.4, dM: 1.2, showPlants });
 }
 
 /** Dehumidifier — 0.35 × 0.35 × 0.6 m floor unit with drip bucket. */

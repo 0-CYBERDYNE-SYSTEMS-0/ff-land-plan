@@ -46,6 +46,16 @@ type TileId =
 
 const GRASS_VARIANTS: TileId[] = ['grass-01', 'grass-02', 'grass-03'];
 
+/**
+ * Interior floor tiles are a surface sheet over a slab skirt that only exists
+ * so a diorama shows its cut edge. An enclosed world renders that skirt once
+ * per plan cell and can never show it, so it bakes the surface layer alone
+ * (see VoxelCullOptions.floorOnly).
+ */
+const FLOOR_ONLY_TILES: ReadonlySet<TileId> = new Set<TileId>([
+  'floor-mylar', 'floor-concrete', 'floor-greenhouse',
+]);
+
 /** Default underlay tile per plan surface — enclosed canvases never show grass.
  * Hoophouse grows in ground soil beds (tilled dry); warehouse is a concrete
  * hall floor (tape lines come from the shell/props, not the tile). */
@@ -140,7 +150,7 @@ const TILE_MAKERS: Record<TileId, () => THREE.Object3D> = {
 };
 
 let sharedMaterial: THREE.MeshStandardMaterial | null = null;
-const templateCache = new Map<TileId, TileTemplate>();
+const templateCache = new Map<string, TileTemplate>();
 
 function getMaterial(): THREE.MeshStandardMaterial {
   if (!sharedMaterial) {
@@ -153,13 +163,188 @@ function getMaterial(): THREE.MeshStandardMaterial {
   return sharedMaterial;
 }
 
+/** Face order produced by buildVoxelGeometry: +X, -X, +Y, -Y, +Z, -Z. */
+const VOXEL_FACE_DIRS: ReadonlyArray<readonly [number, number, number]> = [
+  [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
+];
+/** buildVoxelGeometry emits 6 quads of 4 unique corners per voxel. */
+const VOXEL_VERTEX_COUNT = 24;
+const GRID_EPSILON = 1e-3;
+
+export interface VoxelCullOptions {
+  /**
+   * Keep only the tile's top surface layer.
+   *
+   * The interior floor tiles model a surface sheet over a perimeter skirt that
+   * exists so a diorama shows the slab's cut edge. An enclosed plan renders
+   * that skirt once per plan cell (thousands of copies of a 3 cm edge nobody
+   * can walk under) and never shows it: the shell stands on grade and the
+   * camera is held above the floor. Dropping it keeps the visible surface
+   * pixel-identical.
+   */
+  floorOnly?: boolean;
+}
+
+/**
+ * Bake a voxel tile down to the faces that can actually be seen.
+ *
+ * Tiles are built as one box per voxel with no shared vertices and no
+ * neighbour awareness, so a voxel pressed against another still contributes
+ * both of the coincident quads between them. This pass rebuilds the geometry
+ * from the voxel grid, drops every face that borders another grid voxel inside
+ * the same tile, and optionally drops everything below the surface layer.
+ *
+ * Only exact matches count: a face is dropped when its own voxel and the voxel
+ * one unit along that face are both full-size and grid-aligned. Decorations
+ * (fractional voxels, off-grid detail) never cull and are never culled.
+ *
+ * Exported for the ground geometry-budget test; production callers go through
+ * buildTemplate.
+ */
+export function cullVoxelFaces(
+  source: THREE.BufferGeometry,
+  options: VoxelCullOptions = {},
+): THREE.BufferGeometry {
+  const position = source.getAttribute('position');
+  const normal = source.getAttribute('normal');
+  const color = source.getAttribute('color');
+  const index = source.getIndex();
+  if (!index || !position || !normal || !color) return source;
+
+  const vertexCount = position.count;
+  if (vertexCount === 0 || vertexCount % VOXEL_VERTEX_COUNT !== 0) return source;
+  const boxCount = vertexCount / VOXEL_VERTEX_COUNT;
+
+  // Voxel bounds: [minX, maxX, minY, maxY, minZ, maxZ] per voxel.
+  const bounds = new Float32Array(boxCount * 6);
+  const isGrid = new Uint8Array(boxCount);
+  const gridFaces = new Uint8Array(boxCount);
+  for (let box = 0; box < boxCount; box++) {
+    let minX = Infinity; let maxX = -Infinity;
+    let minY = Infinity; let maxY = -Infinity;
+    let minZ = Infinity; let maxZ = -Infinity;
+    for (let v = box * VOXEL_VERTEX_COUNT; v < (box + 1) * VOXEL_VERTEX_COUNT; v++) {
+      const x = position.getX(v);
+      const y = position.getY(v);
+      const z = position.getZ(v);
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
+    const base = box * 6;
+    bounds[base] = minX; bounds[base + 1] = maxX;
+    bounds[base + 2] = minY; bounds[base + 3] = maxY;
+    bounds[base + 4] = minZ; bounds[base + 5] = maxZ;
+    const centreX = (minX + maxX) / 2;
+    const centreY = (minY + maxY) / 2;
+    const centreZ = (minZ + maxZ) / 2;
+    const unit = Math.abs(maxX - minX - 1) < GRID_EPSILON
+      && Math.abs(maxY - minY - 1) < GRID_EPSILON
+      && Math.abs(maxZ - minZ - 1) < GRID_EPSILON;
+    const aligned = Math.abs(centreX - Math.round(centreX)) < GRID_EPSILON
+      && Math.abs(centreY - Math.round(centreY)) < GRID_EPSILON
+      && Math.abs(centreZ - Math.round(centreZ)) < GRID_EPSILON;
+    isGrid[box] = unit && aligned ? 1 : 0;
+    gridFaces[box] = isGrid[box]!;
+  }
+
+  const kept = new Uint8Array(boxCount).fill(1);
+  if (options.floorOnly) {
+    let topY = -Infinity;
+    for (let box = 0; box < boxCount; box++) {
+      if (!isGrid[box]) continue;
+      const centreY = (bounds[box * 6 + 2]! + bounds[box * 6 + 3]!) / 2;
+      if (centreY > topY) topY = centreY;
+    }
+    if (Number.isFinite(topY)) {
+      for (let box = 0; box < boxCount; box++) {
+        if (!isGrid[box]) continue;
+        const centreY = (bounds[box * 6 + 2]! + bounds[box * 6 + 3]!) / 2;
+        if (centreY < topY - GRID_EPSILON) kept[box] = 0;
+      }
+    }
+  }
+
+  const occupied = new Set<string>();
+  for (let box = 0; box < boxCount; box++) {
+    if (!kept[box] || !isGrid[box]) continue;
+    const base = box * 6;
+    occupied.add(`${(bounds[base]! + bounds[base + 1]!) / 2},${(bounds[base + 2]! + bounds[base + 3]!) / 2},${(bounds[base + 4]! + bounds[base + 5]!) / 2}`);
+  }
+
+  const emitFace = new Uint8Array(boxCount * 6).fill(1);
+  for (let box = 0; box < boxCount; box++) {
+    if (!kept[box] || !isGrid[box]) continue; // decorations keep every face
+    const base = box * 6;
+    const centreX = (bounds[base]! + bounds[base + 1]!) / 2;
+    const centreY = (bounds[base + 2]! + bounds[base + 3]!) / 2;
+    const centreZ = (bounds[base + 4]! + bounds[base + 5]!) / 2;
+    for (let face = 0; face < VOXEL_FACE_DIRS.length; face++) {
+      const dir = VOXEL_FACE_DIRS[face]!;
+      if (occupied.has(`${centreX + dir[0]},${centreY + dir[1]},${centreZ + dir[2]}`)) emitFace[base + face] = 0;
+    }
+  }
+
+  const idx = index.array;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const remap = new Map<number, number>();
+  let droppedAnything = false;
+  const mapVertex = (v: number): number => {
+    const existing = remap.get(v);
+    if (existing !== undefined) return existing;
+    const next = positions.length / 3;
+    positions.push(position.getX(v), position.getY(v), position.getZ(v));
+    normals.push(normal.getX(v), normal.getY(v), normal.getZ(v));
+    colors.push(color.getX(v), color.getY(v), color.getZ(v));
+    remap.set(v, next);
+    return next;
+  };
+
+  for (let tri = 0; tri < idx.length / 3; tri++) {
+    const a = idx[tri * 3]!;
+    const b = idx[tri * 3 + 1]!;
+    const c = idx[tri * 3 + 2]!;
+    const box = Math.floor(a / VOXEL_VERTEX_COUNT);
+    const face = Math.floor((a % VOXEL_VERTEX_COUNT) / 4);
+    const sameBox = Math.floor(b / VOXEL_VERTEX_COUNT) === box && Math.floor(c / VOXEL_VERTEX_COUNT) === box;
+    const sameFace = sameBox
+      && Math.floor((b % VOXEL_VERTEX_COUNT) / 4) === face
+      && Math.floor((c % VOXEL_VERTEX_COUNT) / 4) === face;
+    if (sameFace) {
+      if (!kept[box] || !emitFace[box * 6 + face]) {
+        droppedAnything = true;
+        continue;
+      }
+    } else if (!kept[box]) {
+      droppedAnything = true;
+      continue;
+    }
+    indices.push(mapVertex(a), mapVertex(b), mapVertex(c));
+  }
+  if (!droppedAnything) return source;
+
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  out.setIndex(indices);
+  return out;
+}
+
 /**
  * Build a merged, vertex-colored template geometry for a tile type.
  * Animated/translucent parts (pond shimmer plate, sparkle specks) have no
  * 'color' attribute and are skipped — the static water body remains.
  */
-function buildTemplate(id: TileId, cellM: number): TileTemplate {
-  const cached = templateCache.get(id);
+function buildTemplate(id: TileId, cellM: number, floorOnly: boolean): TileTemplate {
+  const cacheKey = floorOnly ? `${id}|floor` : id;
+  const cached = templateCache.get(cacheKey);
   if (cached) return cached;
 
   const root = TILE_MAKERS[id]();
@@ -186,16 +371,19 @@ function buildTemplate(id: TileId, cellM: number): TileTemplate {
   }
   for (let i = 1; i < parts.length; i++) parts[i]?.dispose();
 
+  const culled = cullVoxelFaces(merged, { floorOnly });
+  if (culled !== merged) merged.dispose();
+
   // uniform scale: tile footprint → plan cell size
-  merged.computeBoundingBox();
-  const bb = merged.boundingBox ?? new THREE.Box3();
+  culled.computeBoundingBox();
+  const bb = culled.boundingBox ?? new THREE.Box3();
   const size = new THREE.Vector3();
   bb.getSize(size);
   const tileWidth = Math.max(size.x, size.z, 1e-6);
   const baseScale = cellM / tileWidth;
 
-  const template: TileTemplate = { geometry: merged, baseScale };
-  templateCache.set(id, template);
+  const template: TileTemplate = { geometry: culled, baseScale };
+  templateCache.set(cacheKey, template);
   return template;
 }
 
@@ -234,7 +422,7 @@ export function buildGround(plan: PlanState, scene: THREE.Scene, archetypeId?: A
   for (const [id, cells] of cellsByType) {
     let template: TileTemplate;
     try {
-      template = buildTemplate(id, cellM);
+      template = buildTemplate(id, cellM, FLOOR_ONLY_TILES.has(id));
     } catch {
       continue; // a broken tile type must never take down the whole ground
     }

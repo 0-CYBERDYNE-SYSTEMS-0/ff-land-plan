@@ -41,7 +41,8 @@ import type { Environment, PlanState } from '@/types';
 import { parseKey } from '@/lib/plan';
 import { assetBySlug } from '@/data/assets';
 import { entries as structureEntries } from '@/creative/structures/registry';
-import { makePlantRack } from '@/creative/structures/equipment';
+import { makeGrowLightTierMount, makeGrowBench, makeHydroChannel, makePlantRack } from '@/creative/structures/equipment';
+import { makeHydroRaftAsset } from '@/creative/structures/envEquipment';
 
 export interface StructureGroup {
   /** Root objects added to the scene (one per linear cell / merged region). */
@@ -188,17 +189,42 @@ interface Template {
 
 const templateCache = new Map<string, Template>();
 
-function getTemplate(entryId: string, rackTiers?: number): Template | null {
-  const cacheKey = rackTiers === undefined ? entryId : `${entryId}|planned-tiers:${rackTiers}`;
+/**
+ * Planner variants that bypass the registry's showcase makers. The registry
+ * keeps the decorated showcase look (seedling trays, lettuce-filled
+ * channels); planning renders fixtures clean so visible crops only ever
+ * come from saved growing-level targets.
+ */
+interface TemplateVariant {
+  rackTiers?: number;
+  rackLevelElevationsM?: number[];
+  rackBayWidthM?: number;
+  tierLightMount?: boolean;
+}
+
+function getTemplate(entryId: string, variant?: TemplateVariant): Template | null {
+  const cacheKey = variant
+    ? `${entryId}|planned-tiers:${variant.rackTiers ?? ''}` +
+      `|elev:${(variant.rackLevelElevationsM ?? []).map((value) => value.toFixed(2)).join(',')}` +
+      `|bay:${variant.rackBayWidthM?.toFixed(1) ?? ''}|tier-light:${variant.tierLightMount ? 1 : 0}`
+    : entryId;
   const cached = templateCache.get(cacheKey);
   if (cached) return cached;
 
   const entry = structureEntries.find((e) => e.id === entryId);
   if (!entry) return null;
 
-  const obj = entryId === 'plant-rack' && rackTiers !== undefined
-    ? makePlantRack(rackTiers, false)
-    : entry.make();
+  const obj = entryId === 'plant-rack' && variant?.rackTiers !== undefined
+    ? makePlantRack(variant.rackTiers, false, variant.rackLevelElevationsM, variant.rackBayWidthM)
+    : entryId === 'grow-light' && variant?.tierLightMount
+      ? makeGrowLightTierMount()
+      : entryId === 'hydro-channel'
+        ? makeHydroChannel(false)
+        : entryId === 'grow-bench'
+          ? makeGrowBench(false)
+          : entryId === 'hydro-raft'
+            ? makeHydroRaftAsset(false)
+            : entry.make();
   // Measure FIRST (object at identity), then re-centre: builders anchor voxels
   // at a corner (e.g. the polytunnel spans 0..+Z with tie-down pegs at −x), but
   // instances are placed at a region's centre, so the template's footprint
@@ -315,6 +341,31 @@ export function buildStructures(plan: PlanState, scene: THREE.Scene): StructureG
   return [{ roots }];
 }
 
+/** Creative kit contract: one voxel is 10 cm (src/creative/voxel.ts). */
+const VOXEL_SIZE_M = 0.1;
+
+/**
+ * Deck-bearing fixtures whose saved growing-space levels pin crop elevations
+ * to the fixture's authored physical deck heights (grow-bench top 0.6 m, NFT
+ * channel top band 0.26–0.33 m, DWC raft board 0.22 m). Stretching their Y
+ * with the footprint would lift decks off the saved levels, so like plant
+ * racks they keep the raw voxel→metre Y factor.
+ */
+const DECK_FIXTURE_SLUGS = new Set(['grow-bench', 'hydro-channel', 'hydro-raft']);
+
+/**
+ * Deliberate default mount height (metres above the floor) for environment-
+ * mounted equipment that predates explicit `elevationM` on the mount record.
+ * Fans hang at canopy height, HVAC boxes are wall mounted, CO₂ stays at floor
+ * level; anything else falls back to the slug mapping / floor.
+ */
+const ENV_MOUNT_DEFAULT_ELEVATION_M: Record<string, number> = {
+  'clip-fan': 1.2,
+  'hvac-unit': 1.8,
+  'grow-light': 1.2,
+  'co2-tank': 0,
+};
+
 /** Render catalog-backed Environment.instances using their saved identities and mounts. */
 export function buildEnvironmentAssets(environment: Environment, plan: PlanState, scene: THREE.Scene): StructureGroup[] {
   const roots: THREE.Object3D[] = [];
@@ -335,18 +386,42 @@ export function buildEnvironmentAssets(environment: Environment, plan: PlanState
       ? space?.levels.find((entry) => entry.id === mount.levelId)
       : undefined;
     if (mount.kind === 'growing-level' && !level) continue;
-    const template = getTemplate(mapping.entryId, instance.slug === 'plant-rack' ? space?.levels.length : undefined);
+    const template = instance.slug === 'plant-rack'
+      ? getTemplate(mapping.entryId, {
+          rackTiers: space?.levels.length,
+          rackLevelElevationsM: space?.levels.map((entry) => entry.elevationM),
+          rackBayWidthM: instance.widthM,
+        })
+      : instance.slug === 'grow-light' && mount.kind === 'growing-level'
+        ? getTemplate(mapping.entryId, { tierLightMount: true })
+        : getTemplate(mapping.entryId);
     if (!template) continue;
     const root = template.obj.clone();
     root.name = `asset-instance:${instance.id}:${instance.slug}`;
-    root.scale.set(
-      instance.widthM / Math.max(0.001, template.size.x),
-      0.1,
-      instance.depthM / Math.max(0.001, template.size.z),
-    );
+    // Footprint (x/z) stretches to the saved instance size. Y keeps physical
+    // proportions: deck-bearing fixtures (plant racks, benches, hydro
+    // channels and rafts) author their decks at absolute physical heights in
+    // 10 cm voxels — the plant rack at its saved GrowingSpaceLevel
+    // elevations — so decks land exactly on the saved levels whatever the
+    // instance footprint, and Y keeps the raw voxel→metre factor. Other
+    // equipment keeps its authored shape via the footprint fit so a mounted
+    // fan or HVAC box keeps its real proportions. Tier-mounted grow lights
+    // follow the length fit only: a suspended bar must never inflate into
+    // the tier above when its bay runs deep.
+    const scaleX = instance.widthM / Math.max(0.001, template.size.x);
+    const scaleZ = instance.depthM / Math.max(0.001, template.size.z);
+    const scaleY = instance.slug === 'plant-rack' || DECK_FIXTURE_SLUGS.has(instance.slug)
+      ? VOXEL_SIZE_M
+      : instance.slug === 'grow-light' && mount.kind === 'growing-level'
+        ? scaleX
+        : (scaleX + scaleZ) / 2;
+    root.scale.set(scaleX, scaleY, scaleZ);
     const worldX = offsetX + instance.x + instance.widthM / 2;
     const worldZ = offsetZ + instance.y + instance.depthM / 2;
-    const mountY = level?.elevationM ?? mapping.yOffsetM ?? 0;
+    const mountY = level?.elevationM
+      ?? (mount.kind === 'environment'
+        ? mount.elevationM ?? ENV_MOUNT_DEFAULT_ELEVATION_M[instance.slug] ?? 0
+        : mapping.yOffsetM ?? 0);
     root.position.set(worldX, mountY, worldZ);
     scene.add(root);
     roots.push(root);

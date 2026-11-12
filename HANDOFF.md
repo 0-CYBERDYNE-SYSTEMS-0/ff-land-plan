@@ -179,7 +179,128 @@ entry before touching surface behavior. Trap: four surface-keyed sites do NOT
 fail typecheck when incomplete — `SURFACE_OPTIONS` (DesignerToolbar),
 `SLUG_MAP` (structures.ts), `SLUG_TILES` (ground.ts), showcase lane wiring —
 audit them by hand when adding a surface. Visual human-eye pass over the new
-renders is the one open gate before mainline merge.
+renders is the one open gate before mainline merge; it was still open after the
+2026-11-11 refinement recorded below.
+
+## Environments readiness refinement (2026-11-11 — branch `feat/beta-readiness`)
+
+Refined the lane-E environment assets and spaces (container, greenhouse,
+hoophouse, warehouse, grow tent, grow room, cold frame, aquaponics, NFT gully)
+for physics, spacing, scale and code so they are identifiable and usable both
+in the planner and in World view. Verified 2026-11-11: `npm test` (39 files /
+203 tests), `npm run typecheck`, `npm run build` and `git diff --check` all
+clean. Full evidence is in `quality/MISSION-ENVIRONMENTS.md` Gate 9 and the
+`implementation-notes.md` entry of the same date.
+
+What changed:
+
+- **Parametric shells** (`creative/environments/shells.ts`): makers build the
+  requested footprint (clamp 0.5 m, not the old 2 m floor) and take an additive
+  `ShellSpec.heightM`. Three vertical loops had modelled `[-h,+h]` and were
+  doubling every wall — a 2.8 m tent rendered 4.04 m. Measured after the fix:
+  tent 2.8 m => 2.186 m, indoor 4 m => 2.628 m, hoophouse 4.2×7 m => 3.338 m,
+  every maker within one 10 cm voxel of its requested footprint, zero lights.
+- **Shell height follows the saved record** (`three/shell.ts`, `World3D.tsx`):
+  a new `ShellBuildContext { usableHeightM }` is threaded from
+  `editor.environment.layout.usableHeightM` and the module cache key became
+  `archetype|widthM|depthM|heightKey` (rounded to the 10 cm voxel). Absent or
+  non-finite height keeps the previous defaults exactly on canvases ≥ 2 m.
+- **Equipment mounting** (`three/structures.ts`): saved rects no longer stretch
+  asset height — racks pin scaleY, other assets fit by footprint, and
+  environment mounts take an explicit `elevationM`
+  (`ENV_MOUNT_DEFAULT_ELEVATION_M`: clip-fan 1.2, hvac 1.8, grow-light 1.2,
+  co2 0).
+- **Fixture / crop / light alignment**: racks render their real saved tier
+  elevations and growing-level lights are tier-mounted, so nothing crosses a
+  shelf on a 0.45 m pitch. Planner-baked decorative crops moved behind opt-in
+  `showPlants` flags so they stop duplicating PlanState planting.
+  `SUPPORT_ELEVATIONS_M` pins rack [0.2, 0.65, 1.1, 1.55], bench [0.6],
+  hydro [0.3], bed [0].
+- **Layout readiness audit** (new `src/lib/environmentPhysics.ts` +
+  `environmentPhysics.test.ts`): pure `auditEnvironmentGeometry(environment)`
+  returns sorted `{code, severity, message, subjectId}` issues for dimensions,
+  footprint, overlap, target anchors, instance collisions, mount resolution,
+  level elevation/clearance vs `usableHeightM`, and access records. Surfaced
+  read-only as "Layout readiness" in the Growing systems panel. It found two
+  real seeded collisions, now fixed: farm 8 water tap inside bed 3, farm 9
+  nursery tray inside east rack 8.
+- **Diorama composition** (`creative/environments/registry.ts`): warehouse 3
+  glowing rack rows (aisles 0.917 m), grow-room aisle 0.745 m, container
+  reoriented to the shell's long-X ISO axis (aisle 0.787 m, door on +X),
+  greenhouse crops seated on the 0.905 m bench deck. New `shells.test.ts`,
+  `registry.test.ts` and `three/structures.test.ts` sample real `Box3`
+  geometry rather than recomputing placement formulas.
+
+Runtime gates re-run this date through the harness with a Playwright
+`chrome-headless-shell` (no Chrome bundle exists on this machine): showcase
+lane E `--expect "showcase-ready 9"` PASS, blueprint farm 1 `--gate --expect
+"25 cm cells"` PASS, World farms 8 and 9 `--gate` PASS. Pass `--vt <ms>` on SPA
+routes — with `--vt 0` some routes serialize the DOM before boot, so
+`--expect`/`--gate` fail on a page that renders fine.
+
+Still open before merge (full list in Gate 9): **the visual human-eye pass was
+not re-run** — see the 2026-09-13 note above; renders for review are in
+`$TMPDIR/ff-environment-milestone-20261111/` and the bar is
+`quality/QUALITY_BAR.md`. Also open: shell access openings are still authored
+per maker rather than derived from saved `layout.access` metadata;
+`usePlanEditor` writes interactive rack levels at `0.25 + i*0.45` while the
+support ladder is [0.2, 0.65, 1.1, 1.55]; `enrichSeededEnvironment` drops
+`access`/`reservations`/`usableHeightM` for farms 5–8; `inground-bed` has no
+`SLUG_MAP` entry; crop canopy spacing is not renderer-enforced; `makePlantRack`
+caps at 8 levels. No simulation or climate equations changed in this work.
+
+## Interior-first worlds and navigation (2026-11-11 — branch `feat/beta-readiness`)
+
+Enclosed worlds are now entered rather than viewed: load-in stands inside the
+shell at eye height, the dock's `Walk` button gives an eye-height first-person
+walk with W/S/A/D, and the enclosed demo worlds are several bays big. Evidence
+is in `quality/MISSION-ENVIRONMENTS.md` Gate 10 and the same-date
+`implementation-notes.md` entry.
+
+- **Framing** (`src/three/cameraFrame.ts`): `isEnclosedSurface`,
+  `interiorFramingAvailable` (≥4 m run, ≥1.6 m width, ≥1.5 m height — a cold
+  frame or a tiny canvas keeps the exterior fit), `interiorEyeHeightM`,
+  `interiorFrame`, `interiorBounds`, `cameraLimits`. `World3D` resolves all of
+  it through `resolveWorldFraming` + `worldNavBounds` (+`Engine.setClip` for the
+  5 cm interior near plane) and re-applies it only when its identity key changes,
+  so a brush dab never yanks the camera.
+- **Walk mode** (`src/three/flight.ts`): ground-plane movement at 2.6 m/s (5.5 m/s
+  sprint), pitch never steers, eye height pinned, position clamped to the
+  interior rect and floor/ceiling band. `activate` also had a pre-existing 180°
+  yaw inversion (`atan2(forward.x, forward.z)` vs a `-Z`-rotated camera) that
+  made fly — and a new walk — start facing backwards; fixed to
+  `atan2(-forward.x, -forward.z)` and pinned by `src/three/flight.test.ts`.
+- **Bigger enclosed worlds** (`src/data/seed.ts` bay tiling): mushroom hall
+  24×16 m, greenhouse 20×14 m, hoophouse 30×16 m, warehouse 36×20 m (grow tent
+  stays 6×5 m). Farm 9's `tieredWarehouse` derives rack spaces, aisle
+  reservations, level lights and the DWC raft from the shipped layout at any
+  canvas size instead of one 12 m hall.
+- **Ground scalability** (`src/three/ground.ts`): the ground layer was ~95 % of
+  every world's triangles. `cullVoxelFaces` now bakes out faces hidden inside a
+  tile and `floorOnly` drops the interior floors' below-grade skirt; worlds cost
+  3.4–3.9× less (farm 9: 125.6 M → 36.6 M triangles; the old 24×16 m hall's
+  19 FPS becomes 60 FPS and the 36×20 m hall holds 40 FPS on the same headless
+  machine). `src/three/ground.test.ts` pins the cull's exactness and per-world
+  budgets.
+- **Headless methods that now work** (use these instead of assuming they don't):
+  the Playwright `chrome-headless-shell` renders blank canvases, but
+  `~/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/"Google Chrome
+  for Testing".app/...` renders WebGL correctly via `FF_CHROME_BIN`. `appshot`
+  captures before a hash-routed SPA boots, so drive Chrome over CDP instead
+  (navigate, wait a real delay, read the DEV `#ff-world-framing` probe, then
+  screenshot). Trusted input IS available: `Input.dispatchMouseEvent` clicks
+  and `Input.dispatchKeyEvent` keys work after
+  `Emulation.setFocusEmulationEnabled` + `Page.bringToFront`, which is what
+  lets a headless walk check exercise the real `Walk` button (a synthetic
+  `.click()` is not a user gesture and the pointer-lock request is refused).
+  `tools/appshot.mjs` cannot synthesize trusted events; CDP can.
+- **Still open**: the human-eye pass is now the only gate blocking this mission
+  (no vision-capable agent or human exists in this environment, so every claim
+  above is quantitative). Scale-aware tile LOD (decimating an interior floor
+  tile when a cell is only 25 cm) is the next scalability lever but is a
+  *visible* change and needs eyes. Walk/fly still exit silently when the browser
+  refuses pointer lock. `WALK_SPEED`/`WALK_SPRINT` are untuned by eye.
+
 
 ## Where things stand
 
@@ -202,8 +323,11 @@ renders is the one open gate before mainline merge.
 | Creative voxel asset forge — 157 builders, 4 gauntlet lanes (see `quality/ASSETS.md`) | ✅ `01d67a6` |
 | Beta hardening: live weather→3D plumbing, single-sun lighting, REST API seam (`VITE_API_BASE_URL`), automated smoke gate (`tools/appshot.mjs`) | ✅ `e6e4031` · `quality/MISSION-BETA.md` |
 | Blueprint power tools + full asset wiring: ghost/fill/line/pick/5×5, spacing & companion overlays, layer toggles, zoom cluster, starter templates, barn/livestock wake-up, region-merge structures, dressing props | ✅ `2c29eb9` · `quality/MISSION-BLUEPRINT.md` |
+| Environments readiness refinement: parametric shells (footprint + saved usable height), unscaled equipment mounts with explicit elevations, fixture/crop/light alignment, layout readiness audit + panel, diorama composition, seeded collision fixes | ✅ uncommitted on `feat/beta-readiness` · `quality/MISSION-ENVIRONMENTS.md` Gate 9 |
+| Interior-first worlds: interior load-in framing + dynamic clip planes, eye-height `Walk`/`Fly` nav with interior bounds, bay-tiled enclosed demo worlds (up to 36×20 m), farm-9 growing spaces derived from the shipped layout, lossless ground face-cull (3.4–3.9× fewer triangles) | ✅ uncommitted on `feat/beta-readiness` · `quality/MISSION-ENVIRONMENTS.md` Gate 10 |
 
-Working tree is clean. Dead code removed: `src/three/groundTexture.ts` (the
+The tree was clean at that handoff; `feat/beta-readiness` now carries both
+uncommitted bodies of work described in the 2026-11-11 sections above. Dead code removed: `src/three/groundTexture.ts` (the
 baked ground-plane texture, superseded by the creative voxel-tile ground
 `src/three/ground.ts`) was deleted in the 2026-09-04 cleanup pass — build
 re-verified, three.js still its own lazy chunk.
@@ -367,27 +491,58 @@ Monitoring and Dashboard. Don't migrate or delete; the designer uses
     from an empty ground map under virtual time, so world PNG bytes cannot
     arbitrate scene content — use GATE + Node-side runtime probes instead
     (see MISSION-BLUEPRINT Verification Log).
+11. **Shell height is saved data, not a constant**: `buildShell` receives the
+    saved `layout.usableHeightM` through `ShellBuildContext` and the module
+    cache key includes its rounded voxel value. A new shell knob must extend
+    BOTH the maker defaults and that key, or the shell will not rebuild when
+    the record changes. Access openings are still authored per maker, so a
+    saved access edge can disagree with the render (the audit reports a
+    missing access record, never a misplaced door).
+12. **Run the environment audit after moving geometry**:
+    `auditEnvironmentGeometry` (`src/lib/environmentPhysics.ts`, panel
+    "Layout readiness") is the check for footprint bounds, space overlap,
+    instance collisions, mount resolution, level clearance vs `usableHeightM`
+    and access records. Moving a growing space, target, level or equipment
+    mount can silently push geometry through a wall or rack; parent/child
+    mounts are exempt by construction.
 
 ## Verification gates (run before calling anything done)
 
-1. `npm run typecheck` — clean at handoff.
-2. `npm run build` — clean as of 2026-09-04 (main chunk ~533 kB / ~157 kB gzip;
-   the chunk-size warning is recharts and is expected — but three.js must
-   land in its own lazy chunk, not here).
+1. `npm run typecheck` and `npm test` — both clean as of 2026-11-11
+   (41 files / 227 tests); add `git diff --check` for whitespace and conflict
+   markers.
+2. `npm run build` — clean as of 2026-11-11 (entry chunk ~1.02 MB / ~307 kB
+   gzip; the chunk-size warning is expected. `three-*.js` (797 kB) and
+   `World3D-*.js` (336 kB) must stay their own lazy chunks, never merged into
+   the entry).
 3. Automated smoke (replaces ad-hoc Playwright): dev server up, then
    `node tools/appshot.mjs "<url>" <out.png> [WxH] --gate [--expect "<text>"]`
    per route (~40 s/shot; Chrome killed on timeout BY DESIGN — trust the
    GATE/EXPECT lines + PNG bytes, not exit codes). Showcase pages assert
    `--expect "showcase-ready N"` (boot probe not mounted there). Scratch
    PNGs go in `$TMPDIR/<dir>/` (never `/tmp`, never the repo unless archiving
-   evidence); create target dirs first — Chrome won't mkdir.
+   evidence); create target dirs first — Chrome won't mkdir. On a machine with
+   no Chrome bundle (this one), point `FF_CHROME_BIN` at Playwright's
+   `chrome-headless-shell` and pass `--vt <ms>` (or `--vt 0` with a raised
+   `FF_SHOT_TIMEOUT_MS`): several SPA routes serialize the DOM before boot
+   without virtual time, so `--expect`/`--gate` fail on a page that renders.
+   For World view, however, `chrome-headless-shell` renders blank canvases —
+   point `FF_CHROME_BIN` at Playwright's full
+   `chromium-<rev>/chrome-mac-arm64/"Google Chrome for Testing".app/Contents/
+   MacOS/Google Chrome for Testing` instead, drive it over CDP (navigate, wait
+   a real delay, read the DEV `#ff-world-framing` / Perf-HUD DOM, then
+   `Page.captureScreenshot`), and enable
+   `Emulation.setFocusEmulationEnabled` + `Page.bringToFront` before dispatching
+   `Input.dispatchMouseEvent`/`Input.dispatchKeyEvent` — that combination is
+   what makes trusted clicks and keyboard input work headlessly.
 4. Dashboard network tab must show NO three.js chunk until the World toggle
    is clicked.
 
 ## Suggested skills for the next session
 
-- `webapp-testing` or `browse` — interactive checks that need real clicks
-  (the headless harness cannot synthesize trusted events).
+- `browse` — interactive checks that need real clicks. CDP trusted input now
+  works headlessly (see gate 3), so a browser agent is optional rather than
+  required; the visual human-eye pass is the one thing that still needs eyes.
 - `investigate` — if a regression appears, root-cause before patching.
 - `qa` / `qa-only` — end-of-phase sweep across viewports using appshot.
 

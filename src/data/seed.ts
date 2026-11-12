@@ -614,9 +614,53 @@ function buildMarketFieldPlan(): PlanState {
   return plan;
 }
 
+/**
+ * Enclosed demo canvases are authored as a grid of repeated bays: one audited
+ * bay motif at a realistic footprint, tiled to the size the shell is rendered
+ * at. Growing worlds are now walked and flown at body scale, so the old single
+ * 12 x 10 m hall was the entire environment; the grid keeps the motif's aisle
+ * widths and equipment clearances while letting the world be a real hall.
+ *
+ * Cell units are 0.25 m (4 cells = 1 m). Every motif stays inside its own bay,
+ * so tiling cannot create cross-bay collisions.
+ */
+interface BayGrid {
+  bayW: number;
+  bayH: number;
+  cols: number;
+  rows: number;
+}
+
+const BAY_GRIDS: Record<number, BayGrid> = {
+  5: { bayW: 24, bayH: 20, cols: 1, rows: 1 }, //  6 x  5 m — compact grow tent
+  6: { bayW: 48, bayH: 32, cols: 2, rows: 2 }, // 24 x 16 m — grow room
+  7: { bayW: 40, bayH: 28, cols: 2, rows: 2 }, // 20 x 14 m — glass range
+  8: { bayW: 40, bayH: 32, cols: 3, rows: 2 }, // 30 x 16 m — high tunnel
+  9: { bayW: 48, bayH: 40, cols: 3, rows: 2 }, // 36 x 20 m — vertical-farm hall
+};
+
+function bayCanvas(grid: BayGrid): { widthM: number; heightM: number } {
+  return { widthM: grid.bayW * grid.cols * 0.25, heightM: grid.bayH * grid.rows * 0.25 };
+}
+
+/** Stamp the bay motif once per grid cell; `bay` receives the bay's cell offset. */
+function eachBay(
+  plan: PlanState,
+  grid: BayGrid,
+  bay: (plan: PlanState, ox: number, oy: number, index: number) => void,
+): void {
+  let index = 0;
+  for (let by = 0; by < grid.rows; by++) {
+    for (let bx = 0; bx < grid.cols; bx++) {
+      bay(plan, bx * grid.bayW, by * grid.bayH, index);
+      index++;
+    }
+  }
+}
+
 function buildGrowTentPlan(): PlanState {
   const plan: PlanState = {
-    farmId: 5, widthM: 6, heightM: 5, cellM: 0.25, allowOutsideBeds: false,
+    farmId: 5, ...bayCanvas(BAY_GRIDS[5]!), cellM: 0.25, allowOutsideBeds: false,
     surface: 'tent',
     planting: {}, ground: {}, updatedAt: new Date().toISOString(),
   };
@@ -649,75 +693,85 @@ function buildGrowTentPlan(): PlanState {
 }
 
 function buildMushroomPlan(): PlanState {
+  const grid = BAY_GRIDS[6]!;
   const plan: PlanState = {
-    farmId: 6, widthM: 12, heightM: 8, cellM: 0.25, allowOutsideBeds: false,
+    farmId: 6, ...bayCanvas(grid), cellM: 0.25, allowOutsideBeds: false,
     surface: 'indoor',
     planting: {}, ground: {}, updatedAt: new Date().toISOString(),
   };
 
-  // Sealed warehouse: vertical rack walls of mushrooms in four fruiting aisles,
-  // climate gear along the walls, packing corner by the door.
+  // Sealed growing room: vertical rack walls of mushrooms in four fruiting
+  // aisles, climate gear along the walls, packing corner by the door. Each bay
+  // rotates its species so the racks read as distinct crops, not a stamp.
   const rackCols = [3, 10, 17, 24, 31, 38];
-  for (const bandRow of [3, 9, 15, 21]) {
-    for (const rx of rackCols) fillGround(plan, rx, bandRow, 4, 2, 'plant-rack');
-  }
-  fillGround(plan, 2, 0, 4, 1, 'hvac-unit');
-  fillGround(plan, 20, 0, 4, 1, 'hvac-unit');
-  fillGround(plan, 38, 0, 4, 1, 'hvac-unit');
-  fillGround(plan, 0, 6, 1, 1, 'clip-fan');
-  fillGround(plan, 12, 6, 1, 1, 'clip-fan');
-  fillGround(plan, 26, 6, 1, 1, 'clip-fan');
-  fillGround(plan, 40, 6, 1, 1, 'clip-fan');
-  fillGround(plan, 43, 26, 5, 5, 'ibc-tote');
-  fillGround(plan, 43, 20, 1, 1, 'water-tap');
-  fillGround(plan, 36, 27, 3, 3, 'crate-stack');
-  fillGround(plan, 40, 28, 3, 3, 'crate-stack');
-  fillGround(plan, 33, 28, 1, 1, 'signpost');
+  const bandRows = [3, 9, 15, 21];
+  const species = [OYSTER, BUTTON, SHIITAKE, OYSTER];
+  eachBay(plan, grid, (p, ox, oy, index) => {
+    for (const bandRow of bandRows) {
+      for (const rx of rackCols) fillGround(p, ox + rx, oy + bandRow, 4, 2, 'plant-rack');
+    }
+    fillGround(p, ox + 2, oy + 0, 4, 1, 'hvac-unit');
+    fillGround(p, ox + 20, oy + 0, 4, 1, 'hvac-unit');
+    fillGround(p, ox + 38, oy + 0, 4, 1, 'hvac-unit');
+    fillGround(p, ox + 0, oy + 6, 1, 1, 'clip-fan');
+    fillGround(p, ox + 12, oy + 6, 1, 1, 'clip-fan');
+    fillGround(p, ox + 26, oy + 6, 1, 1, 'clip-fan');
+    fillGround(p, ox + 40, oy + 6, 1, 1, 'clip-fan');
+    fillGround(p, ox + 43, oy + 26, 5, 5, 'ibc-tote');
+    fillGround(p, ox + 43, oy + 20, 1, 1, 'water-tap');
+    fillGround(p, ox + 36, oy + 27, 3, 3, 'crate-stack');
+    fillGround(p, ox + 40, oy + 28, 3, 3, 'crate-stack');
+    fillGround(p, ox + 33, oy + 28, 1, 1, 'signpost');
 
-  // Mushroom species per rack band — oyster front, button middle, shiitake back.
-  const bandCrop: Record<number, number> = { 3: OYSTER, 9: BUTTON, 15: SHIITAKE, 21: OYSTER };
-  for (const bandRow of [3, 9, 15, 21]) {
-    for (const rx of rackCols) fillCrop(plan, rx, bandRow, 4, 2, bandCrop[bandRow]!);
-  }
+    // Mushroom species per rack band — front band leads, rotated per bay.
+    bandRows.forEach((bandRow, bandIndex) => {
+      const crop = species[(bandIndex + index) % species.length]!;
+      for (const rx of rackCols) fillCrop(p, ox + rx, oy + bandRow, 4, 2, crop);
+    });
+  });
 
   stampPlantedAt(plan, { [OYSTER]: 16, [BUTTON]: 20, [SHIITAKE]: 26 }, 20);
   return plan;
 }
 
 function buildGreenhousePlan(): PlanState {
+  const grid = BAY_GRIDS[7]!;
   const plan: PlanState = {
-    farmId: 7, widthM: 10, heightM: 7, cellM: 0.25, allowOutsideBeds: false,
+    farmId: 7, ...bayCanvas(grid), cellM: 0.25, allowOutsideBeds: false,
     surface: 'greenhouse',
     planting: {}, ground: {}, updatedAt: new Date().toISOString(),
   };
 
-  // Glass range: bench rows of tender crops, NFT channels of greens, supplemental
-  // LED runs, airflow fans in the corners. Gravel-floor surface does the rest.
+  // Glass range: bench rows of tender crops, NFT channels of greens,
+  // supplemental LED runs, airflow fans at every bay corner. Bench crops
+  // rotate bay to bay so the range reads as a working glasshouse.
   const benchXs = [2, 9, 16, 23, 30];
-  for (const bx of benchXs) {
-    fillGround(plan, bx, 3, 5, 2, 'grow-bench');
-    fillGround(plan, bx, 8, 5, 2, 'grow-bench');
-  }
-  fillGround(plan, 2, 6, 33, 1, 'grow-light');
-  fillGround(plan, 2, 11, 33, 1, 'grow-light');
-  fillGround(plan, 2, 14, 36, 1, 'hydro-channel');
-  fillGround(plan, 2, 16, 36, 1, 'hydro-channel');
-  fillGround(plan, 0, 0, 1, 1, 'clip-fan');
-  fillGround(plan, 39, 0, 1, 1, 'clip-fan');
-  fillGround(plan, 0, 26, 1, 1, 'clip-fan');
-  fillGround(plan, 39, 26, 1, 1, 'clip-fan');
-  fillGround(plan, 37, 19, 2, 2, 'water-tap');
-  fillGround(plan, 30, 19, 1, 1, 'signpost');
-
-  // Benches: fruiting crops front, salads and berries behind.
   const benchCrops = [TOMATO, PEPPER, BASIL, CUCUMBER, STRAWBERRY];
   const benchCrops2 = [LETTUCE, ARUGULA, PARSLEY, CILANTRO, SPINACH];
-  benchXs.forEach((bx, i) => {
-    fillCrop(plan, bx, 3, 5, 2, benchCrops[i]!);
-    fillCrop(plan, bx, 8, 5, 2, benchCrops2[i]!);
+  eachBay(plan, grid, (p, ox, oy, index) => {
+    for (const bx of benchXs) {
+      fillGround(p, ox + bx, oy + 3, 5, 2, 'grow-bench');
+      fillGround(p, ox + bx, oy + 8, 5, 2, 'grow-bench');
+    }
+    fillGround(p, ox + 2, oy + 6, 33, 1, 'grow-light');
+    fillGround(p, ox + 2, oy + 11, 33, 1, 'grow-light');
+    fillGround(p, ox + 2, oy + 14, 36, 1, 'hydro-channel');
+    fillGround(p, ox + 2, oy + 16, 36, 1, 'hydro-channel');
+    fillGround(p, ox + 0, oy + 0, 1, 1, 'clip-fan');
+    fillGround(p, ox + 39, oy + 0, 1, 1, 'clip-fan');
+    fillGround(p, ox + 0, oy + 26, 1, 1, 'clip-fan');
+    fillGround(p, ox + 39, oy + 26, 1, 1, 'clip-fan');
+    fillGround(p, ox + 37, oy + 19, 2, 2, 'water-tap');
+    fillGround(p, ox + 30, oy + 19, 1, 1, 'signpost');
+
+    // Benches: fruiting crops front, salads and berries behind.
+    benchXs.forEach((bx, i) => {
+      fillCrop(p, ox + bx, oy + 3, 5, 2, benchCrops[(i + index) % benchCrops.length]!);
+      fillCrop(p, ox + bx, oy + 8, 5, 2, benchCrops2[(i + index) % benchCrops2.length]!);
+    });
+    fillCrop(p, ox + 2, oy + 14, 36, 1, LETTUCE);
+    fillCrop(p, ox + 2, oy + 16, 36, 1, SPINACH);
   });
-  fillCrop(plan, 2, 14, 36, 1, LETTUCE);
-  fillCrop(plan, 2, 16, 36, 1, SPINACH);
 
   stampPlantedAt(plan, {
     [TOMATO]: 55, [PEPPER]: 50, [BASIL]: 35, [CUCUMBER]: 40, [STRAWBERRY]: 70,
@@ -727,38 +781,40 @@ function buildGreenhousePlan(): PlanState {
 }
 
 function buildHoophousePlan(): PlanState {
+  const grid = BAY_GRIDS[8]!;
   const plan: PlanState = {
-    farmId: 8, widthM: 10, heightM: 8, cellM: 0.25, allowOutsideBeds: false,
+    farmId: 8, ...bayCanvas(grid), cellM: 0.25, allowOutsideBeds: false,
     surface: 'hoophouse',
     planting: {}, ground: {}, updatedAt: new Date().toISOString(),
   };
 
   // High tunnel: crops grow in ground soil (no hydro, no benches) — three
   // in-ground beds under trellis lines, drip irrigation down each bed, roll-up
-  // side aisles kept clear, seedling trays staging by the door.
-  // fillGround/fillCrop take (x, y, w, h) — these were originally written as
-  // corner coordinates, which pushed crops up to row 56 of a 32-row grid and
-  // produced the audit's impossible "Coverage 153%" (OPS-002).
-  fillGround(plan, 1, 2, 38, 7, 'inground-bed');
-  fillGround(plan, 1, 13, 38, 7, 'inground-bed');
-  fillGround(plan, 1, 24, 38, 7, 'inground-bed');
-  fillGround(plan, 1, 2, 38, 1, 'trellis');
-  fillGround(plan, 1, 13, 38, 1, 'trellis');
-  fillGround(plan, 1, 24, 38, 1, 'trellis');
-  fillGround(plan, 0, 4, 1, 4, 'irrigation-line');
-  fillGround(plan, 0, 15, 1, 4, 'irrigation-line');
-  fillGround(plan, 0, 26, 1, 4, 'irrigation-line');
-  fillGround(plan, 36, 0, 2, 1, 'seedling-tray');
-  fillGround(plan, 38, 30, 1, 1, 'water-tap');
+  // side aisles kept clear, seedling trays staging by the door. The trellised
+  // tomatoes alternate with salad tunnels bay to bay.
+  // fillGround/fillCrop take (x, y, w, h) — (x, y) is the top-left cell.
+  const bedRows = [2, 13, 24];
+  const bedCrops: Array<[number, number]> = [
+    [TOMATO, BASIL],
+    [PEPPER, LETTUCE],
+    [TOMATO, SPINACH],
+  ];
+  eachBay(plan, grid, (p, ox, oy, index) => {
+    for (const bedRow of bedRows) {
+      fillGround(p, ox + 1, oy + bedRow, 38, 7, 'inground-bed');
+      fillGround(p, ox + 1, oy + bedRow, 38, 1, 'trellis');
+      fillGround(p, ox + 0, oy + bedRow + 2, 1, 4, 'irrigation-line');
+    }
+    fillGround(p, ox + 36, oy + 0, 2, 1, 'seedling-tray');
+    // Corner service tap sits in the south aisle below the last bed.
+    fillGround(p, ox + 38, oy + 31, 1, 1, 'water-tap');
 
-  // Bed 1 trellised tomatoes + basil understory; bed 2 peppers + salad; bed 3
-  // tomatoes + spinach (winter-hardy tunnel crop).
-  fillCrop(plan, 2, 3, 36, 1, TOMATO);
-  fillCrop(plan, 2, 6, 36, 2, BASIL);
-  fillCrop(plan, 2, 14, 36, 2, PEPPER);
-  fillCrop(plan, 2, 17, 36, 2, LETTUCE);
-  fillCrop(plan, 2, 25, 36, 2, TOMATO);
-  fillCrop(plan, 2, 28, 36, 2, SPINACH);
+    bedRows.forEach((bedRow, bedIndex) => {
+      const [primary, secondary] = bedCrops[(bedIndex + index) % bedCrops.length]!;
+      fillCrop(p, ox + 2, oy + bedRow + 1, 36, 1, primary);
+      fillCrop(p, ox + 2, oy + bedRow + 4, 36, 2, secondary);
+    });
+  });
 
   stampPlantedAt(plan, {
     [TOMATO]: 60, [BASIL]: 30, [PEPPER]: 45, [LETTUCE]: 18, [SPINACH]: 22,
@@ -767,30 +823,43 @@ function buildHoophousePlan(): PlanState {
 }
 
 function buildWarehousePlan(): PlanState {
+  const grid = BAY_GRIDS[9]!;
   const plan: PlanState = {
-    farmId: 9, widthM: 12, heightM: 10, cellM: 0.25, allowOutsideBeds: false,
+    farmId: 9, ...bayCanvas(grid), cellM: 0.25, allowOutsideBeds: false,
     surface: 'warehouse',
     planting: {}, ground: {}, updatedAt: new Date().toISOString(),
   };
 
   // Sealed vertical-farm hall: glowing rack canyons with taped aisles, HVAC at
   // the walls, CO2 enrichment, a DWC raft pond and a seedling nursery corner.
+  // Rack runs repeat across bays with alternating species, split either side of
+  // a 1 m central aisle; the raft pond is painted once, in the first bay.
   const rackRows = [2, 10, 18, 26, 34];
-  for (const ry of rackRows) fillGround(plan, 2, ry, 44, 2, 'plant-rack');
-  fillGround(plan, 0, 6, 1, 1, 'clip-fan');
-  fillGround(plan, 46, 14, 1, 1, 'clip-fan');
-  fillGround(plan, 0, 37, 4, 1, 'hvac-unit');
-  fillGround(plan, 43, 37, 4, 1, 'hvac-unit');
-  fillGround(plan, 46, 0, 1, 1, 'co2-tank');
-  fillGround(plan, 46, 30, 2, 2, 'seedling-tray');
-  fillGround(plan, 0, 28, 4, 6, 'hydro-raft');
-  fillGround(plan, 0, 0, 2, 2, 'crate-stack');
+  const rackCrops = [LETTUCE, BASIL];
+  const RACK_RUN_CELLS = 20; // 5 m of rack, then a 1 m aisle, then 5 m more
+  const RACK_AISLE_WIDTH = 4; // cells (1 m)
+  eachBay(plan, grid, (p, ox, oy, index) => {
+    rackRows.forEach((ry, rowIndex) => {
+      const crop = rackCrops[(rowIndex + index) % rackCrops.length]!;
+      fillGround(p, ox + 2, oy + ry, RACK_RUN_CELLS, 2, 'plant-rack');
+      fillCrop(p, ox + 2, oy + ry, RACK_RUN_CELLS, 2, crop);
+      const eastX = ox + 2 + RACK_RUN_CELLS + RACK_AISLE_WIDTH;
+      fillGround(p, eastX, oy + ry, RACK_RUN_CELLS, 2, 'plant-rack');
+      fillCrop(p, eastX, oy + ry, RACK_RUN_CELLS, 2, crop);
+    });
+    fillGround(p, ox + 0, oy + 6, 1, 1, 'clip-fan');
+    fillGround(p, ox + 46, oy + 14, 1, 1, 'clip-fan');
+    fillGround(p, ox + 0, oy + 37, 4, 1, 'hvac-unit');
+    fillGround(p, ox + 43, oy + 37, 4, 1, 'hvac-unit');
+    fillGround(p, ox + 46, oy + 0, 1, 1, 'co2-tank');
+    fillGround(p, ox + 46, oy + 30, 2, 2, 'seedling-tray');
+    fillGround(p, ox + 0, oy + 0, 2, 2, 'crate-stack');
 
-  // Rack rows alternate lettuce and basil down the hall; rafts carry lettuce.
-  for (const [i, ry] of rackRows.entries()) {
-    fillCrop(plan, 2, ry, 44, 2, i % 2 === 0 ? LETTUCE : BASIL);
-  }
-  fillCrop(plan, 0, 29, 4, 4, LETTUCE);
+    if (index === 0) {
+      fillGround(p, ox + 0, oy + 28, 4, 6, 'hydro-raft');
+      fillCrop(p, ox + 0, oy + 29, 4, 4, LETTUCE);
+    }
+  });
 
   stampPlantedAt(plan, { [LETTUCE]: 16, [BASIL]: 24 }, 18);
   return plan;
