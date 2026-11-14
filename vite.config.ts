@@ -12,6 +12,11 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        gallery: path.resolve(__dirname, 'gallery.html'),
+        showcase: path.resolve(__dirname, 'showcase.html'),
+      },
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/three') || id.includes('node_modules/camera-controls')) {
