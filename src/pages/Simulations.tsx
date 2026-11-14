@@ -19,7 +19,7 @@ import { CAMPAIGN_ENABLED, ENV_RECORDS_ENABLED, TWIN_ENABLED } from '@/lib/featu
 import { archetypes, ARCHETYPE_FOR_SURFACE } from '@/creative/archetypes';
 import { useFarm } from '@/hooks/useFarms';
 import { useNavigation } from '@/hooks/useNavigation';
-import { SCENARIOS } from '@/lib/growth';
+import { SCENARIOS } from '@/lib/scenario-params';
 import { isoDayNumber, isoFromDayNumber, runSummaryHasAvailableEstimates } from '@/lib/sim';
 import { yieldMassUnit } from '@/lib/sim';
 import { growingTargetKey } from '@/lib/growingTargets';

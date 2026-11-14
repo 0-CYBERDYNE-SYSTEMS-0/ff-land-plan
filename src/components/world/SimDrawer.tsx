@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { SCENARIOS } from '@/lib/growth';
+import { SCENARIOS } from '@/lib/scenario-params';
 import { TIMELINE_ENABLED } from '@/lib/featureFlags';
 import type { ScenarioType, WeatherCurrent } from '@/types';
 import type { ComparisonMetric, DailyEnvironment, EnsembleBand, EnvSourceTag, Intervention, RunComparison, RunEnsembleResult } from '@/lib/sim';

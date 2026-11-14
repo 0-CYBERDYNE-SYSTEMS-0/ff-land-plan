@@ -2,7 +2,7 @@
 // PlotDesigner plan — NOT satellite imagery. Same plan + date ⇒ same grid.
 // Pure: no fetch, no Math.random.
 import type { Crop, PlanState } from '@/types';
-import { growthProgress, stageForScale } from '@/lib/growth';
+import { growthProgress, stageForScale } from '@/lib/scenario-params';
 
 /** NDVI proxy for bare soil (documented model constant). */
 export const SOIL_NDVI = 0.12;

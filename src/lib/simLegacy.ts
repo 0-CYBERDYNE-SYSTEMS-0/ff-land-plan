@@ -11,7 +11,7 @@
 // storage. Weather/climate data is passed IN by the caller (localApi wires
 // forecast + climate normals). Every named constant documents its origin.
 
-import { SURFACE_SHELTER } from '@/lib/growth';
+import { SURFACE_SHELTER } from '@/lib/scenario-params';
 import { kcAtFraction, kcForCategory, kyForCategory } from '@/data/fao56';
 import type { ClimateNormals } from '@/lib/climate';
 import type { SeasonEnsembles } from '@/lib/ensembles';
@@ -178,7 +178,7 @@ export function runSimulation(args: {
 }
 
 // Scenario deltas attenuated by surface shelter (one source of truth in
-// growth.ts): outdoor takes the full force, a tent barely feels a heatwave.
+// scenario-params.ts): outdoor takes the full force, a tent barely feels a heatwave.
 // Precip reduction is sheltered; increase (multiplier ≥ 1) applies in full.
 function scenarioAdjust(pt: DailyPoint, tempDeltaC: number, precipMultiplier: number, shelter: number): DailyPoint {
   return {

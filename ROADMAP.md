@@ -87,10 +87,14 @@ engine with an observation layer on top:
    ambient climate — a January greenhouse is as cold as the field, minus rain.
    Need heating/cooling setpoints, a light (DLI) model, and humidity for
    greenhouse / indoor / warehouse surfaces.
-6. **Two growth models disagree (#54).** The default 3D view, NDVI and Monitoring
+6. **Two growth models disagree (#54).** ~~The default 3D view, NDVI and Monitoring
    use `src/lib/growth.ts` (calendar + fixed offset); sim runs use
    `src/lib/sim/`. Retire `growth.ts` or drive it from the sim engine so every
-   view agrees.
+   view agrees.~~ **Done (2026-11-14):** `growth.ts` retired; sim truth flows
+   through the `sim/view.ts` seam, and the calendar proxy (no-run fallback +
+   plan-derived NDVI) lives in one shared module (`scenario-params.ts`).
+   Follow-up candidates: sim-truth projection for the no-run 3D fallback;
+   run-aware NDVI panel (would change ndvi.ts's documented contract).
 7. **Known simplifications (#55)** worth revisiting: fixed 30 cm root depth for all
    crops; ET0 proxy without radiation when archive ET0 is missing; no light
    term in the sim; "May-start baseline runs chronically kill the field"
