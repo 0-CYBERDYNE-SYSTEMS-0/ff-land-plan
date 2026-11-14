@@ -216,7 +216,7 @@ export type AssetPattern = 'solid' | 'stripes' | 'dots' | 'cross';
 /**
  * Simulation surface of a plan canvas. Enclosed surfaces swap the 3D floor +
  * add an enclosure shell, gate weather, and dampen climate stress in the
- * growth model (see lib/growth.ts). Missing/undefined = 'outdoor'.
+ * growth model (see lib/scenario-params.ts). Missing/undefined = 'outdoor'.
  * `hoophouse` = passive unheated poly high tunnel (tracks outdoor nights),
  * `warehouse` = sealed weather-blind vertical-farm hall.
  */

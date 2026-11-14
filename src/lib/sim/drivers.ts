@@ -2,7 +2,8 @@
 // mapping (SPEC-SIM-ECOSYSTEM §3.1 drivers.ts). All pure functions of their
 // inputs — determinism is what makes replay-as-storage work.
 
-import { DLI_MIN_MOL, LIGHT_STRESS_WEIGHT, SURFACE_SHELTER } from '@/lib/growth';
+import { DLI_MIN_MOL, LIGHT_STRESS_WEIGHT } from '@/lib/sim/constants';
+import { SURFACE_SHELTER } from '@/lib/scenario-params';
 import type { Crop, PlanSurface } from '@/types';
 import type { CellStress, DailyEnvironment, NeighborContext } from './types';
 
@@ -11,7 +12,8 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /** Fallback mean daily GDD when no climate normals exist: 10 °C·day is what a
- * 20 °C mean day accumulates at base 10 — the legacy growth.ts baseline. */
+ * 20 °C mean day accumulates at base 10 — the DEFAULT_BASELINE_TEMP_C baseline
+ * in scenario-params.ts. */
 export const FALLBACK_MEAN_DAILY_GDD_C = 10;
 
 /** GDD gain multiplier loss at max stress: gain ×(1 − 0.6·maxStress). */
@@ -38,7 +40,7 @@ export function gddRequiredC(crop: Crop, meanDailyGddC: number | undefined): num
 
 /**
  * Surface-sheltered temps for a cell. The SCENARIO delta (effective − raw) is
- * attenuated by growth.ts SURFACE_SHELTER (greenhouse 0.35, tent 0.12, …) —
+ * attenuated by scenario-params.ts SURFACE_SHELTER (greenhouse 0.35, tent 0.12, …) —
  * an enclosure moderates the manipulation, not the underlying climate. With
  * no scenario on the day (no `raw`), shelter is moot and temps pass through.
  */
@@ -104,7 +106,7 @@ export interface ThermalStress {
 }
 
 /** Heat/cold stress vs the crop's real temp band, /10 per °C beyond it — the
- * same slope as growth.ts scenarioGrowthMod, but against daily tMax (heat)
+ * same slope as scenario-params.ts scenarioGrowthMod, but against daily tMax (heat)
  * and tMin (cold) instead of a single mean. */
 export function thermalStress(crop: Crop, tMinC: number, tMaxC: number): ThermalStress {
   const heat = tMaxC > crop.maxTempC ? Math.min(1, (tMaxC - crop.maxTempC) / 10) : 0;
@@ -146,7 +148,7 @@ export function biomassFromGdd(gddAccumC: number, gddRequired: number): number {
   return clamp01(gddAccumC / gddRequired);
 }
 
-/** Discrete voxel-asset stage 0..5 from biomass (growth.ts stageForScale). */
+/** Discrete voxel-asset stage 0..5 from biomass (scenario-params.ts stageForScale). */
 export function stageForBiomass(biomassFrac: number): number {
   return Math.min(5, Math.max(0, Math.round(biomassFrac * 5)));
 }

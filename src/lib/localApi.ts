@@ -36,7 +36,7 @@ import { deleteFarmRecords, deleteRecord, getAllRecords, getRecord, putRecord } 
 import { deriveAlerts, fetchFarmWeather, type FarmWeather } from '@/lib/weather';
 import { fetchClimateNormals } from '@/lib/climate';
 import { fetchSoilProfile } from '@/lib/soil';
-import { SCENARIOS } from '@/lib/growth';
+import { SCENARIOS } from '@/lib/scenario-params';
 import { buildEnvSeries, extractWeatherOverrides, meanDailyGddForRange } from '@/lib/sim/environment';
 import { simulateRun } from '@/lib/sim/engine';
 import { freezeRunModelInputs } from '@/lib/sim/model-inputs';

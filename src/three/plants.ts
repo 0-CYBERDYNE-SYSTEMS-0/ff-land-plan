@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { PlanState, Crop, ScenarioType } from '@/types';
 import { parseKey } from '@/lib/plan';
-import { growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
+import { growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/scenario-params';
 import { cropAssetMap, hasVoxelPathFor, makeCropFor, makeCropForCustom } from '@/creative/crops/map';
 import { variationForCell, type PlantViewParams } from '@/lib/sim/view';
 import { STATE_HEIGHT_FACTOR, unitPadGeometry, type PlantStateVisual } from '@/creative/crops/shared';

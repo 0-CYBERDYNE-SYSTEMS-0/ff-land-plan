@@ -6,7 +6,7 @@ import type { PlanEditor } from '@/components/designer/usePlanEditor';
 import { createAchievementSystem } from '@/lib/achievements';
 import { apiFetch } from '@/lib/api';
 import { fetchClimateNormals } from '@/lib/climate';
-import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/growth';
+import { DEFAULT_BASELINE_TEMP_C, growthProgress, scenarioGrowthMod, stageForScale, SURFACE_PLANT_SCALE, type GrowthModCtx } from '@/lib/scenario-params';
 import { setInputMode } from '@/lib/inputArbiter';
 import { makeCropFor, makeCropForCustom } from '@/creative/crops/map';
 import { parseKey, planCols, planRows } from '@/lib/plan';
